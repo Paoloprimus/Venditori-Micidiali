@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
-import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
-import { createSupabaseBrowser } from "@/lib/supabase/client";
+import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
+import { createSupabaseBrowser } from "../lib/supabase/client";
 
 type Bubble = { role:"user"|"assistant"; content:string };
 
@@ -17,13 +17,12 @@ export default function HomeClient({ email }: { email: string }) {
     const content = input.trim(); if (!content) return;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput("");
-    // chiamata "dummy" all'endpoint: niente LLM ancora
     const res = await fetch("/api/messages/send", {
       method:"POST", headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ content, terse })
     });
     const data = await res.json();
-    if (data?.estimate) setEstim(`Stima costo: ~€${data.estimate.toFixed(4)}`);
+    if (data?.estimate != null) setEstim(`Stima costo: ~€${data.estimate.toFixed(4)}`);
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
   }
 
