@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
-import { createSupabaseServer } from "../../../lib/supabase/server";
-import { openai, LLM_MODEL } from "../../../lib/openai";
+import { createSupabaseServer } from "../../../../lib/supabase/server";
+import { openai, LLM_MODEL } from "../../../../lib/openai";
+
 
 const PRICE_IN = Number(process.env.PRICING_INPUT_PER_1M ?? "1.25");   // EUR / 1M token
 const PRICE_OUT = Number(process.env.PRICING_OUTPUT_PER_1M ?? "10.0"); // EUR / 1M token
