@@ -1,9 +1,10 @@
 "use client";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
 type Bubble = { role:"user"|"assistant"; content:string };
+type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
 
 export default function HomeClient({ email }: { email: string }) {
   const supabase = createSupabaseBrowser();
@@ -11,19 +12,29 @@ export default function HomeClient({ email }: { email: string }) {
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
   const [terse, setTerse] = useState(false);
-  const [estim, setEstim] = useState<string | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null);
+
+  async function refreshUsage() {
+    const res = await fetch("/api/usage/current-chat");
+    const data = await res.json();
+    if (!data?.error) setUsage({ tokensIn: data.tokensIn ?? 0, tokensOut: data.tokensOut ?? 0, costTotal: data.costTotal ?? 0 });
+  }
+
+  useEffect(() => { refreshUsage(); }, []);
 
   async function send() {
     const content = input.trim(); if (!content) return;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput("");
     const res = await fetch("/api/messages/send", {
-      method:"POST", headers: { "Content-Type":"application/json" },
+      method:"POST",
+      headers: { "Content-Type":"application/json" },
       body: JSON.stringify({ content, terse })
     });
     const data = await res.json();
-    if (data?.estimate != null) setEstim(`Stima costo: ~€${data.estimate.toFixed(4)}`);
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
+    // aggiorna usages dopo la risposta
+    await refreshUsage();
   }
 
   async function logout() {
@@ -59,10 +70,8 @@ export default function HomeClient({ email }: { email: string }) {
         <button className="btn" onClick={send}>Invia</button>
       </div>
 
-      {estim && <div className="container helper" style={{ paddingBottom:12 }}>{estim}</div>}
-
       <LeftDrawer open={leftOpen} onClose={closeLeft} />
-      <RightDrawer open={rightOpen} onClose={closeRight} />
+      <RightDrawer open={rightOpen} onClose={closeRight} usage={usage} />
     </>
   );
 }
