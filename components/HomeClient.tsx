@@ -13,6 +13,8 @@ export default function HomeClient({ email }: { email: string }) {
   const [input, setInput] = useState("");
   const [terse, setTerse] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [modelBadge, setModelBadge] = useState<string>("…");
 
   async function refreshUsage() {
     const res = await fetch("/api/usage/current-chat");
@@ -20,9 +22,13 @@ export default function HomeClient({ email }: { email: string }) {
     if (!data?.error) setUsage({ tokensIn: data.tokensIn ?? 0, tokensOut: data.tokensOut ?? 0, costTotal: data.costTotal ?? 0 });
   }
 
-  useEffect(() => { refreshUsage(); }, []);
+  useEffect(() => {
+    refreshUsage();
+    fetch("/api/model").then(r=>r.json()).then(d=>setModelBadge(d?.model ?? "n/d")).catch(()=>setModelBadge("n/d"));
+  }, []);
 
   async function send() {
+    setServerError(null);
     const content = input.trim(); if (!content) return;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput("");
@@ -32,8 +38,12 @@ export default function HomeClient({ email }: { email: string }) {
       body: JSON.stringify({ content, terse })
     });
     const data = await res.json();
+    if (!res.ok) {
+      setServerError(data?.details || data?.error || "Errore server");
+      setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri 📊 per dettagli." }]);
+      return;
+    }
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
-    // aggiorna usages dopo la risposta
     await refreshUsage();
   }
 
@@ -47,7 +57,7 @@ export default function HomeClient({ email }: { email: string }) {
       <div className="topbar">
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
         <div className="title" style={{ flex:1 }}>AIxPMI Assistant</div>
-        <span className="badge">Modello: GPT-5</span>
+        <span className="badge">Modello: {modelBadge}</span>
         <button className="iconbtn" aria-label="Apri costi" onClick={openRight}>📊</button>
         <button className="iconbtn" onClick={logout}>Esci ({email})</button>
       </div>
@@ -60,6 +70,7 @@ export default function HomeClient({ email }: { email: string }) {
           {bubbles.map((m, i) => (
             <div key={i} className={`msg ${m.role === "user" ? "me":""}`}>{m.content}</div>
           ))}
+          {serverError && <div className="helper" style={{ color:"#F59E0B" }}>Errore LLM: {serverError}</div>}
         </div>
       </div>
 
