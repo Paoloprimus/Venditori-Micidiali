@@ -6,7 +6,6 @@ export async function GET() {
   const { data: u } = await supabase.auth.getUser();
   if (!u.user) return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
 
-  // Prende la conversazione più recente
   const { data: conv } = await supabase
     .from("conversations")
     .select("id, total_tokens_in, total_tokens_out, total_cost")
