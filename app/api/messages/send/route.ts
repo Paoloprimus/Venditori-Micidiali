@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "../../../../lib/supabase/server";
 import { openai, LLM_MODEL } from "../../../../lib/openai";
@@ -9,18 +11,25 @@ const SYSTEM_PROMPT =
   "Sei AIxPMI Assistant. Dai risposte pratiche. Se 'terse' è true, rispondi breve e proponi passi successivi.";
 
 export async function POST(req: Request) {
+  // Validazioni ambiente per errori "chiari"
+  if (!process.env.OPENAI_API_KEY) {
+    return NextResponse.json({ error: "CONFIG", details: "OPENAI_API_KEY mancante" }, { status: 500 });
+  }
+  if (!LLM_MODEL) {
+    return NextResponse.json({ error: "CONFIG", details: "LLM_MODEL_NAME mancante" }, { status: 500 });
+  }
+
   const body = await req.json().catch(() => null) as { content?: string; terse?: boolean } | null;
   const content = (body?.content ?? "").trim();
   const terse = !!body?.terse;
   if (!content) return NextResponse.json({ error: "EMPTY" }, { status: 400 });
 
-  // Auth per RLS
   const supabase = createSupabaseServer();
   const { data: u } = await supabase.auth.getUser();
   if (!u.user) return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
   const userId = u.user.id;
 
-  // Conversazione corrente (ultima o nuova)
+  // trova/crea conversazione corrente
   let convId: string;
   {
     const { data: existing } = await supabase
@@ -45,7 +54,6 @@ export async function POST(req: Request) {
   }
 
   try {
-    // LLM reale
     const completion = await openai.chat.completions.create({
       model: LLM_MODEL,
       messages: [
@@ -56,7 +64,10 @@ export async function POST(req: Request) {
       max_tokens: terse ? 300 : 800
     });
 
-    const reply = completion.choices?.[0]?.message?.content ?? "Ok.";
+    const choice = completion.choices?.[0];
+    const replyRaw = choice?.message?.content ?? "";
+    const reply = replyRaw.trim() || "⚠️ Modello senza contenuto: prova a ripetere o cambiare prompt.";
+
     const usage = completion.usage;
     const tokensIn = usage?.prompt_tokens ?? 0;
     const tokensOut = usage?.completion_tokens ?? 0;
@@ -69,8 +80,10 @@ export async function POST(req: Request) {
 
     const { error: errMsg } = await supabase.from("messages").insert([
       { conversation_id: convId, role: "user", content, created_at: now },
-      { conversation_id: convId, role: "assistant", content: reply, created_at: now,
-        tokens_in: tokensIn, tokens_out: tokensOut, cost_in: costIn, cost_out: costOut, cost_total: costTotal }
+      {
+        conversation_id: convId, role: "assistant", content: reply, created_at: now,
+        tokens_in: tokensIn, tokens_out: tokensOut, cost_in: costIn, cost_out: costOut, cost_total: costTotal
+      }
     ]);
     if (errMsg) return NextResponse.json({ error: "DB_INSERT_MSG", details: errMsg.message }, { status: 500 });
 
@@ -81,9 +94,14 @@ export async function POST(req: Request) {
       .eq("user_id", userId);
 
     return NextResponse.json({
-      model: LLM_MODEL,
+      ok: true,
+      modelUsed: completion.model,
       conversationId: convId,
       reply,
+      diag: {
+        choiceCount: completion.choices?.length ?? 0,
+        finishReason: choice?.finish_reason ?? "n/d",
+      },
       usage: { in: tokensIn, out: tokensOut, total: usage?.total_tokens ?? tokensIn + tokensOut },
       cost: { in: costIn, out: costOut, total: costTotal }
     });
