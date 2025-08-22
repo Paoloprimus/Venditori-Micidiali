@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 
-/** Gestione stato apertura pannelli */
+/** Stato apertura pannelli (icone aprono/chiudono) */
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [topOpen, setTopOpen] = useState(false);
@@ -12,27 +12,12 @@ export function useDrawers() {
   };
 }
 
-/** Drawer sinistro (chiusura via swipe verso sinistra all'interno del drawer) */
+/** Drawer sinistro (apri/chiudi da icone) */
 export function LeftDrawer({
   open, onClose
 }: { open:boolean; onClose:()=>void }) {
-
-  // swipe per chiusura
-  let startX = 0;
-  function onTouchStart(e: React.TouchEvent) {
-    startX = e.touches[0].clientX;
-  }
-  function onTouchMove(e: React.TouchEvent) {
-    const dx = e.touches[0].clientX - startX;
-    if (dx < -60) onClose();
-  }
-
   return (
-    <aside
-      className={`drawer ${open ? "open":""}`}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-    >
+    <aside className={`drawer ${open ? "open":""}`}>
       <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
         <div className="title">Conversazioni</div>
@@ -43,13 +28,13 @@ export function LeftDrawer({
           <div className="title">Chat corrente</div>
           <div className="helper">Ultima attività • adesso</div>
         </div>
-        {/* TODO: popolare con elenco reale da DB nel passo successivo */}
+        {/* TODO: popolare con elenco reale da DB nello step successivo */}
       </div>
     </aside>
   );
 }
 
-/** Top sheet (ex drawer destro) che scende dall’alto; chiusura con swipe verso l’alto */
+/** Top sheet (apri/chiudi da icone) */
 type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
 
 export function TopSheet({
@@ -58,22 +43,8 @@ export function TopSheet({
 
   const u = usage ?? { tokensIn:0, tokensOut:0, costTotal:0 };
 
-  // swipe per chiusura (verso l’alto)
-  let startY = 0;
-  function onTouchStart(e: React.TouchEvent) {
-    startY = e.touches[0].clientY;
-  }
-  function onTouchMove(e: React.TouchEvent) {
-    const dy = e.touches[0].clientY - startY;
-    if (dy < -80) onClose();
-  }
-
   return (
-    <aside
-      className={`topsheet ${open ? "open":""}`}
-      onTouchStart={onTouchStart}
-      onTouchMove={onTouchMove}
-    >
+    <aside className={`topsheet ${open ? "open":""}`}>
       <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
         <div className="title">Costi & utilizzo</div>
@@ -86,7 +57,9 @@ export function TopSheet({
         </div>
         <div className="row">
           <div className="title">Questa chat</div>
-          <div className="helper">IN {u.tokensIn} • OUT {u.tokensOut} • Totale €{u.costTotal.toFixed(4)}</div>
+          <div className="helper">
+            IN {u.tokensIn} • OUT {u.tokensOut} • Totale €{u.costTotal.toFixed(4)}
+          </div>
         </div>
         <div className="row">
           <div className="title">Periodo (30g)</div>
