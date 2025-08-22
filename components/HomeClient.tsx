@@ -80,8 +80,7 @@ export default function HomeClient({ email }: { email: string }) {
         <div className="thread">
           {bubbles.length === 0 && (
             <div className="helper">
-              Benvenuto! Inizia una nuova conversazione. Apri le conversazioni con il bottone ☰
-              e i costi/modello con il bottone 📊.
+              Salve!
             </div>
           )}
           {bubbles.map((m, i) => (
