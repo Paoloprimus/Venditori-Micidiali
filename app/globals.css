@@ -1,24 +1,101 @@
-:root { --bg:#0B1220; --panel:#101827; --muted:#A3A8B8; --primary:#2563EB; --danger:#EF4444; --ring:#1F2937; }
+:root {
+  --bg:#0B1220; --panel:#101827; --muted:#A3A8B8; --primary:#2563EB; --danger:#EF4444; --ring:#1F2937;
+}
+
 *{box-sizing:border-box}
 html,body{height:100%}
-body{margin:0;background:var(--bg);color:white;font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif}
+body{
+  margin:0;
+  min-height:100dvh; /* mobile-safe: non taglia con tastiera */
+  background:var(--bg);
+  color:white;
+  font-family:system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
 a{color:#93C5FD}
 button{cursor:pointer}
+
+/* ---- Buttons / UI ---- */
 .btn{background:var(--primary);border:none;color:white;padding:10px 14px;border-radius:10px}
 .iconbtn{background:#111827;border:1px solid var(--ring);color:#C9D1E7;border-radius:10px;padding:8px 10px}
-.topbar{display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--ring);background:#0D1526;position:sticky;top:0;z-index:10}
 .badge{font-size:12px;background:#111827;border:1px solid var(--ring);padding:4px 8px;border-radius:999px;color:#C9D1E7}
+.title{font-weight:700}
+.helper{color:var(--muted);font-size:14px}
+.hr{height:1px;background:var(--ring);margin:12px 0}
+
+/* ---- Top bar ---- */
+.topbar{
+  display:flex; align-items:center; gap:8px;
+  padding:10px; border-bottom:1px solid var(--ring);
+  background:#0D1526; position:sticky; top:0; z-index:10;
+}
+.topbar .spacer{flex:1}
+.topbar .desktop-only{display:inline-flex}
+@media (max-width: 640px){
+  .topbar .desktop-only{display:none} /* su mobile nascondiamo i bottoni per aprire i drawer */
+}
+
+/* ---- Layout content ---- */
 .container{max-width:920px;margin:0 auto;padding:12px}
 .thread{display:flex;flex-direction:column;gap:10px;padding:12px}
 .msg{background:#0F1730;border:1px solid var(--ring);border-radius:12px;padding:10px}
 .msg.me{align-self:flex-end;background:#15203B}
-.composer{position:sticky;bottom:0;background:#0D1526;border-top:1px solid var(--ring);padding:10px;display:flex;gap:8px}
-.composer textarea{flex:1;min-height:48px;max-height:180px;padding:10px;border-radius:10px;border:1px solid var(--ring);background:#0B1220;color:#C9D1E7}
-.drawer{position:fixed;top:0;bottom:0;width:320px;background:#0D1526;border:1px solid var(--ring);z-index:20;overflow:auto;transform:translateX(-100%);transition:transform .2s}
-.drawer.right{right:0;left:auto;transform:translateX(100%)}
+
+/* ---- Composer (mobile-first) ---- */
+.composer{
+  position:sticky; bottom:0; z-index:9;
+  background:#0D1526; border-top:1px solid var(--ring);
+  padding:10px;
+  display:grid; gap:8px;
+}
+.composer .inputwrap{display:block}
+.composer textarea{
+  width:100%;
+  min-height:48px; max-height:164px; /* ~6 righe */
+  padding:10px; border-radius:10px; border:1px solid var(--ring);
+  background:#0B1220; color:#C9D1E7; resize:none; overflow:auto;
+}
+.composer .actions{
+  display:flex; gap:8px; justify-content:space-between;
+}
+.composer .actions .left, .composer .actions .right{
+  display:flex; gap:8px; align-items:center;
+}
+
+/* Desktop: mantieni stile precedente (textarea + bottoni su una riga) */
+@media (min-width: 641px){
+  .composer{display:flex; align-items:flex-end}
+  .composer .inputwrap{flex:1}
+  .composer .actions{align-items:center}
+}
+
+/* ---- Drawers (sx) ---- */
+.drawer{
+  position:fixed; top:0; bottom:0; width:320px;
+  background:#0D1526; border:1px solid var(--ring); z-index:20; overflow:auto;
+  transform:translateX(-100%); transition:transform .2s ease;
+}
 .drawer.open{transform:translateX(0)}
+.drawer{left:0}
+
+/* ---- Top Sheet (dx → dall’alto) ---- */
+.topsheet{
+  position:fixed; left:0; right:0; top:0;
+  height:70vh; max-height:80dvh;
+  background:#0D1526; border-bottom:1px solid var(--ring);
+  z-index:20; overflow:auto;
+  transform:translateY(-100%); transition:transform .2s ease;
+}
+.topsheet.open{transform:translateY(0)}
 .list{padding:12px;display:flex;flex-direction:column;gap:8px}
 .list .row{background:#101827;border:1px solid var(--ring);border-radius:10px;padding:10px}
-.hr{height:1px;background:var(--ring);margin:12px 0}
-.helper{color:var(--muted);font-size:14px}
-.title{font-weight:700}
+
+/* ---- Gesture zones (mobile swipe) ---- */
+.edge-left{
+  position:fixed; left:0; top:0; bottom:0; width:24px; z-index:5;
+}
+.edge-top{
+  position:fixed; left:0; right:0; top:0; height:16px; z-index:5;
+}
+
+/* Evita conflitti di scroll con pull-to-refresh */
+html, body { overscroll-behavior-y: contain; }
