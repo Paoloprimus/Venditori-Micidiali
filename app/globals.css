@@ -75,7 +75,7 @@ button{cursor:pointer}
 .list{padding:12px;display:flex;flex-direction:column;gap:8px}
 .list .row{background:#101827;border:1px solid var(--ring);border-radius:10px;padding:10px}
 
-/* ---- Top Sheet (scende dall’alto) ---- */
+/* ---- Top Sheet (costs/model dall’alto) ---- */
 .topsheet{
   position:fixed; left:0; right:0; top:0;
   height:70vh; max-height:80dvh;
@@ -84,31 +84,3 @@ button{cursor:pointer}
   transform:translateY(-100%); transition:transform .2s ease;
 }
 .topsheet.open{transform:translateY(0)}
-
-/* ---- Maniglie (no-edge) per gesti web-safe) ---- */
-.handle-left, .handle-top { display:none; }
-@media (max-width: 640px){
-  .handle-left, .handle-top { display:block; }
-}
-
-/* Maniglia sinistra: piccola pill a ~8px dal bordo (evita gesto "back" Android) */
-.handle-left{
-  position:fixed; left:8px; top:40%;
-  width:16px; height:64px;
-  background:#111827; border:1px solid var(--ring); border-radius:999px;
-  opacity:.7; z-index:6;
-  touch-action: pan-y; /* consenti scroll verticale; gestiamo noi lo swipe orizzontale */
-}
-
-/* Maniglia top: "grabber" centrato a 8px dal bordo (evita pull-to-refresh) */
-.handle-top{
-  position:fixed; top:8px; left:50%; transform:translateX(-50%);
-  width:60px; height:20px; z-index:6; display:flex; align-items:center; justify-content:center;
-  touch-action: none; /* gestiamo noi la gesture */
-}
-.handle-top .grabber{
-  width:40px; height:6px; background:#374151; border-radius:999px;
-}
-
-/* Evita conflitti di scroll/pull-to-refresh nelle aree principali */
-html, body { overscroll-behavior-y: contain; }
