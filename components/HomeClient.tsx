@@ -1,6 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
-import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
+import { useEffect, useRef, useState } from "react";
+import { useDrawers, LeftDrawer, TopSheet } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
 type Bubble = { role:"user"|"assistant"; content:string };
@@ -8,14 +8,26 @@ type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
 
 export default function HomeClient({ email }: { email: string }) {
   const supabase = createSupabaseBrowser();
-  const { leftOpen, rightOpen, openLeft, closeLeft, openRight, closeRight } = useDrawers();
+  const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
+
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
-  const [terse, setTerse] = useState(false);
   const [usage, setUsage] = useState<Usage | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [modelBadge, setModelBadge] = useState<string>("…");
 
+  // --- Textarea auto-resize ---
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  function autoResize() {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const max = 164; // deve combaciare con CSS
+    el.style.height = Math.min(el.scrollHeight, max) + "px";
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }
+
+  // --- API helpers ---
   async function refreshUsage() {
     const res = await fetch("/api/usage/current-chat");
     const data = await res.json();
@@ -31,16 +43,16 @@ export default function HomeClient({ email }: { email: string }) {
     setServerError(null);
     const content = input.trim(); if (!content) return;
     setBubbles(b => [...b, { role:"user", content }]);
-    setInput("");
+    setInput(""); autoResize();
     const res = await fetch("/api/messages/send", {
       method:"POST",
       headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ content, terse })
+      body: JSON.stringify({ content, terse: false })
     });
     const data = await res.json();
     if (!res.ok) {
       setServerError(data?.details || data?.error || "Errore server");
-      setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri 📊 per dettagli." }]);
+      setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello dall’alto per dettagli." }]);
       return;
     }
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
@@ -52,20 +64,51 @@ export default function HomeClient({ email }: { email: string }) {
     window.location.href = "/login";
   }
 
+  // --- Gesture zones: apri con swipe bordo sinistro / dal bordo superiore ---
+  // LEFT EDGE (open left)
+  let startXLeft = 0; let swipedLeft = false;
+  function leftEdgeStart(e: React.TouchEvent) {
+    startXLeft = e.touches[0].clientX; swipedLeft = false;
+  }
+  function leftEdgeMove(e: React.TouchEvent) {
+    const dx = e.touches[0].clientX - startXLeft;
+    if (dx > 60 && !swipedLeft) { swipedLeft = true; openLeft(); }
+  }
+
+  // TOP EDGE (open top sheet)
+  let startYTop = 0; let swipedTop = false;
+  function topEdgeStart(e: React.TouchEvent) {
+    startYTop = e.touches[0].clientY; swipedTop = false;
+  }
+  function topEdgeMove(e: React.TouchEvent) {
+    const dy = e.touches[0].clientY - startYTop;
+    if (dy > 80 && !swipedTop) { swipedTop = true; openTop(); }
+  }
+
   return (
     <>
+      {/* GESTURE ZONES (attive anche quando i bottoni desktop sono nascosti) */}
+      <div className="edge-left" onTouchStart={leftEdgeStart} onTouchMove={leftEdgeMove} />
+      <div className="edge-top" onTouchStart={topEdgeStart} onTouchMove={topEdgeMove} />
+
+      {/* TOP BAR */}
       <div className="topbar">
-        <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
-        <div className="title" style={{ flex:1 }}>AIxPMI Assistant</div>
-        <span className="badge">Modello: {modelBadge}</span>
-        <button className="iconbtn" aria-label="Apri costi" onClick={openRight}>📊</button>
-        <button className="iconbtn" onClick={logout}>Esci ({email})</button>
+        {/* Bottoni visibili solo su desktop (mobile usa swipe) */}
+        <button className="iconbtn desktop-only" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
+        <div className="title">AIxPMI Assistant</div>
+        <div className="spacer" />
+        <button className="iconbtn desktop-only" aria-label="Apri costi" onClick={openTop}>📊</button>
+        <button className="iconbtn" onClick={logout}>Esci</button>
       </div>
 
+      {/* THREAD */}
       <div className="container">
         <div className="thread">
           {bubbles.length === 0 && (
-            <div className="helper">Benvenuto! Inizia una nuova conversazione oppure prova: “Automatizzare email clienti”.</div>
+            <div className="helper">
+              Benvenuto! Inizia una nuova conversazione oppure prova: “Automatizzare email clienti”.
+              <br/>Apri le conversazioni con uno **swipe dal bordo sinistro**. Apri i costi con **swipe dall’alto**.
+            </div>
           )}
           {bubbles.map((m, i) => (
             <div key={i} className={`msg ${m.role === "user" ? "me":""}`}>{m.content}</div>
@@ -74,15 +117,30 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
+      {/* COMPOSER – mobile-first */}
       <div className="composer">
-        <textarea value={input} onChange={e=>setInput(e.target.value)} placeholder="Scrivi qui la tua domanda… (Invio per inviare)"
-          onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }} />
-        <button className="iconbtn" onClick={()=>setTerse(t=>!t)}>{terse ? "Risposta breve: ON":"Risposta breve: OFF"}</button>
-        <button className="btn" onClick={send}>Invia</button>
+        <div className="inputwrap">
+          <textarea
+            ref={taRef}
+            value={input}
+            onChange={e=>{ setInput(e.target.value); autoResize(); }}
+            placeholder="Scrivi qui la tua domanda…"
+            onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
+          />
+        </div>
+        <div className="actions">
+          <div className="left">
+            <button className="iconbtn" onClick={()=>alert("Modalità vocale (fake): da collegare in seguito.")}>🎙️ Voce</button>
+          </div>
+          <div className="right">
+            <button className="btn" onClick={send}>Invia</button>
+          </div>
+        </div>
       </div>
 
+      {/* PANNELLI */}
       <LeftDrawer open={leftOpen} onClose={closeLeft} />
-      <RightDrawer open={rightOpen} onClose={closeRight} usage={usage} />
+      <TopSheet open={topOpen} onClose={closeTop} usage={usage} model={modelBadge} />
     </>
   );
 }
