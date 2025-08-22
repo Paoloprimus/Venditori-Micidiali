@@ -12,19 +12,19 @@ export function useDrawers() {
   };
 }
 
-/** Drawer sinistro (con chiusura via swipe verso sinistra) */
+/** Drawer sinistro (chiusura via swipe verso sinistra all'interno del drawer) */
 export function LeftDrawer({
   open, onClose
 }: { open:boolean; onClose:()=>void }) {
 
   // swipe per chiusura
-  let startX = 0; let moved = false;
+  let startX = 0;
   function onTouchStart(e: React.TouchEvent) {
-    startX = e.touches[0].clientX; moved = false;
+    startX = e.touches[0].clientX;
   }
   function onTouchMove(e: React.TouchEvent) {
     const dx = e.touches[0].clientX - startX;
-    if (dx < -60) { moved = true; onClose(); }
+    if (dx < -60) onClose();
   }
 
   return (
@@ -59,13 +59,13 @@ export function TopSheet({
   const u = usage ?? { tokensIn:0, tokensOut:0, costTotal:0 };
 
   // swipe per chiusura (verso l’alto)
-  let startY = 0; let moved = false;
+  let startY = 0;
   function onTouchStart(e: React.TouchEvent) {
-    startY = e.touches[0].clientY; moved = false;
+    startY = e.touches[0].clientY;
   }
   function onTouchMove(e: React.TouchEvent) {
     const dy = e.touches[0].clientY - startY;
-    if (dy < -80) { moved = true; onClose(); }
+    if (dy < -80) onClose();
   }
 
   return (
