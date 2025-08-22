@@ -64,40 +64,74 @@ export default function HomeClient({ email }: { email: string }) {
     window.location.href = "/login";
   }
 
-  // --- Gesture zones: apri con swipe bordo sinistro / dal bordo superiore ---
-  // LEFT EDGE (open left)
-  let startXLeft = 0; let swipedLeft = false;
-  function leftEdgeStart(e: React.TouchEvent) {
-    startXLeft = e.touches[0].clientX; swipedLeft = false;
+  // --- Maniglia SINISTRA: swipe orizzontale dal "grip" interno (no bordo di sistema) ---
+  let leftPointerId: number | null = null;
+  let leftStartX = 0;
+  function leftDown(e: React.PointerEvent) {
+    leftPointerId = e.pointerId;
+    (e.currentTarget as HTMLElement).setPointerCapture(leftPointerId);
+    leftStartX = e.clientX;
   }
-  function leftEdgeMove(e: React.TouchEvent) {
-    const dx = e.touches[0].clientX - startXLeft;
-    if (dx > 60 && !swipedLeft) { swipedLeft = true; openLeft(); }
+  function leftMove(e: React.PointerEvent) {
+    if (leftPointerId == null) return;
+    const dx = e.clientX - leftStartX;
+    if (dx > 60) { openLeft(); leftUp(e); }
+  }
+  function leftUp(e: React.PointerEvent) {
+    if (leftPointerId != null) {
+      (e.currentTarget as HTMLElement).releasePointerCapture(leftPointerId);
+      leftPointerId = null;
+    }
   }
 
-  // TOP EDGE (open top sheet)
-  let startYTop = 0; let swipedTop = false;
-  function topEdgeStart(e: React.TouchEvent) {
-    startYTop = e.touches[0].clientY; swipedTop = false;
+  // --- Maniglia TOP: swipe verticale dal "grabber" interno (evita pull-to-refresh) ---
+  let topPointerId: number | null = null;
+  let topStartY = 0;
+  function topDown(e: React.PointerEvent) {
+    topPointerId = e.pointerId;
+    (e.currentTarget as HTMLElement).setPointerCapture(topPointerId);
+    topStartY = e.clientY;
   }
-  function topEdgeMove(e: React.TouchEvent) {
-    const dy = e.touches[0].clientY - startYTop;
-    if (dy > 80 && !swipedTop) { swipedTop = true; openTop(); }
+  function topMove(e: React.PointerEvent) {
+    if (topPointerId == null) return;
+    const dy = e.clientY - topStartY;
+    if (dy > 80) { openTop(); topUp(e); }
+  }
+  function topUp(e: React.PointerEvent) {
+    if (topPointerId != null) {
+      (e.currentTarget as HTMLElement).releasePointerCapture(topPointerId);
+      topPointerId = null;
+    }
   }
 
   return (
     <>
-      {/* GESTURE ZONES (attive anche quando i bottoni desktop sono nascosti) */}
-      <div className="edge-left" onTouchStart={leftEdgeStart} onTouchMove={leftEdgeMove} />
-      <div className="edge-top" onTouchStart={topEdgeStart} onTouchMove={topEdgeMove} />
+      {/* Maniglie interne per gesti web-safe */}
+      <div
+        className="handle-left"
+        onPointerDown={leftDown}
+        onPointerMove={leftMove}
+        onPointerUp={leftUp}
+        onClick={openLeft}
+        aria-label="Apri conversazioni"
+      />
+      <div
+        className="handle-top"
+        onPointerDown={topDown}
+        onPointerMove={topMove}
+        onPointerUp={topUp}
+        onClick={openTop}
+        aria-label="Apri costi & utilizzo"
+      >
+        <div className="grabber" />
+      </div>
 
-      {/* TOP BAR */}
+      {/* TOP BAR (icone sempre disponibili come fallback) */}
       <div className="topbar">
-        {/* Bottoni visibili solo su desktop (mobile usa swipe) */}
-        <button className="iconbtn desktop-only" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
+        <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
         <div className="title">AIxPMI Assistant</div>
         <div className="spacer" />
-        <button className="iconbtn desktop-only" aria-label="Apri costi" onClick={openTop}>📊</button>
+        <button className="iconbtn" aria-label="Apri costi & utilizzo" onClick={openTop}>📊</button>
         <button className="iconbtn" onClick={logout}>Esci</button>
       </div>
 
@@ -106,8 +140,8 @@ export default function HomeClient({ email }: { email: string }) {
         <div className="thread">
           {bubbles.length === 0 && (
             <div className="helper">
-              Benvenuto! Inizia una nuova conversazione oppure prova: “Automatizzare email clienti”.
-              <br/>Apri le conversazioni con uno **swipe dal bordo sinistro**. Apri i costi con **swipe dall’alto**.
+              Benvenuto! Inizia una nuova conversazione, apri le conversazioni dal <b>grip a sinistra</b> o con il bottone ☰.
+              Apri i costi & modello dal <b>grabber in alto</b> o con il bottone 📊.
             </div>
           )}
           {bubbles.map((m, i) => (
