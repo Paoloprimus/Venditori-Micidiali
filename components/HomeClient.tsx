@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useDrawers, LeftDrawer, TopSheet } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
-type Bubble = { role:"user"|"assistant"; content:string };
+type Bubble = { role:"user"|"assistant"; content:string; created_at?: string };
 type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
+type Conv = { id:string; title:string };
 
 export default function HomeClient({ email }: { email: string }) {
   const supabase = createSupabaseBrowser();
@@ -15,39 +16,51 @@ export default function HomeClient({ email }: { email: string }) {
   const [usage, setUsage] = useState<Usage | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
   const [modelBadge, setModelBadge] = useState<string>("…");
+  const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
-  // --- Textarea auto-resize ---
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   function autoResize() {
     const el = taRef.current;
     if (!el) return;
     el.style.height = "auto";
-    const max = 164; // deve combaciare con CSS
+    const max = 164;
     el.style.height = Math.min(el.scrollHeight, max) + "px";
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }
 
-  // --- API helpers ---
-  async function refreshUsage() {
-    const res = await fetch("/api/usage/current-chat");
+  async function refreshUsage(convId?: string) {
+    const q = convId ? `?conversationId=${encodeURIComponent(convId)}` : "";
+    const res = await fetch(`/api/usage/current-chat${q}`);
     const data = await res.json();
     if (!data?.error) setUsage({ tokensIn: data.tokensIn ?? 0, tokensOut: data.tokensOut ?? 0, costTotal: data.costTotal ?? 0 });
   }
 
+  async function loadMessages(convId: string) {
+    const q = new URLSearchParams({ conversationId: convId, limit: "200" });
+    const res = await fetch(`/api/messages/by-conversation?${q.toString()}`);
+    const data = await res.json();
+    if (res.ok) {
+      setBubbles((data.items || []).map((m: any) => ({ role: m.role, content: m.content, created_at: m.created_at })));
+    } else {
+      setBubbles([]);
+    }
+  }
+
   useEffect(() => {
-    refreshUsage();
     fetch("/api/model").then(r=>r.json()).then(d=>setModelBadge(d?.model ?? "n/d")).catch(()=>setModelBadge("n/d"));
+    refreshUsage();
   }, []);
 
   async function send() {
     setServerError(null);
     const content = input.trim(); if (!content) return;
+    const convId = currentConv?.id || undefined;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput(""); autoResize();
     const res = await fetch("/api/messages/send", {
       method:"POST",
       headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ content, terse: false })
+      body: JSON.stringify({ content, terse: false, conversationId: convId })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -55,8 +68,11 @@ export default function HomeClient({ email }: { email: string }) {
       setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
       return;
     }
+    if (!convId && data.conversationId) {
+      setCurrentConv({ id: data.conversationId, title: "Nuova chat" });
+    }
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
-    await refreshUsage();
+    await refreshUsage(currentConv?.id || data.conversationId);
   }
 
   async function logout() {
@@ -64,23 +80,28 @@ export default function HomeClient({ email }: { email: string }) {
     window.location.href = "/login";
   }
 
+  function handleSelectConv(c: { id:string; title:string }) {
+    setCurrentConv({ id: c.id, title: c.title });
+    closeLeft();
+    loadMessages(c.id);
+    refreshUsage(c.id);
+  }
+
   return (
     <>
-      {/* TOP BAR (icone per aprire i pannelli) */}
       <div className="topbar">
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
-        <div className="title">AIxPMI Assistant</div>
+        <div className="title">AIxPMI Assistant{currentConv ? ` — ${currentConv.title}` : ""}</div>
         <div className="spacer" />
         <button className="iconbtn" aria-label="Apri costi & utilizzo" onClick={openTop}>📊</button>
         <button className="iconbtn" onClick={logout}>Esci</button>
       </div>
 
-      {/* THREAD */}
       <div className="container">
         <div className="thread">
           {bubbles.length === 0 && (
             <div className="helper">
-              Salve!
+              Benvenuto! Inizia una nuova conversazione (☰ → “Nuova”) o selezionane una esistente. Poi scrivi sotto.
             </div>
           )}
           {bubbles.map((m, i) => (
@@ -90,14 +111,13 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      {/* COMPOSER – mobile-first */}
       <div className="composer">
         <div className="inputwrap">
           <textarea
             ref={taRef}
             value={input}
             onChange={e=>{ setInput(e.target.value); autoResize(); }}
-            placeholder="Scrivi qui la tua domanda…"
+            placeholder={currentConv ? "Scrivi un messaggio…" : "Scrivi un messaggio (verrà creata una nuova chat)…"}
             onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
           />
         </div>
@@ -111,8 +131,7 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      {/* PANNELLI (apertura/chiusura da icone) */}
-      <LeftDrawer open={leftOpen} onClose={closeLeft} />
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
       <TopSheet open={topOpen} onClose={closeTop} usage={usage} model={modelBadge} />
     </>
   );
