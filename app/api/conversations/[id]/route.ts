@@ -1,7 +1,7 @@
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
-import { createSupabaseServer } from "../../../../../lib/supabase/server";
+import { createSupabaseServer } from "../../../../lib/supabase/server";
 
 export async function PATCH(req: Request, { params }: { params: { id: string } }) {
   const supabase = createSupabaseServer();
