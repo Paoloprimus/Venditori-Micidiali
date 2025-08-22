@@ -52,7 +52,7 @@ export default function HomeClient({ email }: { email: string }) {
     const data = await res.json();
     if (!res.ok) {
       setServerError(data?.details || data?.error || "Errore server");
-      setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello dall’alto per dettagli." }]);
+      setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
       return;
     }
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
@@ -64,69 +64,9 @@ export default function HomeClient({ email }: { email: string }) {
     window.location.href = "/login";
   }
 
-  // --- Maniglia SINISTRA: swipe orizzontale dal "grip" interno (no bordo di sistema) ---
-  let leftPointerId: number | null = null;
-  let leftStartX = 0;
-  function leftDown(e: React.PointerEvent) {
-    leftPointerId = e.pointerId;
-    (e.currentTarget as HTMLElement).setPointerCapture(leftPointerId);
-    leftStartX = e.clientX;
-  }
-  function leftMove(e: React.PointerEvent) {
-    if (leftPointerId == null) return;
-    const dx = e.clientX - leftStartX;
-    if (dx > 60) { openLeft(); leftUp(e); }
-  }
-  function leftUp(e: React.PointerEvent) {
-    if (leftPointerId != null) {
-      (e.currentTarget as HTMLElement).releasePointerCapture(leftPointerId);
-      leftPointerId = null;
-    }
-  }
-
-  // --- Maniglia TOP: swipe verticale dal "grabber" interno (evita pull-to-refresh) ---
-  let topPointerId: number | null = null;
-  let topStartY = 0;
-  function topDown(e: React.PointerEvent) {
-    topPointerId = e.pointerId;
-    (e.currentTarget as HTMLElement).setPointerCapture(topPointerId);
-    topStartY = e.clientY;
-  }
-  function topMove(e: React.PointerEvent) {
-    if (topPointerId == null) return;
-    const dy = e.clientY - topStartY;
-    if (dy > 80) { openTop(); topUp(e); }
-  }
-  function topUp(e: React.PointerEvent) {
-    if (topPointerId != null) {
-      (e.currentTarget as HTMLElement).releasePointerCapture(topPointerId);
-      topPointerId = null;
-    }
-  }
-
   return (
     <>
-      {/* Maniglie interne per gesti web-safe */}
-      <div
-        className="handle-left"
-        onPointerDown={leftDown}
-        onPointerMove={leftMove}
-        onPointerUp={leftUp}
-        onClick={openLeft}
-        aria-label="Apri conversazioni"
-      />
-      <div
-        className="handle-top"
-        onPointerDown={topDown}
-        onPointerMove={topMove}
-        onPointerUp={topUp}
-        onClick={openTop}
-        aria-label="Apri costi & utilizzo"
-      >
-        <div className="grabber" />
-      </div>
-
-      {/* TOP BAR (icone sempre disponibili come fallback) */}
+      {/* TOP BAR (icone per aprire i pannelli) */}
       <div className="topbar">
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
         <div className="title">AIxPMI Assistant</div>
@@ -140,8 +80,8 @@ export default function HomeClient({ email }: { email: string }) {
         <div className="thread">
           {bubbles.length === 0 && (
             <div className="helper">
-              Benvenuto! Inizia una nuova conversazione, apri le conversazioni dal <b>grip a sinistra</b> o con il bottone ☰.
-              Apri i costi & modello dal <b>grabber in alto</b> o con il bottone 📊.
+              Benvenuto! Inizia una nuova conversazione. Apri le conversazioni con il bottone ☰
+              e i costi/modello con il bottone 📊.
             </div>
           )}
           {bubbles.map((m, i) => (
@@ -172,7 +112,7 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      {/* PANNELLI */}
+      {/* PANNELLI (apertura/chiusura da icone) */}
       <LeftDrawer open={leftOpen} onClose={closeLeft} />
       <TopSheet open={topOpen} onClose={closeTop} usage={usage} model={modelBadge} />
     </>
