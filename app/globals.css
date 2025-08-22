@@ -29,10 +29,6 @@ button{cursor:pointer}
   background:#0D1526; position:sticky; top:0; z-index:10;
 }
 .topbar .spacer{flex:1}
-.topbar .desktop-only{display:inline-flex}
-@media (max-width: 640px){
-  .topbar .desktop-only{display:none} /* su mobile nascondiamo i bottoni per aprire i drawer */
-}
 
 /* ---- Layout content ---- */
 .container{max-width:920px;margin:0 auto;padding:12px}
@@ -61,23 +57,25 @@ button{cursor:pointer}
   display:flex; gap:8px; align-items:center;
 }
 
-/* Desktop: mantieni stile precedente (textarea + bottoni su una riga) */
+/* Desktop: layout comodo */
 @media (min-width: 641px){
   .composer{display:flex; align-items:flex-end}
   .composer .inputwrap{flex:1}
   .composer .actions{align-items:center}
 }
 
-/* ---- Drawers (sx) ---- */
+/* ---- Drawer sinistro ---- */
 .drawer{
   position:fixed; top:0; bottom:0; width:320px;
   background:#0D1526; border:1px solid var(--ring); z-index:20; overflow:auto;
   transform:translateX(-100%); transition:transform .2s ease;
+  left:0;
 }
 .drawer.open{transform:translateX(0)}
-.drawer{left:0}
+.list{padding:12px;display:flex;flex-direction:column;gap:8px}
+.list .row{background:#101827;border:1px solid var(--ring);border-radius:10px;padding:10px}
 
-/* ---- Top Sheet (dx → dall’alto) ---- */
+/* ---- Top Sheet (scende dall’alto) ---- */
 .topsheet{
   position:fixed; left:0; right:0; top:0;
   height:70vh; max-height:80dvh;
@@ -86,16 +84,31 @@ button{cursor:pointer}
   transform:translateY(-100%); transition:transform .2s ease;
 }
 .topsheet.open{transform:translateY(0)}
-.list{padding:12px;display:flex;flex-direction:column;gap:8px}
-.list .row{background:#101827;border:1px solid var(--ring);border-radius:10px;padding:10px}
 
-/* ---- Gesture zones (mobile swipe) ---- */
-.edge-left{
-  position:fixed; left:0; top:0; bottom:0; width:24px; z-index:5;
-}
-.edge-top{
-  position:fixed; left:0; right:0; top:0; height:16px; z-index:5;
+/* ---- Maniglie (no-edge) per gesti web-safe) ---- */
+.handle-left, .handle-top { display:none; }
+@media (max-width: 640px){
+  .handle-left, .handle-top { display:block; }
 }
 
-/* Evita conflitti di scroll con pull-to-refresh */
+/* Maniglia sinistra: piccola pill a ~8px dal bordo (evita gesto "back" Android) */
+.handle-left{
+  position:fixed; left:8px; top:40%;
+  width:16px; height:64px;
+  background:#111827; border:1px solid var(--ring); border-radius:999px;
+  opacity:.7; z-index:6;
+  touch-action: pan-y; /* consenti scroll verticale; gestiamo noi lo swipe orizzontale */
+}
+
+/* Maniglia top: "grabber" centrato a 8px dal bordo (evita pull-to-refresh) */
+.handle-top{
+  position:fixed; top:8px; left:50%; transform:translateX(-50%);
+  width:60px; height:20px; z-index:6; display:flex; align-items:center; justify-content:center;
+  touch-action: none; /* gestiamo noi la gesture */
+}
+.handle-top .grabber{
+  width:40px; height:6px; background:#374151; border-radius:999px;
+}
+
+/* Evita conflitti di scroll/pull-to-refresh nelle aree principali */
 html, body { overscroll-behavior-y: contain; }
