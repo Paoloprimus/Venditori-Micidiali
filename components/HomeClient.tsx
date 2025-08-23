@@ -18,6 +18,10 @@ export default function HomeClient({ email }: { email: string }) {
   const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
+  // NEW: stato per nominare la chat prima di iniziare
+  const [newTitle, setNewTitle] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   function autoResize() {
     const el = taRef.current;
@@ -51,10 +55,42 @@ export default function HomeClient({ email }: { email: string }) {
     refreshUsage();
   }, []);
 
+  // NEW: crea conversazione SOLO dopo che l’utente ha inserito il nome
+  async function createConversation() {
+    const title = newTitle.trim();
+    if (!title) return;
+    setIsCreating(true);
+    try {
+      const res = await fetch("/api/conversations/new", {
+        method:"POST",
+        headers:{ "Content-Type":"application/json" },
+        body: JSON.stringify({ title })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data?.error || "Errore creazione conversazione");
+      const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+      if (!id) throw new Error("ID conversazione mancante nella risposta");
+      setCurrentConv({ id, title });
+      setBubbles([]);
+      await refreshUsage(id);
+    } catch (e:any) {
+      alert(e?.message || "Errore nella creazione della conversazione");
+    } finally {
+      setIsCreating(false);
+    }
+  }
+
   async function send() {
     setServerError(null);
     const content = input.trim(); if (!content) return;
-    const convId = currentConv?.id || undefined;
+
+    // NEW: blocca l’invio se non esiste una conversazione già nominata
+    if (!currentConv?.id) {
+      alert("Prima di chattare, nomina la prossima chat.");
+      return;
+    }
+
+    const convId = currentConv.id;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput(""); autoResize();
     const res = await fetch("/api/messages/send", {
@@ -68,11 +104,14 @@ export default function HomeClient({ email }: { email: string }) {
       setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
       return;
     }
-    if (!convId && data.conversationId) {
-      setCurrentConv({ id: data.conversationId, title: "Nuova chat" });
-    }
+
+    // REMOVED (minima modifica): non creiamo più auto “Nuova chat” dal send()
+    // if (!convId && data.conversationId) {
+    //   setCurrentConv({ id: data.conversationId, title: "Nuova chat" });
+    // }
+
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
-    await refreshUsage(currentConv?.id || data.conversationId);
+    await refreshUsage(convId);
   }
 
   async function logout() {
@@ -99,9 +138,33 @@ export default function HomeClient({ email }: { email: string }) {
 
       <div className="container">
         <div className="thread">
-          {bubbles.length === 0 && (
+          {/* NEW: schermata di inizio “Nomina la prossima chat” quando non c’è una conversazione attiva */}
+          {!currentConv && (
             <div className="helper">
-              Benvenuto! Inizia una nuova conversazione (☰ → “Nuova”) o selezionane una esistente. Poi scrivi sotto.
+              <div style={{ fontWeight:600, marginBottom:8 }}>Nomina la prossima chat</div>
+              <div style={{ display:"flex", gap:8 }}>
+                <input
+                  type="text"
+                  value={newTitle}
+                  onChange={e=>setNewTitle(e.target.value)}
+                  placeholder="Inserisci un nome…"
+                  disabled={isCreating}
+                  style={{ flex:1, padding:"10px 12px" }}
+                />
+                <button className="btn" onClick={createConversation} disabled={isCreating || !newTitle.trim()}>
+                  Crea
+                </button>
+              </div>
+              <div style={{ opacity:0.7, marginTop:8 }}>
+                Il nome non è modificabile (per ora). Dopo la creazione puoi iniziare a chattare.
+              </div>
+            </div>
+          )}
+
+          {/* Thread messaggi */}
+          {bubbles.length === 0 && currentConv && (
+            <div className="helper">
+              Inizia a scrivere qui sotto.
             </div>
           )}
           {bubbles.map((m, i) => (
@@ -117,20 +180,22 @@ export default function HomeClient({ email }: { email: string }) {
             ref={taRef}
             value={input}
             onChange={e=>{ setInput(e.target.value); autoResize(); }}
-            placeholder={currentConv ? "Scrivi un messaggio…" : "Scrivi un messaggio (verrà creata una nuova chat)…"}
+            placeholder={currentConv ? "Scrivi un messaggio…" : "Nomina la prossima chat per iniziare"}
             onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
+            disabled={!currentConv} // NEW: disabilita composer finché non c’è una chat nominata
           />
         </div>
         <div className="actions">
           <div className="left">
-            <button className="iconbtn" onClick={()=>alert("Modalità vocale (fake): da collegare in seguito.")}>🎙️ Voce</button>
+            <button className="iconbtn" onClick={()=>alert("Modalità vocale (fake): da collegare in seguito.")} disabled={!currentConv}>🎙️ Voce</button>
           </div>
           <div className="right">
-            <button className="btn" onClick={send}>Invia</button>
+            <button className="btn" onClick={send} disabled={!currentConv}>Invia</button>
           </div>
         </div>
       </div>
 
+      {/* Drawer: solo lista e selezione (il componente rimane invariato) */}
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
       <TopSheet open={topOpen} onClose={closeTop} usage={usage} model={modelBadge} />
     </>
