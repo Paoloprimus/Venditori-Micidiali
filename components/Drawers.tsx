@@ -80,7 +80,7 @@ export function LeftDrawer({
     <aside className={`drawer ${open ? "open":""}`}>
       <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
-        <div className="title">Conversazioni</div>
+        <div className="title">Sessioni</div>
         <div className="spacer" />
         <button className="iconbtn" onClick={()=>load(true)}>↻</button>
         {/* RIMOSSI: pulsanti Nuova / Rinomina / Elimina */}
@@ -91,9 +91,15 @@ export function LeftDrawer({
           <div key={c.id} className="row" style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div style={{ flex:1, cursor:"pointer" }} onClick={()=>onSelect(c)} title={c.title}>
               <div className="title" style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.title}</div>
-              <div className="helper">
-                Aggiornata: {new Date(c.updated_at).toLocaleString()} • Tot €{Number(c.total_cost||0).toFixed(4)}
-              </div>
+                <div className="helper">
+                  Aggiornata: {new Date(c.updated_at).toLocaleString(undefined, {
+                    day: "2-digit",
+                    month: "2-digit",
+                    year: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit"
+                  })}
+                </div>
             </div>
           </div>
         ))}
