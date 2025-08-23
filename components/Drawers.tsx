@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
-  const [topOpen, setTopOpen] = useState(false);
+  const [topOpen, setTopOpen] = useState(false); // riusato per il drawer destro
   return {
     leftOpen, topOpen,
     openLeft: ()=>setLeftOpen(true), closeLeft: ()=>setLeftOpen(false),
@@ -13,6 +13,7 @@ export function useDrawers() {
 
 type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
 
+/** Rimane qui per compatibilità, ma non verrà più usato. */
 export function TopSheet({
   open, onClose, usage, model
 }: { open:boolean; onClose:()=>void; usage:Usage|null; model:string }) {
@@ -94,7 +95,6 @@ export function LeftDrawer({
                 Aggiornata: {new Date(c.updated_at).toLocaleString()} • Tot €{Number(c.total_cost||0).toFixed(4)}
               </div>
             </div>
-            {/* RIMOSSI: bottoni Apri/Rinomina/Elimina → ora si apre cliccando sulla riga */}
           </div>
         ))}
         {hasMore && !loading && (
@@ -102,6 +102,28 @@ export function LeftDrawer({
         )}
         {loading && <div className="helper">Caricamento…</div>}
         {!loading && items.length === 0 && <div className="helper">Nessuna conversazione.</div>}
+      </div>
+    </aside>
+  );
+}
+
+/** NUOVO: Drawer destro per Impostazioni (vuoto per ora). */
+export function RightDrawer({
+  open, onClose
+}: { open:boolean; onClose:()=>void }) {
+  return (
+    <aside
+      className={`drawer right ${open ? "open":""}`}
+      // NB: supponiamo che lo stile .drawer.right lo posizioni a destra; se non presente, aggiungi CSS:
+      // .drawer.right { right: 0; left: auto; }
+    >
+      <div className="topbar">
+        <button className="iconbtn" onClick={onClose}>Chiudi</button>
+        <div className="title">Impostazioni</div>
+        <div className="spacer" />
+      </div>
+      <div className="list">
+        {/* Vuoto per ora */}
       </div>
     </aside>
   );
