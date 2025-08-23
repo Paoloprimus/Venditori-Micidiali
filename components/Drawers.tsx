@@ -13,7 +13,7 @@ export function useDrawers() {
 
 type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
 
-/** Rimane qui per compatibilità, ma non verrà più usato. */
+/** Manteniamo TopSheet per compatibilità, anche se non usato ora. */
 export function TopSheet({
   open, onClose, usage, model
 }: { open:boolean; onClose:()=>void; usage:Usage|null; model:string }) {
@@ -76,6 +76,26 @@ export function LeftDrawer({
 
   useEffect(()=>{ if (open) load(true); }, [open]);
 
+  async function remove(id: string) {
+    if (!confirm("Eliminare questa sessione?")) return;
+    const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data?.details || data?.error || "Errore eliminazione");
+      return;
+    }
+    setItems(prev => prev.filter(x => x.id !== id));
+  }
+
+  const formatUpdatedAt = (iso: string) =>
+    new Date(iso).toLocaleString(undefined, {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit"
+    });
+
   return (
     <aside className={`drawer ${open ? "open":""}`}>
       <div className="topbar">
@@ -83,46 +103,43 @@ export function LeftDrawer({
         <div className="title">Sessioni</div>
         <div className="spacer" />
         <button className="iconbtn" onClick={()=>load(true)}>↻</button>
-        {/* RIMOSSI: pulsanti Nuova / Rinomina / Elimina */}
       </div>
       <div className="list">
         {error && <div className="row" style={{ color:"#F59E0B" }}>Errore: {error}</div>}
         {items.map(c => (
           <div key={c.id} className="row" style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ flex:1, cursor:"pointer" }} onClick={()=>onSelect(c)} title={c.title}>
-              <div className="title" style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.title}</div>
-                <div className="helper">
-                  Aggiornata: {new Date(c.updated_at).toLocaleString(undefined, {
-                    day: "2-digit",
-                    month: "2-digit",
-                    year: "numeric",
-                    hour: "2-digit",
-                    minute: "2-digit"
-                  })}
-                </div>
+            <div
+              style={{ flex:1, cursor:"pointer" }}
+              onClick={()=>onSelect(c)}
+              title={c.title}
+            >
+              <div className="title" style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                {c.title}
+              </div>
+              <div className="helper">
+                Aggiornata: {formatUpdatedAt(c.updated_at)}
+              </div>
             </div>
+            {/* Cestino per eliminare la sessione */}
+            <button className="iconbtn" title="Elimina" onClick={()=>remove(c.id)}>🗑️</button>
           </div>
         ))}
         {hasMore && !loading && (
           <button className="iconbtn" onClick={()=>load(false)}>Carica altro…</button>
         )}
         {loading && <div className="helper">Caricamento…</div>}
-        {!loading && items.length === 0 && <div className="helper">Nessuna conversazione.</div>}
+        {!loading && items.length === 0 && <div className="helper">Nessuna sessione.</div>}
       </div>
     </aside>
   );
 }
 
-/** NUOVO: Drawer destro per Impostazioni (vuoto per ora). */
+/** Drawer destro Impostazioni (vuoto per ora). */
 export function RightDrawer({
   open, onClose
 }: { open:boolean; onClose:()=>void }) {
   return (
-    <aside
-      className={`drawer right ${open ? "open":""}`}
-      // NB: supponiamo che lo stile .drawer.right lo posizioni a destra; se non presente, aggiungi CSS:
-      // .drawer.right { right: 0; left: auto; }
-    >
+    <aside className={`drawer right ${open ? "open":""}`}>
       <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
         <div className="title">Impostazioni</div>
