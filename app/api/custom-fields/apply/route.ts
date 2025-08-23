@@ -15,8 +15,7 @@ const ApplySchema = z.object({
 });
 
 export async function POST(req: NextRequest) {
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = createClient();
   try {
     const body = await req.json();
     const { proposal } = ApplySchema.parse(body);
