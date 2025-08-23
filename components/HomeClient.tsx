@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState } from "react";
-import { useDrawers, LeftDrawer, TopSheet } from "./Drawers";
+import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
 type Bubble = { role:"user"|"assistant"; content:string; created_at?: string };
@@ -13,12 +13,12 @@ export default function HomeClient({ email }: { email: string }) {
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
-  const [usage, setUsage] = useState<Usage | null>(null);
+  const [usage, setUsage] = useState<Usage | null>(null); // rimane per compatibilità futura
   const [serverError, setServerError] = useState<string | null>(null);
-  const [modelBadge, setModelBadge] = useState<string>("…");
+  const [modelBadge, setModelBadge] = useState<string>("…"); // rimane per compatibilità futura
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
-  // NEW: stato per nominare la chat prima di iniziare
+  // Stato per nominare la chat prima di iniziare
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -55,7 +55,6 @@ export default function HomeClient({ email }: { email: string }) {
     refreshUsage();
   }, []);
 
-  // NEW: crea conversazione SOLO dopo che l’utente ha inserito il nome
   async function createConversation() {
     const title = newTitle.trim();
     if (!title) return;
@@ -83,13 +82,10 @@ export default function HomeClient({ email }: { email: string }) {
   async function send() {
     setServerError(null);
     const content = input.trim(); if (!content) return;
-
-    // NEW: blocca l’invio se non esiste una conversazione già nominata
     if (!currentConv?.id) {
       alert("Prima di chattare, nomina la prossima chat.");
       return;
     }
-
     const convId = currentConv.id;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput(""); autoResize();
@@ -104,9 +100,6 @@ export default function HomeClient({ email }: { email: string }) {
       setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
       return;
     }
-
-    // REMOVED: non creiamo più auto “Nuova chat” dal send()
-
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
     await refreshUsage(convId);
   }
@@ -129,13 +122,13 @@ export default function HomeClient({ email }: { email: string }) {
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
         <div className="title">AIxPMI Assistant{currentConv ? ` — ${currentConv.title}` : ""}</div>
         <div className="spacer" />
-        <button className="iconbtn" aria-label="Apri costi & utilizzo" onClick={openTop}>📊</button>
+        {/* Cambiata icona da 📊 a ⚙️ e apre il drawer destro */}
+        <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>⚙️</button>
         <button className="iconbtn" onClick={logout}>Esci</button>
       </div>
 
       <div className="container">
         <div className="thread">
-          {/* NEW: schermata di inizio “Nomina la prossima chat” */}
           {!currentConv && (
             <div className="helper">
               <div style={{ fontWeight:600, marginBottom:8 }}>Nomina la prossima chat</div>
@@ -158,7 +151,6 @@ export default function HomeClient({ email }: { email: string }) {
             </div>
           )}
 
-          {/* Thread messaggi */}
           {bubbles.length === 0 && currentConv && (
             <div className="helper">
               Nessun messaggio ancora. Scrivi qui sotto per iniziare.
@@ -193,7 +185,8 @@ export default function HomeClient({ email }: { email: string }) {
       </div>
 
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
-      <TopSheet open={topOpen} onClose={closeTop} usage={usage} model={modelBadge} />
+      {/* NUOVO: drawer destro Impostazioni */}
+      <RightDrawer open={topOpen} onClose={closeTop} />
     </>
   );
 }
