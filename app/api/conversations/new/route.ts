@@ -1,23 +1,38 @@
-export const runtime = "nodejs";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "../../../../lib/supabase/server";
 
-import { NextResponse } from "next/server";
-import { createSupabaseServer } from "../../../../lib/supabase/server";
-import { LLM_MODEL } from "../../../../lib/openai";
+export async function POST(_req: NextRequest) {
+  const supabase = createClient();
+  try {
+    // Recupera utente loggato
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) throw new Error("Utente non autenticato");
 
-export async function POST(req: Request) {
-  const supabase = createSupabaseServer();
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
+    // Titolo di default leggibile (con data/ora)
+    const defaultTitle = "Nuova sessione " + new Date().toLocaleString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
 
-  const body = await req.json().catch(() => null) as { title?: string } | null;
-  const title = (body?.title || "Nuova chat").trim() || "Nuova chat";
+    // Inserisci nuova conversazione
+    const { data, error } = await supabase
+      .from("conversations")
+      .insert({
+        user_id: user.id,
+        title: defaultTitle,
+      })
+      .select()
+      .single();
 
-  const { data, error } = await supabase
-    .from("conversations")
-    .insert({ user_id: u.user.id, title, model: LLM_MODEL })
-    .select("id, title, updated_at, total_cost")
-    .single();
+    if (error) throw error;
 
-  if (error) return NextResponse.json({ error: "DB_CREATE", details: error.message }, { status: 500 });
-  return NextResponse.json({ conversation: data });
+    return NextResponse.json({ ok: true, conversation: data });
+  } catch (e: any) {
+    return NextResponse.json(
+      { ok: false, error: e.message },
+      { status: 400 }
+    );
+  }
 }
