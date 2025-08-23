@@ -1,22 +1,42 @@
 // lib/supabase/server.ts
-import { cookies } from "next/headers";
-import { createServerClient } from "@supabase/ssr";
+import { cookies, type ReadonlyRequestCookies } from "next/headers";
+import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-export function createSupabaseServer() {
-  const cookieStore = cookies();
-  return createServerClient(
+export function createClient(cookieStore?: ReadonlyRequestCookies) {
+  // Permette sia uso di default (prende i cookies dal contesto)
+  // sia passaggio esplicito (se già li hai)
+  const store = cookieStore ?? cookies();
+
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
       cookies: {
-        // OK in Server Components: solo lettura
         get(name: string) {
-          return cookieStore.get(name)?.value;
+          try {
+            return store.get(name)?.value;
+          } catch {
+            return undefined;
+          }
         },
-        // NO-OP in RSC per evitare l'errore "cannot set cookie in Server Components"
-        set() {},
-        remove() {},
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            // In App Router durante le Route Handlers, set è no-op (read-only);
+            // va bene: l’SDK lo gestisce graceful.
+          } catch {
+            // ignore
+          }
+        },
+        remove(name: string, options: CookieOptions) {
+          try {
+            // vedi nota sopra
+          } catch {
+            // ignore
+          }
+        },
       },
     }
   );
+
+  return supabase;
 }
