@@ -69,11 +69,12 @@ button{cursor:pointer}
   border-color:#223355;
   color:#E7ECFF;
   text-align:right;
+  font-style:italic;
 }
 
 /* AI (non .me) con corsivo leggero e “accent” a sinistra */
 .thread .msg:not(.me){
-  font-style:italic;
+  font-style:normal;
   border-left:3px solid var(--primary);
   padding-left:12px; /* compensa l'accent */
 }
