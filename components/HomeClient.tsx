@@ -336,7 +336,7 @@ export default function HomeClient({ email }: { email: string }) {
     <>
       <div className="topbar">
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
-        <div className="title">AIxPMI Assistant{currentConv ? ` — ${currentConv.title}` : ""}</div>
+        <div className="title">Venditori Micidiali{currentConv ? ` — ${currentConv.title}` : ""}</div>
         <div className="spacer" />
         <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>⚙️</button>
         <button className="iconbtn" onClick={logout}>Esci</button>
