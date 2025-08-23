@@ -131,7 +131,7 @@ export default function HomeClient({ email }: { email: string }) {
         <div className="thread">
           {!currentConv && (
             <div className="helper">
-              <div style={{ fontWeight:600, marginBottom:8 }}>Nomina la prossima chat</div>
+              <div style={{ fontWeight:600, marginBottom:8 }}>Nomina la prossima sessione</div>
               <div style={{ display:"flex", gap:8 }}>
                 <input
                   type="text"
@@ -144,9 +144,6 @@ export default function HomeClient({ email }: { email: string }) {
                 <button className="btn" onClick={createConversation} disabled={isCreating || !newTitle.trim()}>
                   Crea
                 </button>
-              </div>
-              <div style={{ opacity:0.7, marginTop:8 }}>
-                Dopo aver creato la chat potrai iniziare a scrivere messaggi.
               </div>
             </div>
           )}
@@ -169,7 +166,7 @@ export default function HomeClient({ email }: { email: string }) {
             ref={taRef}
             value={input}
             onChange={e=>{ setInput(e.target.value); autoResize(); }}
-            placeholder={currentConv ? "Scrivi un messaggio…" : "Nomina la prossima chat per iniziare"}
+            placeholder={currentConv ? "Scrivi un messaggio…" : "Dopo aver creato la sessione potrai iniziare a scrivere messaggi."}
             onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
             disabled={!currentConv}
           />
