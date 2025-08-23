@@ -13,14 +13,31 @@ export default function HomeClient({ email }: { email: string }) {
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
-  const [usage, setUsage] = useState<Usage | null>(null); // rimane per compatibilità futura
+  const [usage, setUsage] = useState<Usage | null>(null); // compat futuro
   const [serverError, setServerError] = useState<string | null>(null);
-  const [modelBadge, setModelBadge] = useState<string>("…"); // rimane per compatibilità futura
+  const [modelBadge, setModelBadge] = useState<string>("…"); // compat futuro
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
   // Stato per nominare la chat prima di iniziare
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
+
+  // ---- VOCE: stati e ref ----
+  const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [voiceError, setVoiceError] = useState<string | null>(null);
+
+  // SpeechRecognition nativo
+  const SR: any = (typeof window !== "undefined")
+    ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+    : null;
+  const supportsNativeSR = !!SR;
+  const srRef = useRef<any>(null);
+
+  // MediaRecorder fallback
+  const mrRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
 
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   function autoResize() {
@@ -53,6 +70,13 @@ export default function HomeClient({ email }: { email: string }) {
   useEffect(() => {
     fetch("/api/model").then(r=>r.json()).then(d=>setModelBadge(d?.model ?? "n/d")).catch(()=>setModelBadge("n/d"));
     refreshUsage();
+
+    // cleanup: stop tracce microfono se si smonta
+    return () => {
+      try { srRef.current?.stop?.(); } catch {}
+      try { if (mrRef.current && mrRef.current.state !== "inactive") mrRef.current.stop(); } catch {}
+      try { streamRef.current?.getTracks()?.forEach(t=>t.stop()); } catch {}
+    };
   }, []);
 
   async function createConversation() {
@@ -116,6 +140,120 @@ export default function HomeClient({ email }: { email: string }) {
     refreshUsage(c.id);
   }
 
+  // ---------- VOCE: funzioni ----------
+  function pickMime() {
+    // Prova formati amichevoli: Safari iOS preferisce mp4/aac, Chrome webm/opus
+    try {
+      if (typeof MediaRecorder !== "undefined") {
+        if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
+        if (MediaRecorder.isTypeSupported("audio/webm")) return "audio/webm";
+      }
+    } catch {}
+    return "";
+  }
+
+  function startNativeSR() {
+    if (!SR) return;
+    setVoiceError(null);
+    try {
+      const sr = new SR();
+      sr.lang = "it-IT";
+      sr.interimResults = false;
+      sr.maxAlternatives = 1;
+      sr.onresult = (e: any) => {
+        const transcript = e?.results?.[0]?.[0]?.transcript || "";
+        setInput(transcript);
+        autoResize();
+      };
+      sr.onerror = (e: any) => setVoiceError(`Vocale nativo: ${e?.error || "errore"}`);
+      sr.onend = () => setIsRecording(false);
+      srRef.current = sr;
+      sr.start();
+      setIsRecording(true);
+    } catch (e:any) {
+      setVoiceError(e?.message || "Errore avvio riconoscimento");
+      setIsRecording(false);
+    }
+  }
+
+  async function startRecorder() {
+    setVoiceError(null);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
+      const mr = new MediaRecorder(stream, { mimeType: pickMime() });
+      chunksRef.current = [];
+      mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
+      mr.onstop = async () => {
+        setIsRecording(false);
+        setIsTranscribing(true);
+        try {
+          const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+          const fd = new FormData();
+          fd.append("audio", blob, blob.type.includes("mp4") ? "audio.mp4" : "audio.webm");
+          const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
+          if (!res.ok) throw new Error(`Trascrizione fallita (HTTP ${res.status})`);
+          const data = await res.json();
+          const text = (data?.text || "").toString();
+          if (text) {
+            setInput(text);
+            autoResize();
+          }
+        } catch (e:any) {
+          setVoiceError(e?.message || "Errore durante la trascrizione");
+        } finally {
+          setIsTranscribing(false);
+          try { stream.getTracks().forEach(t => t.stop()); } catch {}
+          streamRef.current = null;
+        }
+      };
+      mrRef.current = mr;
+      mr.start();
+      setIsRecording(true);
+    } catch (e:any) {
+      setVoiceError(e?.message || "Microfono non disponibile o permesso negato");
+      setIsRecording(false);
+    }
+  }
+
+  function stopRecorderOrSR() {
+    // stop SR se attivo
+    if (srRef.current) {
+      try { srRef.current.stop?.(); } catch {}
+      srRef.current = null;
+      return;
+    }
+    // stop MediaRecorder se attivo
+    if (mrRef.current && mrRef.current.state !== "inactive") {
+      try { mrRef.current.stop(); } catch {}
+      return;
+    }
+    // stop tracce eventuali
+    try { streamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
+  }
+
+  function handleVoicePressStart() {
+    if (!currentConv) {
+      alert("Prima crea una sessione.");
+      return;
+    }
+    if (isTranscribing) return;
+    if (supportsNativeSR) startNativeSR();
+    else startRecorder();
+  }
+
+  function handleVoicePressEnd() {
+    if (!isRecording) return;
+    stopRecorderOrSR();
+  }
+
+  function handleVoiceClick() {
+    // fallback per desktop: toggle start/stop con un click
+    if (!isRecording) handleVoicePressStart();
+    else handleVoicePressEnd();
+  }
+
+  // ---------- RENDER ----------
   return (
     <>
       <div className="topbar">
@@ -166,23 +304,40 @@ export default function HomeClient({ email }: { email: string }) {
             ref={taRef}
             value={input}
             onChange={e=>{ setInput(e.target.value); autoResize(); }}
-            placeholder={currentConv ? "Scrivi un messaggio…" : "Dopo aver creato la sessione potrai iniziare a scrivere messaggi."}
+            placeholder={currentConv ? "Scrivi un messaggio… o usa la voce 🎙️" : "Dopo aver creato la sessione potrai iniziare a scrivere messaggi."}
             onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
-            disabled={!currentConv}
+            disabled={!currentConv || isTranscribing}
           />
         </div>
         <div className="actions">
           <div className="left">
-            <button className="iconbtn" onClick={()=>alert("Modalità vocale (fake): da collegare in seguito.")} disabled={!currentConv}>🎙️ Voce</button>
+            {/* 🎙️ Voce: click = toggle; su mobile supporta press&hold */}
+            <button
+              className="iconbtn"
+              disabled={!currentConv || isTranscribing}
+              onMouseDown={handleVoicePressStart}
+              onMouseUp={handleVoicePressEnd}
+              onMouseLeave={handleVoicePressEnd}
+              onTouchStart={handleVoicePressStart}
+              onTouchEnd={handleVoicePressEnd}
+              onClick={handleVoiceClick}
+              aria-pressed={isRecording}
+              aria-label="Input vocale"
+              title={supportsNativeSR ? "Riconoscimento vocale nativo" : "Registra audio per trascrizione"}
+            >
+              {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
+            </button>
+            {isTranscribing && <span style={{ marginLeft:8, fontSize:12, opacity:.7 }}>Trascrizione…</span>}
+            {voiceError && <span style={{ marginLeft:8, fontSize:12, color:"#b00020" }}>{voiceError}</span>}
           </div>
           <div className="right">
-            <button className="btn" onClick={send} disabled={!currentConv}>Invia</button>
+            <button className="btn" onClick={send} disabled={!currentConv || isTranscribing}>Invia</button>
           </div>
         </div>
       </div>
 
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
-      {/* NUOVO: drawer destro Impostazioni */}
+      {/* Drawer destro Impostazioni */}
       <RightDrawer open={topOpen} onClose={closeTop} />
     </>
   );
