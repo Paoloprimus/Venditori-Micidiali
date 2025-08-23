@@ -13,9 +13,9 @@ export default function HomeClient({ email }: { email: string }) {
 
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
-  const [usage, setUsage] = useState<Usage | null>(null); // compat futuro
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [serverError, setServerError] = useState<string | null>(null);
-  const [modelBadge, setModelBadge] = useState<string>("…"); // compat futuro
+  const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
   // Stato per nominare la chat prima di iniziare
@@ -33,12 +33,14 @@ export default function HomeClient({ email }: { email: string }) {
   const [lastAssistantText, setLastAssistantText] = useState("");
   const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
 
+  // Toggle "Altoparlante" (auto-TTS se ultimo input = vocale)
+  const [speakerEnabled, setSpeakerEnabled] = useState(false);
+
   // SpeechRecognition nativo: disabilitato su iOS (forza fallback)
   const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
   const SR: any = (typeof window !== "undefined")
     ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
     : null;
-  // Abilita nativo solo se esiste, non siamo su iOS e il contesto è sicuro (https)
   const supportsNativeSR = !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true);
   const srRef = useRef<any>(null);
 
@@ -75,14 +77,11 @@ export default function HomeClient({ email }: { email: string }) {
     }
   }
 
+  // init + cleanup
   useEffect(() => {
     fetch("/api/model").then(r=>r.json()).then(d=>setModelBadge(d?.model ?? "n/d")).catch(()=>setModelBadge("n/d"));
     refreshUsage();
-
-    // iOS/safari: precarica le voci TTS (non sempre necessario)
     try { window.speechSynthesis?.getVoices?.(); } catch {}
-
-    // cleanup: stop tutto se si smonta
     return () => {
       try { srRef.current?.stop?.(); } catch {}
       try { if (mrRef.current && mrRef.current.state !== "inactive") mrRef.current.stop(); } catch {}
@@ -90,6 +89,20 @@ export default function HomeClient({ email }: { email: string }) {
       try { window.speechSynthesis?.cancel?.(); } catch {}
     };
   }, []);
+
+  // carica/salva preferenza altoparlante per sessione
+  useEffect(() => {
+    const id = currentConv?.id;
+    if (!id) return;
+    const saved = typeof localStorage !== "undefined" ? localStorage.getItem(`autoTTS:${id}`) : null;
+    setSpeakerEnabled(saved === "1");
+  }, [currentConv?.id]);
+
+  useEffect(() => {
+    const id = currentConv?.id;
+    if (!id) return;
+    try { localStorage.setItem(`autoTTS:${id}`, speakerEnabled ? "1" : "0"); } catch {}
+  }, [speakerEnabled, currentConv?.id]);
 
   async function createConversation() {
     const title = newTitle.trim();
@@ -126,7 +139,7 @@ export default function HomeClient({ email }: { email: string }) {
     setBubbles(b => [...b, { role:"user", content }]);
     setInput(""); autoResize();
 
-    // Interrompi un eventuale TTS in corso
+    // se stava parlando, ferma
     try { window.speechSynthesis?.cancel?.(); } catch {}
     setTtsSpeaking(false);
 
@@ -144,6 +157,12 @@ export default function HomeClient({ email }: { email: string }) {
     const replyText = data.reply ?? "Ok.";
     setBubbles(b => [...b, { role:"assistant", content: replyText }]);
     setLastAssistantText(replyText);
+
+    // AUTO-TTS: solo se altoparlante ON e ultimo input era vocale
+    if (speakerEnabled && lastInputWasVoice) {
+      speakAssistant(replyText);
+    }
+
     await refreshUsage(convId);
   }
 
@@ -161,7 +180,6 @@ export default function HomeClient({ email }: { email: string }) {
 
   // ---------- VOCE: util ----------
   function pickMime() {
-    // Prova formati amichevoli: Safari iOS preferisce mp4/aac, Chrome webm/opus
     try {
       if (typeof MediaRecorder !== "undefined") {
         if (MediaRecorder.isTypeSupported("audio/mp4")) return "audio/mp4";
@@ -268,52 +286,36 @@ export default function HomeClient({ email }: { email: string }) {
   }
 
   function stopRecorderOrSR() {
-    // stop SR se attivo
-    if (srRef.current) {
-      try { srRef.current.stop?.(); } catch {}
-      srRef.current = null;
-      return;
-    }
-    // stop MediaRecorder se attivo
-    if (mrRef.current && mrRef.current.state !== "inactive") {
-      try { mrRef.current.stop(); } catch {}
-      return;
-    }
-    // stop tracce eventuali
+    if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; return; }
+    if (mrRef.current && mrRef.current.state !== "inactive") { try { mrRef.current.stop(); } catch {} return; }
     try { streamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
   }
 
   function handleVoicePressStart() {
-    if (!currentConv) {
-      alert("Prima crea una sessione.");
-      return;
-    }
+    if (!currentConv) { alert("Prima crea una sessione."); return; }
     if (isTranscribing || isRecording) return;
-    if (supportsNativeSR) startNativeSR();
-    else startRecorder();
+    if (supportsNativeSR) startNativeSR(); else startRecorder();
   }
   function handleVoicePressEnd() {
     if (!isRecording) return;
     stopRecorderOrSR();
   }
   function handleVoiceClick() {
-    if (!isRecording) handleVoicePressStart();
-    else handleVoicePressEnd();
+    if (!isRecording) handleVoicePressStart(); else handleVoicePressEnd();
   }
 
   // ---------- TTS (Voce IA) ----------
-  function speakAssistant() {
+  function speakAssistant(textOverride?: string) {
     const text =
+      textOverride ||
       lastAssistantText ||
       [...bubbles].reverse().find(b => b.role === "assistant")?.content ||
       "";
-
     if (!text) return;
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setVoiceError("Sintesi vocale non supportata dal browser");
       return;
     }
-
     try { window.speechSynthesis.cancel(); } catch {}
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "it-IT";
@@ -336,7 +338,6 @@ export default function HomeClient({ email }: { email: string }) {
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
         <div className="title">AIxPMI Assistant{currentConv ? ` — ${currentConv.title}` : ""}</div>
         <div className="spacer" />
-        {/* Cambiata icona da 📊 a ⚙️ e apre il drawer destro */}
         <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>⚙️</button>
         <button className="iconbtn" onClick={logout}>Esci</button>
       </div>
@@ -404,24 +405,20 @@ export default function HomeClient({ email }: { email: string }) {
               {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
             </button>
 
-            {/* 🔊 Voce IA: attiva solo se l'ultimo input è vocale */}
+            {/* 🔊 Toggle Altoparlante (auto-TTS se ultimo input = vocale) */}
             <button
               className="iconbtn"
-              disabled={
-                !currentConv ||
-                isTranscribing ||
-                isRecording ||
-                !lastInputWasVoice ||
-                !(lastAssistantText || bubbles.some(b => b.role === "assistant"))
-              }
-              onClick={ttsSpeaking ? stopSpeak : speakAssistant}
-              aria-pressed={ttsSpeaking}
-              title="Ascolta risposta IA"
+              disabled={!currentConv}
+              onClick={() => setSpeakerEnabled(s => !s)}
+              aria-pressed={speakerEnabled}
+              title="Risposte vocali automatiche (solo se l'ultimo messaggio è vocale)"
             >
-              {ttsSpeaking ? "⏹️ Stop" : "🔊 Voce IA"}
+              {speakerEnabled ? "🔊 Altoparlante ON" : "🔈 Altoparlante OFF"}
             </button>
 
+            {/* opzionale: mostra stato TTS/transcribe/errore */}
             {isTranscribing && <span style={{ marginLeft:8, fontSize:12, opacity:.7 }}>Trascrizione…</span>}
+            {ttsSpeaking && <span style={{ marginLeft:8, fontSize:12, opacity:.7 }}>Riproduzione…</span>}
             {voiceError && <span style={{ marginLeft:8, fontSize:12, color:"#b00020" }}>{voiceError}</span>}
           </div>
           <div className="right">
@@ -431,7 +428,6 @@ export default function HomeClient({ email }: { email: string }) {
       </div>
 
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
-      {/* Drawer destro Impostazioni */}
       <RightDrawer open={topOpen} onClose={closeTop} />
     </>
   );
