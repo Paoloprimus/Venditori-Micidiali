@@ -26,17 +26,22 @@ export default function HomeClient({ email }: { email: string }) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
+  const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
 
-// SpeechRecognition nativo: disabilitato su iOS (forza fallback)
-const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
-const SR: any = (typeof window !== "undefined")
-  ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-  : null;
+  // TTS (Voce IA)
+  const [ttsSpeaking, setTtsSpeaking] = useState(false);
+  const [lastAssistantText, setLastAssistantText] = useState("");
+  const utterRef = useRef<SpeechSynthesisUtterance | null>(null);
 
-// Abilita nativo solo se esiste, non siamo su iOS e il contesto è sicuro (https)
-const supportsNativeSR = !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true);
-const srRef = useRef<any>(null);
- 
+  // SpeechRecognition nativo: disabilitato su iOS (forza fallback)
+  const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
+  const SR: any = (typeof window !== "undefined")
+    ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+    : null;
+  // Abilita nativo solo se esiste, non siamo su iOS e il contesto è sicuro (https)
+  const supportsNativeSR = !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true);
+  const srRef = useRef<any>(null);
+
   // MediaRecorder fallback
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -74,11 +79,15 @@ const srRef = useRef<any>(null);
     fetch("/api/model").then(r=>r.json()).then(d=>setModelBadge(d?.model ?? "n/d")).catch(()=>setModelBadge("n/d"));
     refreshUsage();
 
-    // cleanup: stop tracce microfono se si smonta
+    // iOS/safari: precarica le voci TTS (non sempre necessario)
+    try { window.speechSynthesis?.getVoices?.(); } catch {}
+
+    // cleanup: stop tutto se si smonta
     return () => {
       try { srRef.current?.stop?.(); } catch {}
       try { if (mrRef.current && mrRef.current.state !== "inactive") mrRef.current.stop(); } catch {}
       try { streamRef.current?.getTracks()?.forEach(t=>t.stop()); } catch {}
+      try { window.speechSynthesis?.cancel?.(); } catch {}
     };
   }, []);
 
@@ -116,6 +125,11 @@ const srRef = useRef<any>(null);
     const convId = currentConv.id;
     setBubbles(b => [...b, { role:"user", content }]);
     setInput(""); autoResize();
+
+    // Interrompi un eventuale TTS in corso
+    try { window.speechSynthesis?.cancel?.(); } catch {}
+    setTtsSpeaking(false);
+
     const res = await fetch("/api/messages/send", {
       method:"POST",
       headers: { "Content-Type":"application/json" },
@@ -127,7 +141,9 @@ const srRef = useRef<any>(null);
       setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
       return;
     }
-    setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
+    const replyText = data.reply ?? "Ok.";
+    setBubbles(b => [...b, { role:"assistant", content: replyText }]);
+    setLastAssistantText(replyText);
     await refreshUsage(convId);
   }
 
@@ -143,7 +159,7 @@ const srRef = useRef<any>(null);
     refreshUsage(c.id);
   }
 
-  // ---------- VOCE: funzioni ----------
+  // ---------- VOCE: util ----------
   function pickMime() {
     // Prova formati amichevoli: Safari iOS preferisce mp4/aac, Chrome webm/opus
     try {
@@ -155,61 +171,61 @@ const srRef = useRef<any>(null);
     return "";
   }
 
+  // ---------- VOCE: nativo ----------
   function startNativeSR() {
-  if (!SR) return;
-  setVoiceError(null);
-  try {
-    const sr = new SR();
-    sr.lang = "it-IT";
-    sr.interimResults = false;
-    sr.maxAlternatives = 1;
+    if (!SR) return;
+    setVoiceError(null);
+    try {
+      const sr = new SR();
+      sr.lang = "it-IT";
+      sr.interimResults = false;
+      sr.maxAlternatives = 1;
 
-    let handedOffToFallback = false;
+      let handedOffToFallback = false;
 
-    sr.onresult = (e: any) => {
-      const transcript = e?.results?.[0]?.[0]?.transcript || "";
-      setInput(transcript);
-      autoResize();
-      // chiude esplicitamente la sessione nativa
-      try { sr.stop?.(); } catch {}
-    };
-
-    sr.onerror = (e: any) => {
-      const code = e?.error || "errore";
-      // iOS / permessi / servizio: passa subito al fallback
-      if (!handedOffToFallback && (code === "not-allowed" || code === "service-not-allowed")) {
-        handedOffToFallback = true;
-        setIsRecording(false);
+      sr.onresult = (e: any) => {
+        const transcript = e?.results?.[0]?.[0]?.transcript || "";
+        setInput(transcript);
+        setLastInputWasVoice(true);
+        autoResize();
         try { sr.stop?.(); } catch {}
+      };
+
+      sr.onerror = (e: any) => {
+        const code = e?.error || "errore";
+        if (!handedOffToFallback && (code === "not-allowed" || code === "service-not-allowed")) {
+          handedOffToFallback = true;
+          setIsRecording(false);
+          try { sr.stop?.(); } catch {}
+          srRef.current = null;
+          startRecorder();
+          return;
+        }
+        setVoiceError(`Vocale nativo: ${code}`);
+        setIsRecording(false);
+      };
+
+      sr.onend = () => {
+        setIsRecording(false);
+        srRef.current = null;
+      };
+
+      srRef.current = sr;
+      sr.start();
+      setIsRecording(true);
+    } catch (e: any) {
+      if (e?.name === "NotAllowedError") {
+        setIsRecording(false);
         srRef.current = null;
         startRecorder();
         return;
       }
-      setVoiceError(`Vocale nativo: ${code}`);
+      setVoiceError(e?.message || "Errore avvio riconoscimento");
       setIsRecording(false);
-    };
-
-    sr.onend = () => {
-      setIsRecording(false);
-      srRef.current = null;
-    };
-
-    srRef.current = sr;
-    sr.start();
-    setIsRecording(true);
-  } catch (e: any) {
-    // es. NotAllowedError lanciato subito da sr.start()
-    if (e?.name === "NotAllowedError") {
-      setIsRecording(false);
-      srRef.current = null;
-      startRecorder();
-      return;
     }
-    setVoiceError(e?.message || "Errore avvio riconoscimento");
-    setIsRecording(false);
   }
-}
 
+  // ---------- VOCE: fallback recorder ----------
   async function startRecorder() {
     setVoiceError(null);
     try {
@@ -231,6 +247,7 @@ const srRef = useRef<any>(null);
           const text = (data?.text || "").toString();
           if (text) {
             setInput(text);
+            setLastInputWasVoice(true);
             autoResize();
           }
         } catch (e:any) {
@@ -266,22 +283,50 @@ const srRef = useRef<any>(null);
     try { streamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
   }
 
-function handleVoicePressStart() {
-  if (!currentConv) { alert("Prima crea una sessione."); return; }
-  if (isTranscribing || isRecording) return;
-  if (supportsNativeSR) startNativeSR();
-  else startRecorder();
-}
-  
+  function handleVoicePressStart() {
+    if (!currentConv) {
+      alert("Prima crea una sessione.");
+      return;
+    }
+    if (isTranscribing || isRecording) return;
+    if (supportsNativeSR) startNativeSR();
+    else startRecorder();
+  }
   function handleVoicePressEnd() {
     if (!isRecording) return;
     stopRecorderOrSR();
   }
-
   function handleVoiceClick() {
-    // fallback per desktop: toggle start/stop con un click
     if (!isRecording) handleVoicePressStart();
     else handleVoicePressEnd();
+  }
+
+  // ---------- TTS (Voce IA) ----------
+  function speakAssistant() {
+    const text =
+      lastAssistantText ||
+      [...bubbles].reverse().find(b => b.role === "assistant")?.content ||
+      "";
+
+    if (!text) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setVoiceError("Sintesi vocale non supportata dal browser");
+      return;
+    }
+
+    try { window.speechSynthesis.cancel(); } catch {}
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "it-IT";
+    u.rate = 1;
+    u.onend = () => setTtsSpeaking(false);
+    u.onerror = () => setTtsSpeaking(false);
+    utterRef.current = u;
+    setTtsSpeaking(true);
+    window.speechSynthesis.speak(u);
+  }
+  function stopSpeak() {
+    try { window.speechSynthesis.cancel(); } catch {}
+    setTtsSpeaking(false);
   }
 
   // ---------- RENDER ----------
@@ -334,7 +379,7 @@ function handleVoicePressStart() {
           <textarea
             ref={taRef}
             value={input}
-            onChange={e=>{ setInput(e.target.value); autoResize(); }}
+            onChange={e=>{ setInput(e.target.value); setLastInputWasVoice(false); autoResize(); }}
             placeholder={currentConv ? "Scrivi un messaggio… o usa la voce 🎙️" : "Dopo aver creato la sessione potrai iniziare a scrivere messaggi."}
             onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
             disabled={!currentConv || isTranscribing}
@@ -342,7 +387,7 @@ function handleVoicePressStart() {
         </div>
         <div className="actions">
           <div className="left">
-            {/* 🎙️ Voce: click = toggle; su mobile supporta press&hold */}
+            {/* 🎙️ Voce: press&hold su mobile, click = toggle su desktop */}
             <button
               className="iconbtn"
               disabled={!currentConv || isTranscribing}
@@ -358,6 +403,24 @@ function handleVoicePressStart() {
             >
               {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
             </button>
+
+            {/* 🔊 Voce IA: attiva solo se l'ultimo input è vocale */}
+            <button
+              className="iconbtn"
+              disabled={
+                !currentConv ||
+                isTranscribing ||
+                isRecording ||
+                !lastInputWasVoice ||
+                !(lastAssistantText || bubbles.some(b => b.role === "assistant"))
+              }
+              onClick={ttsSpeaking ? stopSpeak : speakAssistant}
+              aria-pressed={ttsSpeaking}
+              title="Ascolta risposta IA"
+            >
+              {ttsSpeaking ? "⏹️ Stop" : "🔊 Voce IA"}
+            </button>
+
             {isTranscribing && <span style={{ marginLeft:8, fontSize:12, opacity:.7 }}>Trascrizione…</span>}
             {voiceError && <span style={{ marginLeft:8, fontSize:12, color:"#b00020" }}>{voiceError}</span>}
           </div>
