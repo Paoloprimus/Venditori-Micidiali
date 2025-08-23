@@ -87,6 +87,32 @@ export function LeftDrawer({
     setItems(prev => prev.filter(x => x.id !== id));
   }
 
+  // NEW: crea una nuova sessione chiedendo il titolo
+  async function createNew() {
+    const t = prompt("Titolo nuova sessione:");
+    const title = (t ?? "").trim();
+    if (!title) return;
+    const res = await fetch("/api/conversations/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      alert(data?.details || data?.error || "Errore creazione");
+      return;
+    }
+    // risposta tollerante a shape diversi
+    const conv: Conv = data?.conversation ?? data?.item ?? data;
+    if (!conv?.id) {
+      alert("Errore: ID sessione mancante nella risposta");
+      return;
+    }
+    // inserisci in cima e apri subito
+    setItems(prev => [conv, ...prev]);
+    onSelect(conv);
+  }
+
   const formatUpdatedAt = (iso: string) =>
     new Date(iso).toLocaleString(undefined, {
       day: "2-digit",
@@ -104,8 +130,16 @@ export function LeftDrawer({
         <div className="spacer" />
         <button className="iconbtn" onClick={()=>load(true)}>↻</button>
       </div>
+
       <div className="list">
+        {/* NEW: pulsante per creare rapidamente una nuova sessione */}
+        <div className="row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
+          <div className="helper">Crea una nuova sessione</div>
+          <button className="btn" onClick={createNew}>+ Nuova sessione</button>
+        </div>
+
         {error && <div className="row" style={{ color:"#F59E0B" }}>Errore: {error}</div>}
+
         {items.map(c => (
           <div key={c.id} className="row" style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div
@@ -124,6 +158,7 @@ export function LeftDrawer({
             <button className="iconbtn" title="Elimina" onClick={()=>remove(c.id)}>🗑️</button>
           </div>
         ))}
+
         {hasMore && !loading && (
           <button className="iconbtn" onClick={()=>load(false)}>Carica altro…</button>
         )}
