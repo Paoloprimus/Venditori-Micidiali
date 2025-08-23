@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { cookies } from 'next/headers';
 import { createClient } from '../../../../lib/supabase/server';
 
 export async function GET(_req: NextRequest, { params }: { params: { id: string } }) {
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = createClient();
   try {
     const { data, error } = await supabase.from('proposals').select('*').eq('id', params.id).single();
     if (error) throw error;
@@ -15,8 +13,7 @@ export async function GET(_req: NextRequest, { params }: { params: { id: string 
 }
 
 export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
-  const cookieStore = cookies();
-  const supabase = createClient(cookieStore);
+  const supabase = createClient();
   try {
     const patch = await req.json();
     const { data, error } = await supabase.from('proposals').update(patch).eq('id', params.id).select('*').single();
