@@ -105,10 +105,7 @@ export default function HomeClient({ email }: { email: string }) {
       return;
     }
 
-    // REMOVED (minima modifica): non creiamo più auto “Nuova chat” dal send()
-    // if (!convId && data.conversationId) {
-    //   setCurrentConv({ id: data.conversationId, title: "Nuova chat" });
-    // }
+    // REMOVED: non creiamo più auto “Nuova chat” dal send()
 
     setBubbles(b => [...b, { role:"assistant", content: data.reply ?? "Ok." }]);
     await refreshUsage(convId);
@@ -138,7 +135,7 @@ export default function HomeClient({ email }: { email: string }) {
 
       <div className="container">
         <div className="thread">
-          {/* NEW: schermata di inizio “Nomina la prossima chat” quando non c’è una conversazione attiva */}
+          {/* NEW: schermata di inizio “Nomina la prossima chat” */}
           {!currentConv && (
             <div className="helper">
               <div style={{ fontWeight:600, marginBottom:8 }}>Nomina la prossima chat</div>
@@ -156,7 +153,7 @@ export default function HomeClient({ email }: { email: string }) {
                 </button>
               </div>
               <div style={{ opacity:0.7, marginTop:8 }}>
-                Il nome non è modificabile (per ora). Dopo la creazione puoi iniziare a chattare.
+                Dopo aver creato la chat potrai iniziare a scrivere messaggi.
               </div>
             </div>
           )}
@@ -164,7 +161,7 @@ export default function HomeClient({ email }: { email: string }) {
           {/* Thread messaggi */}
           {bubbles.length === 0 && currentConv && (
             <div className="helper">
-              Inizia a scrivere qui sotto.
+              Nessun messaggio ancora. Scrivi qui sotto per iniziare.
             </div>
           )}
           {bubbles.map((m, i) => (
@@ -182,7 +179,7 @@ export default function HomeClient({ email }: { email: string }) {
             onChange={e=>{ setInput(e.target.value); autoResize(); }}
             placeholder={currentConv ? "Scrivi un messaggio…" : "Nomina la prossima chat per iniziare"}
             onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
-            disabled={!currentConv} // NEW: disabilita composer finché non c’è una chat nominata
+            disabled={!currentConv}
           />
         </div>
         <div className="actions">
@@ -195,7 +192,6 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      {/* Drawer: solo lista e selezione (il componente rimane invariato) */}
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
       <TopSheet open={topOpen} onClose={closeTop} usage={usage} model={modelBadge} />
     </>
