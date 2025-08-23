@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { createClient } from '../../../../lib/supabase/server';
-import { embedText } from '../../../lib/embeddings';
+import { embedText } from '../../../../lib/embeddings';
 
 const Schema = z.object({
   account_id: z.string().uuid().nullable().optional(),
