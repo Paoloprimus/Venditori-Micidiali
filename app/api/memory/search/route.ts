@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { createClient } from '../../../../lib/supabase/server';
-import { embedText } from '../../../lib/embeddings';
+import { embedText } from '../../../../lib/embeddings';
 import type { MemorySearchHit } from '../../../lib/types.copilot';
 
 const Schema = z.object({
