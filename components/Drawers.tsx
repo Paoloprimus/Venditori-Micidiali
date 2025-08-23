@@ -75,41 +75,6 @@ export function LeftDrawer({
 
   useEffect(()=>{ if (open) load(true); }, [open]);
 
-  async function createNew() {
-    const t = prompt("Titolo nuova chat:", "Nuova chat");
-    const res = await fetch("/api/conversations/new", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t||"Nuova chat" }) });
-    const data = await res.json();
-    if (res.ok) {
-      setItems(prev => [data.conversation, ...prev]);
-      onSelect(data.conversation);
-    } else {
-      alert(data?.details || data?.error || "Errore creazione");
-    }
-  }
-
-  async function rename(id: string, current: string) {
-    const t = prompt("Rinomina chat:", current);
-    if (!t || t.trim() === "" || t === current) return;
-    const res = await fetch(`/api/conversations/${id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ title: t }) });
-    const data = await res.json();
-    if (res.ok) {
-      setItems(prev => prev.map(x => x.id === id ? { ...x, title: t } : x));
-    } else {
-      alert(data?.details || data?.error || "Errore rinomina");
-    }
-  }
-
-  async function remove(id: string) {
-    if (!confirm("Eliminare questa chat?")) return;
-    const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
-    const data = await res.json();
-    if (res.ok) {
-      setItems(prev => prev.filter(x => x.id !== id));
-    } else {
-      alert(data?.details || data?.error || "Errore eliminazione");
-    }
-  }
-
   return (
     <aside className={`drawer ${open ? "open":""}`}>
       <div className="topbar">
@@ -117,26 +82,26 @@ export function LeftDrawer({
         <div className="title">Conversazioni</div>
         <div className="spacer" />
         <button className="iconbtn" onClick={()=>load(true)}>↻</button>
-        <button className="btn" onClick={createNew}>Nuova</button>
+        {/* RIMOSSI: pulsanti Nuova / Rinomina / Elimina */}
       </div>
       <div className="list">
         {error && <div className="row" style={{ color:"#F59E0B" }}>Errore: {error}</div>}
         {items.map(c => (
           <div key={c.id} className="row" style={{ display:"flex", alignItems:"center", gap:8 }}>
-            <div style={{ flex:1 }}>
+            <div style={{ flex:1, cursor:"pointer" }} onClick={()=>onSelect(c)} title={c.title}>
               <div className="title" style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.title}</div>
-              <div className="helper">Aggiornata: {new Date(c.updated_at).toLocaleString()} • Tot €{Number(c.total_cost||0).toFixed(4)}</div>
+              <div className="helper">
+                Aggiornata: {new Date(c.updated_at).toLocaleString()} • Tot €{Number(c.total_cost||0).toFixed(4)}
+              </div>
             </div>
-            <button className="iconbtn" title="Apri" onClick={()=>onSelect(c)}>Apri</button>
-            <button className="iconbtn" title="Rinomina" onClick={()=>rename(c.id, c.title)}>✏️</button>
-            <button className="iconbtn" title="Elimina" onClick={()=>remove(c.id)}>🗑️</button>
+            {/* RIMOSSI: bottoni Apri/Rinomina/Elimina → ora si apre cliccando sulla riga */}
           </div>
         ))}
         {hasMore && !loading && (
           <button className="iconbtn" onClick={()=>load(false)}>Carica altro…</button>
         )}
         {loading && <div className="helper">Caricamento…</div>}
-        {!loading && items.length === 0 && <div className="helper">Nessuna conversazione. Crea la prima con “Nuova”.</div>}
+        {!loading && items.length === 0 && <div className="helper">Nessuna conversazione.</div>}
       </div>
     </aside>
   );
