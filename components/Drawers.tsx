@@ -134,7 +134,7 @@ export function LeftDrawer({
       <div className="list">
         {/* NEW: pulsante per creare rapidamente una nuova sessione */}
         <div className="row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-          /** <div className="helper">Crea una nuova sessione</div> */
+
           <button className="btn" onClick={createNew}>+ Nuova sessione</button>
         </div>
 
