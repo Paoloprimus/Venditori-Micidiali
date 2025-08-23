@@ -27,13 +27,16 @@ export default function HomeClient({ email }: { email: string }) {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  // SpeechRecognition nativo
-  const SR: any = (typeof window !== "undefined")
-    ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-    : null;
-  const supportsNativeSR = !!SR;
-  const srRef = useRef<any>(null);
+// SpeechRecognition nativo: disabilitato su iOS (forza fallback)
+const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
+const SR: any = (typeof window !== "undefined")
+  ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
+  : null;
 
+// Abilita nativo solo se esiste, non siamo su iOS e il contesto è sicuro (https)
+const supportsNativeSR = !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true);
+const srRef = useRef<any>(null);
+ 
   // MediaRecorder fallback
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -153,28 +156,59 @@ export default function HomeClient({ email }: { email: string }) {
   }
 
   function startNativeSR() {
-    if (!SR) return;
-    setVoiceError(null);
-    try {
-      const sr = new SR();
-      sr.lang = "it-IT";
-      sr.interimResults = false;
-      sr.maxAlternatives = 1;
-      sr.onresult = (e: any) => {
-        const transcript = e?.results?.[0]?.[0]?.transcript || "";
-        setInput(transcript);
-        autoResize();
-      };
-      sr.onerror = (e: any) => setVoiceError(`Vocale nativo: ${e?.error || "errore"}`);
-      sr.onend = () => setIsRecording(false);
-      srRef.current = sr;
-      sr.start();
-      setIsRecording(true);
-    } catch (e:any) {
-      setVoiceError(e?.message || "Errore avvio riconoscimento");
+  if (!SR) return;
+  setVoiceError(null);
+  try {
+    const sr = new SR();
+    sr.lang = "it-IT";
+    sr.interimResults = false;
+    sr.maxAlternatives = 1;
+
+    let handedOffToFallback = false;
+
+    sr.onresult = (e: any) => {
+      const transcript = e?.results?.[0]?.[0]?.transcript || "";
+      setInput(transcript);
+      autoResize();
+      // chiude esplicitamente la sessione nativa
+      try { sr.stop?.(); } catch {}
+    };
+
+    sr.onerror = (e: any) => {
+      const code = e?.error || "errore";
+      // iOS / permessi / servizio: passa subito al fallback
+      if (!handedOffToFallback && (code === "not-allowed" || code === "service-not-allowed")) {
+        handedOffToFallback = true;
+        setIsRecording(false);
+        try { sr.stop?.(); } catch {}
+        srRef.current = null;
+        startRecorder();
+        return;
+      }
+      setVoiceError(`Vocale nativo: ${code}`);
       setIsRecording(false);
+    };
+
+    sr.onend = () => {
+      setIsRecording(false);
+      srRef.current = null;
+    };
+
+    srRef.current = sr;
+    sr.start();
+    setIsRecording(true);
+  } catch (e: any) {
+    // es. NotAllowedError lanciato subito da sr.start()
+    if (e?.name === "NotAllowedError") {
+      setIsRecording(false);
+      srRef.current = null;
+      startRecorder();
+      return;
     }
+    setVoiceError(e?.message || "Errore avvio riconoscimento");
+    setIsRecording(false);
   }
+}
 
   async function startRecorder() {
     setVoiceError(null);
@@ -232,16 +266,13 @@ export default function HomeClient({ email }: { email: string }) {
     try { streamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
   }
 
-  function handleVoicePressStart() {
-    if (!currentConv) {
-      alert("Prima crea una sessione.");
-      return;
-    }
-    if (isTranscribing) return;
-    if (supportsNativeSR) startNativeSR();
-    else startRecorder();
-  }
-
+function handleVoicePressStart() {
+  if (!currentConv) { alert("Prima crea una sessione."); return; }
+  if (isTranscribing || isRecording) return;
+  if (supportsNativeSR) startNativeSR();
+  else startRecorder();
+}
+  
   function handleVoicePressEnd() {
     if (!isRecording) return;
     stopRecorderOrSR();
