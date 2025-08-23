@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { cookies } from 'next/headers';
 import { createClient } from '../../../../lib/supabase/server';
 import { openai } from '../../../../lib/openai';
-import type { ProposalPayload } from '../../../lib/types.copilot';
+import type { ProposalPayload } from '../../../../lib/types.copilot';
 
 const Schema = z.object({
   account_id: z.string().uuid(),
