@@ -2,7 +2,7 @@ import "./globals.css";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "AIxPMI Assistant",
+  title: "Venditori Micidiali",
   description: "Wrapper conversazionale con drawers laterali",
 };
 
