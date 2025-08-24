@@ -1,38 +1,31 @@
-export const runtime = "nodejs";
+import { NextRequest, NextResponse } from "next/server";
+import { createClient } from "../../../../lib/supabase/server";
 
-import { NextResponse } from "next/server";
-import { createSupabaseServer } from "../../../../lib/supabase/server";
+export async function PATCH(req: NextRequest, { params }: { params: { id: string } }) {
+  const supabase = createClient();
+  try {
+    const patch = await req.json();
+    const updates: any = {};
+    if (typeof patch?.title === "string") {
+      updates.title = patch.title.trim();
+    }
+    // se non c'è nulla da aggiornare
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ ok: false, error: "Nessun campo da aggiornare" }, { status: 400 });
+    }
+    // forza aggiornamento timestamp (in aggiunta al trigger)
+    updates.updated_at = new Date().toISOString();
 
-export async function PATCH(req: Request, { params }: { params: { id: string } }) {
-  const supabase = createSupabaseServer();
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
+    const { data, error } = await supabase
+      .from("conversations")
+      .update(updates)
+      .eq("id", params.id)
+      .select()
+      .single();
+    if (error) throw error;
 
-  const body = await req.json().catch(() => null) as { title?: string } | null;
-  const title = (body?.title || "").trim();
-  if (!title) return NextResponse.json({ error: "EMPTY_TITLE" }, { status: 400 });
-
-  const { error } = await supabase
-    .from("conversations")
-    .update({ title, updated_at: new Date().toISOString() })
-    .eq("id", params.id)
-    .eq("user_id", u.user.id);
-
-  if (error) return NextResponse.json({ error: "DB_RENAME", details: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
-}
-
-export async function DELETE(req: Request, { params }: { params: { id: string } }) {
-  const supabase = createSupabaseServer();
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
-
-  const { error } = await supabase
-    .from("conversations")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", params.id)
-    .eq("user_id", u.user.id);
-
-  if (error) return NextResponse.json({ error: "DB_DELETE", details: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, conversation: data });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e.message }, { status: 400 });
+  }
 }
