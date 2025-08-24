@@ -6,7 +6,7 @@ import { createSupabaseServer } from "../../../../lib/supabase/server";
 export async function GET(req: Request) {
   const supabase = createSupabaseServer();
   const { data: u } = await supabase.auth.getUser();
-  if (!u.user) {
+  if (!u?.user) {
     return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
   }
 
@@ -28,8 +28,10 @@ export async function GET(req: Request) {
     );
   }
 
+  const nextOffset = data && data.length === limit ? offset + limit : null;
+
   return NextResponse.json({
     items: data,
-    nextOffset: data.length === limit ? offset + limit : null,
+    nextOffset, // sarà null quando NON c’è altro da caricare
   });
 }
