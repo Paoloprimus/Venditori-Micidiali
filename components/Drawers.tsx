@@ -159,9 +159,12 @@ export function LeftDrawer({
           </div>
         ))}
 
-        {hasMore && !loading && (
-          <button className="iconbtn" onClick={()=>load(false)}>Carica altro…</button>
+        {hasMore && items.length > 0 && !loading && (
+          <button className="iconbtn" onClick={() => load(false)}>
+            Carica altro…
+          </button>
         )}
+
         {loading && <div className="helper">Caricamento…</div>}
         {!loading && items.length === 0 && <div className="helper">Nessuna sessione.</div>}
       </div>
