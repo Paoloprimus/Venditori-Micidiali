@@ -8,10 +8,10 @@ export default function HandoffPage() {
   const sections = {
     vision: {
       title: "Visione & Obiettivo Prodotto",
-      content: `Base AIxPMI Assistant (chat vocale, sessioni, TTS opzionale, Tailwind).
+      content: ` "Venditori Micidiali", Assistente IA alle vendite (chat vocale, sessioni, TTS opzionale, Tailwind).
 Esteso con "Sales Co-Pilot": funzioni di memory bank personalizzata, generatore proposte, quick add via voce.
-Obiettivo: un assistente conversazionale per PMI che gestisce sia interazioni (chat) sia dati strutturati (clienti, contatti, prodotti, proposte).
-Principio ergonomico: il venditore non deve MAI compilar form complessi → interazione SOLO naturale (testo o voce). L'assistente traduce in dati strutturati e aggiorna automaticamente il DB.`
+Obiettivo: un assistente conversazionale per venditori che gestisce sia interazioni (chat) sia dati strutturati (clienti, contatti, prodotti, proposte).
+Principio ergonomico: il venditore non deve MAI compilare form complessi → interazione SOLO naturale (testo o voce). L'assistente traduce in dati strutturati e aggiorna automaticamente il DB.`
     },
     stack: {
       title: "Stack & Architettura",
@@ -158,7 +158,7 @@ Esempio accounts.custom:
       <div className="max-w-6xl mx-auto bg-white rounded-xl shadow-lg overflow-hidden">
         {/* Header */}
         <div className="bg-indigo-600 p-6 text-white">
-          <h1 className="text-3xl font-bold">AIxPMI Assistant + Sales Co-Pilot</h1>
+          <h1 className="text-3xl font-bold">"Venditori Micidiali" - Sales CoPilot</h1>
           <p className="text-indigo-100 mt-2">Handoff tecnico v1.4 - Data: 2025-08-24</p>
           <div className="mt-4 flex items-center">
             <span className="bg-indigo-700 px-3 py-1 rounded-full text-sm mr-3">Next.js 14</span>
