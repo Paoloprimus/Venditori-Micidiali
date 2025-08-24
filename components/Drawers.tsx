@@ -45,7 +45,7 @@ export function TopSheet({
   );
 }
 
-type Conv = { id:string; title:string; updated_at:string; total_cost:number };
+type Conv = { id:string; title:string; updated_at:string };
 
 export function LeftDrawer({
   open, onClose, onSelect
