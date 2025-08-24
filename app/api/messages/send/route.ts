@@ -191,7 +191,7 @@ export async function POST(req: Request) {
     }
   }
 
-  // 4) Se INTENT = briefing → costruisci contesto reale e genera briefing con guardrail
+// 4) Se INTENT = briefing → costruisci contesto reale e genera briefing con guardrail
 if (intentObj.intent === "briefing") {
   // 4.1 Identifica cliente
   let chosen: { id: string; name: string; custom: any } | null = null;
@@ -214,7 +214,13 @@ if (intentObj.intent === "briefing") {
       { conversation_id: convId!, user_id: userId, role: "assistant", content: replyFallback, created_at: now }
     ]);
     await supabase.from("conversations").update({ updated_at: now }).eq("id", convId).eq("user_id", userId);
-    return NextResponse.json({ ok: true, conversationId: convId, reply: replyFallback, usage: { in: 0, out: 0, total: 0 }, cost: { in: 0, out: 0, total: 0 } });
+    return NextResponse.json({
+      ok: true,
+      conversationId: convId,
+      reply: replyFallback,
+      usage: { in: 0, out: 0, total: 0 },
+      cost: { in: 0, out: 0, total: 0 }
+    });
   }
 
   // 4.2 Recupera ultime note
@@ -239,29 +245,37 @@ if (intentObj.intent === "briefing") {
   const interessi = arr(c.interessi).map(String);
   const note = clean(c.note);
 
-  // 4.4 Rendering deterministico del briefing (noi, non il modello)
+  // 4.4 Rendering deterministico del briefing
   const lines: string[] = [];
   lines.push(`### Briefing Operativo — **${chosen.name}**`);
   lines.push(`- **Fascia**: ${fascia ?? "—"}`);
   lines.push(`- **Pagamento**: ${pagamento ?? "—"}`);
   lines.push(`- **Prodotti di interesse**: ${prodottiInteresse.length ? prodottiInteresse.join(", ") : "—"}`);
-  lines.push(`- **Volumi / ultimo esito**: ${(ultimiVolumi || ultimoEsito) ? [ultimiVolumi, ultimoEsito].filter(Boolean).join(" — ") : "—"}`);
+  lines.push(
+    `- **Volumi / ultimo esito**: ${
+      (ultimiVolumi || ultimoEsito) ? [ultimiVolumi, ultimoEsito].filter(Boolean).join(" — ") : "—"
+    }`
+  );
   lines.push(`- **Tabù da evitare**: ${tabu.length ? tabu.join(", ") : "—"}`);
   lines.push(`- **Interessi personali**: ${interessi.length ? interessi.join(", ") : "—"}`);
   lines.push(`- **Note**: ${note ?? "—"}`);
 
-  // Aggiungi note recenti (se ci sono)
   if (lastNotes && lastNotes.length) {
     lines.push(`- **Note recenti**:`);
     for (const n of lastNotes) {
-      const d = new Date(n.created_at).toLocaleString("it-IT", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" });
+      const d = new Date(n.created_at).toLocaleString("it-IT", {
+        day: "2-digit",
+        month: "2-digit",
+        hour: "2-digit",
+        minute: "2-digit"
+      });
       lines.push(`  • (${d}) ${n.body}`);
     }
   }
 
   const briefingFixed = lines.join("\n");
 
-  // 4.5 Chiedi SOLO 2-3 prossime azioni (vietato inventare nuovi dati o prodotti)
+  // 4.5 Chiedi SOLO 2-3 prossime azioni (vietato inventare)
   const actionsPrompt = `In base al seguente briefing (che è veritiero e completo per quanto noto), proponi 2-3 prossime azioni pratiche.
 Regole:
 - NON inventare prodotti o interessi che non sono nel briefing.
@@ -307,10 +321,48 @@ ${briefingFixed}
     usage: { in: tokensIn, out: tokensOut, total: usage?.total_tokens ?? tokensIn + tokensOut },
     cost: { in: costIn, out: costOut, total: costTotal }
   });
+} // <-- chiusura IF briefing
+
+// 5) Altrimenti (other) → risposta conversazionale standard + eventuale conferma update
+try {
+  const completion = await openai.chat.completions.create({
+    model: LLM_MODEL,
+    messages: [
+      { role: "system", content: SYSTEM_PROMPT },
+      { role: "user", content }
+    ],
+    temperature: terse ? 0.2 : 0.7,
+    max_tokens: terse ? 300 : 800
+  });
+
+  const replyRaw = completion.choices?.[0]?.message?.content ?? "";
+  const reply = (replyRaw.trim() || "⚠️ Nessun contenuto generato.").concat(updateConfirmation);
+
+  const usage = completion.usage;
+  const tokensIn = usage?.prompt_tokens ?? 0;
+  const tokensOut = usage?.completion_tokens ?? 0;
+  const costIn = (tokensIn / 1_000_000) * PRICE_IN;
+  const costOut = (tokensOut / 1_000_000) * PRICE_OUT;
+  const costTotal = costIn + costOut;
+
+  const now = new Date().toISOString();
+  await supabase.from("messages").insert([
+    { conversation_id: convId!, user_id: userId, role: "user", content, created_at: now },
+    { conversation_id: convId!, user_id: userId, role: "assistant", content: reply, created_at: now }
+  ]);
+  await supabase.from("conversations").update({ updated_at: now }).eq("id", convId).eq("user_id", userId);
+
+  return NextResponse.json({
+    ok: true,
+    conversationId: convId,
+    reply,
+    usage: { in: tokensIn, out: tokensOut, total: usage?.total_tokens ?? tokensIn + tokensOut },
+    cost: { in: costIn, out: costOut, total: costTotal }
+  });
 } catch (e: any) {
-    return NextResponse.json(
-      { error: "LLM_ERROR", details: e?.message ?? String(e), hint: "Controlla OPENAI_API_KEY e LLM_MODEL_NAME" },
-      { status: 500 }
-    );
-  }
+  return NextResponse.json(
+    { error: "LLM_ERROR", details: e?.message ?? String(e), hint: "Controlla OPENAI_API_KEY e LLM_MODEL_NAME" },
+    { status: 500 }
+  );
 }
+
