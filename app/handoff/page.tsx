@@ -1,6 +1,8 @@
-import React, { useState } from 'react';
+'use client';
 
-const SalesCoPilotHandoff = () => {
+import { useState } from 'react';
+
+export default function HandoffPage() {
   const [activeSection, setActiveSection] = useState('vision');
 
   const sections = {
@@ -9,7 +11,7 @@ const SalesCoPilotHandoff = () => {
       content: `Base AIxPMI Assistant (chat vocale, sessioni, TTS opzionale, Tailwind).
 Esteso con "Sales Co-Pilot": funzioni di memory bank personalizzata, generatore proposte, quick add via voce.
 Obiettivo: un assistente conversazionale per PMI che gestisce sia interazioni (chat) sia dati strutturati (clienti, contatti, prodotti, proposte).
-Principio ergonomico: il venditore non deve MAI compilare form complessi → interazione SOLO naturale (testo o voce). L'assistente traduce in dati strutturati e aggiorna automaticamente il DB.`
+Principio ergonomico: il venditore non deve MAI compilar form complessi → interazione SOLO naturale (testo o voce). L'assistente traduce in dati strutturati e aggiorna automaticamente il DB.`
     },
     stack: {
       title: "Stack & Architettura",
@@ -211,6 +213,4 @@ Esempio accounts.custom:
       </div>
     </div>
   );
-};
-
-export default SalesCoPilotHandoff;
+}
