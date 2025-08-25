@@ -150,9 +150,6 @@ export function LeftDrawer({
               <div className="title" style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                 {c.title}
               </div>
-              <div className="helper">
-                Aggiornata: {formatUpdatedAt(c.updated_at)}
-              </div>
             </div>
             {/* Cestino per eliminare la sessione */}
             <button className="iconbtn" title="Elimina" onClick={()=>remove(c.id)}>🗑️</button>
