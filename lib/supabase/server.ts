@@ -2,10 +2,10 @@
 import { cookies } from "next/headers";
 import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-export function createClient() {
+export function createSupabaseServer() {
   const cookieStore = cookies();
 
-  const supabase = createServerClient(
+  return createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -17,20 +17,28 @@ export function createClient() {
             return undefined;
           }
         },
-        set(_name: string, _value: string, _options: CookieOptions) {
-          // no-op in API Routes (headers sono read-only)
+        /**
+         * IMPORTANTISSIMO:
+         * nelle route API dell'App Router i cookie sono scrivibili.
+         * Se lasci no-op qui, Supabase non può ruotare/settare la sessione
+         * e getUser() tornerà null in produzione.
+         */
+        set(name: string, value: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value, ...options });
+          } catch {
+            // in contesti dove non è permesso (rari), ignora
+          }
         },
-        remove(_name: string, _options: CookieOptions) {
-          // no-op
+        remove(name: string, options: CookieOptions) {
+          try {
+            cookieStore.set({ name, value: "", ...options, maxAge: 0 });
+          } catch {}
         },
       },
     }
   );
-
-  return supabase;
 }
 
 // Alias legacy per compatibilità
-export function createSupabaseServer() {
-  return createClient();
-}
+export const createClient = createSupabaseServer;
