@@ -1,29 +1,43 @@
-import { NextResponse } from 'next/server';
-import { createClient } from '@/lib/supabase/server';
-import { makeSessionTitle } from '@/lib/sessionTitle';
+export const runtime = "nodejs";
 
-export async function POST() {
-  const supabase = createClient();
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser();
+import { NextResponse } from "next/server";
+import { createSupabaseServer } from "../../../../lib/supabase/server";
 
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
+export async function POST(req: Request) {
+  const supabase = createSupabaseServer();
+  const { data: u } = await supabase.auth.getUser();
+  if (!u?.user) {
+    // compat: la UI vecchia non gestisce 401 → restituisco shape noto con errore
+    return NextResponse.json({ ok: false, error: "UNAUTH" }, { status: 401 });
   }
 
-  const title = makeSessionTitle();
+  const body = await req.json().catch(() => ({} as any));
+  const passedTitle =
+    typeof body?.title === "string" && body.title.trim().length ? body.title.trim() : null;
+
+  const defaultTitle =
+    "Nuova sessione " +
+    new Date().toLocaleString("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  const title = passedTitle ?? defaultTitle;
 
   const { data, error } = await supabase
-    .from('conversations')
-    .insert({ user_id: user.id, title })
-    .select('id, title')
+    .from("conversations")
+    .insert({ user_id: u.user.id, title })
+    .select()
     .single();
 
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  if (error || !data) {
+    return NextResponse.json(
+      { ok: false, error: "DB_INSERT_CONV", details: error?.message ?? "fail" },
+      { status: 500 }
+    );
   }
 
-  return NextResponse.json({ conversation: data });
+  // shape compatibile con il client
+  return NextResponse.json({ ok: true, conversation: data });
 }
