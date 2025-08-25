@@ -6,7 +6,7 @@ const ProjectDocument = () => {
       {/* Header */}
       <header className="text-center mb-12">
           <h1 className="text-4xl font-bold text-blue-800 mb-2">VENDITORI MICIDIALI</h1>
-        <h2 className="text-4xl font-bold text-blue-800 mb-2">Sales CoPilot</h2>
+        <h2 className="text-4xl font-bold text-blue-800 mb-2">Sales IA CoPilot</h2>
         <p className="text-xl text-blue-600">Documento di Progetto</p>
         <div className="mt-4 flex justify-center items-center">
           <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
@@ -14,7 +14,7 @@ const ProjectDocument = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-500">Sales CoPilot — v1.0</p>
+          <p className="text-sm text-gray-500">Sales IA CoPilot — v1.0</p>
         </div>
         <p className="text-gray-500 mt-2">Data: 24 Agosto 2025</p>
       </header>
