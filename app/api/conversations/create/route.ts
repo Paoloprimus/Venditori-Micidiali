@@ -13,10 +13,8 @@ export async function POST() {
     return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
   }
 
-  // Genera titolo automatico (es. "lun 25/08/25")
   const title = makeSessionTitle();
 
-  // Inserisci conversazione in DB
   const { data, error } = await supabase
     .from('conversations')
     .insert({ user_id: user.id, title })
