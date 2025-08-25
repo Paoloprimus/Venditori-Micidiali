@@ -5,7 +5,8 @@ const ProjectDocument = () => {
     <div className="max-w-4xl mx-auto px-4 py-8 bg-gray-50 text-gray-800">
       {/* Header */}
       <header className="text-center mb-12">
-        <h1 className="text-4xl font-bold text-blue-800 mb-2">Sales CoPilot</h1>
+          <h1 className="text-4xl font-bold text-blue-800 mb-2">VENDITORI MICIDIALI</h1>
+        <h2 className="text-4xl font-bold text-blue-800 mb-2">Sales CoPilot</h2>
         <p className="text-xl text-blue-600">Documento di Progetto</p>
         <div className="mt-4 flex justify-center items-center">
           <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
