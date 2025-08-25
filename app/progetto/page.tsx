@@ -297,7 +297,7 @@ const ProjectDocument = () => {
 
       {/* Footer */}
       <footer className="mt-16 pt-8 border-t border-gray-200 text-center text-gray-500">
-        <p>Sales CoPilot. L'IA al servizio delle vendite</p>
+        <p>Sales IA CoPilot. L'IA al servizio delle vendite</p>
         <p className="mt-2">© 2025 IA Utile. Tutti i diritti riservati.</p>
       </footer>
     </div>
