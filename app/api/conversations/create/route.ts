@@ -1,6 +1,3 @@
-Ecco il codice completo per `app/api/conversations/create/route.ts`, pronto da copiare:
-
-```ts
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
 import { makeSessionTitle } from '@/lib/sessionTitle';
@@ -32,6 +29,3 @@ export async function POST() {
 
   return NextResponse.json({ conversation: data });
 }
-```
-
-Questo è tutto il file. Non serve altro: gestisce l’autenticazione, genera il titolo e salva la nuova conversazione. ✔️
