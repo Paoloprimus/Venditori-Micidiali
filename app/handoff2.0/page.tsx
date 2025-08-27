@@ -326,7 +326,7 @@ const DesktopHandoff = () => {
               <div className="text-purple-300">];</div>
               <br/>
               <div className="text-purple-300">// Router messaggi multi-processo</div>
-              <div>const processIntent = (intent: string, message: string) => &#123;</div>
+              <div>const processIntent = (intent: string, message: string) =&gt; &#123;</div>
               <div>&nbsp;&nbsp;if (intent.startsWith('hr_')) return handleHRProcess(intent, message);</div>
               <div>&nbsp;&nbsp;if (intent.startsWith('ops_')) return handleOpsProcess(intent, message);</div>
               <div>&nbsp;&nbsp;// ... esistente sales logic ...</div>
@@ -373,7 +373,7 @@ const DesktopHandoff = () => {
               <div className="bg-gray-900 text-green-400 p-4 rounded-lg text-sm font-mono">
                 <div className="text-yellow-400">// Esempio: "Crea progetto sito web per Rossi, assegna Giulia, budget 5k"</div>
                 <br/>
-                <div>const handleCrossProcessMessage = async (message: string) => &#123;</div>
+                <div>const handleCrossProcessMessage = async (message: string) =&gt; &#123;</div>
                 <div className="text-purple-300">&nbsp;&nbsp;// 1. Crea progetto (ops)</div>
                 <div>&nbsp;&nbsp;const project = await createProject(&#123;</div>
                 <div>&nbsp;&nbsp;&nbsp;&nbsp;name: 'Sito web',</div>
@@ -421,7 +421,7 @@ const DesktopHandoff = () => {
               <div>// ✅ Mantieni drawer conversazioni esistenti</div>
               <div>// 🔄 AGGIUNGI process navigation</div>
               <br/>
-              <div className="text-blue-300">const ProcessDrawer = () => &#123;</div>
+              <div className="text-blue-300">const ProcessDrawer = () =&gt; &#123;</div>
               <div>&nbsp;&nbsp;const [activeProcess, setActiveProcess] = useState('sales'); // default esistente</div>
               <br/>
               <div>&nbsp;&nbsp;return (</div>
