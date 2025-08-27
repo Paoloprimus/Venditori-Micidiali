@@ -217,7 +217,7 @@ const DesktopHandoff = () => {
               <div>const [communitySuggestions, setCommunity] = useState([]);</div>
               <br/>
               <div className="text-blue-300">// Quando crei nuovo cliente, mostra tattiche team</div>
-              <div className="text-blue-300">const handleSuccess = async (newAccount) => &#123;</div>
+              <div className="text-blue-300">const handleSuccess = async (newAccount) =&gt; &#123;</div>
               <div className="text-blue-300">&nbsp;&nbsp;// ... logica esistente ...</div>
               <div className="text-blue-300">&nbsp;&nbsp;</div>
               <div className="text-blue-300">&nbsp;&nbsp;// 🔄 NUOVO: Get community insights</div>
