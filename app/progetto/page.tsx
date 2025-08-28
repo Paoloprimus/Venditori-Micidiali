@@ -122,6 +122,7 @@ const ProjectDocument = () => {
       <div className="border-top border-t-2 border-dashed border-gray-300 my-8"></div>
 
       {/* 4) Come funziona */}
+
       <section className="mb-10">
         <div className="flex items-center mb-4">
           <div className="bg-blue-100 text-blue-800 rounded-full w-8 h-8 flex items-center justify-center mr-3">
@@ -138,13 +139,20 @@ const ProjectDocument = () => {
               <div>
                 <h3 className="font-medium text-lg">Import e modifiche DB immediati</h3>
                 <p className="text-gray-600">Funzione intelligente di creazione e gestione base dati</p>
-                <h3 className="font-medium text-lg mt-3">Conversazione naturale</h3>
-                <p className="text-gray-600">Venditori Micidiali capisce se è richiesta, aggiornamento o nota.</p>
               </div>
             </div>
             <div className="flex items-start">
               <div className="bg-blue-100 text-blue-800 rounded-lg w-10 h-10 flex items-center justify-center mr-4 flex-shrink-0">
                 <span className="font-bold">2</span>
+              </div>
+              <div>
+                <h3 className="font-medium text-lg">Conversazione naturale</h3>
+                <p className="text-gray-600">Venditori Micidiali capisce se è richiesta, aggiornamento o nota.</p>
+              </div>
+            </div>
+            <div className="flex items-start">
+              <div className="bg-blue-100 text-blue-800 rounded-lg w-10 h-10 flex items-center justify-center mr-4 flex-shrink-0">
+                <span className="font-bold">3</span>
               </div>
               <div>
                 <h3 className="font-medium text-lg">Memoria intelligente</h3>
@@ -153,7 +161,7 @@ const ProjectDocument = () => {
             </div>
             <div className="flex items-start">
               <div className="bg-blue-100 text-blue-800 rounded-lg w-10 h-10 flex items-center justify-center mr-4 flex-shrink-0">
-                <span className="font-bold">3</span>
+                <span className="font-bold">4</span>
               </div>
               <div>
                 <h3 className="font-medium text-lg">Briefing su misura</h3>
@@ -162,7 +170,7 @@ const ProjectDocument = () => {
             </div>
             <div className="flex items-start">
               <div className="bg-blue-100 text-blue-800 rounded-lg w-10 h-10 flex items-center justify-center mr-4 flex-shrink-0">
-                <span className="font-bold">4</span>
+                <span className="font-bold">5</span>
               </div>
               <div>
                 <h3 className="font-medium text-lg">Reportistica</h3>
