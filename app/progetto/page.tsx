@@ -31,7 +31,7 @@ const ProjectDocument = () => {
           <p className="mb-4">Spesso i Venditori hanno giornate frenetiche, tante informazioni di natura diversa e poco tempo per preparare bene gli appuntamenti.</p>
           <p className="mb-4">Il rischio concreto è dimenticare dettagli importanti, non sfruttare tutte le opportunità e non riuscire a crearne di nuove.</p>
           <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
-            <p className="text-blue-800 font-medium">Venditori Micidiali nasce per risolvere in particolare questo problema: un assistente intelligente, sempre nel telefono del venditore, accessibile anche solo via voce, che trasforma ogni interazione in dati utili, prepara briefing mirati per ogni cliente e aiuta a capitalizzare ogni risvolto del processo commerciale.</p>
+            <p className="text-blue-800 font-medium">Venditori Micidiali nasce per risolvere in particolare questo problema: un CoPilota intelligente, sempre nel telefono del venditore, accessibile anche solo via voce, che trasforma ogni interazione in dati utili, prepara briefing mirati per ogni cliente e aiuta a capitalizzare ogni risvolto del processo commerciale.</p>
           </div>
         </div>
       </section>
@@ -47,7 +47,7 @@ const ProjectDocument = () => {
           <h2 className="text-2xl font-semibold">La visione</h2>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="text-lg font-medium text-blue-700 mb-4">Un assistente perfetto, sempre al fianco del Venditore, che conosce profondamente i suoi clienti e lo supporta in ogni fase.</p>
+          <p className="text-lg font-medium text-blue-700 mb-4">Un CoPilota perfetto, sempre al fianco del Venditore, che conosce profondamente i suoi clienti e lo supporta in ogni fase.</p>
           <ul className="space-y-3">
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -59,7 +59,7 @@ const ProjectDocument = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
-              <span><span className="font-medium">Tra un incontro e l'altro:</span> il Venditore aggiorna Venditori micidiali (anche solo parlando in viva voce mentre guida) che incorpora e memoriza tutto.</span>
+              <span><span className="font-medium">Tra un incontro e l'altro:</span> il Venditore aggiorna Venditori micidiali (anche solo parlando in viva voce mentre guida) che incorpora e memorizza.</span>
             </li>
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -95,7 +95,7 @@ const ProjectDocument = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <p className="font-medium">Rendere il lavoro dei Venditori più efficace ed efficiente.</p>
+              <p className="font-medium">Rendere il lavoro dei Venditori più efficace, efficiente, facile e piacevole.</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -107,13 +107,13 @@ const ProjectDocument = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
-              <p className="font-medium">Standardizzare il processo e dotarsi di una base dati "naturale" dati (ogni espressione verbale può diventare dato strutturato).</p>
+              <p className="font-medium">Standardizzare il processo e dotarsi di una base dati "naturale" (ogni espressione verbale può diventare dato strutturato).</p>
             </div>
             <div className="bg-amber-50 p-4 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              <p className="font-medium">Supportare il Venditore e la sua azienda di riferimento con info nuove e fondamentali.</p>
+              <p className="font-medium">Supportare il Venditore e la sua azienda di riferimento con info fondamentali e completamente nuove.</p>
             </div>
           </div>
         </div>
@@ -137,7 +137,7 @@ const ProjectDocument = () => {
               </div>
               <div>
                 <h3 className="font-medium text-lg">Conversazione naturale</h3>
-                <p className="text-gray-600">l'assistente capisce se è richiesta, aggiornamento o nota.</p>
+                <p className="text-gray-600">Venditori Micidiali capisce se è richiesta, aggiornamento o nota.</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -146,7 +146,7 @@ const ProjectDocument = () => {
               </div>
               <div>
                 <h3 className="font-medium text-lg">Memoria intelligente</h3>
-                <p className="text-gray-600">salva dati strutturati e note libere.</p>
+                <p className="text-gray-600">Salva dati strutturati e note libere.</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -155,7 +155,7 @@ const ProjectDocument = () => {
               </div>
               <div>
                 <h3 className="font-medium text-lg">Briefing su misura</h3>
-                <p className="text-gray-600">mostra solo dati reali, sintetizzati in punti chiari.</p>
+                <p className="text-gray-600">Mostra solo dati reali, sintetizzati in punti chiari e immediatamente utili.</p>
               </div>
             </div>
             <div className="flex items-start">
@@ -164,7 +164,7 @@ const ProjectDocument = () => {
               </div>
               <div>
                 <h3 className="font-medium text-lg">Reportistica</h3>
-                <p className="text-gray-600">riepilogo di giornata o periodo, pronto da condividere.</p>
+                <p className="text-gray-600">Fornisce riepiloghi di giornata o periodo, di cliente, prodottti etc.</p>
               </div>
             </div>
           </div>
@@ -173,7 +173,7 @@ const ProjectDocument = () => {
 
       <div className="border-top border-t-2 border-dashed border-gray-300 my-8"></div>
 
-      {/* 5) Cosa cambia per i venditori */}
+      {/* 5) Cosa cambia per i Venditori */}
       <section className="mb-10">
         <div className="flex items-center mb-4">
           <div className="bg-blue-100 text-blue-800 rounded-full w-8 h-8 flex items-center justify-center mr-3">
@@ -187,25 +187,25 @@ const ProjectDocument = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-red-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
               </svg>
-              <p>Nessun modulo da compilare.</p>
+              <p>Nessuna tabella o modulo da riempire con codice, numeri o altri dati "muti".</p>
             </div>
             <div className="flex items-center p-4 bg-blue-50 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
-              <p>Memoria affidabile e sempre aggiornata.</p>
+              <p>Disponibilità immediata di una memoria profonda, affidabile e sempre aggiornata.</p>
             </div>
             <div className="flex items-center p-4 bg-green-50 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
               </svg>
-              <p>Preparazione migliore agli appuntamenti.</p>
+              <p>Ottima e istantanea preparazione degli appuntamenti.</p>
             </div>
             <div className="flex items-center p-4 bg-purple-50 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
               </svg>
-              <p>Più tempo per vendere, meno burocrazia.</p>
+              <p>Più tempo per vendere, meno per organizazione e registrazioni.</p>
             </div>
           </div>
         </div>
@@ -223,8 +223,8 @@ const ProjectDocument = () => {
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
           <ul className="list-disc pl-5 space-y-2">
-            <li>Dati aggiornati e centralizzati.</li>
-            <li>Riduzione errori e dimenticanze.</li>
+            <li>Nuovi dati (anche in tempo reale).</li>
+            <li>Drastica riduzione errori e dimenticanze.</li>
             <li>Team allineato grazie a report condivisi.</li>
             <li>Immagine professionale verso i clienti.</li>
           </ul>
@@ -243,8 +243,8 @@ const ProjectDocument = () => {
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
           <ul className="list-disc pl-5 space-y-2">
-            <li>Strumento quotidiano del venditore (desktop, mobile, voce).</li>
-            <li>Assistente personale evolutivo (più lo usi, più diventa preciso).</li>
+            <li>Strumento quotidiano del Venditore (desktop, mobile, voce).</li>
+            <li>Copilota evolutivo (più lo usi, più diventa preciso).</li>
             <li>Soluzione scalabile per PMI (facile, accessibile, senza complessità).</li>
           </ul>
         </div>
@@ -252,52 +252,9 @@ const ProjectDocument = () => {
 
       <div className="border-top border-t-2 border-dashed border-gray-300 my-8"></div>
 
-      {/* 8) Prossimi sviluppi */}
-      <section className="mb-10">
-        <div className="flex items-center mb-4">
-          <div className="bg-blue-100 text-blue-800 rounded-full w-8 h-8 flex items-center justify-center mr-3">
-            <span className="font-bold">8</span>
-          </div>
-          <h2 className="text-2xl font-semibold">Prossimi sviluppi</h2>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <ul className="list-disc pl-5 space-y-2">
-            <li>Interazione vocale completa (mani libere in auto).</li>
-            <li>Report automatici di fine giornata in PDF/Word.</li>
-            <li>UI dedicata per briefing (oltre alla chat).</li>
-            <li>Quick Add esteso (note, ordini, follow-up).</li>
-            <li>Dashboard manager per overview attività venditori.</li>
-          </ul>
-        </div>
-      </section>
-
-      <div className="border-top border-t-2 border-dashed border-gray-300 my-8"></div>
-
-      {/* 9) Conclusione */}
-      <section className="mb-10">
-        <div className="flex items-center mb-4">
-          <div className="bg-blue-100 text-blue-800 rounded-full w-8 h-8 flex items-center justify-center mr-3">
-            <span className="font-bold">9</span>
-          </div>
-          <h2 className="text-2xl font-semibold">Conclusione</h2>
-        </div>
-        <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="mb-4 font-medium">Assistente IA alle vendite = non un CRM tradizionale, non un chatbot generico.</p>
-          <p>È un compagno di lavoro intelligente che ascolta, ricorda e supporta i venditori.</p>
-          <div className="mt-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
-            <p className="text-blue-800 font-medium flex items-center">
-              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-              Obiettivo: meno tempo perso, più vendite, clienti seguiti meglio.
-            </p>
-          </div>
-        </div>
-      </section>
-
       {/* Footer */}
       <footer className="mt-16 pt-8 border-t border-gray-200 text-center text-gray-500">
-        <p>CoPilota alle vendite. L'IA al servizio del Venditore</p>
+        <p>Venditori Micidiali - CoPilota alle vendite - L'IA al servizio del Venditore</p>
         <p className="mt-2">© 2025 IA Utile. Tutti i diritti riservati.</p>
       </footer>
     </div>
