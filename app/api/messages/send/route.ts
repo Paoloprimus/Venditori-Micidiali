@@ -49,6 +49,49 @@ function safeJson<T>(s: string, fallback: T): T {
   try { return JSON.parse(s) as T; } catch { return fallback; }
 }
 
+/** Autonomina titolo conversazione se vuoto/placeholder */
+async function autoNameConversation(
+  supabase: ReturnType<typeof createSupabaseServer>,
+  convId: string,
+  userId: string
+) {
+  try {
+    const { data: convRow } = await supabase
+      .from("conversations")
+      .select("title")
+      .eq("id", convId)
+      .eq("user_id", userId)
+      .single();
+
+    const currentTitle = (convRow?.title ?? "").trim();
+    const isPlaceholder = currentTitle === "" || currentTitle.toLowerCase() === "nuova chat";
+    if (!isPlaceholder) return;
+
+    const nowRome = new Date();
+    const weekday = new Intl.DateTimeFormat("it-IT", {
+      weekday: "short",
+      timeZone: "Europe/Rome",
+    }).format(nowRome).toLowerCase(); // es. "gio"
+
+    const datePart = new Intl.DateTimeFormat("it-IT", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      timeZone: "Europe/Rome",
+    }).format(nowRome); // es. "28/08/25"
+
+    const autoTitle = `${weekday} ${datePart}`;
+
+    await supabase
+      .from("conversations")
+      .update({ title: autoTitle })
+      .eq("id", convId)
+      .eq("user_id", userId);
+  } catch {
+    // non bloccare il flusso in caso di errore
+  }
+}
+
 export async function POST(req: Request) {
   // Config
   if (!process.env.OPENAI_API_KEY) {
@@ -94,10 +137,9 @@ export async function POST(req: Request) {
     if (lastConv?.id) {
       convId = lastConv.id;
     } else {
-      const defaultTitle = "Nuova sessione " +
-        new Date().toLocaleString("it-IT",{day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit"});
+      // ⬇️ PATCH: crea la conversazione SENZA titolo (placeholder)
       const { data: created, error: createErr } = await supabase
-        .from("conversations").insert({ user_id: userId, title: defaultTitle })
+        .from("conversations").insert({ user_id: userId, title: "" })
         .select("id").single();
       if (createErr || !created?.id) {
         return NextResponse.json({ error: "DB_INSERT_CONV", details: createErr?.message || "Impossibile creare conversazione" }, { status: 500 });
@@ -186,6 +228,10 @@ export async function POST(req: Request) {
         { conversation_id: convId, user_id: userId, role: "assistant", content: replyFallback, created_at: now }
       ]);
       await supabase.from("conversations").update({ updated_at: now }).eq("id", convId).eq("user_id", userId);
+
+      // ⬇️ Autonomina titolo al primo messaggio (anche in fallback)
+      await autoNameConversation(supabase, convId, userId);
+
       return NextResponse.json({
         ok: true, conversationId: convId, reply: replyFallback,
         usage: { in: 0, out: 0, total: 0 }, cost: { in: 0, out: 0, total: 0 }
@@ -270,6 +316,9 @@ ${briefingFixed}
     ]);
     await supabase.from("conversations").update({ updated_at: now }).eq("id", convId).eq("user_id", userId);
 
+    // ⬇️ Autonomina titolo al primo messaggio
+    await autoNameConversation(supabase, convId, userId);
+
     return NextResponse.json({
       ok: true,
       conversationId: convId,
@@ -304,6 +353,9 @@ ${briefingFixed}
       { conversation_id: convId, user_id: userId, role: "assistant", content: reply, created_at: now }
     ]);
     await supabase.from("conversations").update({ updated_at: now }).eq("id", convId).eq("user_id", userId);
+
+    // ⬇️ Autonomina titolo al primo messaggio
+    await autoNameConversation(supabase, convId, userId);
 
     return NextResponse.json({
       ok: true,
