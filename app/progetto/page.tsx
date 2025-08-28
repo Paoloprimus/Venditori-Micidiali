@@ -47,25 +47,25 @@ const ProjectDocument = () => {
           <h2 className="text-2xl font-semibold">La visione</h2>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="text-lg font-medium text-blue-700 mb-4">Un navigatore perfetto, sempre al fianco del Venditore, che conosce profondamente i suoi clienti e lo supporta in ogni fase.</p>
+          <p className="text-lg font-medium text-blue-700 mb-4">Un assistente perfetto, sempre al fianco del Venditore, che conosce profondamente i suoi clienti e lo supporta in ogni fase.</p>
           <ul className="space-y-3">
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
-              <span><span className="font-medium">Mattina:</span> Piano appuntamenti e briefing su chi incontrerà (condizioni, preferenze, tabù, interessi).</span>
+              <span><span className="font-medium">Mattina:</span> il Venditore concorda con Venditori Micidiali il Piano Appuntamenti e riceve un Briefing dettagliato su clienti (trend, condizioni, preferenze) e proposta obiettivi.</span>
             </li>
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
-              <span><span className="font-medium">Tra un incontro e l'altro:</span> il Venditore aggiorna l'assistente (parlando, Venditori Micidiali incorpora tutto).</span>
+              <span><span className="font-medium">Tra un incontro e l'altro:</span> il Venditore aggiorna Venditori micidiali (anche solo parlando in viva voce mentre guida) che incorpora e memoriza tutto.</span>
             </li>
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
-              <span><span className="font-medium">Fine giornata:</span> report completo, pronto per salvataggio o condivisione.</span>
+              <span><span className="font-medium">Fine giornata:</span> Venditori Micidiali propone un Report completo della giornata (o altri specificati dal Venditore), pronto per salvataggio o condivisione.</span>
             </li>
           </ul>
           <div className="mt-4 p-3 bg-gray-100 rounded-lg">
@@ -95,25 +95,25 @@ const ProjectDocument = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-blue-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
               </svg>
-              <p className="font-medium">Facilitare il lavoro dei venditori (meno burocrazia).</p>
+              <p className="font-medium">Rendere il lavoro dei Venditori più efficace ed efficiente.</p>
             </div>
             <div className="bg-green-50 p-4 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
               </svg>
-              <p className="font-medium">Migliorare la relazione col cliente (briefing personalizzati).</p>
+              <p className="font-medium">Migliorare la fidelizzazione del cliente.</p>
             </div>
             <div className="bg-purple-50 p-4 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-purple-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" />
               </svg>
-              <p className="font-medium">Standardizzare raccolta dati (ogni parola diventa dato strutturato).</p>
+              <p className="font-medium">Standardizzare il processo e dotarsi di una base dati "naturale" dati (ogni espressione verbale può diventare dato strutturato).</p>
             </div>
             <div className="bg-amber-50 p-4 rounded-lg">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 text-amber-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
               </svg>
-              <p className="font-medium">Supportare le PMI con uno strumento accessibile e potente.</p>
+              <p className="font-medium">Supportare il Venditore e la sua azienda di riferimento con info nuove e fondamentali.</p>
             </div>
           </div>
         </div>
