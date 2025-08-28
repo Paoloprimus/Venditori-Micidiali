@@ -6,7 +6,7 @@ const ProjectDocument = () => {
       {/* Header */}
       <header className="text-center mb-12">
           <h1 className="text-4xl font-bold text-blue-800 mb-2">VENDITORI MICIDIALI</h1>
-        <h2 className="text-4xl font-bold text-blue-800 mb-2">Sales IA CoPilot</h2>
+        <h2 className="text-4xl font-bold text-blue-800 mb-2">CoPilota alle Vendite</h2>
         <p className="text-xl text-blue-600">Documento di Progetto</p>
         <div className="mt-4 flex justify-center items-center">
           <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mr-3">
@@ -14,12 +14,12 @@ const ProjectDocument = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" />
             </svg>
           </div>
-          <p className="text-sm text-gray-500">Sales IA CoPilot — v1.0</p>
+          <p className="text-sm text-gray-500">Venditori Micidiali - CoPilota alle Vendite — v1.0</p>
         </div>
-        <p className="text-gray-500 mt-2">Data: 24 Agosto 2025</p>
+        <p className="text-gray-500 mt-2">Settembre 2025</p>
       </header>
 
-      {/* 1) Perché nasce il progetto */}
+      {/* 1) Il progetto */}
       <section className="mb-10">
         <div className="flex items-center mb-4">
           <div className="bg-blue-100 text-blue-800 rounded-full w-8 h-8 flex items-center justify-center mr-3">
@@ -28,10 +28,10 @@ const ProjectDocument = () => {
           <h2 className="text-2xl font-semibold">Perché nasce il progetto</h2>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="mb-4">I venditori hanno giornate frenetiche, tante informazioni sparse e poco tempo per prepararsi agli appuntamenti.</p>
-          <p className="mb-4">Il rischio è dimenticare dettagli importanti o non sfruttare le opportunità.</p>
+          <p className="mb-4">Spesso i venditori hanno giornate frenetiche, tante informazioni di natura diversa e poco tempo per preparare bene gli appuntamenti.</p>
+          <p className="mb-4">Il rischio concreto è dimenticare dettagli importanti, non sfruttare tutte le opportunità e non riuscire a crearne di nuove.</p>
           <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
-            <p className="text-blue-800 font-medium">Sales CoPilot nasce per risolvere questo problema: un assistente intelligente, sempre al fianco del venditore, che trasforma ogni interazione in dati utili e prepara briefing mirati per ogni cliente.</p>
+            <p className="text-blue-800 font-medium">Venditori Micidiali nasce per risolvere in particolare questo problema: un assistente intelligente, sempre nel telefono del venditore, accessibile anche solo via voce, che trasforma ogni interazione in dati utili, prepara briefing mirati per ogni cliente e aiuta a capitalizzare ogni risvolto del processo commerciale.</p>
           </div>
         </div>
       </section>
@@ -282,7 +282,7 @@ const ProjectDocument = () => {
           <h2 className="text-2xl font-semibold">Conclusione</h2>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="mb-4 font-medium">Sales CoPilot = non un CRM tradizionale, non un chatbot generico.</p>
+          <p className="mb-4 font-medium">Assistente IA alle vendite = non un CRM tradizionale, non un chatbot generico.</p>
           <p>È un compagno di lavoro intelligente che ascolta, ricorda e supporta i venditori.</p>
           <div className="mt-4 p-4 bg-blue-50 rounded-lg border-l-4 border-blue-500">
             <p className="text-blue-800 font-medium flex items-center">
@@ -297,7 +297,7 @@ const ProjectDocument = () => {
 
       {/* Footer */}
       <footer className="mt-16 pt-8 border-t border-gray-200 text-center text-gray-500">
-        <p>Sales IA CoPilot. L'IA al servizio delle vendite</p>
+        <p>CoPilota alle vendite. L'IA al servizio del Venditore</p>
         <p className="mt-2">© 2025 IA Utile. Tutti i diritti riservati.</p>
       </footer>
     </div>
