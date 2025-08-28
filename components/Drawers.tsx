@@ -45,7 +45,7 @@ export function TopSheet({
   );
 }
 
-type Conv = { id:string; title:string; updated_at:string };
+type Conv = { id:string; title:string; updated_at?:string };
 
 export function LeftDrawer({
   open, onClose, onSelect
@@ -87,7 +87,7 @@ export function LeftDrawer({
     setItems(prev => prev.filter(x => x.id !== id));
   }
 
-  // NEW: crea una nuova sessione chiedendo il titolo
+  // Crea una nuova sessione chiedendo il titolo e la apre subito (stato interno)
   async function createNew() {
     const t = prompt("Titolo nuova sessione:");
     const title = (t ?? "").trim();
@@ -102,25 +102,14 @@ export function LeftDrawer({
       alert(data?.details || data?.error || "Errore creazione");
       return;
     }
-    // risposta tollerante a shape diversi
     const conv: Conv = data?.conversation ?? data?.item ?? data;
     if (!conv?.id) {
       alert("Errore: ID sessione mancante nella risposta");
       return;
     }
-    // inserisci in cima e apri subito
     setItems(prev => [conv, ...prev]);
-    onSelect(conv);
+    onSelect(conv); // nessuna navigazione: resta su /
   }
-
-  const formatUpdatedAt = (iso: string) =>
-    new Date(iso).toLocaleString(undefined, {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit"
-    });
 
   return (
     <aside className={`drawer ${open ? "open":""}`}>
@@ -132,9 +121,8 @@ export function LeftDrawer({
       </div>
 
       <div className="list">
-        {/* NEW: pulsante per creare rapidamente una nuova sessione */}
+        {/* Pulsante per creare rapidamente una nuova sessione */}
         <div className="row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-
           <button className="btn" onClick={createNew}>+ Nuova sessione</button>
         </div>
 
@@ -151,7 +139,6 @@ export function LeftDrawer({
                 {c.title}
               </div>
             </div>
-            {/* Cestino per eliminare la sessione */}
             <button className="iconbtn" title="Elimina" onClick={()=>remove(c.id)}>🗑️</button>
           </div>
         ))}
