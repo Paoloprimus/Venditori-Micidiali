@@ -28,7 +28,7 @@ const ProjectDocument = () => {
           <h2 className="text-2xl font-semibold">Perché nasce il progetto</h2>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="mb-4">Spesso i venditori hanno giornate frenetiche, tante informazioni di natura diversa e poco tempo per preparare bene gli appuntamenti.</p>
+          <p className="mb-4">Spesso i Venditori hanno giornate frenetiche, tante informazioni di natura diversa e poco tempo per preparare bene gli appuntamenti.</p>
           <p className="mb-4">Il rischio concreto è dimenticare dettagli importanti, non sfruttare tutte le opportunità e non riuscire a crearne di nuove.</p>
           <div className="bg-blue-50 p-4 rounded-lg border-l-4 border-blue-500">
             <p className="text-blue-800 font-medium">Venditori Micidiali nasce per risolvere in particolare questo problema: un assistente intelligente, sempre nel telefono del venditore, accessibile anche solo via voce, che trasforma ogni interazione in dati utili, prepara briefing mirati per ogni cliente e aiuta a capitalizzare ogni risvolto del processo commerciale.</p>
@@ -47,25 +47,25 @@ const ProjectDocument = () => {
           <h2 className="text-2xl font-semibold">La visione</h2>
         </div>
         <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-          <p className="text-lg font-medium text-blue-700 mb-4">Un collega sempre pronto che conosce i tuoi clienti e ti supporta in ogni momento.</p>
+          <p className="text-lg font-medium text-blue-700 mb-4">Un navigatore perfetto, sempre al fianco del Venditore, che conosce profondamente i suoi clienti e lo supporta in ogni fase.</p>
           <ul className="space-y-3">
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-yellow-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
               </svg>
-              <span><span className="font-medium">Mattina:</span> briefing su chi incontrerai (condizioni, preferenze, tabù, interessi).</span>
+              <span><span className="font-medium">Mattina:</span> Piano appuntamenti e briefing su chi incontrerà (condizioni, preferenze, tabù, interessi).</span>
             </li>
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
               </svg>
-              <span><span className="font-medium">Durante gli incontri:</span> aggiorni l'assistente parlando, lui registra tutto.</span>
+              <span><span className="font-medium">Tra un incontro e l'altro:</span> il Venditore aggiorna l'assistente (parlando, Venditori Micidiali incorpora tutto).</span>
             </li>
             <li className="flex items-start">
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-indigo-500 mt-1 mr-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
               </svg>
-              <span><span className="font-medium">Fine giornata:</span> report ordinato pronto da condividere.</span>
+              <span><span className="font-medium">Fine giornata:</span> report completo, pronto per salvataggio o condivisione.</span>
             </li>
           </ul>
           <div className="mt-4 p-3 bg-gray-100 rounded-lg">
@@ -73,7 +73,7 @@ const ProjectDocument = () => {
               <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-green-500 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
               </svg>
-              Zero CRM da compilare. Solo conversazione naturale.
+              Zero form da compilare. Solo conversazione naturale.
             </p>
           </div>
         </div>
