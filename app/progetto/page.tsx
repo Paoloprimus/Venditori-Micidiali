@@ -136,10 +136,9 @@ const ProjectDocument = () => {
                 <span className="font-bold">1</span>
               </div>
               <div>
-              <h3 className="font-medium text-lg">Import e modifiche DB immediati</h3>
+                <h3 className="font-medium text-lg">Import e modifiche DB immediati</h3>
                 <p className="text-gray-600">Funzione intelligente di creazione e gestione base dati</p>
-              </div>
-                <h3 className="font-medium text-lg">Conversazione naturale</h3>
+                <h3 className="font-medium text-lg mt-3">Conversazione naturale</h3>
                 <p className="text-gray-600">Venditori Micidiali capisce se è richiesta, aggiornamento o nota.</p>
               </div>
             </div>
