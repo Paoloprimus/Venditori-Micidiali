@@ -1,11 +1,12 @@
+// components/HomeClient.tsx
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
-type Bubble = { role:"user"|"assistant"; content:string; created_at?: string };
-type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
-type Conv = { id:string; title:string };
+type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
+type Usage = { tokensIn: number; tokensOut: number; costTotal: number };
+type Conv = { id: string; title: string };
 
 export default function HomeClient({ email }: { email: string }) {
   const supabase = createSupabaseBrowser();
@@ -18,7 +19,7 @@ export default function HomeClient({ email }: { email: string }) {
   const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
-  // Stato per nominare la chat prima di iniziare
+  // (Facoltativo) nomina manuale
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -36,11 +37,12 @@ export default function HomeClient({ email }: { email: string }) {
   // Toggle "Altoparlante" (auto-TTS se ultimo input = vocale)
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
 
-  // SpeechRecognition nativo: disabilitato su iOS (forza fallback)
+  // SpeechRecognition nativo (no iOS)
   const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
-  const SR: any = (typeof window !== "undefined")
-    ? ((window as any).SpeechRecognition || (window as any).webkitSpeechRecognition)
-    : null;
+  const SR: any =
+    typeof window !== "undefined"
+      ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
+      : null;
   const supportsNativeSR = !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true);
   const srRef = useRef<any>(null);
 
@@ -57,6 +59,19 @@ export default function HomeClient({ email }: { email: string }) {
     const max = 164;
     el.style.height = Math.min(el.scrollHeight, max) + "px";
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }
+
+  // ---- Helpers ----
+  function autoTitleRome() {
+    const fmt = new Intl.DateTimeFormat("it-IT", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      timeZone: "Europe/Rome",
+    });
+    // es. "mar 28/08/25" (forziamo minuscolo ed eliminiamo eventuali punti)
+    return fmt.format(new Date()).toLowerCase().replace(/\./g, "");
   }
 
   async function refreshUsage(convId?: string) {
@@ -79,14 +94,27 @@ export default function HomeClient({ email }: { email: string }) {
 
   // init + cleanup
   useEffect(() => {
-    fetch("/api/model").then(r=>r.json()).then(d=>setModelBadge(d?.model ?? "n/d")).catch(()=>setModelBadge("n/d"));
+    fetch("/api/model")
+      .then((r) => r.json())
+      .then((d) => setModelBadge(d?.model ?? "n/d"))
+      .catch(() => setModelBadge("n/d"));
     refreshUsage();
-    try { window.speechSynthesis?.getVoices?.(); } catch {}
+    try {
+      window.speechSynthesis?.getVoices?.();
+    } catch {}
     return () => {
-      try { srRef.current?.stop?.(); } catch {}
-      try { if (mrRef.current && mrRef.current.state !== "inactive") mrRef.current.stop(); } catch {}
-      try { streamRef.current?.getTracks()?.forEach(t=>t.stop()); } catch {}
-      try { window.speechSynthesis?.cancel?.(); } catch {}
+      try {
+        srRef.current?.stop?.();
+      } catch {}
+      try {
+        if (mrRef.current && mrRef.current.state !== "inactive") mrRef.current.stop();
+      } catch {}
+      try {
+        streamRef.current?.getTracks()?.forEach((t) => t.stop());
+      } catch {}
+      try {
+        window.speechSynthesis?.cancel?.();
+      } catch {}
     };
   }, []);
 
@@ -101,61 +129,95 @@ export default function HomeClient({ email }: { email: string }) {
   useEffect(() => {
     const id = currentConv?.id;
     if (!id) return;
-    try { localStorage.setItem(`autoTTS:${id}`, speakerEnabled ? "1" : "0"); } catch {}
+    try {
+      localStorage.setItem(`autoTTS:${id}`, speakerEnabled ? "1" : "0");
+    } catch {}
   }, [speakerEnabled, currentConv?.id]);
 
+  // ---- Creazione esplicita (facoltativa) ----
   async function createConversation() {
     const title = newTitle.trim();
     if (!title) return;
     setIsCreating(true);
     try {
       const res = await fetch("/api/conversations/new", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
-        body: JSON.stringify({ title })
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data?.error || "Errore creazione conversazione");
       const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+      const t = data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title;
       if (!id) throw new Error("ID conversazione mancante nella risposta");
-      setCurrentConv({ id, title });
+      setCurrentConv({ id, title: t });
       setBubbles([]);
       await refreshUsage(id);
-    } catch (e:any) {
+    } catch (e: any) {
       alert(e?.message || "Errore nella creazione della conversazione");
     } finally {
       setIsCreating(false);
     }
   }
 
+  // ---- Creazione implicita (automatica) al primo invio ----
+  async function ensureConversation(): Promise<Conv> {
+    if (currentConv?.id) return currentConv;
+    const autoTitle = autoTitleRome();
+    const res = await fetch("/api/conversations/new", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ title: autoTitle }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data?.details || data?.error || "Errore creazione automatica");
+    const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+    const title = data?.title ?? data?.conversation?.title ?? data?.item?.title ?? autoTitle;
+    if (!id) throw new Error("ID conversazione mancante nella risposta");
+    const conv = { id, title };
+    setCurrentConv(conv);
+    await refreshUsage(id);
+    return conv;
+  }
+
   async function send() {
     setServerError(null);
-    const content = input.trim(); if (!content) return;
-    if (!currentConv?.id) {
-      alert("Prima di chattare, nomina la prossima chat.");
+    const content = input.trim();
+    if (!content) return;
+
+    // assicura una conversazione (se manca, la crea con titolo auto "mar 28/08/25" Europe/Rome)
+    let conv: Conv;
+    try {
+      conv = await ensureConversation();
+    } catch (e: any) {
+      alert(e?.message || "Impossibile creare la conversazione");
       return;
     }
-    const convId = currentConv.id;
-    setBubbles(b => [...b, { role:"user", content }]);
-    setInput(""); autoResize();
+    const convId = conv.id;
+
+    setBubbles((b) => [...b, { role: "user", content }]);
+    setInput("");
+    autoResize();
 
     // se stava parlando, ferma
-    try { window.speechSynthesis?.cancel?.(); } catch {}
+    try {
+      window.speechSynthesis?.cancel?.();
+    } catch {}
     setTtsSpeaking(false);
 
     const res = await fetch("/api/messages/send", {
-      method:"POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ content, terse: false, conversationId: convId })
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, terse: false, conversationId: convId }),
     });
     const data = await res.json();
     if (!res.ok) {
       setServerError(data?.details || data?.error || "Errore server");
-      setBubbles(b => [...b, { role:"assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
+      setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
       return;
     }
     const replyText = data.reply ?? "Ok.";
-    setBubbles(b => [...b, { role:"assistant", content: replyText }]);
+    setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
     setLastAssistantText(replyText);
 
     // AUTO-TTS: solo se altoparlante ON e ultimo input era vocale
@@ -171,7 +233,7 @@ export default function HomeClient({ email }: { email: string }) {
     window.location.href = "/login";
   }
 
-  function handleSelectConv(c: { id:string; title:string }) {
+  function handleSelectConv(c: { id: string; title: string }) {
     setCurrentConv({ id: c.id, title: c.title });
     closeLeft();
     loadMessages(c.id);
@@ -206,7 +268,9 @@ export default function HomeClient({ email }: { email: string }) {
         setInput(transcript);
         setLastInputWasVoice(true);
         autoResize();
-        try { sr.stop?.(); } catch {}
+        try {
+          sr.stop?.();
+        } catch {}
       };
 
       sr.onerror = (e: any) => {
@@ -214,7 +278,9 @@ export default function HomeClient({ email }: { email: string }) {
         if (!handedOffToFallback && (code === "not-allowed" || code === "service-not-allowed")) {
           handedOffToFallback = true;
           setIsRecording(false);
-          try { sr.stop?.(); } catch {}
+          try {
+            sr.stop?.();
+          } catch {}
           srRef.current = null;
           startRecorder();
           return;
@@ -251,7 +317,9 @@ export default function HomeClient({ email }: { email: string }) {
       streamRef.current = stream;
       const mr = new MediaRecorder(stream, { mimeType: pickMime() });
       chunksRef.current = [];
-      mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
+      mr.ondataavailable = (ev) => {
+        if (ev.data?.size) chunksRef.current.push(ev.data);
+      };
       mr.onstop = async () => {
         setIsRecording(false);
         setIsTranscribing(true);
@@ -268,40 +336,57 @@ export default function HomeClient({ email }: { email: string }) {
             setLastInputWasVoice(true);
             autoResize();
           }
-        } catch (e:any) {
+        } catch (e: any) {
           setVoiceError(e?.message || "Errore durante la trascrizione");
         } finally {
           setIsTranscribing(false);
-          try { stream.getTracks().forEach(t => t.stop()); } catch {}
+          try {
+            stream.getTracks().forEach((t) => t.stop());
+          } catch {}
           streamRef.current = null;
         }
       };
       mrRef.current = mr;
       mr.start();
       setIsRecording(true);
-    } catch (e:any) {
+    } catch (e: any) {
       setVoiceError(e?.message || "Microfono non disponibile o permesso negato");
       setIsRecording(false);
     }
   }
 
   function stopRecorderOrSR() {
-    if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; return; }
-    if (mrRef.current && mrRef.current.state !== "inactive") { try { mrRef.current.stop(); } catch {} return; }
-    try { streamRef.current?.getTracks()?.forEach(t => t.stop()); } catch {}
+    if (srRef.current) {
+      try {
+        srRef.current.stop?.();
+      } catch {}
+      srRef.current = null;
+      return;
+    }
+    if (mrRef.current && mrRef.current.state !== "inactive") {
+      try {
+        mrRef.current.stop();
+      } catch {}
+      return;
+    }
+    try {
+      streamRef.current?.getTracks()?.forEach((t) => t.stop());
+    } catch {}
   }
 
   function handleVoicePressStart() {
-    if (!currentConv) { alert("Prima crea una sessione."); return; }
     if (isTranscribing || isRecording) return;
-    if (supportsNativeSR) startNativeSR(); else startRecorder();
+    // Nessun blocco: possiamo registrare anche senza conversazione; verrà creata al send
+    if (supportsNativeSR) startNativeSR();
+    else startRecorder();
   }
   function handleVoicePressEnd() {
     if (!isRecording) return;
     stopRecorderOrSR();
   }
   function handleVoiceClick() {
-    if (!isRecording) handleVoicePressStart(); else handleVoicePressEnd();
+    if (!isRecording) handleVoicePressStart();
+    else handleVoicePressEnd();
   }
 
   // ---------- TTS (Voce IA) ----------
@@ -309,14 +394,16 @@ export default function HomeClient({ email }: { email: string }) {
     const text =
       textOverride ||
       lastAssistantText ||
-      [...bubbles].reverse().find(b => b.role === "assistant")?.content ||
+      [...bubbles].reverse().find((b) => b.role === "assistant")?.content ||
       "";
     if (!text) return;
     if (typeof window === "undefined" || !("speechSynthesis" in window)) {
       setVoiceError("Sintesi vocale non supportata dal browser");
       return;
     }
-    try { window.speechSynthesis.cancel(); } catch {}
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "it-IT";
     u.rate = 1;
@@ -327,7 +414,9 @@ export default function HomeClient({ email }: { email: string }) {
     window.speechSynthesis.speak(u);
   }
   function stopSpeak() {
-    try { window.speechSynthesis.cancel(); } catch {}
+    try {
+      window.speechSynthesis.cancel();
+    } catch {}
     setTtsSpeaking(false);
   }
 
@@ -335,43 +424,55 @@ export default function HomeClient({ email }: { email: string }) {
   return (
     <>
       <div className="topbar">
-        <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
-        <div className="title">Venditori Micidiali{currentConv ? ` — ${currentConv.title}` : ""}</div>
+        <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>
+          ☰
+        </button>
+        <div className="title">
+          Venditori Micidiali
+          {currentConv ? ` — ${currentConv.title}` : ""}
+        </div>
         <div className="spacer" />
-        <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>⚙️</button>
-        <button className="iconbtn" onClick={logout}>Esci</button>
+        <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>
+          ⚙️
+        </button>
+        <button className="iconbtn" onClick={logout}>
+          Esci
+        </button>
       </div>
 
       <div className="container">
         <div className="thread">
           {!currentConv && (
             <div className="helper">
-              <div style={{ fontWeight:600, marginBottom:8 }}>Nomina la prossima sessione</div>
-              <div style={{ display:"flex", gap:8 }}>
+              <div style={{ fontWeight: 600, marginBottom: 8 }}>Puoi nominare la sessione (facoltativo)</div>
+              <div style={{ display: "flex", gap: 8 }}>
                 <input
                   type="text"
                   value={newTitle}
-                  onChange={e=>setNewTitle(e.target.value)}
-                  placeholder="Inserisci un nome…"
+                  onChange={(e) => setNewTitle(e.target.value)}
+                  placeholder="Titolo personalizzato…"
                   disabled={isCreating}
-                  style={{ flex:1, padding:"10px 12px" }}
+                  style={{ flex: 1, padding: "10px 12px" }}
                 />
                 <button className="btn" onClick={createConversation} disabled={isCreating || !newTitle.trim()}>
                   Crea
                 </button>
               </div>
+              <div style={{ marginTop: 8, opacity: 0.75, fontSize: 13 }}>
+                In alternativa, scrivi subito: la chat verrà creata con titolo automatico (es. “{autoTitleRome()}”).
+              </div>
             </div>
           )}
 
           {bubbles.length === 0 && currentConv && (
-            <div className="helper">
-              Nessun messaggio ancora. Scrivi qui sotto per iniziare.
-            </div>
+            <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
           )}
           {bubbles.map((m, i) => (
-            <div key={i} className={`msg ${m.role === "user" ? "me":""}`}>{m.content}</div>
+            <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
+              {m.content}
+            </div>
           ))}
-          {serverError && <div className="helper" style={{ color:"#F59E0B" }}>Errore LLM: {serverError}</div>}
+          {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
         </div>
       </div>
 
@@ -380,10 +481,19 @@ export default function HomeClient({ email }: { email: string }) {
           <textarea
             ref={taRef}
             value={input}
-            onChange={e=>{ setInput(e.target.value); setLastInputWasVoice(false); autoResize(); }}
-            placeholder={currentConv ? "Scrivi un messaggio… o usa la voce 🎙️" : "Dopo aver creato la sessione potrai iniziare a scrivere messaggi."}
-            onKeyDown={e=>{ if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } }}
-            disabled={!currentConv || isTranscribing}
+            onChange={(e) => {
+              setInput(e.target.value);
+              setLastInputWasVoice(false);
+              autoResize();
+            }}
+            placeholder={"Scrivi un messaggio… o usa la voce 🎙️"}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            disabled={isTranscribing}
           />
         </div>
         <div className="actions">
@@ -391,7 +501,7 @@ export default function HomeClient({ email }: { email: string }) {
             {/* 🎙️ Voce: press&hold su mobile, click = toggle su desktop */}
             <button
               className="iconbtn"
-              disabled={!currentConv || isTranscribing}
+              disabled={isTranscribing}
               onMouseDown={handleVoicePressStart}
               onMouseUp={handleVoicePressEnd}
               onMouseLeave={handleVoicePressEnd}
@@ -408,21 +518,21 @@ export default function HomeClient({ email }: { email: string }) {
             {/* 🔊 Toggle Altoparlante (auto-TTS se ultimo input = vocale) */}
             <button
               className="iconbtn"
-              disabled={!currentConv}
-              onClick={() => setSpeakerEnabled(s => !s)}
+              onClick={() => setSpeakerEnabled((s) => !s)}
               aria-pressed={speakerEnabled}
               title="Risposte vocali automatiche (solo se l'ultimo messaggio è vocale)"
             >
               {speakerEnabled ? "🔊 Altoparlante ON" : "🔈 Altoparlante OFF"}
             </button>
 
-            {/* opzionale: mostra stato TTS/transcribe/errore */}
-            {isTranscribing && <span style={{ marginLeft:8, fontSize:12, opacity:.7 }}>Trascrizione…</span>}
-            {ttsSpeaking && <span style={{ marginLeft:8, fontSize:12, opacity:.7 }}>Riproduzione…</span>}
-            {voiceError && <span style={{ marginLeft:8, fontSize:12, color:"#b00020" }}>{voiceError}</span>}
+            {isTranscribing && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Trascrizione…</span>}
+            {ttsSpeaking && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Riproduzione…</span>}
+            {voiceError && <span style={{ marginLeft: 8, fontSize: 12, color: "#b00020" }}>{voiceError}</span>}
           </div>
           <div className="right">
-            <button className="btn" onClick={send} disabled={!currentConv || isTranscribing}>Invia</button>
+            <button className="btn" onClick={send} disabled={isTranscribing}>
+              Invia
+            </button>
           </div>
         </div>
       </div>
