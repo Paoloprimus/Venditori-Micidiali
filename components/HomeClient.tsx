@@ -67,6 +67,21 @@ export default function HomeClient({ email }: { email: string }) {
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }
 
+  // --- Helper comandi vocali (Dialogo) ---
+  function hasSubmitCue(raw: string) {
+    // true se termina con: "esegui", "esegui ora", "esegui adesso" (+ punteggiatura)
+    return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
+  }
+  function stripSubmitCue(raw: string) {
+    // rimuove la parola chiave finale prima di inviare
+    return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
+  }
+  function isCmdStop(raw: string)     { return /\bstop\s+dialogo\b/i.test(raw); }
+  function isCmdAnnulla(raw: string)  { return /\bannulla\b/i.test(raw); }
+  function isCmdRipeti(raw: string)   { return /\bripeti\b/i.test(raw); }
+  function isCmdNuova(raw: string)    { return /\bnuova\s+sessione\b/i.test(raw); }
+
+  
   function focusComposer() {
     try {
       if (!taRef.current) return;
@@ -77,7 +92,6 @@ export default function HomeClient({ email }: { email: string }) {
       taRef.current.selectionStart = taRef.current.selectionEnd = v.length;
     } catch {}
   }
-
   
   // ---- Helpers ----
   function autoTitleRome() {
