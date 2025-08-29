@@ -135,6 +135,9 @@ export default function HomeClient({ email }: { email: string }) {
       window.speechSynthesis?.getVoices?.();
     } catch {}
     return () => {
+    // 👇 NEW: spegne il ciclo mani libere
+    dialogActiveRef.current = false;
+      
       try {
         srRef.current?.stop?.();
       } catch {}
@@ -631,6 +634,17 @@ async function dialogLoop() {
         <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>
           ⚙️
         </button>
+
+        {/* ⬇️ NUOVO: toggle modalità vocale */}
+        <button
+          className="iconbtn"
+          aria-pressed={voiceMode}
+          onClick={() => (voiceMode ? stopDialog() : startDialog())}
+          title="Modalità vocale hands-free"
+        >
+          {voiceMode ? "🛑 Dialogo ON" : "🗣️ Dialogo"}
+        </button>
+        
         <button className="iconbtn" onClick={logout}>
           Esci
         </button>
