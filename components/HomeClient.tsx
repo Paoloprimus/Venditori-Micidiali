@@ -652,6 +652,102 @@ async function dialogLoop() {
   }
 }
 
+  async function startDialog() {
+  if (voiceMode) return;
+  setVoiceMode(true);
+  dialogActiveRef.current = true;
+  dialogDraftRef.current = "";
+  try { window.speechSynthesis?.cancel?.(); } catch {}
+  speakAssistant("Modalità dialogo attiva. Dimmi pure.");
+  dialogLoop(); // non await: gira finché dialogActiveRef è true
+}
+
+function stopDialog() {
+  dialogActiveRef.current = false;
+  setVoiceMode(false);
+  try { window.speechSynthesis?.cancel?.(); } catch {}
+  stopRecorderOrSR();
+}
+
+async function dialogLoop() {
+  while (dialogActiveRef.current) {
+    const heard = (await listenOnce()).trim();
+    if (!dialogActiveRef.current) break;
+    if (!heard) continue;
+
+    // comandi rapidi
+    if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
+    if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
+    if (isCmdRipeti(heard)) { speakAssistant(); continue; }
+    if (isCmdNuova(heard))  {
+      try {
+        const title = autoTitleRome();
+        const res = await fetch("/api/conversations/new", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title })
+        });
+        const data = await res.json();
+        const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+        if (id) {
+          setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
+          setBubbles([]); refreshUsage(id);
+          speakAssistant("Nuova sessione. Dimmi pure.");
+        } else {
+          speakAssistant("Non riesco a creare la sessione.");
+        }
+      } catch { speakAssistant("Errore creazione sessione."); }
+      continue;
+    }
+
+    // testo normale
+    let text = heard;
+    let shouldSend = false;
+    if (hasSubmitCue(text)) {
+      text = stripSubmitCue(text);
+      shouldSend = true;
+    }
+    if (text) {
+      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+    }
+
+    if (shouldSend) {
+      const toSend = dialogDraftRef.current.trim();
+      dialogDraftRef.current = "";
+      if (toSend) {
+        // se non c'è una sessione, creane una automatica
+        if (!currentConv?.id) {
+          try {
+            const title = autoTitleRome();
+            const res = await fetch("/api/conversations/new", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ title })
+            });
+            const data = await res.json();
+            const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+            if (id) {
+              setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
+              setBubbles([]); refreshUsage(id);
+            } else {
+              speakAssistant("Non riesco a creare la sessione.");
+              continue;
+            }
+          } catch {
+            speakAssistant("Errore creazione sessione.");
+            continue;
+          }
+        }
+
+        // invia senza mani
+        setInput(toSend);
+        await send();
+        speakAssistant(); // leggi l'ultima risposta
+      } else {
+        speakAssistant("Nessun testo da inviare. Dimmi pure.");
+      }
+    }
+  }
+}
+
   
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
