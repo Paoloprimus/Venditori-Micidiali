@@ -11,40 +11,6 @@ export function useDrawers() {
   };
 }
 
-type Usage = { tokensIn:number; tokensOut:number; costTotal:number };
-
-/** Manteniamo TopSheet per compatibilità, anche se non usato ora. */
-export function TopSheet({
-  open, onClose, usage, model
-}: { open:boolean; onClose:()=>void; usage:Usage|null; model:string }) {
-  const u = usage ?? { tokensIn:0, tokensOut:0, costTotal:0 };
-  return (
-    <aside className={`topsheet ${open ? "open":""}`}>
-      <div className="topbar">
-        <button className="iconbtn" onClick={onClose}>Chiudi</button>
-        <div className="title">Costi & utilizzo</div>
-        <div className="spacer" />
-      </div>
-      <div className="list">
-        <div className="row">
-          <div className="title">Modello in uso</div>
-          <div className="helper">{model || "n/d"}</div>
-        </div>
-        <div className="row">
-          <div className="title">Questa chat</div>
-          <div className="helper">
-            IN {u.tokensIn} • OUT {u.tokensOut} • Totale €{u.costTotal.toFixed(4)}
-          </div>
-        </div>
-        <div className="row">
-          <div className="title">Periodo (30g)</div>
-          <div className="helper">Coming soon</div>
-        </div>
-      </div>
-    </aside>
-  );
-}
-
 type Conv = { id:string; title:string; updated_at?:string };
 
 export function LeftDrawer({
@@ -163,13 +129,4 @@ export function RightDrawer({
   return (
     <aside className={`drawer right ${open ? "open":""}`}>
       <div className="topbar">
-        <button className="iconbtn" onClick={onClose}>Chiudi</button>
-        <div className="title">Impostazioni</div>
-        <div className="spacer" />
-      </div>
-      <div className="list">
-        {/* Vuoto per ora */}
-      </div>
-    </aside>
-  );
-}
+        <button className="iconbtn" onClick={onClose
