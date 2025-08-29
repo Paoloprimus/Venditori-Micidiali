@@ -61,14 +61,21 @@ export function LeftDrawer({
 
   async function remove(id: string) {
     if (!confirm("Eliminare questa sessione?")) return;
+  
     const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
-    const data = await res.json();
+    let data: any = {};
+    try { data = await res.json(); } catch {}
+  
     if (!res.ok) {
-      alert(data?.details || data?.error || "Errore eliminazione");
+      alert(data?.details || data?.error || `Errore eliminazione (HTTP ${res.status})`);
       return;
     }
-    setItems((prev) => prev.filter((x) => x.id !== id));
+  
+    // ottimismo + sync server
+    setItems(prev => prev.filter(x => x.id !== id));
+    await load(true); // ricarica l’elenco dal server per allinearti al DB
   }
+
 
   // Crea una nuova sessione chiedendo il titolo e la apre subito (stato interno)
   async function createNew() {
