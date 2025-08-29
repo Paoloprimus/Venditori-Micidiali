@@ -635,15 +635,7 @@ export default function HomeClient({ email }: { email: string }) {
           ⚙️
         </button>
 
-        {/* ⬇️ NUOVO: toggle modalità vocale */}
-        <button
-          className="iconbtn"
-          aria-pressed={voiceMode}
-          onClick={() => (voiceMode ? stopDialog() : startDialog())}
-          title="Modalità vocale hands-free"
-        >
-          {voiceMode ? "🛑 Dialogo ON" : "🗣️ Dialogo"}
-        </button>
+
         
         <button className="iconbtn" onClick={logout}>
           Esci
@@ -739,6 +731,16 @@ export default function HomeClient({ email }: { email: string }) {
                 {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
               </button>
 
+                      {/* ⬇️ NUOVO: toggle modalità vocale */}
+              <button
+                className="iconbtn"
+                aria-pressed={voiceMode}
+                onClick={() => (voiceMode ? stopDialog() : startDialog())}
+                title="Modalità vocale hands-free"
+              >
+                {voiceMode ? "🛑 Dialogo ON" : "🗣️ Dialogo"}
+              </button>
+              
               {/* 🔊 Toggle Altoparlante (auto-TTS se ultimo input = vocale) */}
               <button
                 className="iconbtn"
