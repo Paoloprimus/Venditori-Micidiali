@@ -1,3 +1,4 @@
+// components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
 
@@ -87,7 +88,7 @@ export function LeftDrawer({
     setItems(prev => prev.filter(x => x.id !== id));
   }
 
-  // Crea una nuova sessione chiedendo il titolo e la apre subito (stato interno)
+  // Crea una nuova sessione con nomina manuale
   async function createNew() {
     const t = prompt("Titolo nuova sessione:");
     const title = (t ?? "").trim();
@@ -108,7 +109,7 @@ export function LeftDrawer({
       return;
     }
     setItems(prev => [conv, ...prev]);
-    onSelect(conv); // nessuna navigazione: resta su /
+    onSelect(conv); // resta su /
   }
 
   return (
@@ -121,9 +122,9 @@ export function LeftDrawer({
       </div>
 
       <div className="list">
-        {/* Pulsante per creare rapidamente una nuova sessione */}
+        {/* Testo aggiornato come richiesto (#4) */}
         <div className="row" style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:8 }}>
-          <button className="btn" onClick={createNew}>+ Nuova sessione</button>
+          <button className="btn" onClick={createNew}>Crea + nomina nuova sessione</button>
         </div>
 
         {error && <div className="row" style={{ color:"#F59E0B" }}>Errore: {error}</div>}
