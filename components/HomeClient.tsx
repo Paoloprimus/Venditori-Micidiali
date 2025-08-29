@@ -442,6 +442,7 @@ export default function HomeClient({ email }: { email: string }) {
 
       <div className="container">
         <div className="thread">
+        {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
           {!currentConv && (
             <div className="helper">
               <div style={{ fontWeight: 600, marginBottom: 8 }}>Puoi nominare la sessione (facoltativo)</div>
@@ -463,7 +464,8 @@ export default function HomeClient({ email }: { email: string }) {
               </div>
             </div>
           )}
-
+          --- FINE BLOCCO NOMINA --- */}
+          
           {bubbles.length === 0 && currentConv && (
             <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
           )}
