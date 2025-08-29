@@ -19,7 +19,7 @@ export default function HomeClient({ email }: { email: string }) {
   const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
-  // (Facoltativo) nomina manuale — ora NON più visibile (blocco commentato nel render)
+  // (Facoltativo) nomina manuale — UI commentata nel render
   const [newTitle, setNewTitle] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -125,7 +125,7 @@ export default function HomeClient({ email }: { email: string }) {
     try { localStorage.setItem(`autoTTS:${id}`, speakerEnabled ? "1" : "0"); } catch {}
   }, [speakerEnabled, currentConv?.id]);
 
-  // ---- Creazione esplicita (facoltativa) — manteniamo la logica, ma il box a UI è commentato ----
+  // ---- Creazione esplicita (facoltativa) — manteniamo la logica, UI commentata nel render ----
   async function createConversation() {
     const title = newTitle.trim();
     if (!title) return;
@@ -176,7 +176,7 @@ export default function HomeClient({ email }: { email: string }) {
     const content = input.trim();
     if (!content) return;
 
-    // chiudi eventuali drawer prima di inviare (richiesta #3)
+    // chiudi eventuali drawer prima di inviare
     closeLeft(); closeTop();
 
     // assicura una conversazione (se manca, la crea con titolo auto "mar 28/08/25" Europe/Rome)
@@ -354,9 +354,35 @@ export default function HomeClient({ email }: { email: string }) {
     if (!isRecording) handleVoicePressStart(); else handleVoicePressEnd();
   }
 
-  // ---- CHIUSURA DRAWER su qualunque azione nell’area Home (#3) ----
+  // ---------- TTS (Voce IA) ----------
+  function speakAssistant(textOverride?: string) {
+    const text =
+      textOverride ||
+      lastAssistantText ||
+      [...bubbles].reverse().find((b) => b.role === "assistant")?.content ||
+      "";
+    if (!text) return;
+    if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+      setVoiceError("Sintesi vocale non supportata dal browser");
+      return;
+    }
+    try { window.speechSynthesis.cancel(); } catch {}
+    const u = new SpeechSynthesisUtterance(text);
+    u.lang = "it-IT";
+    u.rate = 1;
+    u.onend = () => setTtsSpeaking(false);
+    u.onerror = () => setTtsSpeaking(false);
+    utterRef.current = u;
+    setTtsSpeaking(true);
+    window.speechSynthesis.speak(u);
+  }
+  function stopSpeak() {
+    try { window.speechSynthesis.cancel(); } catch {}
+    setTtsSpeaking(false);
+  }
+
+  // ---- CHIUSURA DRAWER su qualunque azione nell’area Home ----
   const handleAnyHomeInteraction = useCallback(() => {
-    // chiudi se sono aperti
     if (leftOpen) closeLeft();
     if (topOpen) closeTop();
   }, [leftOpen, topOpen, closeLeft, closeTop]);
@@ -367,7 +393,7 @@ export default function HomeClient({ email }: { email: string }) {
       <div className="topbar" onMouseDown={handleAnyHomeInteraction}>
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>☰</button>
         <div className="title">
-          Venditori Micidiali{currentConv ? ` — ${currentConv.title}` : ""}
+          Venditori Micidiali{currentConv ? ` — ${currentConv.title}` : ""} · {modelBadge}
         </div>
         <div className="spacer" />
         <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>⚙️</button>
@@ -378,7 +404,7 @@ export default function HomeClient({ email }: { email: string }) {
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
         <div className="container">
           <div className="thread">
-            {/* --- BLOCCO NOMINA MANUALE NASCOSTO (richiesta #4) ---
+            {/* --- BLOCCO NOMINA MANUALE NASCOSTO ---
             {!currentConv && (
               <div className="helper">
                 <div style={{ fontWeight:600, marginBottom:8 }}>Puoi nominare la sessione (facoltativo)</div>
@@ -422,8 +448,7 @@ export default function HomeClient({ email }: { email: string }) {
               onChange={e=>{ setInput(e.target.value); setLastInputWasVoice(false); autoResize(); }}
               placeholder={"Scrivi un messaggio… o usa la voce 🎙️"}
               onKeyDown={e=>{ 
-                // Chiudi drawer anche alla digitazione (#3)
-                handleAnyHomeInteraction();
+                handleAnyHomeInteraction(); // chiudi drawer anche alla digitazione
                 if(e.key==="Enter" && !e.shiftKey){ e.preventDefault(); send(); } 
               }}
               disabled={isTranscribing}
@@ -435,10 +460,10 @@ export default function HomeClient({ email }: { email: string }) {
               <button
                 className="iconbtn"
                 disabled={isTranscribing}
-                onMouseDown={(ev)=>{ handleAnyHomeInteraction(); handleVoicePressStart(); }}
+                onMouseDown={()=>{ handleAnyHomeInteraction(); handleVoicePressStart(); }}
                 onMouseUp={handleVoicePressEnd}
                 onMouseLeave={handleVoicePressEnd}
-                onTouchStart={(ev)=>{ handleAnyHomeInteraction(); handleVoicePressStart(); }}
+                onTouchStart={()=>{ handleAnyHomeInteraction(); handleVoicePressStart(); }}
                 onTouchEnd={handleVoicePressEnd}
                 onClick={handleVoiceClick}
                 aria-pressed={isRecording}
