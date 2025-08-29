@@ -474,7 +474,7 @@ export default function HomeClient({ email }: { email: string }) {
         </button>
       </div>
 
-      <div className="container">
+      <div className="container"
              onMouseDown={handleAnyHomeInteraction}
              onTouchStart={handleAnyHomeInteraction}
             >
@@ -515,7 +515,7 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      <div className="composer">
+      <div className="composer"
              onMouseDown={handleAnyHomeInteraction}
              onTouchStart={handleAnyHomeInteraction}
               >
