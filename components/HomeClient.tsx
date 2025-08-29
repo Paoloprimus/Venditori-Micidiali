@@ -474,6 +474,13 @@ export default function HomeClient({ email }: { email: string }) {
         </button>
       </div>
 
+    {/* WRAPPER NEW */}
+    <div
+      onMouseDown={handleAnyHomeInteraction}
+      onTouchStart={handleAnyHomeInteraction}
+      style={{ minHeight: "100vh" }}
+    >
+      
       <div className="container"
              onMouseDown={handleAnyHomeInteraction}
              onTouchStart={handleAnyHomeInteraction}
@@ -579,6 +586,8 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
+</div>  {/* /WRAPPER NEW */}   // ⬅️ AGGIUNGI QUESTA RIGA
+      
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
       <RightDrawer open={topOpen} onClose={closeTop} />
     </>
