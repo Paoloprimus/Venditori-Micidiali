@@ -61,6 +61,18 @@ export default function HomeClient({ email }: { email: string }) {
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }
 
+  function focusComposer() {
+    try {
+      if (!taRef.current) return;
+      // Evita scroll in cima quando mette il focus
+      taRef.current.focus({ preventScroll: true } as any);
+      // Metti il cursore alla fine
+      const v = taRef.current.value || "";
+      taRef.current.selectionStart = taRef.current.selectionEnd = v.length;
+    } catch {}
+  }
+
+  
   // ---- Helpers ----
   function autoTitleRome() {
     const fmt = new Intl.DateTimeFormat("it-IT", {
@@ -133,6 +145,19 @@ export default function HomeClient({ email }: { email: string }) {
       localStorage.setItem(`autoTTS:${id}`, speakerEnabled ? "1" : "0");
     } catch {}
   }, [speakerEnabled, currentConv?.id]);
+
+  useEffect(() => {
+  // Evita iOS (apre la tastiera da solo) ed evita durante la trascrizione
+    const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
+    if (isIOS || isTranscribing) return;
+  
+    const id = setTimeout(() => {
+      focusComposer(); // focus solo quando cambia/si crea la conversazione
+    }, 80); // piccolo delay per dare tempo al DOM
+  
+    return () => clearTimeout(id);
+  }, [currentConv?.id, isTranscribing]);
+
 
   // ---- Creazione esplicita (facoltativa) ----
   async function createConversation() {
