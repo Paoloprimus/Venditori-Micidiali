@@ -51,6 +51,12 @@ export default function HomeClient({ email }: { email: string }) {
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
+  // Modalità mani libere
+  const [voiceMode, setVoiceMode] = useState(false);
+  const dialogActiveRef = useRef(false);    // flag del loop
+  const dialogDraftRef = useRef<string>(""); // testo accumulato finché non dici "esegui"
+
+
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   function autoResize() {
     const el = taRef.current;
