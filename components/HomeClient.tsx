@@ -296,6 +296,68 @@ export default function HomeClient({ email }: { email: string }) {
     return "";
   }
 
+  // Ascolta una singola frase e restituisce il testo trascritto.
+  // Usa SR nativo se disponibile; altrimenti registra ~4s e trascrive via /api/voice/transcribe.
+  async function listenOnce(): Promise<string> {
+    if (supportsNativeSR && SR) {
+      return new Promise((resolve) => {
+        try {
+          const sr = new SR();
+          sr.lang = "it-IT";
+          sr.interimResults = false;
+          sr.maxAlternatives = 1;
+  
+          let got = false;
+  
+          sr.onresult = (e: any) => {
+            got = true;
+            const t = e?.results?.[0]?.[0]?.transcript || "";
+            resolve(t.toString());
+            try { sr.stop?.(); } catch {}
+          };
+          sr.onerror = () => { if (!got) resolve(""); };
+          sr.onend = () => { if (!got) resolve(""); };
+  
+          sr.start();
+        } catch {
+          resolve("");
+        }
+      });
+    }
+  
+    // Fallback: MediaRecorder ~4s + /api/voice/transcribe
+    return new Promise(async (resolve) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mr = new MediaRecorder(stream, { mimeType: pickMime() });
+        const chunks: BlobPart[] = [];
+  
+        mr.ondataavailable = (ev) => { if (ev.data?.size) chunks.push(ev.data); };
+        mr.onstop = async () => {
+          try {
+            const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+            const fd = new FormData();
+            fd.append("audio", blob, blob.type.includes("mp4") ? "audio.mp4" : "audio.webm");
+            const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
+            const data = await res.json();
+            resolve((data?.text || "").toString());
+          } catch {
+            resolve("");
+          } finally {
+            try { stream.getTracks().forEach(t => t.stop()); } catch {}
+          }
+        };
+  
+        mr.start();
+        // stop automatico dopo ~4 secondi
+        setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
+      } catch {
+        resolve("");
+      }
+    });
+  }
+
+  
   // ---------- VOCE: nativo ----------
   function startNativeSR() {
     if (!SR) return;
@@ -434,6 +496,86 @@ export default function HomeClient({ email }: { email: string }) {
     else handleVoicePressEnd();
   }
 
+async function startDialog() {
+  if (voiceMode) return;
+  setVoiceMode(true);
+  dialogActiveRef.current = true;
+  dialogDraftRef.current = "";
+  try { window.speechSynthesis?.cancel?.(); } catch {}
+  // breve prompt vocale iniziale
+  speakAssistant("Modalità dialogo attiva. Dimmi pure.");
+  dialogLoop(); // non await: parte in background finché voiceMode è ON
+}
+
+function stopDialog() {
+  dialogActiveRef.current = false;
+  setVoiceMode(false);
+  try { window.speechSynthesis?.cancel?.(); } catch {}
+  stopRecorderOrSR();
+}
+
+async function dialogLoop() {
+  while (dialogActiveRef.current) {
+    const heard = (await listenOnce()).trim();
+    if (!dialogActiveRef.current) break;
+    if (!heard) continue;
+
+    // comandi rapidi
+    if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
+    if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
+    if (isCmdRipeti(heard)) { speakAssistant(); continue; }
+    if (isCmdNuova(heard))  {
+      // crea e passa a nuova sessione (titolo auto)
+      try {
+        const title = autoTitleRome();
+        const res = await fetch("/api/conversations/new", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title })
+        });
+        const data = await res.json();
+        const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+        if (id) {
+          setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
+          setBubbles([]); refreshUsage(id);
+          speakAssistant("Nuova sessione. Dimmi pure.");
+        } else {
+          speakAssistant("Non riesco a creare la sessione.");
+        }
+      } catch { speakAssistant("Errore creazione sessione."); }
+      continue;
+    }
+
+    // testo normale
+    let text = heard;
+    let shouldSend = false;
+    if (hasSubmitCue(text)) {
+      text = stripSubmitCue(text);
+      shouldSend = true;
+    }
+    if (text) {
+      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+    }
+
+    if (shouldSend) {
+      const toSend = dialogDraftRef.current.trim();
+      dialogDraftRef.current = "";
+      if (toSend) {
+        // invia senza usare le mani
+        setInput(toSend);
+        await send();              // usa la tua send esistente
+        speakAssistant();          // leggi la risposta appena arriva
+      } else {
+        speakAssistant("Nessun testo da inviare. Dimmi pure.");
+      }
+    } else {
+      // non hai detto "esegui": restiamo in ascolto
+      // opzionale: feedback breve
+      // speakAssistant("Ok.");
+    }
+  }
+}
+
+  
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
