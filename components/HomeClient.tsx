@@ -106,6 +106,20 @@ export default function HomeClient({ email }: { email: string }) {
     return fmt.format(new Date()).toLowerCase().replace(/\./g, "");
   }
 
+  // --- Helper comandi vocali (Dialogo) ---
+  function hasSubmitCue(raw: string) {
+    // vero se termina con: "esegui", "esegui ora", "esegui adesso" (+ punteggiatura)
+    return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
+  }
+  function stripSubmitCue(raw: string) {
+    // rimuove la parola chiave finale prima di inviare
+    return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
+  }
+  function isCmdStop(raw: string)     { return /\bstop\s+dialogo\b/i.test(raw); }
+  function isCmdAnnulla(raw: string)  { return /\bannulla\b/i.test(raw); }
+  function isCmdRipeti(raw: string)   { return /\bripeti\b/i.test(raw); }
+  function isCmdNuova(raw: string)    { return /\bnuova\s+sessione\b/i.test(raw); }
+  
   async function refreshUsage(convId?: string) {
     const q = convId ? `?conversationId=${encodeURIComponent(convId)}` : "";
     const res = await fetch(`/api/usage/current-chat${q}`);
@@ -360,7 +374,67 @@ export default function HomeClient({ email }: { email: string }) {
     });
   }
 
+  // Ascolta una singola frase e restituisce il testo trascritto.
+  // Usa SR nativo se disponibile; altrimenti registra ~4s e trascrive via /api/voice/transcribe.
+  async function listenOnce(): Promise<string> {
+    if (supportsNativeSR && SR) {
+      return new Promise((resolve) => {
+        try {
+          const sr = new SR();
+          sr.lang = "it-IT";
+          sr.interimResults = false;
+          sr.maxAlternatives = 1;
   
+          let got = false;
+  
+          sr.onresult = (e: any) => {
+            got = true;
+            const t = e?.results?.[0]?.[0]?.transcript || "";
+            resolve(t.toString());
+            try { sr.stop?.(); } catch {}
+          };
+          sr.onerror = () => { if (!got) resolve(""); };
+          sr.onend = () => { if (!got) resolve(""); };
+  
+          sr.start();
+        } catch {
+          resolve("");
+        }
+      });
+    }
+  
+    // Fallback: MediaRecorder ~4s + /api/voice/transcribe
+    return new Promise(async (resolve) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mr = new MediaRecorder(stream, { mimeType: pickMime() });
+        const chunks: BlobPart[] = [];
+  
+        mr.ondataavailable = (ev) => { if (ev.data?.size) chunks.push(ev.data); };
+        mr.onstop = async () => {
+          try {
+            const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
+            const fd = new FormData();
+            fd.append("audio", blob, blob.type.includes("mp4") ? "audio.mp4" : "audio.webm");
+            const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
+            const data = await res.json();
+            resolve((data?.text || "").toString());
+          } catch {
+            resolve("");
+          } finally {
+            try { stream.getTracks().forEach(t => t.stop()); } catch {}
+          }
+        };
+  
+        mr.start();
+        // stop automatico dopo ~4 secondi
+        setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
+      } catch {
+        resolve("");
+      }
+    });
+  }
+
   // ---------- VOCE: nativo ----------
   function startNativeSR() {
     if (!SR) return;
