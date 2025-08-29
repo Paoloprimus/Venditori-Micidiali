@@ -454,9 +454,10 @@ export default function HomeClient({ email }: { email: string }) {
   // ---------- RENDER ----------
   return (
     <>
-      <div className="topbar">
+      <div className="topbar"
              onMouseDown={handleAnyHomeInteraction}
-             onTouchStart={handleAnyHomeInteraction}>
+             onTouchStart={handleAnyHomeInteraction}
+            >
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>
           ☰
         </button>
@@ -475,7 +476,8 @@ export default function HomeClient({ email }: { email: string }) {
 
       <div className="container">
              onMouseDown={handleAnyHomeInteraction}
-             onTouchStart={handleAnyHomeInteraction}>
+             onTouchStart={handleAnyHomeInteraction}
+            >
         <div className="thread">
         {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
           {!currentConv && (
@@ -515,7 +517,8 @@ export default function HomeClient({ email }: { email: string }) {
 
       <div className="composer">
              onMouseDown={handleAnyHomeInteraction}
-             onTouchStart={handleAnyHomeInteraction}>
+             onTouchStart={handleAnyHomeInteraction}
+              >
         <div className="inputwrap">
           <textarea
             ref={taRef}
