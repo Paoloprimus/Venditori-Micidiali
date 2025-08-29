@@ -56,8 +56,8 @@ export default function HomeClient({ email }: { email: string }) {
   const dialogActiveRef = useRef(false);    // flag del loop
   const dialogDraftRef = useRef<string>(""); // testo accumulato finché non dici "esegui"
 
-
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  
   function autoResize() {
     const el = taRef.current;
     if (!el) return;
@@ -72,16 +72,17 @@ export default function HomeClient({ email }: { email: string }) {
     // true se termina con: "esegui", "esegui ora", "esegui adesso" (+ punteggiatura)
     return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
   }
+  
   function stripSubmitCue(raw: string) {
     // rimuove la parola chiave finale prima di inviare
     return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
   }
+  
   function isCmdStop(raw: string)     { return /\bstop\s+dialogo\b/i.test(raw); }
   function isCmdAnnulla(raw: string)  { return /\bannulla\b/i.test(raw); }
   function isCmdRipeti(raw: string)   { return /\bripeti\b/i.test(raw); }
   function isCmdNuova(raw: string)    { return /\bnuova\s+sessione\b/i.test(raw); }
 
-  
   function focusComposer() {
     try {
       if (!taRef.current) return;
@@ -106,20 +107,6 @@ export default function HomeClient({ email }: { email: string }) {
     return fmt.format(new Date()).toLowerCase().replace(/\./g, "");
   }
 
-  // --- Helper comandi vocali (Dialogo) ---
-  function hasSubmitCue(raw: string) {
-    // vero se termina con: "esegui", "esegui ora", "esegui adesso" (+ punteggiatura)
-    return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
-  }
-  function stripSubmitCue(raw: string) {
-    // rimuove la parola chiave finale prima di inviare
-    return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
-  }
-  function isCmdStop(raw: string)     { return /\bstop\s+dialogo\b/i.test(raw); }
-  function isCmdAnnulla(raw: string)  { return /\bannulla\b/i.test(raw); }
-  function isCmdRipeti(raw: string)   { return /\bripeti\b/i.test(raw); }
-  function isCmdNuova(raw: string)    { return /\bnuova\s+sessione\b/i.test(raw); }
-  
   async function refreshUsage(convId?: string) {
     const q = convId ? `?conversationId=${encodeURIComponent(convId)}` : "";
     const res = await fetch(`/api/usage/current-chat${q}`);
@@ -149,8 +136,8 @@ export default function HomeClient({ email }: { email: string }) {
       window.speechSynthesis?.getVoices?.();
     } catch {}
     return () => {
-    // 👇 NEW: spegne il ciclo mani libere
-    dialogActiveRef.current = false;
+      // 👇 NEW: spegne il ciclo mani libere
+      dialogActiveRef.current = false;
       
       try {
         srRef.current?.stop?.();
@@ -184,7 +171,7 @@ export default function HomeClient({ email }: { email: string }) {
   }, [speakerEnabled, currentConv?.id]);
 
   useEffect(() => {
-  // Evita iOS (apre la tastiera da solo) ed evita durante la trascrizione
+    // Evita iOS (apre la tastiera da solo) ed evita durante la trascrizione
     const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
     if (isIOS || isTranscribing) return;
   
@@ -194,7 +181,6 @@ export default function HomeClient({ email }: { email: string }) {
   
     return () => clearTimeout(id);
   }, [currentConv?.id, isTranscribing]);
-
 
   // ---- Creazione esplicita (facoltativa) ----
   async function createConversation() {
@@ -311,67 +297,6 @@ export default function HomeClient({ email }: { email: string }) {
       }
     } catch {}
     return "";
-  }
-
-  // Ascolta una singola frase e restituisce il testo trascritto.
-  // Usa SR nativo se disponibile; altrimenti registra ~4s e trascrive via /api/voice/transcribe.
-  async function listenOnce(): Promise<string> {
-    if (supportsNativeSR && SR) {
-      return new Promise((resolve) => {
-        try {
-          const sr = new SR();
-          sr.lang = "it-IT";
-          sr.interimResults = false;
-          sr.maxAlternatives = 1;
-  
-          let got = false;
-  
-          sr.onresult = (e: any) => {
-            got = true;
-            const t = e?.results?.[0]?.[0]?.transcript || "";
-            resolve(t.toString());
-            try { sr.stop?.(); } catch {}
-          };
-          sr.onerror = () => { if (!got) resolve(""); };
-          sr.onend = () => { if (!got) resolve(""); };
-  
-          sr.start();
-        } catch {
-          resolve("");
-        }
-      });
-    }
-  
-    // Fallback: MediaRecorder ~4s + /api/voice/transcribe
-    return new Promise(async (resolve) => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mr = new MediaRecorder(stream, { mimeType: pickMime() });
-        const chunks: BlobPart[] = [];
-  
-        mr.ondataavailable = (ev) => { if (ev.data?.size) chunks.push(ev.data); };
-        mr.onstop = async () => {
-          try {
-            const blob = new Blob(chunks, { type: mr.mimeType || "audio/webm" });
-            const fd = new FormData();
-            fd.append("audio", blob, blob.type.includes("mp4") ? "audio.mp4" : "audio.webm");
-            const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
-            const data = await res.json();
-            resolve((data?.text || "").toString());
-          } catch {
-            resolve("");
-          } finally {
-            try { stream.getTracks().forEach(t => t.stop()); } catch {}
-          }
-        };
-  
-        mr.start();
-        // stop automatico dopo ~4 secondi
-        setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
-      } catch {
-        resolve("");
-      }
-    });
   }
 
   // Ascolta una singola frase e restituisce il testo trascritto.
@@ -564,191 +489,96 @@ export default function HomeClient({ email }: { email: string }) {
     if (supportsNativeSR) startNativeSR();
     else startRecorder();
   }
+  
   function handleVoicePressEnd() {
     if (!isRecording) return;
     stopRecorderOrSR();
   }
+  
   function handleVoiceClick() {
     if (!isRecording) handleVoicePressStart();
     else handleVoicePressEnd();
   }
 
-async function startDialog() {
-  if (voiceMode) return;
-  setVoiceMode(true);
-  dialogActiveRef.current = true;
-  dialogDraftRef.current = "";
-  try { window.speechSynthesis?.cancel?.(); } catch {}
-  // breve prompt vocale iniziale
-  speakAssistant("Modalità dialogo attiva. Dimmi pure.");
-  dialogLoop(); // non await: parte in background finché voiceMode è ON
-}
-
-function stopDialog() {
-  dialogActiveRef.current = false;
-  setVoiceMode(false);
-  try { window.speechSynthesis?.cancel?.(); } catch {}
-  stopRecorderOrSR();
-}
-
-async function dialogLoop() {
-  while (dialogActiveRef.current) {
-    const heard = (await listenOnce()).trim();
-    if (!dialogActiveRef.current) break;
-    if (!heard) continue;
-
-    // comandi rapidi
-    if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
-    if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
-    if (isCmdRipeti(heard)) { speakAssistant(); continue; }
-    if (isCmdNuova(heard))  {
-      // crea e passa a nuova sessione (titolo auto)
-      try {
-        const title = autoTitleRome();
-        const res = await fetch("/api/conversations/new", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title })
-        });
-        const data = await res.json();
-        const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-        if (id) {
-          setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
-          setBubbles([]); refreshUsage(id);
-          speakAssistant("Nuova sessione. Dimmi pure.");
-        } else {
-          speakAssistant("Non riesco a creare la sessione.");
-        }
-      } catch { speakAssistant("Errore creazione sessione."); }
-      continue;
-    }
-
-    // testo normale
-    let text = heard;
-    let shouldSend = false;
-    if (hasSubmitCue(text)) {
-      text = stripSubmitCue(text);
-      shouldSend = true;
-    }
-    if (text) {
-      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-    }
-
-    if (shouldSend) {
-      const toSend = dialogDraftRef.current.trim();
-      dialogDraftRef.current = "";
-      if (toSend) {
-        // invia senza usare le mani
-        setInput(toSend);
-        await send();              // usa la tua send esistente
-        speakAssistant();          // leggi la risposta appena arriva
-      } else {
-        speakAssistant("Nessun testo da inviare. Dimmi pure.");
-      }
-    } else {
-      // non hai detto "esegui": restiamo in ascolto
-      // opzionale: feedback breve
-      // speakAssistant("Ok.");
-    }
-  }
-}
-
   async function startDialog() {
-  if (voiceMode) return;
-  setVoiceMode(true);
-  dialogActiveRef.current = true;
-  dialogDraftRef.current = "";
-  try { window.speechSynthesis?.cancel?.(); } catch {}
-  speakAssistant("Modalità dialogo attiva. Dimmi pure.");
-  dialogLoop(); // non await: gira finché dialogActiveRef è true
-}
+    if (voiceMode) return;
+    setVoiceMode(true);
+    dialogActiveRef.current = true;
+    dialogDraftRef.current = "";
+    try { window.speechSynthesis?.cancel?.(); } catch {}
+    // breve prompt vocale iniziale
+    speakAssistant("Modalità dialogo attiva. Dimmi pure.");
+    dialogLoop(); // non await: parte in background finché voiceMode è ON
+  }
 
-function stopDialog() {
-  dialogActiveRef.current = false;
-  setVoiceMode(false);
-  try { window.speechSynthesis?.cancel?.(); } catch {}
-  stopRecorderOrSR();
-}
+  function stopDialog() {
+    dialogActiveRef.current = false;
+    setVoiceMode(false);
+    try { window.speechSynthesis?.cancel?.(); } catch {}
+    stopRecorderOrSR();
+  }
 
-async function dialogLoop() {
-  while (dialogActiveRef.current) {
-    const heard = (await listenOnce()).trim();
-    if (!dialogActiveRef.current) break;
-    if (!heard) continue;
+  async function dialogLoop() {
+    while (dialogActiveRef.current) {
+      const heard = (await listenOnce()).trim();
+      if (!dialogActiveRef.current) break;
+      if (!heard) continue;
 
-    // comandi rapidi
-    if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
-    if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
-    if (isCmdRipeti(heard)) { speakAssistant(); continue; }
-    if (isCmdNuova(heard))  {
-      try {
-        const title = autoTitleRome();
-        const res = await fetch("/api/conversations/new", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title })
-        });
-        const data = await res.json();
-        const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-        if (id) {
-          setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
-          setBubbles([]); refreshUsage(id);
-          speakAssistant("Nuova sessione. Dimmi pure.");
-        } else {
-          speakAssistant("Non riesco a creare la sessione.");
-        }
-      } catch { speakAssistant("Errore creazione sessione."); }
-      continue;
-    }
-
-    // testo normale
-    let text = heard;
-    let shouldSend = false;
-    if (hasSubmitCue(text)) {
-      text = stripSubmitCue(text);
-      shouldSend = true;
-    }
-    if (text) {
-      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-    }
-
-    if (shouldSend) {
-      const toSend = dialogDraftRef.current.trim();
-      dialogDraftRef.current = "";
-      if (toSend) {
-        // se non c'è una sessione, creane una automatica
-        if (!currentConv?.id) {
-          try {
-            const title = autoTitleRome();
-            const res = await fetch("/api/conversations/new", {
-              method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ title })
-            });
-            const data = await res.json();
-            const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-            if (id) {
-              setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
-              setBubbles([]); refreshUsage(id);
-            } else {
-              speakAssistant("Non riesco a creare la sessione.");
-              continue;
-            }
-          } catch {
-            speakAssistant("Errore creazione sessione.");
-            continue;
+      // comandi rapidi
+      if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
+      if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
+      if (isCmdRipeti(heard)) { speakAssistant(); continue; }
+      if (isCmdNuova(heard))  {
+        // crea e passa a nuova sessione (titolo auto)
+        try {
+          const title = autoTitleRome();
+          const res = await fetch("/api/conversations/new", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title })
+          });
+          const data = await res.json();
+          const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+          if (id) {
+            setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
+            setBubbles([]); refreshUsage(id);
+            speakAssistant("Nuova sessione. Dimmi pure.");
+          } else {
+            speakAssistant("Non riesco a creare la sessione.");
           }
-        }
+        } catch { speakAssistant("Errore creazione sessione."); }
+        continue;
+      }
 
-        // invia senza mani
-        setInput(toSend);
-        await send();
-        speakAssistant(); // leggi l'ultima risposta
+      // testo normale
+      let text = heard;
+      let shouldSend = false;
+      if (hasSubmitCue(text)) {
+        text = stripSubmitCue(text);
+        shouldSend = true;
+      }
+      if (text) {
+        dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+      }
+
+      if (shouldSend) {
+        const toSend = dialogDraftRef.current.trim();
+        dialogDraftRef.current = "";
+        if (toSend) {
+          // invia senza usare le mani
+          setInput(toSend);
+          await send();              // usa la tua send esistente
+          speakAssistant();          // leggi la risposta appena arriva
+        } else {
+          speakAssistant("Nessun testo da inviare. Dimmi pure.");
+        }
       } else {
-        speakAssistant("Nessun testo da inviare. Dimmi pure.");
+        // non hai detto "esegui": restiamo in ascolto
+        // opzionale: feedback breve
+        // speakAssistant("Ok.");
       }
     }
   }
-}
 
-  
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
@@ -773,6 +603,7 @@ async function dialogLoop() {
     setTtsSpeaking(true);
     window.speechSynthesis.speak(u);
   }
+  
   function stopSpeak() {
     try {
       window.speechSynthesis.cancel();
@@ -785,7 +616,6 @@ async function dialogLoop() {
     if (topOpen) closeTop();
   }, [leftOpen, topOpen, closeLeft, closeTop]);
 
-  
   // ---------- RENDER ----------
   return (
     <>
@@ -820,119 +650,117 @@ async function dialogLoop() {
         </button>
       </div>
 
-    {/* WRAPPER NEW */}
-    <div
-      onMouseDown={handleAnyHomeInteraction}
-      onTouchStart={handleAnyHomeInteraction}
-      style={{ minHeight: "100vh" }}
-    >
-      
-      <div className="container"
-             onMouseDown={handleAnyHomeInteraction}
-             onTouchStart={handleAnyHomeInteraction}
-            >
-        <div className="thread">
-        {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
-          {!currentConv && (
-            <div className="helper">
-              <div style={{ fontWeight: 600, marginBottom: 8 }}>Puoi nominare la sessione (facoltativo)</div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <input
-                  type="text"
-                  value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
-                  placeholder="Titolo personalizzato…"
-                  disabled={isCreating}
-                  style={{ flex: 1, padding: "10px 12px" }}
-                />
-                <button className="btn" onClick={createConversation} disabled={isCreating || !newTitle.trim()}>
-                  Crea
-                </button>
-              </div>
-              <div style={{ marginTop: 8, opacity: 0.75, fontSize: 13 }}>
-                In alternativa, scrivi subito: la chat verrà creata con titolo automatico (es. “{autoTitleRome()}”).
-              </div>
-            </div>
-          )}
-          --- FINE BLOCCO NOMINA --- */}
-          
-          {bubbles.length === 0 && currentConv && (
-            <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
-          )}
-          {bubbles.map((m, i) => (
-            <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
-              {m.content}
-            </div>
-          ))}
-          {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
-        </div>
-      </div>
-
-      <div className="composer"
-             onMouseDown={handleAnyHomeInteraction}
-             onTouchStart={handleAnyHomeInteraction}
+      {/* WRAPPER NEW */}
+      <div
+        onMouseDown={handleAnyHomeInteraction}
+        onTouchStart={handleAnyHomeInteraction}
+        style={{ minHeight: "100vh" }}
+      >
+        <div className="container"
+               onMouseDown={handleAnyHomeInteraction}
+               onTouchStart={handleAnyHomeInteraction}
               >
-        <div className="inputwrap">
-          <textarea
-            ref={taRef}
-            value={input}
-            onChange={(e) => {
-              setInput(e.target.value);
-              setLastInputWasVoice(false);
-              autoResize();
-            }}
-            placeholder={"Scrivi un messaggio… o usa la voce 🎙️"}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && !e.shiftKey) {
-                e.preventDefault();
-                send();
-              }
-            }}
-            disabled={isTranscribing}
-          />
+          <div className="thread">
+          {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
+            {!currentConv && (
+              <div className="helper">
+                <div style={{ fontWeight: 600, marginBottom: 8 }}>Puoi nominare la sessione (facoltativo)</div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <input
+                    type="text"
+                    value={newTitle}
+                    onChange={(e) => setNewTitle(e.target.value)}
+                    placeholder="Titolo personalizzato…"
+                    disabled={isCreating}
+                    style={{ flex: 1, padding: "10px 12px" }}
+                  />
+                  <button className="btn" onClick={createConversation} disabled={isCreating || !newTitle.trim()}>
+                    Crea
+                  </button>
+                </div>
+                <div style={{ marginTop: 8, opacity: 0.75, fontSize: 13 }}>
+                  In alternativa, scrivi subito: la chat verrà creata con titolo automatico (es. “{autoTitleRome()}”).
+                </div>
+              </div>
+            )}
+            --- FINE BLOCCO NOMINA --- */}
+            
+            {bubbles.length === 0 && currentConv && (
+              <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
+            )}
+            {bubbles.map((m, i) => (
+              <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
+                {m.content}
+              </div>
+            ))}
+            {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
+          </div>
         </div>
-        <div className="actions">
-          <div className="left">
-            {/* 🎙️ Voce: press&hold su mobile, click = toggle su desktop */}
-            <button
-              className="iconbtn"
+
+        <div className="composer"
+               onMouseDown={handleAnyHomeInteraction}
+               onTouchStart={handleAnyHomeInteraction}
+                >
+          <div className="inputwrap">
+            <textarea
+              ref={taRef}
+              value={input}
+              onChange={(e) => {
+                setInput(e.target.value);
+                setLastInputWasVoice(false);
+                autoResize();
+              }}
+              placeholder={"Scrivi un messaggio… o usa la voce 🎙️"}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  send();
+                }
+              }}
               disabled={isTranscribing}
-              onMouseDown={handleVoicePressStart}
-              onMouseUp={handleVoicePressEnd}
-              onMouseLeave={handleVoicePressEnd}
-              onTouchStart={handleVoicePressStart}
-              onTouchEnd={handleVoicePressEnd}
-              onClick={handleVoiceClick}
-              aria-pressed={isRecording}
-              aria-label="Input vocale"
-              title={supportsNativeSR ? "Riconoscimento vocale nativo" : "Registra audio per trascrizione"}
-            >
-              {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
-            </button>
-
-            {/* 🔊 Toggle Altoparlante (auto-TTS se ultimo input = vocale) */}
-            <button
-              className="iconbtn"
-              onClick={() => setSpeakerEnabled((s) => !s)}
-              aria-pressed={speakerEnabled}
-              title="Risposte vocali automatiche (solo se l'ultimo messaggio è vocale)"
-            >
-              {speakerEnabled ? "🔊 Altoparlante ON" : "🔈 Altoparlante OFF"}
-            </button>
-
-            {isTranscribing && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Trascrizione…</span>}
-            {ttsSpeaking && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Riproduzione…</span>}
-            {voiceError && <span style={{ marginLeft: 8, fontSize: 12, color: "#b00020" }}>{voiceError}</span>}
+            />
           </div>
-          <div className="right">
-            <button className="btn" onClick={send} disabled={isTranscribing}>
-              Invia
-            </button>
+          <div className="actions">
+            <div className="left">
+              {/* 🎙️ Voce: press&hold su mobile, click = toggle su desktop */}
+              <button
+                className="iconbtn"
+                disabled={isTranscribing}
+                onMouseDown={handleVoicePressStart}
+                onMouseUp={handleVoicePressEnd}
+                onMouseLeave={handleVoicePressEnd}
+                onTouchStart={handleVoicePressStart}
+                onTouchEnd={handleVoicePressEnd}
+                onClick={handleVoiceClick}
+                aria-pressed={isRecording}
+                aria-label="Input vocale"
+                title={supportsNativeSR ? "Riconoscimento vocale nativo" : "Registra audio per trascrizione"}
+              >
+                {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
+              </button>
+
+              {/* 🔊 Toggle Altoparlante (auto-TTS se ultimo input = vocale) */}
+              <button
+                className="iconbtn"
+                onClick={() => setSpeakerEnabled((s) => !s)}
+                aria-pressed={speakerEnabled}
+                title="Risposte vocali automatiche (solo se l'ultimo messaggio è vocale)"
+              >
+                {speakerEnabled ? "🔊 Altoparlante ON" : "🔈 Altoparlante OFF"}
+              </button>
+
+              {isTranscribing && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Trascrizione…</span>}
+              {ttsSpeaking && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Riproduzione…</span>}
+              {voiceError && <span style={{ marginLeft: 8, fontSize: 12, color: "#b00020" }}>{voiceError}</span>}
+            </div>
+            <div className="right">
+              <button className="btn" onClick={send} disabled={isTranscribing}>
+                Invia
+              </button>
+            </div>
           </div>
         </div>
-      </div>
-
-</div>  {/* /WRAPPER NEW */}   // ⬅️ AGGIUNGI QUESTA RIGA
+      </div>  {/* /WRAPPER NEW */}
       
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
       <RightDrawer open={topOpen} onClose={closeTop} />
