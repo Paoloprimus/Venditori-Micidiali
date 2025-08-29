@@ -1,6 +1,6 @@
 // components/HomeClient.tsx
 "use client";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
@@ -445,10 +445,18 @@ export default function HomeClient({ email }: { email: string }) {
     setTtsSpeaking(false);
   }
 
+  const handleAnyHomeInteraction = useCallback(() => {
+    if (leftOpen) closeLeft();
+    if (topOpen) closeTop();
+  }, [leftOpen, topOpen, closeLeft, closeTop]);
+
+  
   // ---------- RENDER ----------
   return (
     <>
       <div className="topbar">
+             onMouseDown={handleAnyHomeInteraction}
+             onTouchStart={handleAnyHomeInteraction}>
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>
           ☰
         </button>
@@ -466,6 +474,8 @@ export default function HomeClient({ email }: { email: string }) {
       </div>
 
       <div className="container">
+             onMouseDown={handleAnyHomeInteraction}
+             onTouchStart={handleAnyHomeInteraction}>
         <div className="thread">
         {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
           {!currentConv && (
@@ -504,6 +514,8 @@ export default function HomeClient({ email }: { email: string }) {
       </div>
 
       <div className="composer">
+             onMouseDown={handleAnyHomeInteraction}
+             onTouchStart={handleAnyHomeInteraction}>
         <div className="inputwrap">
           <textarea
             ref={taRef}
