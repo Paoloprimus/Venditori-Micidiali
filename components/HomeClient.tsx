@@ -518,67 +518,114 @@ export default function HomeClient({ email }: { email: string }) {
     stopRecorderOrSR();
   }
 
-  async function dialogLoop() {
-    while (dialogActiveRef.current) {
-      const heard = (await listenOnce()).trim();
-      if (!dialogActiveRef.current) break;
-      if (!heard) continue;
+async function dialogLoop() {
+  while (dialogActiveRef.current) {
+    const heard = (await listenOnce()).trim();
+    if (!dialogActiveRef.current) break;
+    if (!heard) continue;
 
-      // comandi rapidi
-      if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
-      if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
-      if (isCmdRipeti(heard)) { speakAssistant(); continue; }
-      if (isCmdNuova(heard))  {
-        // crea e passa a nuova sessione (titolo auto)
-        try {
-          const title = autoTitleRome();
-          const res = await fetch("/api/conversations/new", {
-            method: "POST", headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ title })
-          });
-          const data = await res.json();
-          const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-          if (id) {
-            setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
-            setBubbles([]); refreshUsage(id);
-            speakAssistant("Nuova sessione. Dimmi pure.");
-          } else {
-            speakAssistant("Non riesco a creare la sessione.");
-          }
-        } catch { speakAssistant("Errore creazione sessione."); }
-        continue;
-      }
-
-      // testo normale
-      let text = heard;
-      let shouldSend = false;
-      if (hasSubmitCue(text)) {
-        text = stripSubmitCue(text);
-        shouldSend = true;
-      }
-      if (text) {
-        dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-      }
-
-      if (shouldSend) {
-        const toSend = dialogDraftRef.current.trim();
-        dialogDraftRef.current = "";
-        if (toSend) {
-          // invia senza usare le mani
-          setInput(toSend);
-          await send();              // usa la tua send esistente
-          speakAssistant();          // leggi la risposta appena arriva
+    // comandi rapidi
+    if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
+    if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
+    if (isCmdRipeti(heard)) { speakAssistant(); continue; }
+    if (isCmdNuova(heard))  {
+      // crea e passa a nuova sessione (titolo auto)
+      try {
+        const title = autoTitleRome();
+        const res = await fetch("/api/conversations/new", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title })
+        });
+        const data = await res.json();
+        const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+        if (id) {
+          setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
+          setBubbles([]); refreshUsage(id);
+          speakAssistant("Nuova sessione. Dimmi pure.");
         } else {
-          speakAssistant("Nessun testo da inviare. Dimmi pure.");
+          speakAssistant("Non riesco a creare la sessione.");
         }
+      } catch { speakAssistant("Errore creazione sessione."); }
+      continue;
+    }
+
+    // testo normale
+    let text = heard;
+    let shouldSend = false;
+    if (hasSubmitCue(text)) {
+      text = stripSubmitCue(text);
+      shouldSend = true;
+    }
+    if (text) {
+      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+    }
+
+    if (shouldSend) {
+      const toSend = dialogDraftRef.current.trim();
+      dialogDraftRef.current = "";
+      if (toSend) {
+        // INVIO DIRETTO senza usare lo stato input
+        await sendDirectly(toSend);
+        speakAssistant(); // leggi la risposta appena arriva
       } else {
-        // non hai detto "esegui": restiamo in ascolto
-        // opzionale: feedback breve
-        // speakAssistant("Ok.");
+        speakAssistant("Nessun testo da inviare. Dimmi pure.");
       }
+    } else {
+      // non hai detto "esegui": restiamo in ascolto
+      // opzionale: feedback breve
+      // speakAssistant("Ok.");
     }
   }
+}
 
+// AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
+async function sendDirectly(content: string) {
+  setServerError(null);
+  
+  // assicura una conversazione
+  let conv: Conv;
+  try {
+    conv = await ensureConversation();
+  } catch (e: any) {
+    speakAssistant("Impossibile creare la conversazione");
+    return;
+  }
+  const convId = conv.id;
+
+  // Aggiungi il messaggio utente alle bolle
+  setBubbles((b) => [...b, { role: "user", content }]);
+
+  // ferma TTS se sta parlando
+  try {
+    window.speechSynthesis?.cancel?.();
+  } catch {}
+  setTtsSpeaking(false);
+
+  // invia direttamente al server
+  const res = await fetch("/api/messages/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, terse: false, conversationId: convId }),
+  });
+  
+  const data = await res.json();
+  if (!res.ok) {
+    setServerError(data?.details || data?.error || "Errore server");
+    setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
+    return;
+  }
+  
+  const replyText = data.reply ?? "Ok.";
+  setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
+  setLastAssistantText(replyText);
+
+  // AUTO-TTS: solo se altoparlante ON (in modalità dialogo, l'input è sempre vocale)
+  if (speakerEnabled) {
+    speakAssistant(replyText);
+  }
+
+  await refreshUsage(convId);
+}
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
