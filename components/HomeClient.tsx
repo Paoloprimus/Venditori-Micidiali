@@ -540,6 +540,10 @@ export default function HomeClient({ email }: { email: string }) {
     // breve prompt vocale iniziale - USA UN MESSAGGIO FISSO
     const welcomeMessage = "Modalità dialogo attiva. Dimmi pure.";
     setLastAssistantText(welcomeMessage); // ← IMPOSTA il testo da leggere
+
+      // Aspetta un attimo che le voci siano pronte
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     speakAssistant(welcomeMessage); // ← LEGGI il messaggio corretto
     dialogLoop(); // non await: parte in background finché voiceMode è ON
   }
@@ -683,6 +687,18 @@ export default function HomeClient({ email }: { email: string }) {
     u.onerror = () => setTtsSpeaking(false);
     utterRef.current = u;
     setTtsSpeaking(true);
+
+        // --- AGGIUNGI QUESTE RIGHE ---
+    // Forza la voce italiana se disponibile
+    const voices = window.speechSynthesis.getVoices();
+    const italianVoice = voices.find(voice => 
+      voice.lang.includes('it-IT') || voice.lang.includes('it_IT')
+    );
+    if (italianVoice) {
+      u.voice = italianVoice;
+    }
+    // --- FINE AGGIUNTA ---
+    
     window.speechSynthesis.speak(u);
   }
   
