@@ -849,10 +849,6 @@ export default function HomeClient({ email }: { email: string }) {
       <RightDrawer
         open={topOpen}
         onClose={closeTop}
-        usage={usage}
-        modelBadge={modelBadge}
-        serverError={serverError}
-        voiceError={voiceError}
       />
     </>
   );
