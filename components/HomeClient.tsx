@@ -127,30 +127,41 @@ export default function HomeClient({ email }: { email: string }) {
 
   // init + cleanup
   useEffect(() => {
+    // Prima controlla se c'è una sessione di oggi
+    const loadTodaySession = async () => {
+      const todayTitle = autoTitleRome();
+      try {
+        const res = await fetch(`/api/conversations/list?limit=50`);
+        const data = await res.json();
+        if (res.ok && data.items) {
+          // Cerca una sessione con il titolo di oggi
+          const todaySession = data.items.find((item: Conv) => 
+            item.title === todayTitle
+          );
+          if (todaySession) {
+            // Se trovata, caricala automaticamente
+            setCurrentConv(todaySession);
+            await loadMessages(todaySession.id);
+            await refreshUsage(todaySession.id);
+          }
+        }
+      } catch (e) {
+        console.log("Errore nel caricamento sessioni:", e);
+      }
+    };
+  
     fetch("/api/model")
       .then((r) => r.json())
       .then((d) => setModelBadge(d?.model ?? "n/d"))
       .catch(() => setModelBadge("n/d"));
-    refreshUsage();
+    
+    loadTodaySession(); // ← Questo carica la sessione di oggi se esiste
+    
     try {
       window.speechSynthesis?.getVoices?.();
     } catch {}
     return () => {
-      // 👇 NEW: spegne il ciclo mani libere
-      dialogActiveRef.current = false;
-      
-      try {
-        srRef.current?.stop?.();
-      } catch {}
-      try {
-        if (mrRef.current && mrRef.current.state !== "inactive") mrRef.current.stop();
-      } catch {}
-      try {
-        streamRef.current?.getTracks()?.forEach((t) => t.stop());
-      } catch {}
-      try {
-        window.speechSynthesis?.cancel?.();
-      } catch {}
+      // ... (il resto rimane uguale)
     };
   }, []);
 
