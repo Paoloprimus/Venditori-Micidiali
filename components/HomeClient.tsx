@@ -211,7 +211,27 @@ export default function HomeClient({ email }: { email: string }) {
   // ---- Creazione implicita (automatica) al primo invio ----
   async function ensureConversation(): Promise<Conv> {
     if (currentConv?.id) return currentConv;
+    
+    // Prima cerca se esiste già una sessione con la data odierna
     const autoTitle = autoTitleRome();
+    try {
+      const res = await fetch(`/api/conversations/list?limit=50`);
+      const data = await res.json();
+      if (res.ok && data.items) {
+        const todaySession = data.items.find((item: Conv) => 
+          item.title === autoTitle || item.title.includes(autoTitle)
+        );
+        if (todaySession) {
+          setCurrentConv(todaySession);
+          await refreshUsage(todaySession.id);
+          return todaySession;
+        }
+      }
+    } catch (e) {
+      console.log("Errore nel controllo sessioni esistenti:", e);
+    }
+    
+    // Se non esiste, crea una nuova
     const res = await fetch("/api/conversations/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -518,114 +538,116 @@ export default function HomeClient({ email }: { email: string }) {
     stopRecorderOrSR();
   }
 
-async function dialogLoop() {
-  while (dialogActiveRef.current) {
-    const heard = (await listenOnce()).trim();
-    if (!dialogActiveRef.current) break;
-    if (!heard) continue;
+  async function dialogLoop() {
+    while (dialogActiveRef.current) {
+      const heard = (await listenOnce()).trim();
+      if (!dialogActiveRef.current) break;
+      if (!heard) continue;
 
-    // comandi rapidi
-    if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
-    if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
-    if (isCmdRipeti(heard)) { speakAssistant(); continue; }
-    if (isCmdNuova(heard))  {
-      // crea e passa a nuova sessione (titolo auto)
-      try {
-        const title = autoTitleRome();
-        const res = await fetch("/api/conversations/new", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ title })
-        });
-        const data = await res.json();
-        const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-        if (id) {
-          setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
-          setBubbles([]); refreshUsage(id);
-          speakAssistant("Nuova sessione. Dimmi pure.");
-        } else {
-          speakAssistant("Non riesco a creare la sessione.");
-        }
-      } catch { speakAssistant("Errore creazione sessione."); }
-      continue;
-    }
-
-    // testo normale
-    let text = heard;
-    let shouldSend = false;
-    if (hasSubmitCue(text)) {
-      text = stripSubmitCue(text);
-      shouldSend = true;
-    }
-    if (text) {
-      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-    }
-
-    if (shouldSend) {
-      const toSend = dialogDraftRef.current.trim();
-      dialogDraftRef.current = "";
-      if (toSend) {
-        // INVIO DIRETTO senza usare lo stato input
-        await sendDirectly(toSend);
-        speakAssistant(); // leggi la risposta appena arriva
-      } else {
-        speakAssistant("Nessun testo da inviare. Dimmi pure.");
+      // comandi rapidi
+      if (isCmdStop(heard))   { speakAssistant("Dialogo disattivato."); stopDialog(); break; }
+      if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
+      if (isCmdRipeti(heard)) { speakAssistant(); continue; }
+      if (isCmdNuova(heard))  {
+        // crea e passa a nuova sessione (titolo auto)
+        try {
+          const title = autoTitleRome();
+          const res = await fetch("/api/conversations/new", {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ title })
+          });
+          const data = await res.json();
+          const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
+          if (id) {
+            setCurrentConv({ id, title: data?.title ?? data?.conversation?.title ?? data?.item?.title ?? title });
+            setBubbles([]); refreshUsage(id);
+            speakAssistant("Nuova sessione. Dimmi pure.");
+          } else {
+            speakAssistant("Non riesco a creare la sessione.");
+          }
+        } catch { speakAssistant("Errore creazione sessione."); }
+        continue;
       }
-    } else {
-      // non hai detto "esegui": restiamo in ascolto
-      // opzionale: feedback breve
-      // speakAssistant("Ok.");
+
+      // testo normale
+      let text = heard;
+      let shouldSend = false;
+      if (hasSubmitCue(text)) {
+        text = stripSubmitCue(text);
+        shouldSend = true;
+      }
+      if (text) {
+        dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+      }
+
+      if (shouldSend) {
+        const toSend = dialogDraftRef.current.trim();
+        dialogDraftRef.current = "";
+        if (toSend) {
+          // INVIO DIRETTO senza usare lo stato input
+          await sendDirectly(toSend);
+          speakAssistant(); // leggi la risposta appena arriva
+        } else {
+          speakAssistant("Nessun testo da inviare. Dimmi pure.");
+        }
+      } else {
+        // non hai detto "esegui": restiamo in ascolto
+        // opzionale: feedback breve
+        // speakAssistant("Ok.");
+      }
     }
   }
-}
 
-// AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
-async function sendDirectly(content: string) {
-  setServerError(null);
-  
-  // assicura una conversazione
-  let conv: Conv;
-  try {
-    conv = await ensureConversation();
-  } catch (e: any) {
-    speakAssistant("Impossibile creare la conversazione");
-    return;
+  // AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
+  async function sendDirectly(content: string) {
+    setServerError(null);
+    
+    // assicura una conversazione
+    let conv: Conv;
+    try {
+      conv = await ensureConversation();
+    } catch (e: any) {
+      speakAssistant("Impossibile creare la conversazione");
+      return;
+    }
+    const convId = conv.id;
+
+    // Aggiungi il messaggio utente alle bolle
+    setBubbles((b) => [...b, { role: "user", content }]);
+    setLastInputWasVoice(true); // ← AGGIUNTO: indica che l'input è vocale
+
+    // ferma TTS se sta parlando
+    try {
+      window.speechSynthesis?.cancel?.();
+    } catch {}
+    setTtsSpeaking(false);
+
+    // invia direttamente al server
+    const res = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, terse: false, conversationId: convId }),
+    });
+    
+    const data = await res.json();
+    if (!res.ok) {
+      setServerError(data?.details || data?.error || "Errore server");
+      setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
+      return;
+    }
+    
+    const replyText = data.reply ?? "Ok.";
+    setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
+    setLastAssistantText(replyText);
+
+    // AUTO-TTS: solo se altoparlante ON (in modalità dialogo, l'input è sempre vocale)
+    if (speakerEnabled) {
+      speakAssistant(replyText);
+    }
+
+    await refreshUsage(convId);
   }
-  const convId = conv.id;
 
-  // Aggiungi il messaggio utente alle bolle
-  setBubbles((b) => [...b, { role: "user", content }]);
-
-  // ferma TTS se sta parlando
-  try {
-    window.speechSynthesis?.cancel?.();
-  } catch {}
-  setTtsSpeaking(false);
-
-  // invia direttamente al server
-  const res = await fetch("/api/messages/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, terse: false, conversationId: convId }),
-  });
-  
-  const data = await res.json();
-  if (!res.ok) {
-    setServerError(data?.details || data?.error || "Errore server");
-    setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
-    return;
-  }
-  
-  const replyText = data.reply ?? "Ok.";
-  setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
-  setLastAssistantText(replyText);
-
-  // AUTO-TTS: solo se altoparlante ON (in modalità dialogo, l'input è sempre vocale)
-  if (speakerEnabled) {
-    speakAssistant(replyText);
-  }
-
-  await refreshUsage(convId);
-}
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
@@ -673,9 +695,8 @@ async function sendDirectly(content: string) {
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>
           ☰
         </button>
-        <div className="title">
-          Venditori Micidiali
-          {currentConv ? ` — ${currentConv.title}` : ""}
+        <div className="title" style={{ flex: 1, textAlign: "center", overflow: "hidden", textOverflow: "ellipsis" }}>
+          {currentConv ? currentConv.title : "Venditori Micidiali"}
         </div>
         <div className="spacer" />
         <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>
@@ -793,26 +814,46 @@ async function sendDirectly(content: string) {
                 className="iconbtn"
                 onClick={() => setSpeakerEnabled((s) => !s)}
                 aria-pressed={speakerEnabled}
-                title="Risposte vocali automatiche (solo se l'ultimo messaggio è vocale)"
+                title="Riproduci risposte in audio se l'input era vocale"
               >
-                {speakerEnabled ? "🔊 Altoparlante ON" : "🔈 Altoparlante OFF"}
+                {speakerEnabled ? "🔊 ON" : "🔈 OFF"}
               </button>
-
-              {isTranscribing && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Trascrizione…</span>}
-              {ttsSpeaking && <span style={{ marginLeft: 8, fontSize: 12, opacity: 0.7 }}>Riproduzione…</span>}
-              {voiceError && <span style={{ marginLeft: 8, fontSize: 12, color: "#b00020" }}>{voiceError}</span>}
+              
+              {/* ⬇️ NUOVO: pulsante per riascoltare ultima risposta */}
+              {lastAssistantText && (
+                <button
+                  className="iconbtn"
+                  onClick={() => speakAssistant()}
+                  disabled={ttsSpeaking}
+                  title="Riascolta ultima risposta"
+                >
+                  {ttsSpeaking ? "🔊 Parlando…" : "🔊 Ripeti"}
+                </button>
+              )}
             </div>
             <div className="right">
-              <button className="btn" onClick={send} disabled={isTranscribing}>
+              <button className="btn" onClick={send} disabled={!input.trim()}>
                 Invia
               </button>
             </div>
           </div>
+          {(voiceError || isTranscribing) && (
+            <div className="voice-status">
+              {isTranscribing ? "🎙️ Trascrizione in corso…" : voiceError}
+            </div>
+          )}
         </div>
-      </div>  {/* /WRAPPER NEW */}
-      
-      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
-      <RightDrawer open={topOpen} onClose={closeTop} />
+      </div>
+
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelectConv={handleSelectConv} />
+      <RightDrawer
+        open={topOpen}
+        onClose={closeTop}
+        usage={usage}
+        modelBadge={modelBadge}
+        serverError={serverError}
+        voiceError={voiceError}
+      />
     </>
   );
 }
