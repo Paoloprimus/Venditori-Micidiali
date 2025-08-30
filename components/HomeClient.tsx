@@ -613,70 +613,64 @@ export default function HomeClient({ email }: { email: string }) {
   }
 }
 
-  // AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
-  async function sendDirectly(content: string) {
-    setServerError(null);
-    
-    // assicura una conversazione
-    let conv: Conv;
-    try {
-      conv = await ensureConversation();
-    } catch (e: any) {
-      speakAssistant("Impossibile creare la conversazione");
-      return;
-    }
-    const convId = conv.id;
-
-    // Aggiungi il messaggio utente alle bolle
-    setBubbles((b) => [...b, { role: "user", content }]);
-    setLastInputWasVoice(true); // ← AGGIUNTO: indica che l'input è vocale
-
-    // ferma TTS se sta parlando
-    try {
-      window.speechSynthesis?.cancel?.();
-    } catch {}
-    setTtsSpeaking(false);
-
-    // invia direttamente al server
-    const res = await fetch("/api/messages/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content, terse: false, conversationId: convId }),
-    });
-    
-    const data = await res.json();
-    if (!res.ok) {
-      setServerError(data?.details || data?.error || "Errore server");
-      setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
-      return;
-    }
-    
+ // AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
 async function sendDirectly(content: string) {
   setServerError(null);
   
-  // ... (codice esistente) ...
+  // assicura una conversazione
+  let conv: Conv;
+  try {
+    conv = await ensureConversation();
+  } catch (e: any) {
+    speakAssistant("Impossibile creare la conversazione");
+    return;
+  }
+  const convId = conv.id;
+
+  // Aggiungi il messaggio utente alle bolle
+  setBubbles((b) => [...b, { role: "user", content }]);
+  setLastInputWasVoice(true); // ← AGGIUNTO: indica che l'input è vocale
+
+  // ferma TTS se sta parlando
+  try {
+    window.speechSynthesis?.cancel?.();
+  } catch {}
+  setTtsSpeaking(false);
+
+  // invia direttamente al server
+  const res = await fetch("/api/messages/send", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ content, terse: false, conversationId: convId }),
+  });
+  
+  const data = await res.json();
+  if (!res.ok) {
+    setServerError(data?.details || data?.error || "Errore server");
+    setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
+    return;
+  }
   
   const replyText = data.reply ?? "Ok.";
-    setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
-    setLastAssistantText(replyText); // ← ASSICURATI che sia impostato
-  
-    // AUTO-TTS: solo se altoparlante ON
-    if (speakerEnabled) {
-      // Pulisci il testo per la voce (rimuovi punteggiatura strana)
-      const cleanText = replyText
-        .replace(/\(.*?\)/g, "") // rimuovi parentesi
-        .replace(/\[.*?\]/g, "") // rimuovi quadre
-        .replace(/\*/g, "") // rimuovi asterischi
-        .replace(/_/g, "") // rimuovi underscore
-        .replace(/\.{2,}/g, ".") // sostituisci punti multipli con uno solo
-        .trim();
-      
-      speakAssistant(cleanText);
-    }
-  
-    await refreshUsage(convId);
-  }
+  setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
+  setLastAssistantText(replyText);
+
+  // AUTO-TTS: solo se altoparlante ON
+  if (speakerEnabled) {
+    // Pulisci il testo per la voce (rimuovi punteggiatura strana)
+    const cleanText = replyText
+      .replace(/\(.*?\)/g, "") // rimuovi parentesi
+      .replace(/\[.*?\]/g, "") // rimuovi quadre
+      .replace(/\*/g, "") // rimuovi asterischi
+      .replace(/_/g, "") // rimuovi underscore
+      .replace(/\.{2,}/g, ".") // sostituisci punti multipli con uno solo
+      .trim();
     
+    speakAssistant(cleanText);
+  }
+
+  await refreshUsage(convId);
+}
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
