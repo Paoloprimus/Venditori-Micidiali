@@ -526,8 +526,10 @@ export default function HomeClient({ email }: { email: string }) {
     dialogActiveRef.current = true;
     dialogDraftRef.current = "";
     try { window.speechSynthesis?.cancel?.(); } catch {}
-    // breve prompt vocale iniziale
-    speakAssistant("Modalità dialogo attiva. Dimmi pure.");
+    // breve prompt vocale iniziale - USA UN MESSAGGIO FISSO
+    const welcomeMessage = "Modalità dialogo attiva. Dimmi pure.";
+    setLastAssistantText(welcomeMessage); // ← IMPOSTA il testo da leggere
+    speakAssistant(welcomeMessage); // ← LEGGI il messaggio corretto
     dialogLoop(); // non await: parte in background finché voiceMode è ON
   }
 
