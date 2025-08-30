@@ -845,7 +845,7 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelectConv={handleSelectConv} />
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
       <RightDrawer
         open={topOpen}
         onClose={closeTop}
