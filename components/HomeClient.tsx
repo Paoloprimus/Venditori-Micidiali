@@ -537,8 +537,10 @@ export default function HomeClient({ email }: { email: string }) {
     dialogActiveRef.current = true;
     dialogDraftRef.current = "";
     try { window.speechSynthesis?.cancel?.(); } catch {}
+
+    
     // breve prompt vocale iniziale - USA UN MESSAGGIO FISSO
-    const welcomeMessage = "Modalità dialogo attiva. Dimmi pure.";
+    const welcomeMessage = "Dimmi pure.";
     setLastAssistantText(welcomeMessage); // ← IMPOSTA il testo da leggere
 
       // Aspetta un attimo che le voci siano pronte
@@ -586,34 +588,30 @@ export default function HomeClient({ email }: { email: string }) {
         continue;
       }
 
-      // testo normale
-      let text = heard;
-      let shouldSend = false;
-      if (hasSubmitCue(text)) {
-        text = stripSubmitCue(text);
-        shouldSend = true;
-      }
-      if (text) {
-        dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-      }
+ // testo normale
+    let text = heard;
+    let shouldSend = false;
+    if (hasSubmitCue(text)) {
+      text = stripSubmitCue(text);
+      shouldSend = true;
+    }
+    if (text) {
+      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+    }
 
-      if (shouldSend) {
-        const toSend = dialogDraftRef.current.trim();
-        dialogDraftRef.current = "";
-        if (toSend) {
-          // INVIO DIRETTO senza usare lo stato input
-          await sendDirectly(toSend);
-          speakAssistant(); // leggi la risposta appena arriva
-        } else {
-          speakAssistant("Nessun testo da inviare. Dimmi pure.");
-        }
+    if (shouldSend) {
+      const toSend = dialogDraftRef.current.trim();
+      dialogDraftRef.current = "";
+      if (toSend) {
+        // INVIO DIRETTO senza mostrare il messaggio di dialogo
+        await sendDirectly(toSend);
+        // NON chiamare speakAssistant() qui - viene già chiamato in sendDirectly()
       } else {
-        // non hai detto "esegui": restiamo in ascolto
-        // opzionale: feedback breve
-        // speakAssistant("Ok.");
+        speakAssistant("Dimmi cosa vuoi che faccia");
       }
     }
   }
+}
 
   // AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
   async function sendDirectly(content: string) {
@@ -653,18 +651,32 @@ export default function HomeClient({ email }: { email: string }) {
       return;
     }
     
-    const replyText = data.reply ?? "Ok.";
+async function sendDirectly(content: string) {
+  setServerError(null);
+  
+  // ... (codice esistente) ...
+  
+  const replyText = data.reply ?? "Ok.";
     setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
-    setLastAssistantText(replyText);
-
-    // AUTO-TTS: solo se altoparlante ON (in modalità dialogo, l'input è sempre vocale)
+    setLastAssistantText(replyText); // ← ASSICURATI che sia impostato
+  
+    // AUTO-TTS: solo se altoparlante ON
     if (speakerEnabled) {
-      speakAssistant(replyText);
+      // Pulisci il testo per la voce (rimuovi punteggiatura strana)
+      const cleanText = replyText
+        .replace(/\(.*?\)/g, "") // rimuovi parentesi
+        .replace(/\[.*?\]/g, "") // rimuovi quadre
+        .replace(/\*/g, "") // rimuovi asterischi
+        .replace(/_/g, "") // rimuovi underscore
+        .replace(/\.{2,}/g, ".") // sostituisci punti multipli con uno solo
+        .trim();
+      
+      speakAssistant(cleanText);
     }
-
+  
     await refreshUsage(convId);
   }
-
+    
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
