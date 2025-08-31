@@ -1,17 +1,20 @@
+// hooks/useConversations.ts
 "use client";
 import { useEffect, useRef, useState } from "react";
+import { listConversations, createConversation as apiCreate, type Conv } from "../lib/api/conversations";
+import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
+import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
 
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
-export type Usage = { tokensIn: number; tokensOut: number; costTotal: number };
-export type Conv = { id: string; title: string };
 
 type Options = {
-  onAssistantReply?: (text: string) => void;   // per TTS
+  onAssistantReply?: (text: string) => void; // per TTS o altre reazioni
 };
 
 export function useConversations(opts: Options = {}) {
   const { onAssistantReply } = opts;
 
+  // ---- Stato
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -19,10 +22,11 @@ export function useConversations(opts: Options = {}) {
   const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
-  // Refs utili
+  // ---- Refs UI
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
 
+  // ---- Utils
   function autoTitleRome() {
     const fmt = new Intl.DateTimeFormat("it-IT", {
       weekday: "short",
@@ -43,141 +47,103 @@ export function useConversations(opts: Options = {}) {
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }
 
+  // ---- API wrappers
   async function refreshUsage(convId?: string) {
-    const q = convId ? `?conversationId=${encodeURIComponent(convId)}` : "";
-    const res = await fetch(`/api/usage/current-chat${q}`);
-    const data = await res.json();
-    if (!data?.error) setUsage({ tokensIn: data.tokensIn ?? 0, tokensOut: data.tokensOut ?? 0, costTotal: data.costTotal ?? 0 });
+    const u = await getCurrentChatUsage(convId);
+    setUsage(u);
   }
 
   async function loadMessages(convId: string) {
-    const q = new URLSearchParams({ conversationId: convId, limit: "200" });
-    const res = await fetch(`/api/messages/by-conversation?${q.toString()}`);
-    const data = await res.json();
-    if (res.ok) {
-      setBubbles((data.items || []).map((m: any) => ({ role: m.role, content: m.content, created_at: m.created_at })));
-    } else {
-      setBubbles([]);
-    }
+    const items = await getMessagesByConversation(convId, 200);
+    setBubbles(items);
   }
 
   async function ensureConversation(): Promise<Conv> {
     if (currentConv?.id) return currentConv;
     const autoTitle = autoTitleRome();
+
     try {
-      const res = await fetch(`/api/conversations/list?limit=50`);
-      const data = await res.json();
-      if (res.ok && data.items) {
-        const todaySession = data.items.find((item: Conv) =>
-          item.title === autoTitle || item.title.includes(autoTitle)
-        );
-        if (todaySession) {
-          setCurrentConv(todaySession);
-          await refreshUsage(todaySession.id);
-          return todaySession;
-        }
+      const list = await listConversations(50);
+      const today = list.find((c) => c.title === autoTitle || c.title.includes(autoTitle));
+      if (today) {
+        setCurrentConv(today);
+        await refreshUsage(today.id);
+        return today;
       }
     } catch (e) {
-      console.log("Errore nel controllo sessioni esistenti:", e);
+      console.warn("Errore listConversations:", e);
     }
-    const res = await fetch("/api/conversations/new", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: autoTitle }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.details || data?.error || "Errore creazione automatica");
-    const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-    const title = data?.title ?? data?.conversation?.title ?? data?.item?.title ?? autoTitle;
-    if (!id) throw new Error("ID conversazione mancante nella risposta");
-    const conv = { id, title };
-    setCurrentConv(conv);
-    await refreshUsage(id);
-    return conv;
+
+    const created = await apiCreate(autoTitle);
+    setCurrentConv(created);
+    await refreshUsage(created.id);
+    return created;
   }
 
   async function createConversation(title: string) {
-    const t = title.trim();
-    if (!t) return;
-    const res = await fetch("/api/conversations/new", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ title: t }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || "Errore creazione conversazione");
-    const id = data?.id ?? data?.conversation?.id ?? data?.item?.id;
-    const finalTitle = data?.title ?? data?.conversation?.title ?? data?.item?.title ?? t;
-    if (!id) throw new Error("ID conversazione mancante nella risposta");
-    setCurrentConv({ id, title: finalTitle });
+    const created = await apiCreate(title.trim());
+    setCurrentConv(created);
     setBubbles([]);
-    await refreshUsage(id);
+    await refreshUsage(created.id);
   }
 
   async function send(content: string) {
     setServerError(null);
     const txt = content.trim();
     if (!txt) return;
-    let conv: Conv;
-    try {
-      conv = await ensureConversation();
-    } catch (e: any) {
-      throw new Error(e?.message || "Impossibile creare la conversazione");
-    }
-    const convId = conv.id;
 
+    const conv = await ensureConversation();
     setBubbles((b) => [...b, { role: "user", content: txt }]);
 
-    const res = await fetch("/api/messages/send", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content: txt, terse: false, conversationId: convId }),
-    });
-    const data = await res.json();
-    if (!res.ok) {
-      setServerError(data?.details || data?.error || "Errore server");
-      setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
-      return;
+    try {
+      const replyText = await sendMessage({ content: txt, conversationId: conv.id, terse: false });
+      setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
+      onAssistantReply?.(replyText);
+      await refreshUsage(conv.id);
+    } catch (e: any) {
+      setServerError(e?.message || "Errore server");
+      setBubbles((b) => [
+        ...b,
+        { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
+      ]);
     }
-    const replyText = data.reply ?? "Ok.";
-    setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
-    onAssistantReply?.(replyText);
-    await refreshUsage(convId);
   }
 
-  // Bootstrap iniziale
+  // ---- Bootstrap
   useEffect(() => {
     const loadTodaySession = async () => {
       const todayTitle = autoTitleRome();
       try {
-        const res = await fetch(`/api/conversations/list?limit=50`);
-        const data = await res.json();
-        if (res.ok && data.items) {
-          const todaySession = data.items.find((item: Conv) => item.title === todayTitle);
-          if (todaySession) {
-            setCurrentConv(todaySession);
-            await loadMessages(todaySession.id);
-            await refreshUsage(todaySession.id);
-          }
+        const list = await listConversations(50);
+        const today = list.find((c) => c.title === todayTitle);
+        if (today) {
+          setCurrentConv(today);
+          await loadMessages(today.id);
+          await refreshUsage(today.id);
         }
       } catch (e) {
         console.log("Errore nel caricamento sessioni:", e);
       }
     };
+
     fetch("/api/model")
       .then((r) => r.json())
       .then((d) => setModelBadge(d?.model ?? "n/d"))
       .catch(() => setModelBadge("n/d"));
+
     loadTodaySession();
   }, []);
 
-  // autoscroll thread
+  // ---- Autoscroll su nuovi messaggi
   useEffect(() => {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [bubbles]);
 
-  function handleSelectConv(c: Conv) {
+  // ---- Selezione conversazione dall’esterno (drawer)
+  async function handleSelectConv(c: Conv) {
     setCurrentConv({ id: c.id, title: c.title });
-    loadMessages(c.id);
-    refreshUsage(c.id);
+    await loadMessages(c.id);
+    await refreshUsage(c.id);
   }
 
   return {
@@ -187,7 +153,7 @@ export function useConversations(opts: Options = {}) {
     usage, serverError, modelBadge,
     currentConv, setCurrentConv,
 
-    // refs e utils
+    // refs/util
     taRef, threadRef,
     autoResize, autoTitleRome,
 
