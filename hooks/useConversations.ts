@@ -8,7 +8,7 @@ import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
 
 type Options = {
-  onAssistantReply?: (text: string) => void; // per TTS o altre reazioni
+  onAssistantReply?: (text: string) => void; // es: TTS o side-effects
 };
 
 export function useConversations(opts: Options = {}) {
@@ -53,7 +53,7 @@ export function useConversations(opts: Options = {}) {
       const u = await getCurrentChatUsage(convId);
       setUsage(u);
     } catch (e) {
-      // Non blocchiamo l'app per usage; log silenzioso
+      // Non blocchiamo l'app per errori di usage
       console.warn("refreshUsage error:", e);
     }
   }
@@ -63,17 +63,23 @@ export function useConversations(opts: Options = {}) {
     setBubbles(items);
   }
 
+  /**
+   * ensureConversation
+   * - Trova la conversazione di oggi (match esatto o include).
+   * - Se non esiste, la crea.
+   * - IMPORTANTE: dopo selezione/creazione chiama refreshUsage SENZA convId (usage globale)
+   *   per evitare 400 finché non inviamo almeno un messaggio.
+   */
   async function ensureConversation(): Promise<Conv> {
     if (currentConv?.id) return currentConv;
     const autoTitle = autoTitleRome();
 
     try {
       const list = await listConversations(50);
-      // Tollerante: match esatto o include (come nel tuo codice originale)
       const today = list.find((c) => c.title === autoTitle || c.title.includes(autoTitle));
       if (today) {
         setCurrentConv(today);
-        await refreshUsage(today.id);
+        await refreshUsage(); // usage globale (evita 400)
         return today;
       }
     } catch (e) {
@@ -82,7 +88,7 @@ export function useConversations(opts: Options = {}) {
 
     const created = await apiCreate(autoTitle);
     setCurrentConv(created);
-    await refreshUsage(created.id);
+    await refreshUsage(); // usage globale finché non c'è traffico nella conv
     return created;
   }
 
@@ -90,9 +96,15 @@ export function useConversations(opts: Options = {}) {
     const created = await apiCreate(title.trim());
     setCurrentConv(created);
     setBubbles([]);
-    await refreshUsage(created.id);
+    await refreshUsage(); // usage globale
   }
 
+  /**
+   * send
+   * - Aggiunge il messaggio utente.
+   * - Manda al backend e aggiunge la reply.
+   * - SOLO DOPO il primo scambio chiede usage per-conv (ora l'API ha conteggi).
+   */
   async function send(content: string) {
     setServerError(null);
     const txt = content.trim();
@@ -105,7 +117,7 @@ export function useConversations(opts: Options = {}) {
       const replyText = await sendMessage({ content: txt, conversationId: conv.id, terse: false });
       setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
       onAssistantReply?.(replyText);
-      await refreshUsage(conv.id);
+      await refreshUsage(conv.id); // ORA sì: per-conv
     } catch (e: any) {
       setServerError(e?.message || "Errore server");
       setBubbles((b) => [
@@ -125,7 +137,7 @@ export function useConversations(opts: Options = {}) {
         if (today) {
           setCurrentConv(today);
           await loadMessages(today.id);
-          await refreshUsage(today.id);
+          await refreshUsage(); // usage globale all'avvio
         }
       } catch (e) {
         console.log("Errore nel caricamento sessioni:", e);
@@ -145,11 +157,11 @@ export function useConversations(opts: Options = {}) {
     if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
   }, [bubbles]);
 
-  // ---- Selezione conversazione dall’esterno (drawer)
+  // ---- Selezione conversazione (drawer)
   async function handleSelectConv(c: Conv) {
     setCurrentConv({ id: c.id, title: c.title });
     await loadMessages(c.id);
-    await refreshUsage(c.id);
+    await refreshUsage(); // usage globale alla selezione
   }
 
   return {
