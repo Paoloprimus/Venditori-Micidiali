@@ -1,6 +1,6 @@
 // components/HomeClient.tsx
 "use client";
-import { useCallback } from "react";
+import { useCallback, useEffect } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
@@ -27,6 +27,12 @@ export default function HomeClient({ email }: { email: string }) {
       // La riproduzione audio è decisa dal toggle in useVoice (speakerEnabled)
     },
   });
+
+  // 👉 crea/subito la sessione di oggi al primo accesso
+  useEffect(() => {
+    conv.ensureConversation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // ---- Voce
   const voice = useVoice({
