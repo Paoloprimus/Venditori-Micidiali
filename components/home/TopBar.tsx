@@ -16,7 +16,8 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout }: Props
         {title}
       </div>
       <div className="spacer" />
-      <button className="iconbtn" aria-label="Docs" onClick={onOpenTop}>⚙📁</button>
+      <button className="iconbtn" aria-label="Docs" onClick={onOpenTop}>📁</button>
+      <button className="iconbtn" aria-label="Apri impostazioni" onClick={onOpenTop}>⚙</button>
       <button className="iconbtn" onClick={onLogout}>Esci</button>
     </div>
   );
