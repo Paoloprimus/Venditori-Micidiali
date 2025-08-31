@@ -25,6 +25,8 @@ export function useConversations(opts: Options = {}) {
   // ---- Refs UI
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);   // ✅ sentinel in fondo al thread
+  const firstPaintRef = useRef(true);            // evita animazione al primo render
 
   // ---- Utils
   function autoTitleRome() {
@@ -152,9 +154,23 @@ export function useConversations(opts: Options = {}) {
     loadTodaySession();
   }, []);
 
-  // ---- Autoscroll su nuovi messaggi
+  // ---- Autoscroll SEMPRE all'ultimo messaggio
   useEffect(() => {
-    if (threadRef.current) threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    const sentinel = endRef.current;
+    if (!sentinel) return;
+    const behavior: ScrollBehavior = firstPaintRef.current ? "auto" : "smooth";
+    firstPaintRef.current = false;
+    // rAF per evitare salti prima del layout
+    requestAnimationFrame(() => {
+      try {
+        sentinel.scrollIntoView({ behavior, block: "end" });
+      } catch {
+        // fallback legacy
+        if (threadRef.current) {
+          threadRef.current.scrollTop = threadRef.current.scrollHeight;
+        }
+      }
+    });
   }, [bubbles]);
 
   // ---- Selezione conversazione (drawer)
@@ -172,7 +188,7 @@ export function useConversations(opts: Options = {}) {
     currentConv, setCurrentConv,
 
     // refs/util
-    taRef, threadRef,
+    taRef, threadRef, endRef,   // ✅ esportiamo anche endRef
     autoResize, autoTitleRome,
 
     // azioni
