@@ -2,91 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-/* === Base: tema chiaro (default) + opzionale .dark === */
+/* === Base === */
 @layer base {
-  :root {
-    --bg:        #f8fafc;   /* slate-50 */
-    --panel:     #ffffff;
-    --text:      #0f172a;   /* slate-900 */
-    --muted:     #475569;   /* slate-600 */
-    --primary:   #2563EB;
-    --danger:    #EF4444;
-    --ring:      #e2e8f0;   /* slate-200 */
-  }
-  /* Attiva dark mode applicando class="dark" su <html> o <body> (facoltativo) */
-  .dark {
-    --bg:#0B1220; --panel:#101827; --text:#ffffff;
-    --muted:#A3A8B8; --primary:#2563EB; --danger:#EF4444; --ring:#1F2937;
-  }
-
   html, body { @apply h-full; }
   body {
     margin: 0;
     min-height: 100dvh;
-    background: var(--bg);
-    color: var(--text);
+    @apply bg-white text-slate-900 antialiased;
     font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
-    font-size: 15px;      /* testo un filo più piccolo */
-    line-height: 1.35;    /* righe più strette */
-    @apply antialiased;
+    font-size: 15px;   /* compatto */
+    line-height: 1.35; /* compatto */
   }
   a { @apply text-blue-600; }
   button { @apply cursor-pointer; }
 }
 
-/* === Componenti: mappiamo le tue classi alla UI Tailwind (versione compatta) === */
+/* === Componenti (look “tailwind”) === */
 @layer components {
-  /* Top bar (compatto, senza ombre) */
+  /* Topbar: minimal */
   .topbar {
-    @apply sticky top-0 z-20 flex items-center gap-2 h-11 px-2 py-1
-           border-b bg-white /* niente blur, niente shadow */
-           border-slate-200;
+    @apply sticky top-0 z-20 flex items-center gap-2 h-11 px-3 border-b border-slate-200 bg-white;
   }
   .topbar .spacer { @apply flex-1; }
-  .title { @apply font-semibold tracking-tight text-sm; }
+  .title { @apply font-semibold text-sm tracking-tight; }
   .badge { @apply text-[11px] bg-white border border-slate-200 rounded-full px-2 py-0.5 text-slate-600; }
   .hr { @apply h-px bg-slate-200 my-2; }
 
-  /* Layout contenuto */
-  .container { @apply max-w-3xl mx-auto px-3; } /* mantengo larghezza, ma il resto è più denso */
+  /* Layout */
+  .container { @apply max-w-3xl mx-auto px-3; }
   .thread    { @apply flex flex-col gap-2 p-2; }
   .helper    { @apply text-slate-600 text-xs bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5; }
 
-  /* Bubbles (compatto, senza ombre) */
+  /* Messaggi: “bubble” tailwind-style */
   .msg {
-    @apply max-w-[90%] rounded-lg px-2.5 py-1.5 border bg-white text-slate-900 leading-tight;
+    @apply max-w-[90%] rounded-lg px-3 py-2 text-sm leading-tight border;
   }
-  .msg.me {
-    @apply self-end bg-brand-600 text-white italic border-brand-600 text-right;
-  }
-  .thread .msg:not(.me) {
-    @apply font-normal border-l-2 pl-2 border-l-brand-600;
-  }
+  /* Assistant = neutro */
+  .thread .msg:not(.me) { @apply bg-slate-100 border-slate-200 text-slate-800; }
+  /* User = azzurrino */
+  .msg.me { @apply self-end bg-blue-50 border-blue-200 text-slate-900 text-right; }
 
-  /* Composer (compatto, senza ombre) */
+  /* Composer: semplice e denso */
   .composer {
-    @apply sticky bottom-0 z-10 bg-white border-t border-slate-200
-           px-2 py-2 grid gap-2; /* niente blur, niente shadow */
+    @apply sticky bottom-0 z-10 bg-white border-t border-slate-200 px-3 py-2 grid gap-2;
   }
   .composer .inputwrap { @apply block; }
   .composer textarea {
     @apply w-full min-h-10 max-h-32 p-2.5 rounded-md
            border border-slate-300 bg-white text-slate-900 text-sm leading-tight
            resize-none overflow-auto
-           focus:outline-none focus:ring-2 focus:ring-brand-600;
+           focus:outline-none focus:ring-2 focus:ring-blue-500;
   }
-  .composer .actions {
-    @apply flex gap-2 justify-between items-center;
-  }
+  .composer .actions { @apply flex gap-2 justify-between items-center; }
   .composer .actions .left,
-  .composer .actions .right {
-    @apply flex gap-1.5 items-center; /* pulsanti più vicini */
-  }
+  .composer .actions .right { @apply flex gap-2 items-center; }
 
-  /* Bottoni (semplici, senza ombre) */
+  /* Bottoni: tailwind default */
   .btn {
-    @apply bg-brand-600 text-white px-3 py-1.5 rounded-md
-           hover:bg-brand-700 active:translate-y-px transition;
+    @apply bg-blue-600 text-white px-3 py-1.5 rounded-md
+           hover:bg-blue-700 active:translate-y-px transition;
     border: none;
   }
   .iconbtn {
@@ -94,34 +68,31 @@
            border border-slate-300 hover:bg-slate-100 active:translate-y-px transition;
   }
 
-  /* Drawer sinistro / destro (senza ombre) */
+  /* Drawer sinistro/destro: puliti, senza ombre */
   .drawer {
     @apply fixed top-0 bottom-0 w-80 bg-white border border-slate-200 z-20 overflow-auto
            -translate-x-full transition-transform duration-200 left-0;
-    box-shadow: none !important;
   }
   .drawer.open { @apply translate-x-0; }
-  .list { @apply p-2.5 flex flex-col gap-2; }
+  .drawer.right { @apply left-auto right-0 translate-x-full; }
+  .drawer.right.open { @apply translate-x-0; }
+
+  .list { @apply p-3 flex flex-col gap-2; }
   .list .row {
     @apply bg-slate-50 border border-slate-200 rounded-md px-3 py-2
            hover:bg-slate-100 hover:border-slate-300 transition;
   }
 
-  /* Drawer destro */
-  .drawer.right { @apply left-auto right-0 translate-x-full; box-shadow: none !important; }
-  .drawer.right.open { @apply translate-x-0; }
-
-  /* Top sheet (se lo usi) */
+  /* Top sheet (se usato) */
   .topsheet {
     @apply fixed left-0 right-0 top-0 h-[70vh] max-h-[80dvh] bg-white border-b border-slate-200 z-20
            overflow-auto -translate-y-full transition-transform duration-200;
-    box-shadow: none !important;
   }
   .topsheet.open { @apply translate-y-0; }
 }
 
-/* === Utilities minime aggiuntive === */
+/* === Utilities === */
 @layer utilities {
-  /* rimuove tutte le ombre dove venivano applicate */
+  /* placeholder per eventuali shadows, lasciate vuote per look piatto */
   .shadow-soft { box-shadow: none !important; }
 }
