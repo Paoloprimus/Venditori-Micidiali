@@ -70,7 +70,12 @@ export default function HomeClient({ email }: { email: string }) {
       {/* Wrapper esterno */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
         <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
-          <Thread bubbles={conv.bubbles} serverError={conv.serverError} threadRef={conv.threadRef} />
+          <Thread
+            bubbles={conv.bubbles}
+            serverError={conv.serverError}
+            threadRef={conv.threadRef}
+            endRef={conv.endRef}   // ✅ sentinel per autoscroll all’ultimo messaggio
+          />
           <Composer
             value={conv.input}
             onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
