@@ -57,6 +57,7 @@ export default function HomeClient({ email }: { email: string }) {
   const dialogDraftRef = useRef<string>(""); // testo accumulato finché non dici "esegui"
 
   const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
   
   function autoResize() {
     const el = taRef.current;
@@ -193,6 +194,13 @@ export default function HomeClient({ email }: { email: string }) {
     return () => clearTimeout(id);
   }, [currentConv?.id, isTranscribing]);
 
+  // Scroll automatico ai nuovi messaggi
+  useEffect(() => {
+    if (threadRef.current) {
+      threadRef.current.scrollTop = threadRef.current.scrollHeight;
+    }
+  }, [bubbles]); // Si attiva quando cambiano i messaggi
+  
   // ---- Creazione esplicita (facoltativa) ----
   async function createConversation() {
     const title = newTitle.trim();
@@ -755,7 +763,7 @@ async function sendDirectly(content: string) {
                onMouseDown={handleAnyHomeInteraction}
                onTouchStart={handleAnyHomeInteraction}
               >
-          <div className="thread">
+          <div className="thread" ref={threadRef}>
           {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
             {!currentConv && (
               <div className="helper">
@@ -780,16 +788,15 @@ async function sendDirectly(content: string) {
             )}
             --- FINE BLOCCO NOMINA --- */}
             
-            {bubbles.length === 0 && currentConv && (
-              <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
-            )}
-            {bubbles.map((m, i) => (
-              <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
-                {m.content}
-              </div>
-            ))}
-            {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
-          </div>
+          {bubbles.length === 0 && currentConv && (
+            <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
+          )}
+          {bubbles.map((m, i) => (
+            <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
+              {m.content}
+            </div>
+          ))}
+          {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
         </div>
 
         <div className="composer"
