@@ -26,58 +26,102 @@
     background: var(--bg);
     color: var(--text);
     font-family: system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px;      /* testo un filo più piccolo */
+    line-height: 1.35;    /* righe più strette */
     @apply antialiased;
   }
   a { @apply text-blue-600; }
   button { @apply cursor-pointer; }
 }
 
-/* === Componenti: mappiamo le tue classi alla UI Tailwind === */
+/* === Componenti: mappiamo le tue classi alla UI Tailwind (versione compatta) === */
 @layer components {
-  /* Top bar */
-  .topbar { @apply sticky top-0 z-20 flex items-center gap-2 px-3 py-2 border-b bg-white/80 backdrop-blur border-slate-200 shadow-soft; }
+  /* Top bar (compatto, senza ombre) */
+  .topbar {
+    @apply sticky top-0 z-20 flex items-center gap-2 h-11 px-2 py-1
+           border-b bg-white /* niente blur, niente shadow */
+           border-slate-200;
+  }
   .topbar .spacer { @apply flex-1; }
-  .title { @apply font-semibold tracking-tight; }
-  .badge { @apply text-xs bg-white border border-slate-200 rounded-full px-2 py-1 text-slate-600; }
-  .hr { @apply h-px bg-slate-200 my-3; }
+  .title { @apply font-semibold tracking-tight text-sm; }
+  .badge { @apply text-[11px] bg-white border border-slate-200 rounded-full px-2 py-0.5 text-slate-600; }
+  .hr { @apply h-px bg-slate-200 my-2; }
 
   /* Layout contenuto */
-  .container { @apply max-w-3xl mx-auto px-3; }
-  .thread { @apply flex flex-col gap-3 p-4; }
-  .helper { @apply text-slate-600 text-sm bg-slate-50 border border-slate-200 rounded-lg p-3; }
+  .container { @apply max-w-3xl mx-auto px-3; } /* mantengo larghezza, ma il resto è più denso */
+  .thread    { @apply flex flex-col gap-2 p-2; }
+  .helper    { @apply text-slate-600 text-xs bg-slate-50 border border-slate-200 rounded-md px-2 py-1.5; }
 
-  /* Bubbles */
-  .msg { @apply max-w-[90%] rounded-2xl px-3 py-2 shadow-soft border bg-white text-slate-900 leading-relaxed; }
-  .msg.me { @apply self-end bg-brand-600 text-white italic border-brand-600 text-right; }
-  .thread .msg:not(.me) { @apply font-normal border-l-[3px] pl-3 border-l-brand-600; }
+  /* Bubbles (compatto, senza ombre) */
+  .msg {
+    @apply max-w-[90%] rounded-lg px-2.5 py-1.5 border bg-white text-slate-900 leading-tight;
+  }
+  .msg.me {
+    @apply self-end bg-brand-600 text-white italic border-brand-600 text-right;
+  }
+  .thread .msg:not(.me) {
+    @apply font-normal border-l-2 pl-2 border-l-brand-600;
+  }
 
-  /* Composer */
-  .composer { @apply sticky bottom-0 z-10 bg-white/90 backdrop-blur border-t border-slate-200 px-3 py-2 grid gap-2 shadow-[0_-6px_12px_rgba(0,0,0,.08)]; }
+  /* Composer (compatto, senza ombre) */
+  .composer {
+    @apply sticky bottom-0 z-10 bg-white border-t border-slate-200
+           px-2 py-2 grid gap-2; /* niente blur, niente shadow */
+  }
   .composer .inputwrap { @apply block; }
-  .composer textarea { @apply w-full min-h-12 max-h-40 p-3 rounded-xl border border-slate-300 bg-white text-slate-900 resize-none overflow-auto shadow-sm focus:outline-none focus:ring-2 focus:ring-brand-600; }
-  .composer .actions { @apply flex gap-2 justify-between items-center; }
-  .composer .actions .left, .composer .actions .right { @apply flex gap-2 items-center; }
+  .composer textarea {
+    @apply w-full min-h-10 max-h-32 p-2.5 rounded-md
+           border border-slate-300 bg-white text-slate-900 text-sm leading-tight
+           resize-none overflow-auto
+           focus:outline-none focus:ring-2 focus:ring-brand-600;
+  }
+  .composer .actions {
+    @apply flex gap-2 justify-between items-center;
+  }
+  .composer .actions .left,
+  .composer .actions .right {
+    @apply flex gap-1.5 items-center; /* pulsanti più vicini */
+  }
 
-  /* Bottoni */
-  .btn { @apply bg-brand-600 text-white px-3 py-2 rounded-lg shadow hover:bg-brand-700 active:translate-y-px transition; border: none; }
-  .iconbtn { @apply bg-white text-slate-700 px-2 py-1 rounded-lg border border-slate-300 shadow-sm hover:bg-slate-100 active:translate-y-px transition; }
+  /* Bottoni (semplici, senza ombre) */
+  .btn {
+    @apply bg-brand-600 text-white px-3 py-1.5 rounded-md
+           hover:bg-brand-700 active:translate-y-px transition;
+    border: none;
+  }
+  .iconbtn {
+    @apply bg-white text-slate-700 px-2 py-1 rounded-md
+           border border-slate-300 hover:bg-slate-100 active:translate-y-px transition;
+  }
 
-  /* Drawer sinistro / destro */
-  .drawer { @apply fixed top-0 bottom-0 w-80 bg-white border border-slate-200 z-20 overflow-auto -translate-x-full transition-transform duration-200 left-0; box-shadow: 0 8px 24px rgba(0,0,0,.08); }
+  /* Drawer sinistro / destro (senza ombre) */
+  .drawer {
+    @apply fixed top-0 bottom-0 w-80 bg-white border border-slate-200 z-20 overflow-auto
+           -translate-x-full transition-transform duration-200 left-0;
+    box-shadow: none !important;
+  }
   .drawer.open { @apply translate-x-0; }
-  .list { @apply p-3 flex flex-col gap-2; }
-  .list .row { @apply bg-slate-50 border border-slate-200 rounded-lg p-3 hover:bg-slate-100 hover:border-slate-300 transition; }
+  .list { @apply p-2.5 flex flex-col gap-2; }
+  .list .row {
+    @apply bg-slate-50 border border-slate-200 rounded-md px-3 py-2
+           hover:bg-slate-100 hover:border-slate-300 transition;
+  }
 
   /* Drawer destro */
-  .drawer.right { @apply left-auto right-0 translate-x-full; box-shadow: -4px 0 12px rgba(0,0,0,.08); }
+  .drawer.right { @apply left-auto right-0 translate-x-full; box-shadow: none !important; }
   .drawer.right.open { @apply translate-x-0; }
 
   /* Top sheet (se lo usi) */
-  .topsheet { @apply fixed left-0 right-0 top-0 h-[70vh] max-h-[80dvh] bg-white border-b border-slate-200 z-20 overflow-auto -translate-y-full transition-transform duration-200; }
+  .topsheet {
+    @apply fixed left-0 right-0 top-0 h-[70vh] max-h-[80dvh] bg-white border-b border-slate-200 z-20
+           overflow-auto -translate-y-full transition-transform duration-200;
+    box-shadow: none !important;
+  }
   .topsheet.open { @apply translate-y-0; }
 }
 
-/* === Utilities minime aggiuntive (se servono) === */
+/* === Utilities minime aggiuntive === */
 @layer utilities {
-  .shadow-soft { box-shadow: 0 2px 8px rgba(0,0,0,.08); }
+  /* rimuove tutte le ombre dove venivano applicate */
+  .shadow-soft { box-shadow: none !important; }
 }
