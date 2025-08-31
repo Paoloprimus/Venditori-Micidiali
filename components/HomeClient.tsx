@@ -728,6 +728,8 @@ async function sendDirectly(content: string) {
     if (topOpen) closeTop();
   }, [leftOpen, topOpen, closeLeft, closeTop]);
 
+  }
+
   // ---------- RENDER ----------
   return (
     <>
