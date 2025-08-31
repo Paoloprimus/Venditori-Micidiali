@@ -49,8 +49,13 @@ export function useConversations(opts: Options = {}) {
 
   // ---- API wrappers
   async function refreshUsage(convId?: string) {
-    const u = await getCurrentChatUsage(convId);
-    setUsage(u);
+    try {
+      const u = await getCurrentChatUsage(convId);
+      setUsage(u);
+    } catch (e) {
+      // Non blocchiamo l'app per usage; log silenzioso
+      console.warn("refreshUsage error:", e);
+    }
   }
 
   async function loadMessages(convId: string) {
@@ -64,6 +69,7 @@ export function useConversations(opts: Options = {}) {
 
     try {
       const list = await listConversations(50);
+      // Tollerante: match esatto o include (come nel tuo codice originale)
       const today = list.find((c) => c.title === autoTitle || c.title.includes(autoTitle));
       if (today) {
         setCurrentConv(today);
