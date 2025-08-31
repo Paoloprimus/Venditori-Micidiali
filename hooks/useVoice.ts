@@ -53,6 +53,22 @@ export function useVoice({
   //   localStorage.setItem("autoTTS:global", speakerEnabled ? "1" : "0");
   // }, [speakerEnabled]);
 
+  function normalizeInterrogative(raw: string) {
+    const t = (raw || "").trim();
+    if (!t) return t;
+  
+    const hasEndPunct = /[.!?…]$/.test(t);
+    // euristiche semplici per l'italiano
+    const looksQuestion =
+      /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante)\b/i.test(t) ||
+      /\b(puoi|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti)\b/i.test(t) ||
+      /\?$/.test(t);
+  
+    if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
+    if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
+    return t;
+  }
+
   function pickMime() {
     try {
       if (typeof MediaRecorder !== "undefined") {
@@ -149,7 +165,8 @@ export function useVoice({
     setVoiceError(null);
     listenOnce().then((t) => {
       if (!t) { setIsRecording(false); return; }
-      onTranscriptionToInput(t);
+      const txt = normalizeInterrogative(t);
+      onTranscriptionToInput(txt);
       setLastInputWasVoice(true);
       setIsRecording(false);
     });
@@ -176,7 +193,7 @@ export function useVoice({
 
   async function dialogLoopTick() {
     while (dialogActiveRef.current) {
-      const heard = (await listenOnce()).trim();
+      const heard = normalizeInterrogative((await listenOnce()).trim());
       if (!dialogActiveRef.current) break;
       if (!heard) continue;
 
