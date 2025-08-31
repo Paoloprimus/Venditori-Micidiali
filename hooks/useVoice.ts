@@ -1,6 +1,8 @@
+// hooks/useVoice.ts
 "use client";
 import { useEffect, useRef, useState } from "react";
-import type { Conv } from "./useConversations";
+import { transcribeAudio } from "../lib/api/voice";
+import type { Conv } from "../lib/api/conversations";
 
 type Params = {
   onTranscriptionToInput: (text: string) => void;
@@ -42,6 +44,15 @@ export function useVoice({
   const dialogActiveRef = useRef(false);
   const dialogDraftRef = useRef<string>("");
 
+  // --- Persistenza ON/OFF altoparlante per sessione (opzionale: chiave esterna se vuoi per-conv)
+  // useEffect(() => {
+  //   const saved = localStorage.getItem("autoTTS:global");
+  //   setSpeakerEnabled(saved === "1");
+  // }, []);
+  // useEffect(() => {
+  //   localStorage.setItem("autoTTS:global", speakerEnabled ? "1" : "0");
+  // }, [speakerEnabled]);
+
   function pickMime() {
     try {
       if (typeof MediaRecorder !== "undefined") {
@@ -77,7 +88,7 @@ export function useVoice({
         }
       });
     }
-    // fallback: 4s
+    // fallback recorder: ~4s
     return new Promise(async (resolve) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
@@ -90,11 +101,8 @@ export function useVoice({
           setIsTranscribing(true);
           try {
             const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
-            const fd = new FormData();
-            fd.append("audio", blob, blob.type.includes("mp4") ? "audio.mp4" : "audio.webm");
-            const res = await fetch("/api/voice/transcribe", { method: "POST", body: fd });
-            const data = await res.json();
-            resolve(String(data?.text || ""));
+            const text = await transcribeAudio(blob);
+            resolve(text);
           } catch {
             resolve("");
           } finally {
@@ -135,38 +143,28 @@ export function useVoice({
   function isCmdRipeti(raw: string) { return /\bripeti\b/i.test(raw); }
   function isCmdNuova(raw: string)  { return /\bnuova\s+sessione\b/i.test(raw); }
 
-  // API pubblica “press”
+  // --- API pubblica “press”
   function handleVoicePressStart() {
     if (isTranscribing || isRecording) return;
-    if (supportsNativeSR) {
-      setVoiceError(null);
-      listenOnce().then((t) => {
-        if (!t) { setIsRecording(false); return; }
-        onTranscriptionToInput(t);
-        setLastInputWasVoice(true);
-        setIsRecording(false);
-      });
-    } else {
-      setVoiceError(null);
-      listenOnce().then((t) => {
-        if (!t) return;
-        onTranscriptionToInput(t);
-        setLastInputWasVoice(true);
-      });
-    }
+    setVoiceError(null);
+    listenOnce().then((t) => {
+      if (!t) { setIsRecording(false); return; }
+      onTranscriptionToInput(t);
+      setLastInputWasVoice(true);
+      setIsRecording(false);
+    });
   }
   function handleVoicePressEnd() { if (!isRecording) return; stopRecorderOrSR(); }
   function handleVoiceClick() { if (!isRecording) handleVoicePressStart(); else handleVoicePressEnd(); }
 
-  // dialogo vocale
+  // --- Dialogo vocale
   async function startDialog() {
     if (voiceMode) return;
     setVoiceMode(true);
     dialogActiveRef.current = true;
     dialogDraftRef.current = "";
     try { window.speechSynthesis?.cancel?.(); } catch {}
-    const welcomeMessage = "Dimmi pure.";
-    onSpeak(welcomeMessage);
+    onSpeak("Dimmi pure.");
   }
 
   function stopDialog() {
@@ -189,14 +187,9 @@ export function useVoice({
         const title = autoTitleRome();
         try {
           const conv = await createNewSession(title);
-          if (conv?.id) {
-            onSpeak("Nuova sessione. Dimmi pure.");
-          } else {
-            onSpeak("Non riesco a creare la sessione.");
-          }
-        } catch {
-          onSpeak("Errore creazione sessione.");
-        }
+          if (conv?.id) onSpeak("Nuova sessione. Dimmi pure.");
+          else onSpeak("Non riesco a creare la sessione.");
+        } catch { onSpeak("Errore creazione sessione."); }
         continue;
       }
 
@@ -214,7 +207,7 @@ export function useVoice({
     }
   }
 
-  // loop del dialogo
+  // loop
   useEffect(() => {
     if (!voiceMode) return;
     dialogLoopTick();
