@@ -1,3 +1,4 @@
+// components/HomeClient.tsx
 "use client";
 import { useCallback } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
@@ -17,13 +18,13 @@ export default function HomeClient({ email }: { email: string }) {
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
 
   // ---- TTS
-  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant, stopSpeak } = useTTS();
+  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
 
   // ---- Conversazioni / messaggi
   const conv = useConversations({
     onAssistantReply: (text) => {
       setLastAssistantText(text);
-      // l'audio è gestito dal toggle in useVoice (speakerEnabled)
+      // La riproduzione audio è decisa dal toggle in useVoice (speakerEnabled)
     },
   });
 
@@ -32,7 +33,6 @@ export default function HomeClient({ email }: { email: string }) {
     onTranscriptionToInput: (text) => { conv.setInput(text); },
     onSendDirectly: async (text) => {
       await conv.send(text);
-      // se lo vuoi pulito per la voce:
       const clean = text.replace(/\(.*?\)|\[.*?\]|\*|_/g, "").replace(/\.{2,}/g, ".").trim();
       speakAssistant(clean);
     },
