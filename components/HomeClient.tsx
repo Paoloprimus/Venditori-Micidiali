@@ -747,8 +747,6 @@ async function sendDirectly(content: string) {
           ⚙️
         </button>
 
-
-        
         <button className="iconbtn" onClick={logout}>
           Esci
         </button>
