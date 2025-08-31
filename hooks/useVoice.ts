@@ -53,21 +53,29 @@ export function useVoice({
   //   localStorage.setItem("autoTTS:global", speakerEnabled ? "1" : "0");
   // }, [speakerEnabled]);
 
-  function normalizeInterrogative(raw: string) {
-    const t = (raw || "").trim();
-    if (!t) return t;
-  
-    const hasEndPunct = /[.!?…]$/.test(t);
-    // euristiche semplici per l'italiano
-    const looksQuestion =
-      /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante)\b/i.test(t) ||
-      /\b(puoi|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti)\b/i.test(t) ||
-      /\?$/.test(t);
-  
-    if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
-    if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
-    return t;
-  }
+    function normalizeInterrogative(raw: string) {
+      const t0 = (raw ?? "").trim();
+      if (!t0) return t0;
+    
+      // comprime punteggiatura finale ripetuta e spazi
+      const t = t0.replace(/\s+$/g, "").replace(/[?!.\u2026]+$/g, (m) => m[0]);
+    
+      const hasEndPunct = /[.!?]$/.test(t);
+    
+      // euristiche italiane più ampie
+      const questionStarts =
+        /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante|posso|puoi|può|potrei|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti|è|sei|siamo|siete|sono|hai|avete|c'?è|ci\s+sono)\b/i;
+      const questionTails = /\b(vero|giusto|d'accordo|ok|no)\s*$/i;             // es: "giusto", "vero"
+      const questionPhrases = /\b(quanto\s+costa|qual[ei]\s+prezzo|mi\s+spieghi|potresti\s+dire)\b/i;
+    
+      const looksQuestion =
+        /\?$/.test(t) || questionStarts.test(t) || questionTails.test(t) || questionPhrases.test(t);
+    
+      if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
+      if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
+      return t;
+    }
+
 
   function pickMime() {
     try {
@@ -166,7 +174,7 @@ export function useVoice({
     listenOnce().then((t) => {
       if (!t) { setIsRecording(false); return; }
       const txt = normalizeInterrogative(t);
-      onTranscriptionToInput(txt);
+      onTranscriptionToInput(normalizeInterrogative(t));
       setLastInputWasVoice(true);
       setIsRecording(false);
     });
