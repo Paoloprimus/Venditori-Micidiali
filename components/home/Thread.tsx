@@ -24,7 +24,7 @@ export default function Thread({ bubbles, serverError, threadRef, endRef }: Prop
       {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
 
       {/* ✅ sentinel: sempre alla fine del thread */}
-      <div ref={endRef} style={{ height: 120 }} />
+      <div ref={endRef} style={{ height: 150 }} />
     </div>
   );
 }
