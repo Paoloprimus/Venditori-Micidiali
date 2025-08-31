@@ -87,9 +87,7 @@ export default function HomeClient({ email }: { email: string }) {
   function focusComposer() {
     try {
       if (!taRef.current) return;
-      // Evita scroll in cima quando mette il focus
       taRef.current.focus({ preventScroll: true } as any);
-      // Metti il cursore alla fine
       const v = taRef.current.value || "";
       taRef.current.selectionStart = taRef.current.selectionEnd = v.length;
     } catch {}
@@ -104,7 +102,6 @@ export default function HomeClient({ email }: { email: string }) {
       year: "2-digit",
       timeZone: "Europe/Rome",
     });
-    // es. "mar 28/08/25" (forziamo minuscolo ed eliminiamo eventuali punti)
     return fmt.format(new Date()).toLowerCase().replace(/\./g, "");
   }
 
@@ -128,19 +125,14 @@ export default function HomeClient({ email }: { email: string }) {
 
   // init + cleanup
   useEffect(() => {
-    // Prima controlla se c'è una sessione di oggi
     const loadTodaySession = async () => {
       const todayTitle = autoTitleRome();
       try {
         const res = await fetch(`/api/conversations/list?limit=50`);
         const data = await res.json();
         if (res.ok && data.items) {
-          // Cerca una sessione con il titolo di oggi
-          const todaySession = data.items.find((item: Conv) => 
-            item.title === todayTitle
-          );
+          const todaySession = data.items.find((item: Conv) => item.title === todayTitle);
           if (todaySession) {
-            // Se trovata, caricala automaticamente
             setCurrentConv(todaySession);
             await loadMessages(todaySession.id);
             await refreshUsage(todaySession.id);
@@ -156,13 +148,13 @@ export default function HomeClient({ email }: { email: string }) {
       .then((d) => setModelBadge(d?.model ?? "n/d"))
       .catch(() => setModelBadge("n/d"));
     
-    loadTodaySession(); // ← Questo carica la sessione di oggi se esiste
+    loadTodaySession();
     
     try {
       window.speechSynthesis?.getVoices?.();
     } catch {}
     return () => {
-      // ... (il resto rimane uguale)
+      // cleanup eventuale
     };
   }, []);
 
@@ -183,14 +175,9 @@ export default function HomeClient({ email }: { email: string }) {
   }, [speakerEnabled, currentConv?.id]);
 
   useEffect(() => {
-    // Evita iOS (apre la tastiera da solo) ed evita durante la trascrizione
     const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
     if (isIOS || isTranscribing) return;
-  
-    const id = setTimeout(() => {
-      focusComposer(); // focus solo quando cambia/si crea la conversazione
-    }, 80); // piccolo delay per dare tempo al DOM
-  
+    const id = setTimeout(() => { focusComposer(); }, 80);
     return () => clearTimeout(id);
   }, [currentConv?.id, isTranscribing]);
 
@@ -199,9 +186,9 @@ export default function HomeClient({ email }: { email: string }) {
     if (threadRef.current) {
       threadRef.current.scrollTop = threadRef.current.scrollHeight;
     }
-  }, [bubbles]); // Si attiva quando cambiano i messaggi
+  }, [bubbles]);
   
-  // ---- Creazione esplicita (facoltativa) ----
+  // ---- Creazione esplicita ----
   async function createConversation() {
     const title = newTitle.trim();
     if (!title) return;
@@ -227,11 +214,9 @@ export default function HomeClient({ email }: { email: string }) {
     }
   }
 
-  // ---- Creazione implicita (automatica) al primo invio ----
+  // ---- Creazione implicita al primo invio ----
   async function ensureConversation(): Promise<Conv> {
     if (currentConv?.id) return currentConv;
-    
-    // Prima cerca se esiste già una sessione con la data odierna
     const autoTitle = autoTitleRome();
     try {
       const res = await fetch(`/api/conversations/list?limit=50`);
@@ -249,8 +234,6 @@ export default function HomeClient({ email }: { email: string }) {
     } catch (e) {
       console.log("Errore nel controllo sessioni esistenti:", e);
     }
-    
-    // Se non esiste, crea una nuova
     const res = await fetch("/api/conversations/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -271,8 +254,6 @@ export default function HomeClient({ email }: { email: string }) {
     setServerError(null);
     const content = input.trim();
     if (!content) return;
-
-    // assicura una conversazione (se manca, la crea con titolo auto "mar 28/08/25" Europe/Rome)
     let conv: Conv;
     try {
       conv = await ensureConversation();
@@ -286,10 +267,7 @@ export default function HomeClient({ email }: { email: string }) {
     setInput("");
     autoResize();
 
-    // se stava parlando, ferma
-    try {
-      window.speechSynthesis?.cancel?.();
-    } catch {}
+    try { window.speechSynthesis?.cancel?.(); } catch {}
     setTtsSpeaking(false);
 
     const res = await fetch("/api/messages/send", {
@@ -306,12 +284,9 @@ export default function HomeClient({ email }: { email: string }) {
     const replyText = data.reply ?? "Ok.";
     setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
     setLastAssistantText(replyText);
-
-    // AUTO-TTS: solo se altoparlante ON e ultimo input era vocale
     if (speakerEnabled && lastInputWasVoice) {
       speakAssistant(replyText);
     }
-
     await refreshUsage(convId);
   }
 
@@ -338,8 +313,6 @@ export default function HomeClient({ email }: { email: string }) {
     return "";
   }
 
-  // Ascolta una singola frase e restituisce il testo trascritto.
-  // Usa SR nativo se disponibile; altrimenti registra ~4s e trascrive via /api/voice/transcribe.
   async function listenOnce(): Promise<string> {
     if (supportsNativeSR && SR) {
       return new Promise((resolve) => {
@@ -348,9 +321,7 @@ export default function HomeClient({ email }: { email: string }) {
           sr.lang = "it-IT";
           sr.interimResults = false;
           sr.maxAlternatives = 1;
-  
           let got = false;
-  
           sr.onresult = (e: any) => {
             got = true;
             const t = e?.results?.[0]?.[0]?.transcript || "";
@@ -359,21 +330,18 @@ export default function HomeClient({ email }: { email: string }) {
           };
           sr.onerror = () => { if (!got) resolve(""); };
           sr.onend = () => { if (!got) resolve(""); };
-  
           sr.start();
         } catch {
           resolve("");
         }
       });
     }
-  
     // Fallback: MediaRecorder ~4s + /api/voice/transcribe
     return new Promise(async (resolve) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         const mr = new MediaRecorder(stream, { mimeType: pickMime() });
         const chunks: BlobPart[] = [];
-  
         mr.ondataavailable = (ev) => { if (ev.data?.size) chunks.push(ev.data); };
         mr.onstop = async () => {
           try {
@@ -389,9 +357,7 @@ export default function HomeClient({ email }: { email: string }) {
             try { stream.getTracks().forEach(t => t.stop()); } catch {}
           }
         };
-  
         mr.start();
-        // stop automatico dopo ~4 secondi
         setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
       } catch {
         resolve("");
@@ -416,9 +382,7 @@ export default function HomeClient({ email }: { email: string }) {
         setInput(transcript);
         setLastInputWasVoice(true);
         autoResize();
-        try {
-          sr.stop?.();
-        } catch {}
+        try { sr.stop?.(); } catch {}
       };
 
       sr.onerror = (e: any) => {
@@ -426,9 +390,7 @@ export default function HomeClient({ email }: { email: string }) {
         if (!handedOffToFallback && (code === "not-allowed" || code === "service-not-allowed")) {
           handedOffToFallback = true;
           setIsRecording(false);
-          try {
-            sr.stop?.();
-          } catch {}
+          try { sr.stop?.(); } catch {}
           srRef.current = null;
           startRecorder();
           return;
@@ -488,9 +450,7 @@ export default function HomeClient({ email }: { email: string }) {
           setVoiceError(e?.message || "Errore durante la trascrizione");
         } finally {
           setIsTranscribing(false);
-          try {
-            stream.getTracks().forEach((t) => t.stop());
-          } catch {}
+          try { stream.getTracks().forEach((t) => t.stop()); } catch {}
           streamRef.current = null;
         }
       };
@@ -505,26 +465,19 @@ export default function HomeClient({ email }: { email: string }) {
 
   function stopRecorderOrSR() {
     if (srRef.current) {
-      try {
-        srRef.current.stop?.();
-      } catch {}
+      try { srRef.current.stop?.(); } catch {}
       srRef.current = null;
       return;
     }
     if (mrRef.current && mrRef.current.state !== "inactive") {
-      try {
-        mrRef.current.stop();
-      } catch {}
+      try { mrRef.current.stop(); } catch {}
       return;
     }
-    try {
-      streamRef.current?.getTracks()?.forEach((t) => t.stop());
-    } catch {}
+    try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch {}
   }
 
   function handleVoicePressStart() {
     if (isTranscribing || isRecording) return;
-    // Nessun blocco: possiamo registrare anche senza conversazione; verrà creata al send
     if (supportsNativeSR) startNativeSR();
     else startRecorder();
   }
@@ -546,16 +499,12 @@ export default function HomeClient({ email }: { email: string }) {
     dialogDraftRef.current = "";
     try { window.speechSynthesis?.cancel?.(); } catch {}
 
-    
-    // breve prompt vocale iniziale - USA UN MESSAGGIO FISSO
+    // messaggio iniziale fisso
     const welcomeMessage = "Dimmi pure.";
-    setLastAssistantText(welcomeMessage); // ← IMPOSTA il testo da leggere
-
-      // Aspetta un attimo che le voci siano pronte
+    setLastAssistantText(welcomeMessage);
     await new Promise(resolve => setTimeout(resolve, 100));
-    
-    speakAssistant(welcomeMessage); // ← LEGGI il messaggio corretto
-    dialogLoop(); // non await: parte in background finché voiceMode è ON
+    speakAssistant(welcomeMessage);
+    dialogLoop();
   }
 
   function stopDialog() {
@@ -576,7 +525,6 @@ export default function HomeClient({ email }: { email: string }) {
       if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; speakAssistant("Annullato. Dimmi pure."); continue; }
       if (isCmdRipeti(heard)) { speakAssistant(); continue; }
       if (isCmdNuova(heard))  {
-        // crea e passa a nuova sessione (titolo auto)
         try {
           const title = autoTitleRome();
           const res = await fetch("/api/conversations/new", {
@@ -596,89 +544,75 @@ export default function HomeClient({ email }: { email: string }) {
         continue;
       }
 
- // testo normale
-    let text = heard;
-    let shouldSend = false;
-    if (hasSubmitCue(text)) {
-      text = stripSubmitCue(text);
-      shouldSend = true;
-    }
-    if (text) {
-      dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-    }
+      // testo normale
+      let text = heard;
+      let shouldSend = false;
+      if (hasSubmitCue(text)) {
+        text = stripSubmitCue(text);
+        shouldSend = true;
+      }
+      if (text) {
+        dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
+      }
 
-    if (shouldSend) {
-      const toSend = dialogDraftRef.current.trim();
-      dialogDraftRef.current = "";
-      if (toSend) {
-        // INVIO DIRETTO senza mostrare il messaggio di dialogo
-        await sendDirectly(toSend);
-        // NON chiamare speakAssistant() qui - viene già chiamato in sendDirectly()
-      } else {
-        speakAssistant("Dimmi cosa vuoi che faccia");
+      if (shouldSend) {
+        const toSend = dialogDraftRef.current.trim();
+        dialogDraftRef.current = "";
+        if (toSend) {
+          await sendDirectly(toSend); // invio diretto; TTS gestito dentro
+        } else {
+          speakAssistant("Dimmi cosa vuoi che faccia");
+        }
       }
     }
   }
-}
 
- // AGGIUNGI QUESTA NUOVA FUNZIONE per l'invio diretto
-async function sendDirectly(content: string) {
-  setServerError(null);
-  
-  // assicura una conversazione
-  let conv: Conv;
-  try {
-    conv = await ensureConversation();
-  } catch (e: any) {
-    speakAssistant("Impossibile creare la conversazione");
-    return;
-  }
-  const convId = conv.id;
+  // Invio diretto (usato nel dialogo vocale)
+  async function sendDirectly(content: string) {
+    setServerError(null);
+    let conv: Conv;
+    try {
+      conv = await ensureConversation();
+    } catch {
+      speakAssistant("Impossibile creare la conversazione");
+      return;
+    }
+    const convId = conv.id;
 
-  // Aggiungi il messaggio utente alle bolle
-  setBubbles((b) => [...b, { role: "user", content }]);
-  setLastInputWasVoice(true); // ← AGGIUNTO: indica che l'input è vocale
+    setBubbles((b) => [...b, { role: "user", content }]);
+    setLastInputWasVoice(true);
 
-  // ferma TTS se sta parlando
-  try {
-    window.speechSynthesis?.cancel?.();
-  } catch {}
-  setTtsSpeaking(false);
+    try { window.speechSynthesis?.cancel?.(); } catch {}
+    setTtsSpeaking(false);
 
-  // invia direttamente al server
-  const res = await fetch("/api/messages/send", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ content, terse: false, conversationId: convId }),
-  });
-  
-  const data = await res.json();
-  if (!res.ok) {
-    setServerError(data?.details || data?.error || "Errore server");
-    setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
-    return;
-  }
-  
-  const replyText = data.reply ?? "Ok.";
-  setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
-  setLastAssistantText(replyText);
+    const res = await fetch("/api/messages/send", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content, terse: false, conversationId: convId }),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      setServerError(data?.details || data?.error || "Errore server");
+      setBubbles((b) => [...b, { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." }]);
+      return;
+    }
+    const replyText = data.reply ?? "Ok.";
+    setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
+    setLastAssistantText(replyText);
 
-  // AUTO-TTS: solo se altoparlante ON
-  if (speakerEnabled) {
-    // Pulisci il testo per la voce (rimuovi punteggiatura strana)
-    const cleanText = replyText
-      .replace(/\(.*?\)/g, "") // rimuovi parentesi
-      .replace(/\[.*?\]/g, "") // rimuovi quadre
-      .replace(/\*/g, "") // rimuovi asterischi
-      .replace(/_/g, "") // rimuovi underscore
-      .replace(/\.{2,}/g, ".") // sostituisci punti multipli con uno solo
-      .trim();
-    
-    speakAssistant(cleanText);
+    if (speakerEnabled) {
+      const cleanText = replyText
+        .replace(/\(.*?\)/g, "")
+        .replace(/\[.*?\]/g, "")
+        .replace(/\*/g, "")
+        .replace(/_/g, "")
+        .replace(/\.{2,}/g, ".")
+        .trim();
+      speakAssistant(cleanText);
+    }
+    await refreshUsage(convId);
   }
 
-  await refreshUsage(convId);
-}
   // ---------- TTS (Voce IA) ----------
   function speakAssistant(textOverride?: string) {
     const text =
@@ -691,9 +625,7 @@ async function sendDirectly(content: string) {
       setVoiceError("Sintesi vocale non supportata dal browser");
       return;
     }
-    try {
-      window.speechSynthesis.cancel();
-    } catch {}
+    try { window.speechSynthesis.cancel(); } catch {}
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "it-IT";
     u.rate = 1;
@@ -702,24 +634,16 @@ async function sendDirectly(content: string) {
     utterRef.current = u;
     setTtsSpeaking(true);
 
-        // --- AGGIUNGI QUESTE RIGHE ---
     // Forza la voce italiana se disponibile
     const voices = window.speechSynthesis.getVoices();
-    const italianVoice = voices.find(voice => 
-      voice.lang.includes('it-IT') || voice.lang.includes('it_IT')
-    );
-    if (italianVoice) {
-      u.voice = italianVoice;
-    }
-    // --- FINE AGGIUNTA ---
+    const italianVoice = voices.find(voice => voice.lang.includes("it-IT") || voice.lang.includes("it_IT"));
+    if (italianVoice) u.voice = italianVoice;
     
     window.speechSynthesis.speak(u);
   }
   
   function stopSpeak() {
-    try {
-      window.speechSynthesis.cancel();
-    } catch {}
+    try { window.speechSynthesis.cancel(); } catch {}
     setTtsSpeaking(false);
   }
 
@@ -728,14 +652,14 @@ async function sendDirectly(content: string) {
     if (topOpen) closeTop();
   }, [leftOpen, topOpen, closeLeft, closeTop]);
 
-
   // ---------- RENDER ----------
   return (
     <>
-      <div className="topbar"
-             onMouseDown={handleAnyHomeInteraction}
-             onTouchStart={handleAnyHomeInteraction}
-            >
+      <div
+        className="topbar"
+        onMouseDown={handleAnyHomeInteraction}
+        onTouchStart={handleAnyHomeInteraction}
+      >
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={openLeft}>
           ☰
         </button>
@@ -746,10 +670,7 @@ async function sendDirectly(content: string) {
         <button className="iconbtn" aria-label="Apri impostazioni" onClick={openTop}>
           ⚙️
         </button>
-
-        <button className="iconbtn" onClick={logout}>
-          Esci
-        </button>
+        <button className="iconbtn" onClick={logout}>Esci</button>
       </div>
 
       {/* WRAPPER NEW */}
@@ -758,12 +679,13 @@ async function sendDirectly(content: string) {
         onTouchStart={handleAnyHomeInteraction}
         style={{ minHeight: "100vh" }}
       >
-        <div className="container"
-               onMouseDown={handleAnyHomeInteraction}
-               onTouchStart={handleAnyHomeInteraction}
-              >
+        <div
+          className="container"
+          onMouseDown={handleAnyHomeInteraction}
+          onTouchStart={handleAnyHomeInteraction}
+        >
           <div className="thread" ref={threadRef}>
-          {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
+            {/* --- BLOCCO NOMINA MANUALE DISABILITATO ---
             {!currentConv && (
               <div className="helper">
                 <div style={{ fontWeight: 600, marginBottom: 8 }}>Puoi nominare la sessione (facoltativo)</div>
@@ -787,110 +709,113 @@ async function sendDirectly(content: string) {
             )}
             --- FINE BLOCCO NOMINA --- */}
             
-          {bubbles.length === 0 && currentConv && (
-            <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
-          )}
-          {bubbles.map((m, i) => (
-            <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
-              {m.content}
-            </div>
-          ))}
-          {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
-        </div>
-
-        <div className="composer"
-               onMouseDown={handleAnyHomeInteraction}
-               onTouchStart={handleAnyHomeInteraction}
-                >
-          <div className="inputwrap">
-            <textarea
-              ref={taRef}
-              value={input}
-              onChange={(e) => {
-                setInput(e.target.value);
-                setLastInputWasVoice(false);
-                autoResize();
-              }}
-              placeholder={"Scrivi un messaggio… o usa la voce 🎙️"}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  send();
-                }
-              }}
-              disabled={isTranscribing}
-            />
+            {bubbles.length === 0 && currentConv && (
+              <div className="helper">Nessun messaggio ancora. Scrivi qui sotto per iniziare.</div>
+            )}
+            {bubbles.map((m, i) => (
+              <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
+                {m.content}
+              </div>
+            ))}
+            {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
           </div>
-          <div className="actions">
-            <div className="left">
-              {/* 🎙️ Voce: press&hold su mobile, click = toggle su desktop */}
-              <button
-                className="iconbtn"
-                disabled={isTranscribing}
-                onMouseDown={handleVoicePressStart}
-                onMouseUp={handleVoicePressEnd}
-                onMouseLeave={handleVoicePressEnd}
-                onTouchStart={handleVoicePressStart}
-                onTouchEnd={handleVoicePressEnd}
-                onClick={handleVoiceClick}
-                aria-pressed={isRecording}
-                aria-label="Input vocale"
-                title={supportsNativeSR ? "Riconoscimento vocale nativo" : "Registra audio per trascrizione"}
-              >
-                {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
-              </button>
 
-                      {/* ⬇️ NUOVO: toggle modalità vocale */}
-              <button
-                className="iconbtn"
-                aria-pressed={voiceMode}
-                onClick={() => (voiceMode ? stopDialog() : startDialog())}
-                title="Modalità vocale hands-free"
-              >
-                {voiceMode ? "🛑 Dialogo ON" : "🗣️ Dialogo"}
-              </button>
-              
-              {/* 🔊 Toggle Altoparlante (auto-TTS se ultimo input = vocale) */}
-              <button
-                className="iconbtn"
-                onClick={() => setSpeakerEnabled((s) => !s)}
-                aria-pressed={speakerEnabled}
-                title="Riproduci risposte in audio se l'input era vocale"
-              >
-                {speakerEnabled ? "🔊 ON" : "🔈 OFF"}
-              </button>
-              
-              {/* ⬇️ NUOVO: pulsante per riascoltare ultima risposta */}
-              {lastAssistantText && (
+          <div
+            className="composer"
+            onMouseDown={handleAnyHomeInteraction}
+            onTouchStart={handleAnyHomeInteraction}
+          >
+            <div className="inputwrap">
+              <textarea
+                ref={taRef}
+                value={input}
+                onChange={(e) => {
+                  setInput(e.target.value);
+                  setLastInputWasVoice(false);
+                  autoResize();
+                }}
+                placeholder={"Scrivi un messaggio… o usa la voce 🎙️"}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
+                disabled={isTranscribing}
+              />
+            </div>
+
+            <div className="actions">
+              <div className="left">
+                {/* 🎙️ Voce */}
                 <button
                   className="iconbtn"
-                  onClick={() => speakAssistant()}
-                  disabled={ttsSpeaking}
-                  title="Riascolta ultima risposta"
+                  disabled={isTranscribing}
+                  onMouseDown={handleVoicePressStart}
+                  onMouseUp={handleVoicePressEnd}
+                  onMouseLeave={handleVoicePressEnd}
+                  onTouchStart={handleVoicePressStart}
+                  onTouchEnd={handleVoicePressEnd}
+                  onClick={handleVoiceClick}
+                  aria-pressed={isRecording}
+                  aria-label="Input vocale"
+                  title={supportsNativeSR ? "Riconoscimento vocale nativo" : "Registra audio per trascrizione"}
                 >
-                  {ttsSpeaking ? "🔊 Parlando…" : "🔊 Ripeti"}
+                  {isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
                 </button>
-              )}
+
+                {/* Toggle modalità vocale */}
+                <button
+                  className="iconbtn"
+                  aria-pressed={voiceMode}
+                  onClick={() => (voiceMode ? stopDialog() : startDialog())}
+                  title="Modalità vocale hands-free"
+                >
+                  {voiceMode ? "🛑 Dialogo ON" : "🗣️ Dialogo"}
+                </button>
+              
+                {/* Toggle Altoparlante */}
+                <button
+                  className="iconbtn"
+                  onClick={() => setSpeakerEnabled((s) => !s)}
+                  aria-pressed={speakerEnabled}
+                  title="Riproduci risposte in audio se l'input era vocale"
+                >
+                  {speakerEnabled ? "🔊 ON" : "🔈 OFF"}
+                </button>
+              
+                {/* Riascolta ultima risposta */}
+                {lastAssistantText && (
+                  <button
+                    className="iconbtn"
+                    onClick={() => speakAssistant()}
+                    disabled={ttsSpeaking}
+                    title="Riascolta ultima risposta"
+                  >
+                    {ttsSpeaking ? "🔊 Parlando…" : "🔊 Ripeti"}
+                  </button>
+                )}
+              </div>
+
+              <div className="right">
+                <button className="btn" onClick={send} disabled={!input.trim()}>
+                  Invia
+                </button>
+              </div>
             </div>
-            <div className="right">
-              <button className="btn" onClick={send} disabled={!input.trim()}>
-                Invia
-              </button>
-            </div>
+
+            {(voiceError || isTranscribing) && (
+              <div className="voice-status">
+                {isTranscribing ? "🎙️ Trascrizione in corso…" : voiceError}
+              </div>
+            )}
           </div>
-          {(voiceError || isTranscribing) && (
-            <div className="voice-status">
-              {isTranscribing ? "🎙️ Trascrizione in corso…" : voiceError}
-            </div>
-          )}
         </div>
+      {/* ✅ FIX: chiusura del wrapper mancante */}
       </div>
 
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={handleSelectConv} />
-      <RightDrawer
-        open={topOpen}
-        onClose={closeTop}
-      />
+      <RightDrawer open={topOpen} onClose={closeTop} />
     </>
   );
 }
