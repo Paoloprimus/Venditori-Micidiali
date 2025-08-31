@@ -154,7 +154,7 @@ export default function HomeClient({ email }: { email: string }) {
       window.speechSynthesis?.getVoices?.();
     } catch {}
     return () => {
-      // cleanup eventuale
+      // (il resto rimane uguale)
     };
   }, []);
 
