@@ -8,9 +8,10 @@ const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY!,
 });
 
-// Facoltativo: scegli il modello via env, altrimenti default moderno.
-// Esempi: "gpt-4o-mini-transcribe" (consigliato), "whisper-1"
+// Modello e lingua (overridable via env)
 const MODEL = process.env.OPENAI_TRANSCRIBE_MODEL || "gpt-4o-mini-transcribe";
+// Esempi: "it", "en", "fr". Se non settata, default "it".
+const LANGUAGE = process.env.OPENAI_TRANSCRIBE_LANG || "it";
 
 export async function POST(req: NextRequest) {
   try {
@@ -22,20 +23,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "file audio mancante" }, { status: 400 });
     }
 
-    // L’SDK v4 accetta Blob direttamente. Non serve salvare su disco.
+    // ➜ lingua forzata: migliora punteggiatura e interrogative
     const resp = await openai.audio.transcriptions.create({
-      file,         // Blob (webm/mp4/aac…)
-      model: MODEL, // "gpt-4o-mini-transcribe" di default
-      // language: "it",    // opzionale: imposta la lingua se vuoi
-      // response_format: "json", // default
-      // temperature: 0,    // opzionale
+      file,          // Blob (webm/mp4/aac…)
+      model: MODEL,  // es. "gpt-4o-mini-transcribe" o "whisper-1"
+      language: LANGUAGE, // ← QUI la lingua (es. "it")
+      // response_format: "json",
+      // temperature: 0,
+      // prompt: "Italiano. Inserisci correttamente i punti interrogativi.",
     });
 
     const text = (resp as any)?.text ?? "";
     return NextResponse.json({ text });
   } catch (err: any) {
     const msg = err?.message || "errore trascrizione";
-    // Log minimale server-side (apparirà nella console Vercel)
     console.error("[voice/transcribe] Error:", err);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
@@ -43,5 +44,5 @@ export async function POST(req: NextRequest) {
 
 export async function GET() {
   // Endpoint “ping” utile per verificare il deploy
-  return NextResponse.json({ ok: true, model: MODEL });
+  return NextResponse.json({ ok: true, model: MODEL, language: LANGUAGE });
 }
