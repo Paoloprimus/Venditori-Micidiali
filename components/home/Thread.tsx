@@ -7,9 +7,10 @@ type Props = {
   bubbles: Bubble[];
   serverError?: string | null;
   threadRef?: RefObject<HTMLDivElement>;
+  endRef?: RefObject<HTMLDivElement>; // ✅ nuovo: sentinel per autoscroll
 };
 
-export default function Thread({ bubbles, serverError, threadRef }: Props) {
+export default function Thread({ bubbles, serverError, threadRef, endRef }: Props) {
   return (
     <div className="thread" ref={threadRef}>
       {bubbles.length === 0 && (
@@ -21,6 +22,9 @@ export default function Thread({ bubbles, serverError, threadRef }: Props) {
         </div>
       ))}
       {serverError && <div className="helper" style={{ color: "#F59E0B" }}>Errore LLM: {serverError}</div>}
+
+      {/* ✅ sentinel: sempre alla fine del thread */}
+      <div ref={endRef} style={{ height: 1 }} />
     </div>
   );
 }
