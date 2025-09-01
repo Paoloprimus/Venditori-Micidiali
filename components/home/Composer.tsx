@@ -7,37 +7,42 @@ type Voice = {
   error?: string | null;
   onPressStart: () => void;
   onPressEnd: () => void;
-  onClick: () => void;
+  onClick: () => void; // toggle start/stop
   voiceMode: boolean;
   onToggleDialog: () => void;
   speakerEnabled: boolean;
   onToggleSpeaker: () => void;
   canRepeat: boolean;
   onRepeat: () => void;
-  ttsSpeaking: boolean;
+  ttsSpeaking?: boolean;
 };
 
 type Props = {
   value: string;
-  disabled?: boolean;
   onChange: (v: string) => void;
   onSend: () => void;
-  voice: Voice;
+  disabled?: boolean;
   taRef?: React.RefObject<HTMLTextAreaElement>;
+  voice: Voice;
 };
 
-export default function Composer({ value, disabled, onChange, onSend, voice, taRef }: Props) {
+export default function Composer({ value, onChange, onSend, disabled, taRef, voice }: Props) {
   const localRef = useRef<HTMLTextAreaElement | null>(null);
   const ref = taRef ?? localRef;
 
+  // Invio con Ctrl/Cmd+Enter
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    el.style.height = "auto";
-    const max = 164;
-    el.style.height = Math.min(el.scrollHeight, max) + "px";
-    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }, [value, ref]);
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (!disabled && value.trim()) onSend();
+      }
+    };
+    el.addEventListener("keydown", handler);
+    return () => el.removeEventListener("keydown", handler);
+  }, [ref, value, disabled, onSend]);
 
   return (
     <div className="composer">
@@ -46,41 +51,49 @@ export default function Composer({ value, disabled, onChange, onSend, voice, taR
           ref={ref}
           value={value}
           onChange={(e) => onChange(e.target.value)}
-          placeholder="Scrivi un messaggio… o usa la voce 🎙️"
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onSend(); }
-          }}
-          disabled={!!disabled || voice.isTranscribing}
+          placeholder="Scrivi un messaggio…"
         />
       </div>
 
       <div className="actions">
         <div className="left">
+          {/* 🎙️ Toggle: 1° tap avvia, 2° tap ferma. Label: 'registrazione' mentre registra */}
           <button
+            type="button"
             className="iconbtn"
-            disabled={voice.isTranscribing}
-            onMouseDown={voice.onPressStart}
-            onMouseUp={voice.onPressEnd}
-            onMouseLeave={voice.onPressEnd}
-            onTouchStart={voice.onPressStart}
-            onTouchEnd={voice.onPressEnd}
-            onClick={voice.onClick}
             aria-pressed={voice.isRecording}
+            aria-label={voice.isRecording ? "Registrazione in corso" : "Voce"}
+            onClick={voice.onClick}
+            disabled={!!disabled}
           >
-            {voice.isRecording ? "🔴 Registrazione…" : "🎙️ Voce"}
+            {voice.isRecording ? "registrazione" : "Voce"}
           </button>
 
-          <button className="iconbtn" aria-pressed={voice.voiceMode} onClick={voice.onToggleDialog}>
-            {voice.voiceMode ? "🛑 Dialogo ON" : "🗣️ Dialogo"}
+          {/* Opzionali: speaker / dialogo / ripeti (invariati) */}
+          <button
+            type="button"
+            className="iconbtn"
+            aria-pressed={voice.speakerEnabled}
+            onClick={voice.onToggleSpeaker}
+            disabled={!!disabled}
+            title="Lettura vocale delle risposte"
+          >
+            {voice.speakerEnabled ? "🔈 On" : "🔈 Off"}
           </button>
 
-          <button className="iconbtn" onClick={voice.onToggleSpeaker} aria-pressed={voice.speakerEnabled}>
-            {voice.speakerEnabled ? "🔊 ON" : "🔈 OFF"}
+          <button
+            type="button"
+            className="iconbtn"
+            onClick={voice.onToggleDialog}
+            disabled={!!disabled}
+            title="Dialogo vocale"
+          >
+            {voice.voiceMode ? "Dialogo On" : "Dialogo Off"}
           </button>
 
           {voice.canRepeat && (
-            <button className="iconbtn" onClick={voice.onRepeat} disabled={voice.ttsSpeaking}>
-              {voice.ttsSpeaking ? "🔊 Parlando…" : "🔊 Ripeti"}
+            <button type="button" className="iconbtn" onClick={voice.onRepeat} disabled={!!disabled}>
+              Ripeti
             </button>
           )}
         </div>
@@ -90,10 +103,9 @@ export default function Composer({ value, disabled, onChange, onSend, voice, taR
         </div>
       </div>
 
-      {(voice.error || voice.isTranscribing) && (
-        <div className="voice-status">
-          {voice.isTranscribing ? "🎙️ Trascrizione in corso…" : voice.error}
-        </div>
+      {/* ✅ niente messaggi “trascrizione in corso…”; mostriamo solo errori, se presenti */}
+      {voice.error && (
+        <div className="voice-status">{voice.error}</div>
       )}
     </div>
   );
