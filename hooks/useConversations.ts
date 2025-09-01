@@ -145,7 +145,8 @@ export function useConversations(opts: Options = {}) {
         { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
       ]);
     }
-  
+  } // ← ✅ CHIUSURA MANCANTE DI send()
+
   // ---- Bootstrap
   useEffect(() => {
     const loadTodaySession = async () => {
