@@ -2,7 +2,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-export const runtime = "nodejs"; // evita edge-quirk su FormData/File
+export const runtime = "nodejs"; // evita edge-quirk su File/Blob
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -14,25 +14,39 @@ const PROMPT   = process.env.OPENAI_TRANSCRIBE_PROMPT ||
 export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
-    const anyFile = form.get("audio");
+    const part = form.get("audio");
 
-    // ✅ niente instanceof: duck-typing per evitare cross-realm
-    if (!anyFile || typeof (anyFile as any).arrayBuffer !== "function") {
+    // Duck-typing: deve avere arrayBuffer()
+    if (!part || typeof (part as any).arrayBuffer !== "function") {
       return NextResponse.json({ error: "file audio mancante" }, { status: 400 });
     }
 
-    const file = anyFile as Blob;
-
-    // ✅ se Blob vuoto: non trattarlo come errore duro
-    const size = (file as any).size ?? 0;
+    const incoming: any = part; // può essere File o Blob (undici)
+    const size = typeof incoming.size === "number" ? incoming.size : 0;
     if (!size) {
+      // Silenzio: non è un errore duro
       return NextResponse.json({ text: "" }, { status: 204 });
     }
 
+    // Costruisci SEMPRE un File per soddisfare il type "Uploadable"
+    const defaultName =
+      typeof incoming.type === "string" && incoming.type.includes("mp4") ? "audio.mp4" : "audio.webm";
+    const fileName = typeof incoming.name === "string" && incoming.name ? incoming.name : defaultName;
+    const type = typeof incoming.type === "string" && incoming.type ? incoming.type : "application/octet-stream";
+
+    let uploadFile: File;
+    if (typeof File !== "undefined" && incoming instanceof File) {
+      uploadFile = incoming as File; // già File con name/lastModified
+    } else {
+      // Converte Blob -> File garantendo name/lastModified
+      const buf = await (incoming as Blob).arrayBuffer();
+      uploadFile = new File([new Uint8Array(buf)], fileName, { type, lastModified: Date.now() });
+    }
+
     const resp = await openai.audio.transcriptions.create({
-      file,               // Blob/File
-      model: MODEL,       // whisper-1 consigliato
-      language: LANGUAGE, // it
+      file: uploadFile,   // ✅ ora è un File (Uploadable)
+      model: MODEL,
+      language: LANGUAGE,
       prompt: PROMPT,
       temperature: 0,
     });
