@@ -51,6 +51,7 @@ export function useVoice({
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
+  const pendingStopResolveRef = useRef<(() => void) | null>(null); // per stop asincrono nel fallback
 
   // ===== Helpers =====
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -108,10 +109,7 @@ export function useVoice({
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
-    // Se già spento, non avviare
     if (!micActiveRef.current) return;
-
-    // Evita eco se il TTS sta parlando (di solito parli dopo aver fermato il mic)
     if (isTtsSpeaking()) {
       setTimeout(startNativeSR, 150);
       return;
@@ -124,7 +122,6 @@ export function useVoice({
       sr.continuous = true;
       sr.maxAlternatives = 1;
 
-      // Stato UI
       setIsRecording(true);
       srRef.current = sr;
 
@@ -134,7 +131,6 @@ export function useVoice({
           const res = e.results[i];
           const txt = (res?.[0]?.transcript ?? "") as string;
           if (res.isFinal) {
-            // Comando “cancella”
             if (isCancelCommand(txt)) {
               finalAccumRef.current = "";
               onTranscriptionToInput("");
@@ -145,15 +141,11 @@ export function useVoice({
             interim += txt;
           }
         }
-
-        // Live preview: finale + interim
         const live = (finalAccumRef.current + " " + interim).trim();
         onTranscriptionToInput(live);
       };
 
-      sr.onerror = (_ev: any) => {
-        // Errori noti: network, no-speech, audio-capture...
-        // Se il mic è ancora “attivo”, riavvia dopo un attimo
+      sr.onerror = () => {
         if (micActiveRef.current) {
           try { sr.stop?.(); } catch {}
           srRef.current = null;
@@ -162,7 +154,6 @@ export function useVoice({
       };
 
       sr.onend = () => {
-        // Chrome chiude su silenzio/timeouts: se stiamo ancora registrando, riavvia
         if (micActiveRef.current) {
           srRef.current = null;
           setTimeout(startNativeSR, 120);
@@ -173,7 +164,6 @@ export function useVoice({
 
       sr.start();
     } catch {
-      // Se fallisce, disattiva nativo e prova fallback
       srRef.current = null;
       startFallbackRecorder();
     }
@@ -210,10 +200,15 @@ export function useVoice({
           setIsTranscribing(false);
           try { stream.getTracks().forEach(t => t.stop()); } catch {}
           streamRef.current = null;
+          // 🔔 risolvi eventuale stopMic() in attesa
+          if (pendingStopResolveRef.current) {
+            pendingStopResolveRef.current();
+            pendingStopResolveRef.current = null;
+          }
         }
       };
 
-      mr.start(); // nessun timeslice: resta attivo finché non premi stop
+      mr.start(); // resta attivo finché non premi stop
     } catch (e: any) {
       setVoiceError(e?.message || "Impossibile accedere al microfono");
       setIsRecording(false);
@@ -221,33 +216,57 @@ export function useVoice({
     }
   }
 
+  // ======= STOP MIC pubblica (usata quando premi "Invia") =======
+  async function stopMic(): Promise<void> {
+    // segnala che non vogliamo più ascoltare
+    micActiveRef.current = false;
+
+    // SR nativa: abbiamo già il testo accumulato → stop immediato
+    if (supportsNativeSR) {
+      stopAll();
+      const finalTxt = normalizeInterrogative(finalAccumRef.current).trim();
+      onTranscriptionToInput(finalTxt);
+      setLastInputWasVoice(true);
+      return;
+    }
+
+    // Fallback: fermiamo il recorder e aspettiamo la trascrizione server
+    if (mrRef.current && mrRef.current.state !== "inactive") {
+      await new Promise<void>((resolve) => {
+        pendingStopResolveRef.current = () => {
+          const finalTxt = normalizeInterrogative(finalAccumRef.current).trim();
+          onTranscriptionToInput(finalTxt);
+          setLastInputWasVoice(true);
+          resolve();
+        };
+        try { mrRef.current!.stop(); } catch { resolve(); }
+      });
+      return;
+    }
+
+    // Nessun mic attivo: assicurati che sia tutto pulito
+    stopAll();
+  }
+
   // ======= Toggle a TAP =======
-  function handleVoiceClick() {
+  async function handleVoiceClick() {
     // START
     if (!isRecording && !micActiveRef.current) {
       setVoiceError(null);
-      finalAccumRef.current = "";   // nuova sessione di dettatura
+      finalAccumRef.current = "";   // nuova sessione
       micActiveRef.current = true;
 
       if (supportsNativeSR) startNativeSR();
       else startFallbackRecorder();
-
       return;
     }
-
     // STOP
-    micActiveRef.current = false;
-    stopAll();
-
-    // Alla chiusura puoi normalizzare (opzionale)
-    const finalTxt = normalizeInterrogative(finalAccumRef.current).trim();
-    onTranscriptionToInput(finalTxt);
-    setLastInputWasVoice(true);
+    await stopMic();
   }
 
   // Manteniamo le API “press” per compatibilità, ma il toggle è su onClick
-  function handleVoicePressStart() { /* no-op (usiamo onClick) */ }
-  function handleVoicePressEnd()   { /* no-op (usiamo onClick) */ }
+  function handleVoicePressStart() { /* no-op */ }
+  function handleVoicePressEnd()   { /* no-op */ }
 
   // ======= Dialogo: API presenti ma non operative qui =======
   async function startDialog() {
@@ -275,11 +294,14 @@ export function useVoice({
     speakerEnabled, setSpeakerEnabled,
     lastInputWasVoice, setLastInputWasVoice,
 
-    // controlli (il bottone usa onClick per toggle)
+    // controlli
     handleVoicePressStart,
     handleVoicePressEnd,
     handleVoiceClick,
     startDialog,
     stopDialog,
+
+    // nuovo: stop esplicito per "Invia"
+    stopMic,
   };
 }
