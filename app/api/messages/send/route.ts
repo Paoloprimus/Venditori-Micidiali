@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
     const terse   = Boolean(body?.terse);
     const conversationId = body?.conversationId ? String(body.conversationId) : undefined;
 
+    // Validazione base
     if (!content)        return NextResponse.json({ error: "content mancante" }, { status: 400 });
     if (!conversationId) return NextResponse.json({ error: "conversationId mancante" }, { status: 400 });
     if (content.length > 8000) return NextResponse.json({ error: "content troppo lungo" }, { status: 413 });
@@ -35,20 +36,20 @@ export async function POST(req: NextRequest) {
 
     const reply = completion.choices?.[0]?.message?.content?.trim() || "Ok.";
     return NextResponse.json({ reply });
+
   } catch (err: any) {
-    // 🔒 Gestione QUOTA / RATE LIMIT
     const status = err?.status ?? 500;
     const type   = err?.error?.type ?? err?.code;
     const retryHeader = err?.headers?.get?.("retry-after");
     const retryAfter = retryHeader ? Number(retryHeader) : undefined;
 
-    // insufficient_quota (billing) oppure 429 generico
+    // Quota/rate limit
     if (status === 429 || type === "insufficient_quota") {
       return NextResponse.json(
         {
           error: "QUOTA_ESAURITA",
           message: "Quota OpenAI esaurita o rate limit raggiunto. Riprova più tardi o aggiorna il piano/chiave.",
-          retryAfter, // opzionale, in secondi se fornito
+          retryAfter,
         },
         { status: 429 }
       );
