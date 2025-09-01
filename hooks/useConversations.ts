@@ -120,7 +120,24 @@ export function useConversations(opts: Options = {}) {
       setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
       onAssistantReply?.(replyText);
       await refreshUsage(conv.id); // ORA sì: per-conv
+
     } catch (e: any) {
+      // 429: quota/rate limit → messaggio chiaro
+      if (e?.status === 429) {
+        const retry = Number(e?.details?.retryAfter) || 0;
+        const hint =
+          retry > 0
+            ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
+            : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
+        console.warn("[/api/messages/send] 429:", e);
+        setServerError(hint);
+        setBubbles((b) => [
+          ...b,
+          { role: "assistant", content: "⚠️ " + hint },
+        ]);
+        return;
+      }
+    
       console.error("[/api/messages/send] client error:", e?.status, e?.message, e?.details);
       setServerError(e?.message || "Errore server");
       setBubbles((b) => [
@@ -128,8 +145,7 @@ export function useConversations(opts: Options = {}) {
         { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
       ]);
     }
-  }
-
+  
   // ---- Bootstrap
   useEffect(() => {
     const loadTodaySession = async () => {
