@@ -3,36 +3,15 @@ import { useEffect, useRef, useState } from "react";
 import { transcribeAudio } from "../lib/api/voice";
 import type { Conv } from "../lib/api/conversations";
 
-/**
- * =========================
- *  SAFE MODE / FEATURE FLAG
- * =========================
- * Attiva una funzione alla volta cambiando i flag qui sotto:
- *
- * F.DIALOG            → abilita la modalità "Dialogo" (loop ascolta/parla)
- * F.INTERIM           → abilita la trascrizione live via SR nativo (Chrome)
- * F.BLOCK_MIC_WHEN_TTS→ blocca microfono mentre il TTS parla (consigliato)
- * F.NORMALIZE_Q       → aggiunge "?" quando rileva una domanda (consigliato)
- *
- * Profilo baseline consigliato:
- *   DIALOG=false, INTERIM=false, BLOCK_MIC_WHEN_TTS=true, NORMALIZE_Q=true
- */
-const F = {
-  DIALOG: false,
-  INTERIM: false,
-  BLOCK_MIC_WHEN_TTS: true,
-  NORMALIZE_Q: true,
-};
-
 type Params = {
   onTranscriptionToInput: (text: string) => void;
   onSendDirectly: (text: string) => Promise<void>;
   onSpeak: (text?: string) => void;
   createNewSession: (titleAuto: string) => Promise<Conv | null>;
   autoTitleRome: () => string;
-  /** Se true, ignora SR nativo e usa sempre backend (Whisper) */
+  /** Se true, ignora SR nativo e usa sempre backend (Whisper). Per avere testo live, metti false. */
   preferServerSTT?: boolean;
-  /** Ritorna true se il TTS sta parlando (per sospendere il mic) */
+  /** True se il TTS sta parlando: evitiamo eco registrando in pausa. */
   isTtsSpeaking?: () => boolean;
 };
 
@@ -42,42 +21,38 @@ export function useVoice({
   onSpeak,
   createNewSession,
   autoTitleRome,
-  // In SAFE MODE usiamo di default Whisper server → più stabile
-  preferServerSTT = true,
+  preferServerSTT = false, // default: abilita SR nativo per testo live
   isTtsSpeaking = () => false,
 }: Params) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false); // Dialogo non usato qui
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
 
-  // ---------------- SR nativo (usato solo se INTERIM=true e preferServerSTT=false)
-  const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
+  const isIOS =
+    typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
+
   const SR: any =
     typeof window !== "undefined"
       ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
       : null;
-  const srRef = useRef<any>(null);
 
   const supportsNativeSR =
-    !!SR &&
-    !isIOS &&
-    (typeof window !== "undefined" ? window.isSecureContext : true) &&
-    !preferServerSTT &&
-    F.INTERIM;
+    !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true) && !preferServerSTT;
 
-  // ---------------- Recorder fallback (server Whisper)
+  const srRef = useRef<any>(null);
+
+  // Recorder fallback (Whisper)
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // ---------------- Stato Dialogo (disattivato in SAFE MODE)
+  // Dialogo (API compatibile)
   const dialogActiveRef = useRef(false);
-  const dialogDraftRef = useRef<string>("");
 
-  // ================= Helpers =================
+  // ===== Helpers =====
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   function pickMime() {
@@ -90,8 +65,11 @@ export function useVoice({
     return "";
   }
 
+  function isCancelCommand(t: string) {
+    return /^\s*cancella\s*[.!?]*\s*$/i.test(t) || /\bcancella\b/i.test(t.trim());
+  }
+
   function normalizeInterrogative(raw: string) {
-    if (!F.NORMALIZE_Q) return (raw ?? "").trim();
     const t0 = (raw ?? "").trim();
     if (!t0) return t0;
     const t = t0.replace(/\s+$/g, "").replace(/[?!.\u2026]+$/g, (m) => m[0]);
@@ -118,43 +96,63 @@ export function useVoice({
     try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch {}
   }
 
-  // ================= Core: una “presa” di parlato =================
+  // ===== Core: una “presa” di parlato, con toggle a tap =====
   async function listenOnce(): Promise<string> {
-    // Evita di registrare la voce del TTS
-    if (F.BLOCK_MIC_WHEN_TTS) {
-      while (isTtsSpeaking()) await sleep(80);
-    }
+    // Pausa se il TTS sta parlando (evita eco)
+    while (isTtsSpeaking()) await sleep(80);
 
-    // SR nativo con interim (solo se abilitato esplicitamente)
     if (supportsNativeSR) {
       return new Promise((resolve) => {
         try {
           const sr = new SR();
           sr.lang = "it-IT";
-          sr.interimResults = true;      // mostra testo live
+          sr.interimResults = true; // testo live
           sr.maxAlternatives = 1;
+          sr.continuous = true;     // resta attivo finché non lo fermi
+
+          let finalText = "";
           let resolved = false;
 
           sr.onresult = (e: any) => {
             let interim = "";
-            let final = "";
             for (let i = e.resultIndex; i < e.results.length; i++) {
               const res = e.results[i];
               const txt = res[0]?.transcript || "";
-              if (res.isFinal) final += txt;
-              else interim += txt;
+              if (res.isFinal) {
+                finalText += txt;
+              } else {
+                interim += txt;
+              }
             }
 
-            // In SAFE MODE l’input live si aggiorna SOLO fuori dal Dialogo
-            if (interim && !dialogActiveRef.current) onTranscriptionToInput(interim);
-            if (final && !resolved) {
+            // LIVE: aggiorna textarea
+            if (interim) {
+              // "cancella" intercettato live → svuota e continua ad ascoltare
+              if (isCancelCommand(interim)) {
+                onTranscriptionToInput("");
+                finalText = "";
+                return;
+              }
+              onTranscriptionToInput(interim);
+            }
+
+            if (finalText && !resolved) {
+              // finale = "cancella" → svuota e continua (non chiudere)
+              if (isCancelCommand(finalText)) {
+                onTranscriptionToInput("");
+                finalText = "";
+                return;
+              }
+
+              // finale normale → risolvi (chiudiamo la sessione tap-to-talk)
               resolved = true;
-              resolve(String(final));
+              resolve(String(finalText));
               try { sr.stop?.(); } catch {}
             }
           };
+
           sr.onerror = () => { if (!resolved) resolve(""); };
-          sr.onend   = () => { if (!resolved) resolve(""); };
+          sr.onend = () => { if (!resolved) resolve(finalText); };
 
           sr.start();
           srRef.current = sr;
@@ -165,14 +163,13 @@ export function useVoice({
       });
     }
 
-    // Fallback/Server STT (Whisper)
+    // Fallback: registrazione → Whisper (niente live testo)
     return new Promise(async (resolve) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
         const mr = new MediaRecorder(stream, { mimeType: pickMime() });
         chunksRef.current = [];
-
         mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
         mr.onstop = async () => {
           setIsRecording(false);
@@ -180,7 +177,12 @@ export function useVoice({
           try {
             const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
             const text = await transcribeAudio(blob);
-            resolve(text);
+            if (isCancelCommand(text)) {
+              onTranscriptionToInput("");
+              resolve("");
+            } else {
+              resolve(text);
+            }
           } catch (err: any) {
             setVoiceError(err?.message || "errore trascrizione");
             resolve("");
@@ -194,120 +196,49 @@ export function useVoice({
         mrRef.current = mr;
         mr.start();
         setIsRecording(true);
-        setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
       } catch {
         resolve("");
       }
     });
   }
 
-  // ================= Controlli UI =================
-  /** Tap-to-talk: detta UNA volta e scrive nella textarea (niente invio automatico) */
+  // ===== Controlli: toggle a tap =====
   function handleVoicePressStart() {
-    if (isTranscribing || isRecording) return;
-    setVoiceError(null);
-
-    listenOnce().then((t) => {
-      if (!t) { setIsRecording(false); return; }
-      const txt = normalizeInterrogative(t);
-      // SAFE MODE: aggiorna sempre e solo la textarea
-      onTranscriptionToInput(txt);
-      setLastInputWasVoice(true);
-      setIsRecording(false);
-    });
+    if (isTranscribing) return;
+    if (!isRecording) {
+      setVoiceError(null);
+      listenOnce().then((t) => {
+        setIsRecording(false);
+        if (!t) return;
+        const txt = normalizeInterrogative(t);
+        onTranscriptionToInput(txt);
+        setLastInputWasVoice(true);
+      });
+    }
   }
 
   function handleVoicePressEnd() {
     if (!isRecording) return;
     stopRecorderOrSR();
+    setIsRecording(false);
   }
 
   function handleVoiceClick() {
+    // Toggle: primo tap start, secondo tap stop
     if (!isRecording) handleVoicePressStart();
     else handleVoicePressEnd();
   }
 
-  // ================= Dialogo vocale (DISABILITATO in SAFE MODE) =================
+  // ===== Dialogo (manteniamo API, ma non attivo qui) =====
   async function startDialog() {
-    if (!F.DIALOG) {
-      // Mantieni l’API, ma informi l’utente e non attivi loop
-      onSpeak("Dialogo disattivato (modalità sicura). Puoi dettare con il microfono singolo.");
-      return;
-    }
-    if (voiceMode) return;
-    try { window.speechSynthesis?.cancel?.(); } catch {}
-    onSpeak("Dimmi pure.");
     setVoiceMode(true);
-    dialogActiveRef.current = true;
-    dialogDraftRef.current = "";
+    onSpeak("Dialogo vocale non attivo in questa modalità. Usa il microfono singolo.");
   }
-
   function stopDialog() {
-    dialogActiveRef.current = false;
     setVoiceMode(false);
-    try { window.speechSynthesis?.cancel?.(); } catch {}
     stopRecorderOrSR();
   }
 
-  function hasSubmitCue(raw: string) {
-    return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
-  }
-  function stripSubmitCue(raw: string) {
-    return raw.replace(/\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
-  }
-  function isCmdStop(raw: string)   { return /\bstop\s+dialogo\b/i.test(raw); }
-  function isCmdAnnulla(raw: string){ return /\bannulla\b/i.test(raw); }
-  function isCmdRipeti(raw: string) { return /\bripeti\b/i.test(raw); }
-  function isCmdNuova(raw: string)  { return /\bnuova\s+sessione\b/i.test(raw); }
-
-  async function dialogLoopTick() {
-    if (!F.DIALOG) return; // disattivo il loop in SAFE MODE
-    while (dialogActiveRef.current) {
-      if (F.BLOCK_MIC_WHEN_TTS) while (isTtsSpeaking() && dialogActiveRef.current) await sleep(80);
-
-      const heardRaw = (await listenOnce()).trim();
-      if (!dialogActiveRef.current) break;
-      if (!heardRaw) continue;
-
-      const heard = normalizeInterrogative(heardRaw);
-
-      if (isCmdStop(heard))   { onSpeak("Dialogo disattivato."); stopDialog(); break; }
-      if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; onSpeak("Annullato. Dimmi pure."); continue; }
-      if (isCmdRipeti(heard)) { onSpeak(); continue; }
-      if (isCmdNuova(heard))  {
-        const title = autoTitleRome();
-        try { const conv = await createNewSession(title);
-          onSpeak(conv?.id ? "Nuova sessione. Dimmi pure." : "Non riesco a creare la sessione.");
-        } catch { onSpeak("Errore creazione sessione."); }
-        continue;
-      }
-
-      let text = heard;
-      let shouldSend = false;
-      if (hasSubmitCue(text)) { text = stripSubmitCue(text); shouldSend = true; }
-      if (text) dialogDraftRef.current = (dialogDraftRef.current + " " + text).trim();
-
-      if (shouldSend) {
-        const toSend = dialogDraftRef.current.trim();
-        dialogDraftRef.current = "";
-        if (toSend) {
-          await onSendDirectly(normalizeInterrogative(toSend));
-          if (F.BLOCK_MIC_WHEN_TTS) while (isTtsSpeaking() && dialogActiveRef.current) await sleep(80);
-          onSpeak("Dimmi pure.");
-        } else {
-          onSpeak("Dimmi cosa inviare.");
-        }
-      }
-    }
-  }
-
-  useEffect(() => {
-    if (!voiceMode) return;
-    dialogLoopTick();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [voiceMode]);
-
-  // ================= API invariata verso l’esterno =================
   return {
     // stato
     isRecording, isTranscribing, voiceError,
