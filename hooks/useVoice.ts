@@ -4,15 +4,13 @@ import { transcribeAudio } from "../lib/api/voice";
 import type { Conv } from "../lib/api/conversations";
 
 type Params = {
-  onTranscriptionToInput: (text: string) => void;
-  onSendDirectly: (text: string) => Promise<void>;
-  onSpeak: (text?: string) => void;
+  onTranscriptionToInput: (text: string) => void;           // aggiorna textarea (solo tap-to-talk)
+  onSendDirectly: (text: string) => Promise<void>;           // invio diretto nel Dialogo
+  onSpeak: (text?: string) => void;                          // prompt vocale breve, es. "Dimmi pure."
   createNewSession: (titleAuto: string) => Promise<Conv | null>;
   autoTitleRome: () => string;
-  /** Se true, ignora il riconoscimento nativo e usa sempre il backend */
-  preferServerSTT?: boolean;
-  /** Funzione che indica se il TTS sta parlando (per sospendere il mic) */
-  isTtsSpeaking?: () => boolean;
+  preferServerSTT?: boolean;                                 // se true => forzi backend STT
+  isTtsSpeaking?: () => boolean;                             // blocca mic mentre il TTS parla
 };
 
 export function useVoice({
@@ -24,6 +22,7 @@ export function useVoice({
   preferServerSTT = true,
   isTtsSpeaking = () => false,
 }: Params) {
+  // ---- stato
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
@@ -31,7 +30,7 @@ export function useVoice({
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
 
-  // SR nativo
+  // ---- SR nativo (abilitato solo se non forzi server)
   const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
   const SR: any =
     typeof window !== "undefined"
@@ -41,16 +40,16 @@ export function useVoice({
     !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true) && !preferServerSTT;
   const srRef = useRef<any>(null);
 
-  // Recorder fallback
+  // ---- Recorder fallback
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // Dialogo
+  // ---- Dialogo
   const dialogActiveRef = useRef(false);
   const dialogDraftRef = useRef<string>("");
 
-  // --- helpers
+  // ---- utils
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
   function pickMime() {
@@ -72,8 +71,10 @@ export function useVoice({
       /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante|posso|puoi|può|potrei|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti|è|sei|siamo|siete|sono|hai|avete|c'?è|ci\s+sono)\b/i;
     const questionTails = /\b(vero|giusto|d'accordo|ok|no)\s*$/i;
     const questionPhrases = /\b(quanto\s+costa|qual[ei]\s+prezzo|mi\s+spieghi|potresti\s+dire)\b/i;
+
     const looksQuestion =
       /\?$/.test(t) || questionStarts.test(t) || questionTails.test(t) || questionPhrases.test(t);
+
     if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
     if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
     return t;
@@ -90,11 +91,11 @@ export function useVoice({
     try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch {}
   }
 
-  // ---------- una “presa” di parlato ----------
+  // ---- una "presa" di parlato
   async function listenOnce(): Promise<string> {
-    // Attendi che il TTS finisca prima di aprire il mic
-    while (isTtsSpeaking() && dialogActiveRef.current) {
-      await sleep(100);
+    // Non aprire il mic mentre l'assistente sta parlando (stop eco)
+    while (isTtsSpeaking() && (voiceMode || isRecording || isTranscribing)) {
+      await sleep(80);
     }
 
     if (supportsNativeSR && SR) {
@@ -102,7 +103,7 @@ export function useVoice({
         try {
           const sr = new SR();
           sr.lang = "it-IT";
-          sr.interimResults = true;        // interim ON
+          sr.interimResults = true;   // interim ON per testo live
           sr.maxAlternatives = 1;
           let resolved = false;
 
@@ -115,12 +116,8 @@ export function useVoice({
               if (res.isFinal) final += txt;
               else interim += txt;
             }
-
-            // ✅ Aggiorna input SOLO nel tap-to-talk (non nel dialogo)
-            if (interim && !dialogActiveRef.current) {
-              onTranscriptionToInput(interim);
-            }
-
+            // Aggiorna live la textarea SOLO nel tap-to-talk (non nel Dialogo)
+            if (interim && !dialogActiveRef.current) onTranscriptionToInput(interim);
             if (final && !resolved) {
               resolved = true;
               resolve(String(final));
@@ -139,13 +136,14 @@ export function useVoice({
       });
     }
 
-    // Fallback: registra ~4s e manda al server
+    // Fallback server (Whisper): registra ~4s
     return new Promise(async (resolve) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
         const mr = new MediaRecorder(stream, { mimeType: pickMime() });
         chunksRef.current = [];
+
         mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
         mr.onstop = async () => {
           setIsRecording(false);
@@ -163,6 +161,7 @@ export function useVoice({
             streamRef.current = null;
           }
         };
+
         mrRef.current = mr;
         mr.start();
         setIsRecording(true);
@@ -173,16 +172,15 @@ export function useVoice({
     });
   }
 
-  // ---------- controlli UI ----------
+  // ---- controlli UI (tap-to-talk)
   function handleVoicePressStart() {
     if (isTranscribing || isRecording) return;
     setVoiceError(null);
 
     listenOnce().then((t) => {
       if (!t) { setIsRecording(false); return; }
-      // Tap-to-talk: normalizza e scrivi nell'input
       const txt = normalizeInterrogative(t);
-      onTranscriptionToInput(txt);
+      onTranscriptionToInput(txt);   // qui sì: aggiorniamo textarea
       setLastInputWasVoice(true);
       setIsRecording(false);
     });
@@ -198,12 +196,12 @@ export function useVoice({
     else handleVoicePressEnd();
   }
 
-  // ---------- dialogo vocale ----------
+  // ---- dialogo vocale
   async function startDialog() {
     if (voiceMode) return;
-    // Ferma l'eventuale TTS in corso e dai un prompt breve
+    // Ferma eventuale TTS in corso e dai un prompt breve
     try { window.speechSynthesis?.cancel?.(); } catch {}
-    onSpeak("Dimmi pure.");               // messaggio breve
+    onSpeak("Dimmi pure.");
     setVoiceMode(true);
     dialogActiveRef.current = true;
     dialogDraftRef.current = "";
@@ -216,7 +214,7 @@ export function useVoice({
     stopRecorderOrSR();
   }
 
-  // Trigger di submit: “invia”
+  // Trigger invio: "invia"
   function hasSubmitCue(raw: string) {
     return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
   }
@@ -231,9 +229,9 @@ export function useVoice({
 
   async function dialogLoopTick() {
     while (dialogActiveRef.current) {
-      // ⏸️ se il TTS sta parlando, aspetta
+      // Pausa finché il TTS sta parlando
       while (isTtsSpeaking() && dialogActiveRef.current) {
-        await sleep(100);
+        await sleep(80);
       }
 
       const heardRaw = (await listenOnce()).trim();
@@ -264,11 +262,10 @@ export function useVoice({
         const toSend = dialogDraftRef.current.trim();
         dialogDraftRef.current = "";
         if (toSend) {
-          await onSendDirectly(normalizeInterrogative(toSend));
-          // Dopo l'invio, il TTS leggerà la risposta (HomeClient useEffect)
-          // Aspetta che smetta di parlare prima di riprendere ad ascoltare
+          await onSendDirectly(normalizeInterrogative(toSend)); // invia
+          // attesa breve per eventuale latenza, poi prompt
           while (isTtsSpeaking() && dialogActiveRef.current) {
-            await sleep(100);
+            await sleep(80);
           }
           onSpeak("Dimmi pure.");
         } else {
