@@ -24,11 +24,11 @@ export default function HomeClient({ email }: { email: string }) {
   const conv = useConversations({
     onAssistantReply: (text) => {
       setLastAssistantText(text);
-      // TTS viene gestito qui sotto da un useEffect in base al toggle speaker
+      // Il TTS leggerà la risposta qui sotto (useEffect)
     },
   });
 
-  // 👉 crea/subito la sessione di oggi al primo accesso
+  // Crea/subito la sessione odierna
   useEffect(() => {
     conv.ensureConversation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -36,11 +36,10 @@ export default function HomeClient({ email }: { email: string }) {
 
   // ---- Voce
   const voice = useVoice({
-    onTranscriptionToInput: (text) => { conv.setInput(text); },
+    onTranscriptionToInput: (text) => { conv.setInput(text); }, // usato solo nel tap-to-talk
     onSendDirectly: async (text) => {
-      // ❌ NON leggiamo più il prompt utente
+      // NON leggiamo più il prompt utente; parleremo la risposta
       await conv.send(text);
-      // niente speakAssistant qui: il TTS leggerà la risposta del modello via onAssistantReply/useEffect
     },
     onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
@@ -48,13 +47,14 @@ export default function HomeClient({ email }: { email: string }) {
       catch { return null; }
     },
     autoTitleRome: conv.autoTitleRome,
-    preferServerSTT: false, // ✅ abilita SR nativo per interim (live transcription)
+    preferServerSTT: false,              // SR nativo attivo per interim (tap-to-talk)
+    isTtsSpeaking: () => ttsSpeaking,    // ✅ blocca il mic mentre il TTS parla
   });
 
   // auto-resize della textarea
   useAutoResize(conv.taRef, conv.input);
 
-  // ✅ parla SOLO la risposta del modello, quando arriva
+  // Parla SOLO la risposta del modello quando arriva (se speaker abilitato)
   useEffect(() => {
     if (!lastAssistantText) return;
     if (voice.speakerEnabled) speakAssistant(lastAssistantText);
@@ -87,7 +87,7 @@ export default function HomeClient({ email }: { email: string }) {
             bubbles={conv.bubbles}
             serverError={conv.serverError}
             threadRef={conv.threadRef}
-            endRef={conv.endRef}   // ✅ sentinel per autoscroll all’ultimo messaggio
+            endRef={conv.endRef}   // sentinel per autoscroll all’ultimo messaggio
           />
           <Composer
             value={conv.input}
@@ -117,7 +117,6 @@ export default function HomeClient({ email }: { email: string }) {
             }}
           />
         </div>
-      {/* ✅ chiusura wrapper esterno */}
       </div>
 
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
