@@ -9,8 +9,10 @@ type Params = {
   onSpeak: (text?: string) => void;
   createNewSession: (titleAuto: string) => Promise<Conv | null>;
   autoTitleRome: () => string;
-  /** Se true, ignora il riconoscimento nativo del browser e usa sempre il backend */
+  /** Se true, ignora il riconoscimento nativo e usa sempre il backend */
   preferServerSTT?: boolean;
+  /** Funzione che indica se il TTS sta parlando (per sospendere il mic) */
+  isTtsSpeaking?: () => boolean;
 };
 
 export function useVoice({
@@ -20,6 +22,7 @@ export function useVoice({
   createNewSession,
   autoTitleRome,
   preferServerSTT = true,
+  isTtsSpeaking = () => false,
 }: Params) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -43,11 +46,13 @@ export function useVoice({
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // dialogo
+  // Dialogo
   const dialogActiveRef = useRef(false);
   const dialogDraftRef = useRef<string>("");
 
   // --- helpers
+  const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
   function pickMime() {
     try {
       if (typeof MediaRecorder !== "undefined") {
@@ -87,12 +92,17 @@ export function useVoice({
 
   // ---------- una “presa” di parlato ----------
   async function listenOnce(): Promise<string> {
+    // Attendi che il TTS finisca prima di aprire il mic
+    while (isTtsSpeaking() && dialogActiveRef.current) {
+      await sleep(100);
+    }
+
     if (supportsNativeSR && SR) {
       return new Promise((resolve) => {
         try {
           const sr = new SR();
           sr.lang = "it-IT";
-          sr.interimResults = true;         // ✅ interim ON per testo live
+          sr.interimResults = true;        // interim ON
           sr.maxAlternatives = 1;
           let resolved = false;
 
@@ -105,8 +115,12 @@ export function useVoice({
               if (res.isFinal) final += txt;
               else interim += txt;
             }
-            // aggiorna live la textarea (senza normalizzare, è parziale)
-            if (interim) onTranscriptionToInput(interim);
+
+            // ✅ Aggiorna input SOLO nel tap-to-talk (non nel dialogo)
+            if (interim && !dialogActiveRef.current) {
+              onTranscriptionToInput(interim);
+            }
+
             if (final && !resolved) {
               resolved = true;
               resolve(String(final));
@@ -166,7 +180,7 @@ export function useVoice({
 
     listenOnce().then((t) => {
       if (!t) { setIsRecording(false); return; }
-      // alla fine normalizziamo e mettiamo il testo definitivo
+      // Tap-to-talk: normalizza e scrivi nell'input
       const txt = normalizeInterrogative(t);
       onTranscriptionToInput(txt);
       setLastInputWasVoice(true);
@@ -187,11 +201,12 @@ export function useVoice({
   // ---------- dialogo vocale ----------
   async function startDialog() {
     if (voiceMode) return;
+    // Ferma l'eventuale TTS in corso e dai un prompt breve
+    try { window.speechSynthesis?.cancel?.(); } catch {}
+    onSpeak("Dimmi pure.");               // messaggio breve
     setVoiceMode(true);
     dialogActiveRef.current = true;
     dialogDraftRef.current = "";
-    try { window.speechSynthesis?.cancel?.(); } catch {}
-    onSpeak("Dimmi pure.");
   }
 
   function stopDialog() {
@@ -201,7 +216,7 @@ export function useVoice({
     stopRecorderOrSR();
   }
 
-  // ✅ trigger cambiato: “invia” (prima era “esegui”)
+  // Trigger di submit: “invia”
   function hasSubmitCue(raw: string) {
     return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
   }
@@ -216,6 +231,11 @@ export function useVoice({
 
   async function dialogLoopTick() {
     while (dialogActiveRef.current) {
+      // ⏸️ se il TTS sta parlando, aspetta
+      while (isTtsSpeaking() && dialogActiveRef.current) {
+        await sleep(100);
+      }
+
       const heardRaw = (await listenOnce()).trim();
       if (!dialogActiveRef.current) break;
       if (!heardRaw) continue;
@@ -245,8 +265,14 @@ export function useVoice({
         dialogDraftRef.current = "";
         if (toSend) {
           await onSendDirectly(normalizeInterrogative(toSend));
+          // Dopo l'invio, il TTS leggerà la risposta (HomeClient useEffect)
+          // Aspetta che smetta di parlare prima di riprendere ad ascoltare
+          while (isTtsSpeaking() && dialogActiveRef.current) {
+            await sleep(100);
+          }
+          onSpeak("Dimmi pure.");
         } else {
-          onSpeak("Dimmi cosa vuoi che faccia");
+          onSpeak("Dimmi cosa inviare.");
         }
       }
     }
