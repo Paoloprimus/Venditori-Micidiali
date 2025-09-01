@@ -1,8 +1,8 @@
+// /app/api/voice/transcribe/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 
-// Se vuoi forzare il runtime Node su Vercel, decommenta la riga sotto.
-// export const runtime = "nodejs";
+// export const runtime = "nodejs"; // opzionale
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -16,14 +16,13 @@ export async function POST(req: NextRequest) {
   try {
     const form = await req.formData();
     const file = form.get("audio");
-
     if (!(file instanceof Blob)) {
       return NextResponse.json({ error: "file audio mancante" }, { status: 400 });
     }
 
     const resp = await openai.audio.transcriptions.create({
       file,                 // Blob (webm/mp4/aac…)
-      model: MODEL,         // es. "whisper-1" (consigliato)
+      model: MODEL,         // es. "whisper-1"
       language: LANGUAGE,   // es. "it"
       prompt: PROMPT,       // guida morbida alla punteggiatura
       temperature: 0,
