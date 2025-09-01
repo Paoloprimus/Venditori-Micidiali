@@ -14,39 +14,46 @@ export class ApiError extends Error {
 
 type FetchOptions = Omit<RequestInit, "body"> & { body?: any };
 
-export async function fetchJSON<T>(url: string, options: FetchOptions = {}): Promise<T> {
-  const headers: Record<string, string> = {
+/** fetchJSON<T>
+ * - Imposta automaticamente Content-Type/Accept per JSON (tranne quando body è FormData/Blob).
+ * - Propaga status e body d'errore dentro ApiError (e.details).
+ */
+export async function fetchJSON<T = any>(url: string, opts: FetchOptions = {}): Promise<T> {
+  const { body, headers, ...rest } = opts;
+
+  const isFormLike =
+    typeof FormData !== "undefined" && body instanceof FormData ||
+    (typeof Blob !== "undefined" && body instanceof Blob);
+
+  const finalHeaders: HeadersInit = {
     Accept: "application/json",
-    ...(options.body && !(options.body instanceof FormData)
-      ? { "Content-Type": "application/json" }
-      : {}),
-    ...(options.headers as Record<string, string> | undefined),
+    ...(headers || {}),
+    ...(isFormLike ? {} : { "Content-Type": "application/json" }),
   };
 
   const init: RequestInit = {
-    ...options,
-    headers,
-    body: options.body
-      ? options.body instanceof FormData
-        ? options.body
-        : JSON.stringify(options.body)
-      : undefined,
+    method: rest.method || (body ? "POST" : "GET"),
+    ...rest,
+    headers: finalHeaders,
+    body: body == null ? undefined : (isFormLike ? body : JSON.stringify(body)),
   };
 
   const res = await fetch(url, init);
 
-  // Proviamo a leggere JSON (o testo come fallback per log)
-  const ct = res.headers.get("content-type") || "";
+  // prova a leggere JSON se disponibile
+  const ctype = res.headers.get("content-type") || "";
   let data: any = null;
-  if (ct.includes("application/json")) {
+  if (ctype.includes("application/json")) {
     try {
       data = await res.json();
     } catch {
       data = null;
     }
   } else {
+    // fallback: prova testo
     try {
-      data = await res.text();
+      const txt = await res.text();
+      data = txt ? { message: txt } : null;
     } catch {
       data = null;
     }
@@ -54,7 +61,7 @@ export async function fetchJSON<T>(url: string, options: FetchOptions = {}): Pro
 
   if (!res.ok) {
     const msg =
-      (data && (data.details || data.error)) ||
+      (data && (data.message || data.error || data.details)) ||
       `HTTP ${res.status} su ${url}`;
     throw new ApiError(String(msg), res.status, data);
   }
