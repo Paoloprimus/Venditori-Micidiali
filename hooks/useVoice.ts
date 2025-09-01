@@ -19,7 +19,7 @@ export function useVoice({
   onSpeak,
   createNewSession,
   autoTitleRome,
-  preferServerSTT = true, // ✅ default: usa sempre STT server (Whisper)
+  preferServerSTT = true,
 }: Params) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -28,7 +28,7 @@ export function useVoice({
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
 
-  // --- SR nativo (disattivato se preferServerSTT = true)
+  // SR nativo
   const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
   const SR: any =
     typeof window !== "undefined"
@@ -38,16 +38,16 @@ export function useVoice({
     !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true) && !preferServerSTT;
   const srRef = useRef<any>(null);
 
-  // --- Recorder fallback (usato anche quando forziamo il server STT)
+  // Recorder fallback
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // --- Dialogo
+  // dialogo
   const dialogActiveRef = useRef(false);
   const dialogDraftRef = useRef<string>("");
 
-  // ---------- Helpers ----------
+  // --- helpers
   function pickMime() {
     try {
       if (typeof MediaRecorder !== "undefined") {
@@ -61,19 +61,14 @@ export function useVoice({
   function normalizeInterrogative(raw: string) {
     const t0 = (raw ?? "").trim();
     if (!t0) return t0;
-
-    // comprimi punteggiatura/spazi finali
     const t = t0.replace(/\s+$/g, "").replace(/[?!.\u2026]+$/g, (m) => m[0]);
-
     const hasEndPunct = /[.!?]$/.test(t);
     const questionStarts =
       /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante|posso|puoi|può|potrei|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti|è|sei|siamo|siete|sono|hai|avete|c'?è|ci\s+sono)\b/i;
     const questionTails = /\b(vero|giusto|d'accordo|ok|no)\s*$/i;
     const questionPhrases = /\b(quanto\s+costa|qual[ei]\s+prezzo|mi\s+spieghi|potresti\s+dire)\b/i;
-
     const looksQuestion =
       /\?$/.test(t) || questionStarts.test(t) || questionTails.test(t) || questionPhrases.test(t);
-
     if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
     if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
     return t;
@@ -90,25 +85,36 @@ export function useVoice({
     try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch {}
   }
 
-  // ---------- Core: una “presa” di parlato ----------
+  // ---------- una “presa” di parlato ----------
   async function listenOnce(): Promise<string> {
     if (supportsNativeSR && SR) {
       return new Promise((resolve) => {
         try {
           const sr = new SR();
           sr.lang = "it-IT";
-          sr.interimResults = false;
+          sr.interimResults = true;         // ✅ interim ON per testo live
           sr.maxAlternatives = 1;
-          let got = false;
+          let resolved = false;
 
           sr.onresult = (e: any) => {
-            got = true;
-            const t = e?.results?.[0]?.[0]?.transcript || "";
-            resolve(String(t));
-            try { sr.stop?.(); } catch {}
+            let interim = "";
+            let final = "";
+            for (let i = e.resultIndex; i < e.results.length; i++) {
+              const res = e.results[i];
+              const txt = res[0]?.transcript || "";
+              if (res.isFinal) final += txt;
+              else interim += txt;
+            }
+            // aggiorna live la textarea (senza normalizzare, è parziale)
+            if (interim) onTranscriptionToInput(interim);
+            if (final && !resolved) {
+              resolved = true;
+              resolve(String(final));
+              try { sr.stop?.(); } catch {}
+            }
           };
-          sr.onerror = () => { if (!got) resolve(""); };
-          sr.onend = () => { if (!got) resolve(""); };
+          sr.onerror = () => { if (!resolved) resolve(""); };
+          sr.onend = () => { if (!resolved) resolve(""); };
 
           sr.start();
           srRef.current = sr;
@@ -119,14 +125,13 @@ export function useVoice({
       });
     }
 
-    // Fallback/forzato: registra 4s e manda al server (Whisper)
+    // Fallback: registra ~4s e manda al server
     return new Promise(async (resolve) => {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         streamRef.current = stream;
         const mr = new MediaRecorder(stream, { mimeType: pickMime() });
         chunksRef.current = [];
-
         mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
         mr.onstop = async () => {
           setIsRecording(false);
@@ -144,26 +149,24 @@ export function useVoice({
             streamRef.current = null;
           }
         };
-
         mrRef.current = mr;
         mr.start();
         setIsRecording(true);
-        setTimeout(() => {
-          try { if (mr.state !== "inactive") mr.stop(); } catch {}
-        }, 4000);
+        setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
       } catch {
         resolve("");
       }
     });
   }
 
-  // ---------- Controlli UI ----------
+  // ---------- controlli UI ----------
   function handleVoicePressStart() {
     if (isTranscribing || isRecording) return;
     setVoiceError(null);
 
     listenOnce().then((t) => {
       if (!t) { setIsRecording(false); return; }
+      // alla fine normalizziamo e mettiamo il testo definitivo
       const txt = normalizeInterrogative(t);
       onTranscriptionToInput(txt);
       setLastInputWasVoice(true);
@@ -181,7 +184,7 @@ export function useVoice({
     else handleVoicePressEnd();
   }
 
-  // ---------- Dialogo vocale ----------
+  // ---------- dialogo vocale ----------
   async function startDialog() {
     if (voiceMode) return;
     setVoiceMode(true);
@@ -198,12 +201,14 @@ export function useVoice({
     stopRecorderOrSR();
   }
 
+  // ✅ trigger cambiato: “invia” (prima era “esegui”)
   function hasSubmitCue(raw: string) {
-    return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
+    return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
   }
   function stripSubmitCue(raw: string) {
-    return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
+    return raw.replace(/\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
   }
+
   function isCmdStop(raw: string)   { return /\bstop\s+dialogo\b/i.test(raw); }
   function isCmdAnnulla(raw: string){ return /\bannulla\b/i.test(raw); }
   function isCmdRipeti(raw: string) { return /\bripeti\b/i.test(raw); }
@@ -239,7 +244,6 @@ export function useVoice({
         const toSend = dialogDraftRef.current.trim();
         dialogDraftRef.current = "";
         if (toSend) {
-          // ✅ normalizza prima dell'invio
           await onSendDirectly(normalizeInterrogative(toSend));
         } else {
           onSpeak("Dimmi cosa vuoi che faccia");
