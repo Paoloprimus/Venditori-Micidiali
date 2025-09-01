@@ -1,4 +1,3 @@
-// hooks/useVoice.ts
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { transcribeAudio } from "../lib/api/voice";
@@ -10,6 +9,8 @@ type Params = {
   onSpeak: (text?: string) => void;
   createNewSession: (titleAuto: string) => Promise<Conv | null>;
   autoTitleRome: () => string;
+  /** Se true, ignora il riconoscimento nativo del browser e usa sempre il backend */
+  preferServerSTT?: boolean;
 };
 
 export function useVoice({
@@ -18,6 +19,7 @@ export function useVoice({
   onSpeak,
   createNewSession,
   autoTitleRome,
+  preferServerSTT = true, // ✅ default: usa sempre STT server (Whisper)
 }: Params) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -26,57 +28,26 @@ export function useVoice({
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
 
-  // SR nativo
+  // --- SR nativo (disattivato se preferServerSTT = true)
   const isIOS = typeof navigator !== "undefined" && /iP(hone|od|ad)/.test(navigator.userAgent);
   const SR: any =
     typeof window !== "undefined"
       ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
       : null;
-  const supportsNativeSR = !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true);
+  const supportsNativeSR =
+    !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true) && !preferServerSTT;
   const srRef = useRef<any>(null);
 
-  // Recorder fallback
+  // --- Recorder fallback (usato anche quando forziamo il server STT)
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
 
-  // dialogo
+  // --- Dialogo
   const dialogActiveRef = useRef(false);
   const dialogDraftRef = useRef<string>("");
 
-  // --- Persistenza ON/OFF altoparlante per sessione (opzionale: chiave esterna se vuoi per-conv)
-  // useEffect(() => {
-  //   const saved = localStorage.getItem("autoTTS:global");
-  //   setSpeakerEnabled(saved === "1");
-  // }, []);
-  // useEffect(() => {
-  //   localStorage.setItem("autoTTS:global", speakerEnabled ? "1" : "0");
-  // }, [speakerEnabled]);
-
-    function normalizeInterrogative(raw: string) {
-      const t0 = (raw ?? "").trim();
-      if (!t0) return t0;
-    
-      // comprime punteggiatura finale ripetuta e spazi
-      const t = t0.replace(/\s+$/g, "").replace(/[?!.\u2026]+$/g, (m) => m[0]);
-    
-      const hasEndPunct = /[.!?]$/.test(t);
-    
-      // euristiche italiane più ampie
-      const questionStarts =
-        /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante|posso|puoi|può|potrei|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti|è|sei|siamo|siete|sono|hai|avete|c'?è|ci\s+sono)\b/i;
-      const questionTails = /\b(vero|giusto|d'accordo|ok|no)\s*$/i;             // es: "giusto", "vero"
-      const questionPhrases = /\b(quanto\s+costa|qual[ei]\s+prezzo|mi\s+spieghi|potresti\s+dire)\b/i;
-    
-      const looksQuestion =
-        /\?$/.test(t) || questionStarts.test(t) || questionTails.test(t) || questionPhrases.test(t);
-    
-      if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
-      if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
-      return t;
-    }
-
-
+  // ---------- Helpers ----------
   function pickMime() {
     try {
       if (typeof MediaRecorder !== "undefined") {
@@ -87,62 +58,25 @@ export function useVoice({
     return "";
   }
 
-  async function listenOnce(): Promise<string> {
-    if (supportsNativeSR && SR) {
-      return new Promise((resolve) => {
-        try {
-          const sr = new SR();
-          sr.lang = "it-IT";
-          sr.interimResults = false;
-          sr.maxAlternatives = 1;
-          let got = false;
-          sr.onresult = (e: any) => {
-            got = true;
-            const t = e?.results?.[0]?.[0]?.transcript || "";
-            resolve(String(t));
-            try { sr.stop?.(); } catch {}
-          };
-          sr.onerror = () => { if (!got) resolve(""); };
-          sr.onend = () => { if (!got) resolve(""); };
-          sr.start();
-          srRef.current = sr;
-          setIsRecording(true);
-        } catch {
-          resolve("");
-        }
-      });
-    }
-    // fallback recorder: ~4s
-    return new Promise(async (resolve) => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        streamRef.current = stream;
-        const mr = new MediaRecorder(stream, { mimeType: pickMime() });
-        chunksRef.current = [];
-        mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
-        mr.onstop = async () => {
-          setIsRecording(false);
-          setIsTranscribing(true);
-          try {
-            const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
-            const text = await transcribeAudio(blob);
-            resolve(text);
-          } catch {
-            resolve("");
-          } finally {
-            setIsTranscribing(false);
-            try { stream.getTracks().forEach(t => t.stop()); } catch {}
-            streamRef.current = null;
-          }
-        };
-        mrRef.current = mr;
-        mr.start();
-        setIsRecording(true);
-        setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
-      } catch {
-        resolve("");
-      }
-    });
+  function normalizeInterrogative(raw: string) {
+    const t0 = (raw ?? "").trim();
+    if (!t0) return t0;
+
+    // comprimi punteggiatura/spazi finali
+    const t = t0.replace(/\s+$/g, "").replace(/[?!.\u2026]+$/g, (m) => m[0]);
+
+    const hasEndPunct = /[.!?]$/.test(t);
+    const questionStarts =
+      /^(chi|che|cosa|come|quando|dove|perch[eé]|quale|quali|quanto|quanta|quanti|quante|posso|puoi|può|potrei|potresti|riesci|sapresti|mi\s+puoi|mi\s+potresti|è|sei|siamo|siete|sono|hai|avete|c'?è|ci\s+sono)\b/i;
+    const questionTails = /\b(vero|giusto|d'accordo|ok|no)\s*$/i;
+    const questionPhrases = /\b(quanto\s+costa|qual[ei]\s+prezzo|mi\s+spieghi|potresti\s+dire)\b/i;
+
+    const looksQuestion =
+      /\?$/.test(t) || questionStarts.test(t) || questionTails.test(t) || questionPhrases.test(t);
+
+    if (!hasEndPunct) return t + (looksQuestion ? "?" : ".");
+    if (/[.]$/.test(t) && looksQuestion) return t.slice(0, -1) + "?";
+    return t;
   }
 
   function stopRecorderOrSR() {
@@ -156,33 +90,98 @@ export function useVoice({
     try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch {}
   }
 
-  function hasSubmitCue(raw: string) {
-    return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
-  }
-  function stripSubmitCue(raw: string) {
-    return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
-  }
-  function isCmdStop(raw: string)   { return /\bstop\s+dialogo\b/i.test(raw); }
-  function isCmdAnnulla(raw: string){ return /\bannulla\b/i.test(raw); }
-  function isCmdRipeti(raw: string) { return /\bripeti\b/i.test(raw); }
-  function isCmdNuova(raw: string)  { return /\bnuova\s+sessione\b/i.test(raw); }
+  // ---------- Core: una “presa” di parlato ----------
+  async function listenOnce(): Promise<string> {
+    if (supportsNativeSR && SR) {
+      return new Promise((resolve) => {
+        try {
+          const sr = new SR();
+          sr.lang = "it-IT";
+          sr.interimResults = false;
+          sr.maxAlternatives = 1;
+          let got = false;
 
-  // --- API pubblica “press”
+          sr.onresult = (e: any) => {
+            got = true;
+            const t = e?.results?.[0]?.[0]?.transcript || "";
+            resolve(String(t));
+            try { sr.stop?.(); } catch {}
+          };
+          sr.onerror = () => { if (!got) resolve(""); };
+          sr.onend = () => { if (!got) resolve(""); };
+
+          sr.start();
+          srRef.current = sr;
+          setIsRecording(true);
+        } catch {
+          resolve("");
+        }
+      });
+    }
+
+    // Fallback/forzato: registra 4s e manda al server (Whisper)
+    return new Promise(async (resolve) => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        streamRef.current = stream;
+        const mr = new MediaRecorder(stream, { mimeType: pickMime() });
+        chunksRef.current = [];
+
+        mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
+        mr.onstop = async () => {
+          setIsRecording(false);
+          setIsTranscribing(true);
+          try {
+            const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
+            const text = await transcribeAudio(blob);
+            resolve(text);
+          } catch (err: any) {
+            setVoiceError(err?.message || "errore trascrizione");
+            resolve("");
+          } finally {
+            setIsTranscribing(false);
+            try { stream.getTracks().forEach(t => t.stop()); } catch {}
+            streamRef.current = null;
+          }
+        };
+
+        mrRef.current = mr;
+        mr.start();
+        setIsRecording(true);
+        setTimeout(() => {
+          try { if (mr.state !== "inactive") mr.stop(); } catch {}
+        }, 4000);
+      } catch {
+        resolve("");
+      }
+    });
+  }
+
+  // ---------- Controlli UI ----------
   function handleVoicePressStart() {
     if (isTranscribing || isRecording) return;
     setVoiceError(null);
+
     listenOnce().then((t) => {
       if (!t) { setIsRecording(false); return; }
       const txt = normalizeInterrogative(t);
-      onTranscriptionToInput(normalizeInterrogative(t));
+      onTranscriptionToInput(txt);
       setLastInputWasVoice(true);
       setIsRecording(false);
     });
   }
-  function handleVoicePressEnd() { if (!isRecording) return; stopRecorderOrSR(); }
-  function handleVoiceClick() { if (!isRecording) handleVoicePressStart(); else handleVoicePressEnd(); }
 
-  // --- Dialogo vocale
+  function handleVoicePressEnd() {
+    if (!isRecording) return;
+    stopRecorderOrSR();
+  }
+
+  function handleVoiceClick() {
+    if (!isRecording) handleVoicePressStart();
+    else handleVoicePressEnd();
+  }
+
+  // ---------- Dialogo vocale ----------
   async function startDialog() {
     if (voiceMode) return;
     setVoiceMode(true);
@@ -199,11 +198,24 @@ export function useVoice({
     stopRecorderOrSR();
   }
 
+  function hasSubmitCue(raw: string) {
+    return /\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test(raw.trim());
+  }
+  function stripSubmitCue(raw: string) {
+    return raw.replace(/\besegui(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
+  }
+  function isCmdStop(raw: string)   { return /\bstop\s+dialogo\b/i.test(raw); }
+  function isCmdAnnulla(raw: string){ return /\bannulla\b/i.test(raw); }
+  function isCmdRipeti(raw: string) { return /\bripeti\b/i.test(raw); }
+  function isCmdNuova(raw: string)  { return /\bnuova\s+sessione\b/i.test(raw); }
+
   async function dialogLoopTick() {
     while (dialogActiveRef.current) {
-      const heard = normalizeInterrogative((await listenOnce()).trim());
+      const heardRaw = (await listenOnce()).trim();
       if (!dialogActiveRef.current) break;
-      if (!heard) continue;
+      if (!heardRaw) continue;
+
+      const heard = normalizeInterrogative(heardRaw);
 
       if (isCmdStop(heard))   { onSpeak("Dialogo disattivato."); stopDialog(); break; }
       if (isCmdAnnulla(heard)){ dialogDraftRef.current = ""; onSpeak("Annullato. Dimmi pure."); continue; }
@@ -226,13 +238,16 @@ export function useVoice({
       if (shouldSend) {
         const toSend = dialogDraftRef.current.trim();
         dialogDraftRef.current = "";
-        if (toSend) await onSendDirectly(toSend);
-        else onSpeak("Dimmi cosa vuoi che faccia");
+        if (toSend) {
+          // ✅ normalizza prima dell'invio
+          await onSendDirectly(normalizeInterrogative(toSend));
+        } else {
+          onSpeak("Dimmi cosa vuoi che faccia");
+        }
       }
     }
   }
 
-  // loop
   useEffect(() => {
     if (!voiceMode) return;
     dialogLoopTick();
