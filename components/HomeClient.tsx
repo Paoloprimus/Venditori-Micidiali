@@ -34,21 +34,18 @@ export default function HomeClient({ email }: { email: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Voce (SAFE MODE: server STT, dialogo disabilitato in hook)
+  // ---- Voce (SR nativa per live transcript)
   const voice = useVoice({
-    onTranscriptionToInput: (text) => { conv.setInput(text); }, // tap-to-talk
-    onSendDirectly: async (text) => {
-      // non leggiamo il prompt utente; parleremo la risposta
-      await conv.send(text);
-    },
+    onTranscriptionToInput: (text) => { conv.setInput(text); },
+    onSendDirectly: async (text) => { await conv.send(text); },
     onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
       try { await conv.createConversation(titleAuto); return conv.currentConv; }
       catch { return null; }
     },
     autoTitleRome: conv.autoTitleRome,
-    preferServerSTT: false,              // Whisper (stabile)
-    isTtsSpeaking: () => ttsSpeaking,   // blocca mic se TTS attivo (se flag attivo in hook)
+    preferServerSTT: false,             // ⬅️ live transcript
+    isTtsSpeaking: () => ttsSpeaking,   // evita eco
   });
 
   // auto-resize della textarea
@@ -93,6 +90,10 @@ export default function HomeClient({ email }: { email: string }) {
             value={conv.input}
             onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
             onSend={async () => {
+              // ✅ Se il microfono è attivo, spegnilo e finalizza la trascrizione prima di inviare
+              if (voice.isRecording) {
+                await voice.stopMic();
+              }
               const txt = conv.input.trim();
               if (!txt) return;
               await conv.send(txt);
@@ -107,7 +108,7 @@ export default function HomeClient({ email }: { email: string }) {
               onPressStart: voice.handleVoicePressStart,
               onPressEnd: voice.handleVoicePressEnd,
               onClick: voice.handleVoiceClick,
-              voiceMode: voice.voiceMode, // resterà sempre false in SAFE MODE
+              voiceMode: voice.voiceMode,
               onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
               speakerEnabled: voice.speakerEnabled,
               onToggleSpeaker: () => voice.setSpeakerEnabled(s => !s),
