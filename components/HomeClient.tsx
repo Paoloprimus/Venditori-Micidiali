@@ -24,7 +24,7 @@ export default function HomeClient({ email }: { email: string }) {
   const conv = useConversations({
     onAssistantReply: (text) => {
       setLastAssistantText(text);
-      // La riproduzione audio è decisa dal toggle in useVoice (speakerEnabled)
+      // TTS viene gestito qui sotto da un useEffect in base al toggle speaker
     },
   });
 
@@ -38,9 +38,9 @@ export default function HomeClient({ email }: { email: string }) {
   const voice = useVoice({
     onTranscriptionToInput: (text) => { conv.setInput(text); },
     onSendDirectly: async (text) => {
+      // ❌ NON leggiamo più il prompt utente
       await conv.send(text);
-      const clean = text.replace(/\(.*?\)|\[.*?\]|\*|_/g, "").replace(/\.{2,}/g, ".").trim();
-      speakAssistant(clean);
+      // niente speakAssistant qui: il TTS leggerà la risposta del modello via onAssistantReply/useEffect
     },
     onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
@@ -48,10 +48,17 @@ export default function HomeClient({ email }: { email: string }) {
       catch { return null; }
     },
     autoTitleRome: conv.autoTitleRome,
+    preferServerSTT: false, // ✅ abilita SR nativo per interim (live transcription)
   });
 
   // auto-resize della textarea
   useAutoResize(conv.taRef, conv.input);
+
+  // ✅ parla SOLO la risposta del modello, quando arriva
+  useEffect(() => {
+    if (!lastAssistantText) return;
+    if (voice.speakerEnabled) speakAssistant(lastAssistantText);
+  }, [lastAssistantText, voice.speakerEnabled, speakAssistant]);
 
   // ------- UI helpers
   const handleAnyHomeInteraction = useCallback(() => {
