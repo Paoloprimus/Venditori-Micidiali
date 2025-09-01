@@ -24,21 +24,21 @@ export default function HomeClient({ email }: { email: string }) {
   const conv = useConversations({
     onAssistantReply: (text) => {
       setLastAssistantText(text);
-      // Il TTS leggerà la risposta qui sotto (useEffect)
+      // TTS leggerà la risposta qui sotto
     },
   });
 
-  // Crea/subito la sessione odierna
+  // Crea la sessione odierna al primo accesso
   useEffect(() => {
     conv.ensureConversation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Voce
+  // ---- Voce (SAFE MODE: server STT, dialogo disabilitato in hook)
   const voice = useVoice({
-    onTranscriptionToInput: (text) => { conv.setInput(text); }, // usato solo nel tap-to-talk
+    onTranscriptionToInput: (text) => { conv.setInput(text); }, // tap-to-talk
     onSendDirectly: async (text) => {
-      // NON leggiamo più il prompt utente; parleremo la risposta
+      // non leggiamo il prompt utente; parleremo la risposta
       await conv.send(text);
     },
     onSpeak: (text) => speakAssistant(text),
@@ -47,8 +47,8 @@ export default function HomeClient({ email }: { email: string }) {
       catch { return null; }
     },
     autoTitleRome: conv.autoTitleRome,
-    preferServerSTT: false,              // SR nativo attivo per interim (tap-to-talk)
-    isTtsSpeaking: () => ttsSpeaking,    // ✅ blocca il mic mentre il TTS parla
+    preferServerSTT: true,              // Whisper (stabile)
+    isTtsSpeaking: () => ttsSpeaking,   // blocca mic se TTS attivo (se flag attivo in hook)
   });
 
   // auto-resize della textarea
@@ -87,7 +87,7 @@ export default function HomeClient({ email }: { email: string }) {
             bubbles={conv.bubbles}
             serverError={conv.serverError}
             threadRef={conv.threadRef}
-            endRef={conv.endRef}   // sentinel per autoscroll all’ultimo messaggio
+            endRef={conv.endRef}
           />
           <Composer
             value={conv.input}
@@ -107,7 +107,7 @@ export default function HomeClient({ email }: { email: string }) {
               onPressStart: voice.handleVoicePressStart,
               onPressEnd: voice.handleVoicePressEnd,
               onClick: voice.handleVoiceClick,
-              voiceMode: voice.voiceMode,
+              voiceMode: voice.voiceMode, // resterà sempre false in SAFE MODE
               onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
               speakerEnabled: voice.speakerEnabled,
               onToggleSpeaker: () => voice.setSpeakerEnabled(s => !s),
