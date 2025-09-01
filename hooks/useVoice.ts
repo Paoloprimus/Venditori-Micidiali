@@ -1,3 +1,4 @@
+// hooks/useVoice.ts
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { transcribeAudio } from "../lib/api/voice";
@@ -23,10 +24,10 @@ export function useVoice({
   isTtsSpeaking = () => false,
 }: Params) {
   // ---- stato
-  const [isRecording, setIsRecording] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);     // 🔴 SOLO per tap-to-talk (non per Dialogo)
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
-  const [voiceMode, setVoiceMode] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(false);         // stato Dialogo
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
 
@@ -89,6 +90,9 @@ export function useVoice({
       try { mrRef.current.stop(); } catch {}
     }
     try { streamRef.current?.getTracks()?.forEach((t) => t.stop()); } catch {}
+    // ✅ sempre azzera gli stati UI di registrazione/trascrizione
+    setIsRecording(false);
+    setIsTranscribing(false);
   }
 
   // ---- una "presa" di parlato
@@ -98,12 +102,14 @@ export function useVoice({
       await sleep(80);
     }
 
+    const inDialog = dialogActiveRef.current;
+
     if (supportsNativeSR && SR) {
       return new Promise((resolve) => {
         try {
           const sr = new SR();
           sr.lang = "it-IT";
-          sr.interimResults = true;   // interim ON per testo live
+          sr.interimResults = true;
           sr.maxAlternatives = 1;
           let resolved = false;
 
@@ -116,21 +122,34 @@ export function useVoice({
               if (res.isFinal) final += txt;
               else interim += txt;
             }
-            // Aggiorna live la textarea SOLO nel tap-to-talk (non nel Dialogo)
-            if (interim && !dialogActiveRef.current) onTranscriptionToInput(interim);
+            // ✅ aggiorna live la textarea SOLO nel tap-to-talk (non nel Dialogo)
+            if (interim && !inDialog) onTranscriptionToInput(interim);
+
             if (final && !resolved) {
               resolved = true;
-              resolve(String(final));
               try { sr.stop?.(); } catch {}
+              // chiusura esplicita dello stato di rec per sicurezza
+              if (!inDialog) setIsRecording(false);
+              resolve(String(final));
             }
           };
-          sr.onerror = () => { if (!resolved) resolve(""); };
-          sr.onend = () => { if (!resolved) resolve(""); };
+          sr.onerror = () => {
+            if (!resolved) resolve("");
+            // chiudi UI rec
+            if (!inDialog) setIsRecording(false);
+          };
+          sr.onend = () => {
+            if (!resolved) resolve("");
+            // chiudi UI rec
+            if (!inDialog) setIsRecording(false);
+          };
 
           sr.start();
           srRef.current = sr;
-          setIsRecording(true);
+          // 🔴 NON mostriamo "registrazione" sul bottone voce quando siamo in Dialogo
+          if (!inDialog) setIsRecording(true);
         } catch {
+          if (!inDialog) setIsRecording(false);
           resolve("");
         }
       });
@@ -146,7 +165,8 @@ export function useVoice({
 
         mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
         mr.onstop = async () => {
-          setIsRecording(false);
+          // chiudi UI rec SEMPRE
+          if (!inDialog) setIsRecording(false);
           setIsTranscribing(true);
           try {
             const blob = new Blob(chunksRef.current, { type: mr.mimeType || "audio/webm" });
@@ -164,9 +184,11 @@ export function useVoice({
 
         mrRef.current = mr;
         mr.start();
-        setIsRecording(true);
+        // 🔴 NON mostriamo "registrazione" sul bottone voce quando siamo in Dialogo
+        if (!inDialog) setIsRecording(true);
         setTimeout(() => { try { if (mr.state !== "inactive") mr.stop(); } catch {} }, 4000);
       } catch {
+        if (!inDialog) setIsRecording(false);
         resolve("");
       }
     });
@@ -205,13 +227,16 @@ export function useVoice({
     setVoiceMode(true);
     dialogActiveRef.current = true;
     dialogDraftRef.current = "";
+    // assicurati che il bottone voice NON risulti in rec
+    setIsRecording(false);
   }
 
   function stopDialog() {
     dialogActiveRef.current = false;
     setVoiceMode(false);
     try { window.speechSynthesis?.cancel?.(); } catch {}
-    stopRecorderOrSR();
+    stopRecorderOrSR();               // chiude mic/recorder e azzera UI rec/transcribing
+    setIsRecording(false);            // sicurezza extra
   }
 
   // Trigger invio: "invia"
@@ -263,7 +288,7 @@ export function useVoice({
         dialogDraftRef.current = "";
         if (toSend) {
           await onSendDirectly(normalizeInterrogative(toSend)); // invia
-          // attesa breve per eventuale latenza, poi prompt
+          // attesa finché TTS parla, poi riparti
           while (isTtsSpeaking() && dialogActiveRef.current) {
             await sleep(80);
           }
