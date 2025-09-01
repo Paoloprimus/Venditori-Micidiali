@@ -121,6 +121,7 @@ export function useConversations(opts: Options = {}) {
       onAssistantReply?.(replyText);
       await refreshUsage(conv.id); // ORA sì: per-conv
     } catch (e: any) {
+      console.error("[/api/messages/send] client error:", e?.status, e?.message, e?.details);
       setServerError(e?.message || "Errore server");
       setBubbles((b) => [
         ...b,
