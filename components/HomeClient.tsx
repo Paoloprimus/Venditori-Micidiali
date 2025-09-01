@@ -47,7 +47,7 @@ export default function HomeClient({ email }: { email: string }) {
       catch { return null; }
     },
     autoTitleRome: conv.autoTitleRome,
-    preferServerSTT: true,              // Whisper (stabile)
+    preferServerSTT: false,              // Whisper (stabile)
     isTtsSpeaking: () => ttsSpeaking,   // blocca mic se TTS attivo (se flag attivo in hook)
   });
 
