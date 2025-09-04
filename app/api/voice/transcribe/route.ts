@@ -23,9 +23,10 @@ export async function POST(req: NextRequest) {
 
     const incoming: any = part; // può essere File o Blob (undici)
     const size = typeof incoming.size === "number" ? incoming.size : 0;
+    
     if (!size) {
-      // Silenzio: non è un errore duro
-      return NextResponse.json({ text: "" }, { status: 204 });
+      // Silenzio: 204 NO CONTENT (body realmente vuoto)
+      return new Response(null, { status: 204 });
     }
 
     // Costruisci SEMPRE un File per soddisfare il type "Uploadable"
