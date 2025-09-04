@@ -1,6 +1,6 @@
 // components/HomeClient.tsx
 "use client";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
@@ -19,6 +19,11 @@ export default function HomeClient({ email }: { email: string }) {
 
   // ---- TTS
   const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
+
+  // ✅ ref + funzione stabile per sapere se il TTS sta parlando (usata da useVoice/Dialogo)
+  const ttsSpeakingRef = useRef(false);
+  useEffect(() => { ttsSpeakingRef.current = ttsSpeaking; }, [ttsSpeaking]);
+  const isTtsSpeakingFn = useCallback(() => ttsSpeakingRef.current, []);
 
   // ---- Conversazioni / messaggi
   const conv = useConversations({
@@ -44,8 +49,8 @@ export default function HomeClient({ email }: { email: string }) {
       catch { return null; }
     },
     autoTitleRome: conv.autoTitleRome,
-    preferServerSTT: false,             // ⬅️ live transcript
-    isTtsSpeaking: () => ttsSpeaking,   // evita eco
+    preferServerSTT: false,           // ⬅️ live transcript
+    isTtsSpeaking: isTtsSpeakingFn,   // ⬅️ funzione stabile (no closure stantia)
   });
 
   // auto-resize della textarea
