@@ -44,6 +44,9 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
     return () => el.removeEventListener("keydown", handler);
   }, [ref, value, disabled, onSend]);
 
+  const micDisabled = !!disabled || !!voice.ttsSpeaking || voice.isTranscribing;
+  const dialogDisabled = !!disabled || !!voice.ttsSpeaking;
+
   return (
     <div className="composer">
       <div className="inputwrap">
@@ -52,6 +55,7 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder="Scrivi un messaggio…"
+          aria-label="Editor messaggio"
         />
       </div>
 
@@ -62,14 +66,21 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
             type="button"
             className="iconbtn"
             aria-pressed={voice.isRecording}
-            aria-label={voice.isRecording ? "Registrazione in corso" : "Voce"}
+            aria-label={
+              voice.isRecording
+                ? "Registrazione in corso"
+                : voice.isTranscribing
+                ? "Trascrizione in corso"
+                : "Voce"
+            }
             onClick={voice.onClick}
-            disabled={!!disabled}
+            disabled={micDisabled}
+            title={voice.ttsSpeaking ? "Attendi: sta parlando l'assistente" : "Microfono"}
           >
-            {voice.isRecording ? "registrazione" : "Voce"}
+            {voice.isRecording ? "registrazione" : voice.isTranscribing ? "trascrivo…" : "Voce"}
           </button>
 
-          {/* Opzionali: speaker / dialogo / ripeti (invariati) */}
+          {/* Speaker on/off */}
           <button
             type="button"
             className="iconbtn"
@@ -81,12 +92,14 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
             {voice.speakerEnabled ? "🔈 On" : "🔈 Off"}
           </button>
 
+          {/* Dialogo vocale: usa onToggleDialog (mappa start/stopDialog nel parent) */}
           <button
             type="button"
             className="iconbtn"
             onClick={voice.onToggleDialog}
-            disabled={!!disabled}
-            title="Dialogo vocale"
+            disabled={dialogDisabled}
+            title={voice.voiceMode ? "Disattiva dialogo vocale" : "Attiva dialogo vocale"}
+            aria-pressed={voice.voiceMode}
           >
             {voice.voiceMode ? "Dialogo On" : "Dialogo Off"}
           </button>
@@ -99,13 +112,17 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
         </div>
 
         <div className="right">
-          <button className="btn" onClick={onSend} disabled={!value.trim() || !!disabled}>Invia</button>
+          <button className="btn" onClick={onSend} disabled={!value.trim() || !!disabled}>
+            Invia
+          </button>
         </div>
       </div>
 
-      {/* ✅ niente messaggi “trascrizione in corso…”; mostriamo solo errori, se presenti */}
+      {/* ✅ solo errori (niente "trascrizione in corso…"): */}
       {voice.error && (
-        <div className="voice-status">{voice.error}</div>
+        <div className="voice-status" role="status" aria-live="polite">
+          {voice.error}
+        </div>
       )}
     </div>
   );
