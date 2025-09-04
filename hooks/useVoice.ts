@@ -168,18 +168,34 @@ export function useVoice({
           dialogBufRef.current = live;
 
           // Se sente il cue "invia", normalizza e invia
-          if (hasSubmitCue(live)) {
-            const payload = normalizeInterrogative(stripSubmitCue(live));
-            // pulizia buffer
+        if (hasSubmitCue(live)) {
+          const raw = stripSubmitCue(live).trim();
+        
+          // ⛔ Se l’utente ha detto solo "invia" (o testo vuoto), non chiamare l’API: evitiamo il 400
+          if (!raw) {
+            // feedback gentile e ripartenza ascolto
+            onSpeak("Dimmi il messaggio e poi dì 'invia'.");
             dialogBufRef.current = "";
             finalAccumRef.current = "";
-            // metti in pausa il mic mentre parte la risposta
-            micActiveRef.current = false;
-            try { sr.stop?.(); } catch {}
-
-            // invia come nella chat normale
-            onSendDirectly(payload).catch(() => {});
+            // assicura che il mic resti attivo in Dialogo
+            micActiveRef.current = true;
+            return;
           }
+        
+          const payload = normalizeInterrogative(raw);
+        
+          // pulizia buffer
+          dialogBufRef.current = "";
+          finalAccumRef.current = "";
+        
+          // metti in pausa il mic mentre parte la risposta
+          micActiveRef.current = false;
+          try { sr.stop?.(); } catch {}
+        
+          // invia come nella chat normale
+          onSendDirectly(payload).catch(() => {});
+        }
+
         } else {
           // Tap-to-talk: comportamento attuale (live nella textarea)
           onTranscriptionToInput(live);
