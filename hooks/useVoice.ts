@@ -1,3 +1,5 @@
+// hooks/useVoice.ts
+
 "use client";
 import { useEffect, useRef, useState } from "react";
 import { transcribeAudio } from "../lib/api/voice";
@@ -5,7 +7,7 @@ import type { Conv } from "../lib/api/conversations";
 
 type Params = {
   onTranscriptionToInput: (text: string) => void;     // aggiorna textarea
-  onSendDirectly: (text: string) => Promise<void>;     // non usato qui (solo Dialogo)
+  onSendDirectly: (text: string) => Promise<void>;     // usato in Dialogo
   onSpeak: (text?: string) => void;                    // TTS, lasciamo API
   createNewSession: (titleAuto: string) => Promise<Conv | null>;
   autoTitleRome: () => string;
@@ -28,7 +30,7 @@ export function useVoice({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  // (API compatibile, ma qui non usiamo il Dialogo)
+  // (API compatibile)
   const [voiceMode, setVoiceMode] = useState(false);
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
@@ -71,6 +73,15 @@ export function useVoice({
     return /^\s*cancella\s*[.!?]*\s*$/i.test(s) || /\bcancella\b/i.test(s);
   }
 
+  // ⬇️⬇️ AGGIUNTA: cue "invia"
+  function hasSubmitCue(raw: string) {
+    return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test((raw || "").trim());
+  }
+  function stripSubmitCue(raw: string) {
+    return (raw || "").replace(/\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
+  }
+  // ⬆️⬆️
+
   // Normalizza domande se vuoi (non obbligatorio all’invio manuale)
   function normalizeInterrogative(raw: string) {
     const t0 = (raw ?? "").trim();
@@ -107,6 +118,11 @@ export function useVoice({
     setIsRecording(false);
   }
 
+  // ⬇️⬇️ AGGIUNTA: stato/buffer Dialogo
+  const [dialogMode, setDialogMode] = useState(false);
+  const dialogBufRef = useRef<string>(""); // accumula solo in Dialogo
+  // ⬆️⬆️
+
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
     if (!micActiveRef.current) return;
@@ -142,7 +158,33 @@ export function useVoice({
           }
         }
         const live = (finalAccumRef.current + " " + interim).trim();
-        onTranscriptionToInput(live);
+
+        // ⬇️⬇️ MODIFICA: gestione differenziata per Dialogo
+        // Se il TTS sta parlando, in Dialogo ignoriamo risultati e ripartiamo dopo
+        if (dialogMode && isTtsSpeaking()) return;
+
+        if (dialogMode) {
+          // In Dialogo: NON scrivere live nella textarea.
+          dialogBufRef.current = live;
+
+          // Se sente il cue "invia", normalizza e invia
+          if (hasSubmitCue(live)) {
+            const payload = normalizeInterrogative(stripSubmitCue(live));
+            // pulizia buffer
+            dialogBufRef.current = "";
+            finalAccumRef.current = "";
+            // metti in pausa il mic mentre parte la risposta
+            micActiveRef.current = false;
+            try { sr.stop?.(); } catch {}
+
+            // invia come nella chat normale
+            onSendDirectly(payload).catch(() => {});
+          }
+        } else {
+          // Tap-to-talk: comportamento attuale (live nella textarea)
+          onTranscriptionToInput(live);
+        }
+        // ⬆️⬆️
       };
 
       sr.onerror = () => {
@@ -268,13 +310,22 @@ export function useVoice({
   function handleVoicePressStart() { /* no-op */ }
   function handleVoicePressEnd()   { /* no-op */ }
 
-  // ======= Dialogo: API presenti ma non operative qui =======
+  // ======= Dialogo: attiva/disattiva REALI =======
   async function startDialog() {
+    setDialogMode(true);
+    dialogBufRef.current = "";
     setVoiceMode(true);
-    onSpeak("Dialogo vocale non attivo. Usa il microfono singolo.");
+    setVoiceError(null);
+    finalAccumRef.current = "";
+    micActiveRef.current = true;
+    if (supportsNativeSR) startNativeSR();
+    else startFallbackRecorder();
+    onSpeak("Dialogo attivo. Di' la frase e termina con 'invia'.");
   }
   function stopDialog() {
+    setDialogMode(false);
     setVoiceMode(false);
+    dialogBufRef.current = "";
     micActiveRef.current = false;
     stopAll();
   }
@@ -286,6 +337,26 @@ export function useVoice({
       stopAll();
     };
   }, []);
+
+  // ⬇️⬇️ AGGIUNTA: sospensione mic mentre parla il TTS in Dialogo e auto-ripartenza
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!dialogMode) return;
+      if (isTtsSpeaking()) {
+        // sospendi ascolto se serve (SR nativa)
+        if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; }
+        micActiveRef.current = false;
+        setIsRecording(false);
+      } else if (!isRecording && dialogMode && !srRef.current && !mrRef.current) {
+        // riparti quando il TTS ha finito
+        micActiveRef.current = true;
+        if (supportsNativeSR) startNativeSR();
+        else startFallbackRecorder();
+      }
+    }, 150);
+    return () => clearInterval(id);
+  }, [dialogMode, supportsNativeSR, isRecording]);
+  // ⬆️⬆️
 
   return {
     // stato
