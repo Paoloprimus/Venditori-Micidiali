@@ -3,7 +3,7 @@ import { useState } from "react";
 import { createSupabaseBrowser } from "../../lib/supabase/client";
 import { useRouter } from "next/navigation";
 
-export default function LoginPage() {
+export default function AccessoBetaTester() {
   const supabase = createSupabaseBrowser();
   const router = useRouter();
   const [mode, setMode] = useState<"signin"|"signup">("signin");
