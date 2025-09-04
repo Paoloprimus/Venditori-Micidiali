@@ -27,7 +27,7 @@ export default function LoginPage() {
   return (
     <div className="container" style={{ maxWidth: 440, paddingTop: 64 }}>
       <h1 className="title">{mode === "signin" ? "Accedi" : "Registrati"}</h1>
-      <p className="helper">Solo sviluppo: email+password, senza conferma.</p>
+      <p className="helper">Versione Beta 1.0 - Per Tester</p>
       <form onSubmit={submit} style={{ display:"grid", gap:12, marginTop:16 }}>
         <input type="email" placeholder="la-tua-email@esempio.it" value={email} onChange={e=>setEmail(e.target.value)}
           required style={{ padding:10, border:"1px solid #1F2937", borderRadius:10, background:"#0B1220", color:"#C9D1E7" }}/>
