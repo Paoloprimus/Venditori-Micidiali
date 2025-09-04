@@ -50,13 +50,18 @@ export function useConversations(opts: Options = {}) {
   }
 
   // ---- API wrappers
+  /**
+   * refreshUsage
+   * - Se bubbles è vuoto, chiedi l'usage GLOBALE (evita 400).
+   * - Se c'è traffico, prova lo scoped per-conversazione.
+   */
   async function refreshUsage(convId?: string) {
     try {
-      const u = await getCurrentChatUsage(convId);
+      const hasTraffic = bubbles.length > 0;
+      const u = await getCurrentChatUsage(hasTraffic ? convId : undefined);
       setUsage(u);
-    } catch (e) {
-      // Non blocchiamo l'app per errori di usage
-      console.warn("refreshUsage error:", e);
+    } catch {
+      // usage è best-effort: non sporcare la console
     }
   }
 
@@ -69,8 +74,7 @@ export function useConversations(opts: Options = {}) {
    * ensureConversation
    * - Trova la conversazione di oggi (match esatto o include).
    * - Se non esiste, la crea.
-   * - IMPORTANTE: dopo selezione/creazione chiama refreshUsage SENZA convId (usage globale)
-   *   per evitare 400 finché non inviamo almeno un messaggio.
+   * - Dopo selezione/creazione: usage GLOBALE finché non c'è traffico.
    */
   async function ensureConversation(): Promise<Conv> {
     if (currentConv?.id) return currentConv;
@@ -81,16 +85,18 @@ export function useConversations(opts: Options = {}) {
       const today = list.find((c) => c.title === autoTitle || c.title.includes(autoTitle));
       if (today) {
         setCurrentConv(today);
-        await refreshUsage(); // usage globale (evita 400)
+        await loadMessages(today.id);
+        await refreshUsage(today.id); // globale se vuota, scoped se già ha messaggi
         return today;
       }
-    } catch (e) {
-      console.warn("Errore listConversations:", e);
+    } catch {
+      // silenzio
     }
 
     const created = await apiCreate(autoTitle);
     setCurrentConv(created);
-    await refreshUsage(); // usage globale finché non c'è traffico nella conv
+    setBubbles([]);
+    await refreshUsage(created.id); // globale (nessun traffico ancora)
     return created;
   }
 
@@ -98,7 +104,7 @@ export function useConversations(opts: Options = {}) {
     const created = await apiCreate(title.trim());
     setCurrentConv(created);
     setBubbles([]);
-    await refreshUsage(); // usage globale
+    await refreshUsage(created.id); // globale
   }
 
   /**
@@ -119,8 +125,7 @@ export function useConversations(opts: Options = {}) {
       const replyText = await sendMessage({ content: txt, conversationId: conv.id, terse: false });
       setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
       onAssistantReply?.(replyText);
-      await refreshUsage(conv.id); // ORA sì: per-conv
-
+      await refreshUsage(conv.id); // ORA sì: per-conv (hasTraffic = true)
     } catch (e: any) {
       // 429: quota/rate limit → messaggio chiaro
       if (e?.status === 429) {
@@ -129,7 +134,6 @@ export function useConversations(opts: Options = {}) {
           retry > 0
             ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
             : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
-        console.warn("[/api/messages/send] 429:", e);
         setServerError(hint);
         setBubbles((b) => [
           ...b,
@@ -137,15 +141,14 @@ export function useConversations(opts: Options = {}) {
         ]);
         return;
       }
-    
-      console.error("[/api/messages/send] client error:", e?.status, e?.message, e?.details);
+
       setServerError(e?.message || "Errore server");
       setBubbles((b) => [
         ...b,
         { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
       ]);
     }
-  } // ← ✅ CHIUSURA MANCANTE DI send()
+  } // ← chiusura send()
 
   // ---- Bootstrap
   useEffect(() => {
@@ -157,10 +160,10 @@ export function useConversations(opts: Options = {}) {
         if (today) {
           setCurrentConv(today);
           await loadMessages(today.id);
-          await refreshUsage(); // usage globale all'avvio
+          await refreshUsage(today.id); // globale se vuota, scoped se già ha messaggi
         }
-      } catch (e) {
-        console.log("Errore nel caricamento sessioni:", e);
+      } catch {
+        // silenzio
       }
     };
 
@@ -170,6 +173,7 @@ export function useConversations(opts: Options = {}) {
       .catch(() => setModelBadge("n/d"));
 
     loadTodaySession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // ---- Autoscroll SEMPRE all'ultimo messaggio
@@ -178,14 +182,12 @@ export function useConversations(opts: Options = {}) {
     if (!sentinel) return;
     const behavior: ScrollBehavior = firstPaintRef.current ? "auto" : "smooth";
     firstPaintRef.current = false;
-    // rAF per evitare salti prima del layout
     requestAnimationFrame(() => {
       try {
         sentinel.scrollIntoView({ behavior, block: "end" });
       } catch {
-        // fallback legacy
         if (threadRef.current) {
-          threadRef.current.scrollTop = threadRef.current.scrollHeight;
+          (threadRef.current as HTMLDivElement).scrollTop = (threadRef.current as HTMLDivElement).scrollHeight;
         }
       }
     });
@@ -195,7 +197,7 @@ export function useConversations(opts: Options = {}) {
   async function handleSelectConv(c: Conv) {
     setCurrentConv({ id: c.id, title: c.title });
     await loadMessages(c.id);
-    await refreshUsage(); // usage globale alla selezione
+    await refreshUsage(c.id); // globale se vuota, scoped se ha messaggi
   }
 
   return {
