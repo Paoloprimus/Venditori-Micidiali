@@ -11,9 +11,7 @@ type Params = {
   onSpeak: (text?: string) => void;                    // TTS, lasciamo API
   createNewSession: (titleAuto: string) => Promise<Conv | null>;
   autoTitleRome: () => string;
-  /** Per testo live, metti false → usa Web Speech API se presente */
   preferServerSTT?: boolean;
-  /** Se il TTS sta parlando (per evitare eco quando serve) */
   isTtsSpeaking?: () => boolean;
 };
 
@@ -23,14 +21,13 @@ export function useVoice({
   onSpeak,
   createNewSession,
   autoTitleRome,
-  preferServerSTT = false,      // ⬅️ default: SR nativa per live transcript
+  preferServerSTT = false,
   isTtsSpeaking = () => false,
 }: Params) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  // (API compatibile)
   const [voiceMode, setVoiceMode] = useState(false);
   const [speakerEnabled, setSpeakerEnabled] = useState(false);
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
@@ -45,15 +42,15 @@ export function useVoice({
   const supportsNativeSR =
     !!SR && !isIOS && (typeof window !== "undefined" ? window.isSecureContext : true) && !preferServerSTT;
 
-  const srRef = useRef<any>(null);            // istanza corrente SR
-  const micActiveRef = useRef(false);         // stato “voglio ascoltare” (toggle)
-  const finalAccumRef = useRef<string>("");   // testo finale accumulato (SR nativa)
+  const srRef = useRef<any>(null);
+  const micActiveRef = useRef(false);
+  const finalAccumRef = useRef<string>("");
 
   // ======= MediaRecorder fallback (niente live) =======
   const mrRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const streamRef = useRef<MediaStream | null>(null);
-  const pendingStopResolveRef = useRef<(() => void) | null>(null); // per stop asincrono nel fallback
+  const pendingStopResolveRef = useRef<(() => void) | null>(null);
 
   // ===== Helpers =====
   const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -73,16 +70,13 @@ export function useVoice({
     return /^\s*cancella\s*[.!?]*\s*$/i.test(s) || /\bcancella\b/i.test(s);
   }
 
-  // ⬇️⬇️ AGGIUNTA: cue "invia"
   function hasSubmitCue(raw: string) {
     return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test((raw || "").trim());
   }
   function stripSubmitCue(raw: string) {
     return (raw || "").replace(/\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i, "").trim();
   }
-  // ⬆️⬆️
 
-  // Normalizza domande se vuoi (non obbligatorio all’invio manuale)
   function normalizeInterrogative(raw: string) {
     const t0 = (raw ?? "").trim();
     if (!t0) return t0;
@@ -100,7 +94,6 @@ export function useVoice({
   }
 
   function stopAll() {
-    // stop SR
     if (srRef.current) {
       try { srRef.current.onresult = null; } catch {}
       try { srRef.current.onend = null; } catch {}
@@ -108,7 +101,6 @@ export function useVoice({
       try { srRef.current.stop?.(); } catch {}
       srRef.current = null;
     }
-    // stop Recorder
     if (mrRef.current && mrRef.current.state !== "inactive") {
       try { mrRef.current.stop(); } catch {}
     }
@@ -118,10 +110,10 @@ export function useVoice({
     setIsRecording(false);
   }
 
-  // ⬇️⬇️ AGGIUNTA: stato/buffer Dialogo
+  // ===== Dialogo: stato, buffer e lock anti-doppio invio =====
   const [dialogMode, setDialogMode] = useState(false);
-  const dialogBufRef = useRef<string>(""); // accumula solo in Dialogo
-  // ⬆️⬆️
+  const dialogBufRef = useRef<string>("");
+  const dialogSendingRef = useRef<boolean>(false); // ⬅️ blocca invio multiplo sullo stesso "invia"
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
@@ -159,54 +151,53 @@ export function useVoice({
         }
         const live = (finalAccumRef.current + " " + interim).trim();
 
-        // ⬇️⬇️ MODIFICA: gestione differenziata per Dialogo
-        // Se il TTS sta parlando, in Dialogo ignoriamo risultati e ripartiamo dopo
+        // Se il TTS sta parlando, in Dialogo ignoriamo risultati
         if (dialogMode && isTtsSpeaking()) return;
 
         if (dialogMode) {
-          // In Dialogo: NON scrivere live nella textarea.
+          // In Dialogo: NO scrittura live nella textarea
           dialogBufRef.current = live;
 
-          // Se sente il cue "invia", normalizza e invia
-        if (hasSubmitCue(live)) {
-          const raw = stripSubmitCue(live).trim();
-        
-          // ⛔ Se l’utente ha detto solo "invia" (o testo vuoto), non chiamare l’API: evitiamo il 400
-          if (!raw) {
-            // feedback gentile e ripartenza ascolto
-            onSpeak("Dimmi il messaggio e poi dì 'invia'.");
+          // Cue "invia"
+          if (hasSubmitCue(live)) {
+            // evita invii doppi
+            if (dialogSendingRef.current) return;
+            const raw = stripSubmitCue(live).trim();
+
+            if (!raw) {
+              onSpeak("Dimmi il messaggio e poi dì 'invia'.");
+              dialogBufRef.current = "";
+              finalAccumRef.current = "";
+              micActiveRef.current = true;
+              return;
+            }
+
+            dialogSendingRef.current = true; // 🔒 lock durante l'invio
+            const payload = normalizeInterrogative(raw);
+
+            // pulizia buffer
             dialogBufRef.current = "";
             finalAccumRef.current = "";
-            // assicura che il mic resti attivo in Dialogo
-            micActiveRef.current = true;
-            return;
-          }
-        
-          const payload = normalizeInterrogative(raw);
-        
-          // pulizia buffer
-          dialogBufRef.current = "";
-          finalAccumRef.current = "";
-        
-          // metti in pausa il mic mentre parte la risposta
-          micActiveRef.current = false;
-          try { sr.stop?.(); } catch {}
-        
-          // invia come nella chat normale
-          onSendDirectly(payload).catch(() => {});
-        }
 
+            // pausa mic mentre parte la risposta
+            micActiveRef.current = false;
+            try { sr.stop?.(); } catch {}
+
+            onSendDirectly(payload).catch(() => {});
+          }
         } else {
-          // Tap-to-talk: comportamento attuale (live nella textarea)
+          // Tap-to-talk: live nella textarea
           onTranscriptionToInput(live);
         }
-        // ⬆️⬆️
       };
 
       sr.onerror = () => {
         if (micActiveRef.current) {
           try { sr.stop?.(); } catch {}
           srRef.current = null;
+          // 🔁 al riavvio azzera i buffer per evitare carry-over
+          finalAccumRef.current = "";
+          dialogBufRef.current = "";
           setTimeout(startNativeSR, 180);
         }
       };
@@ -214,6 +205,9 @@ export function useVoice({
       sr.onend = () => {
         if (micActiveRef.current) {
           srRef.current = null;
+          // 🔁 al riavvio azzera i buffer
+          finalAccumRef.current = "";
+          dialogBufRef.current = "";
           setTimeout(startNativeSR, 120);
         } else {
           setIsRecording(false);
@@ -258,7 +252,6 @@ export function useVoice({
           setIsTranscribing(false);
           try { stream.getTracks().forEach(t => t.stop()); } catch {}
           streamRef.current = null;
-          // 🔔 risolvi eventuale stopMic() in attesa
           if (pendingStopResolveRef.current) {
             pendingStopResolveRef.current();
             pendingStopResolveRef.current = null;
@@ -266,7 +259,7 @@ export function useVoice({
         }
       };
 
-      mr.start(); // resta attivo finché non premi stop
+      mr.start();
     } catch (e: any) {
       setVoiceError(e?.message || "Impossibile accedere al microfono");
       setIsRecording(false);
@@ -274,12 +267,10 @@ export function useVoice({
     }
   }
 
-  // ======= STOP MIC pubblica (usata quando premi "Invia") =======
+  // ======= STOP MIC pubblico =======
   async function stopMic(): Promise<void> {
-    // segnala che non vogliamo più ascoltare
     micActiveRef.current = false;
 
-    // SR nativa: abbiamo già il testo accumulato → stop immediato
     if (supportsNativeSR) {
       stopAll();
       const finalTxt = normalizeInterrogative(finalAccumRef.current).trim();
@@ -288,7 +279,6 @@ export function useVoice({
       return;
     }
 
-    // Fallback: fermiamo il recorder e aspettiamo la trascrizione server
     if (mrRef.current && mrRef.current.state !== "inactive") {
       await new Promise<void>((resolve) => {
         pendingStopResolveRef.current = () => {
@@ -302,34 +292,32 @@ export function useVoice({
       return;
     }
 
-    // Nessun mic attivo: assicurati che sia tutto pulito
     stopAll();
   }
 
   // ======= Toggle a TAP =======
   async function handleVoiceClick() {
-    // START
     if (!isRecording && !micActiveRef.current) {
       setVoiceError(null);
-      finalAccumRef.current = "";   // nuova sessione
+      finalAccumRef.current = "";
+      dialogBufRef.current = "";
       micActiveRef.current = true;
 
       if (supportsNativeSR) startNativeSR();
       else startFallbackRecorder();
       return;
     }
-    // STOP
     await stopMic();
   }
 
-  // Manteniamo le API “press” per compatibilità, ma il toggle è su onClick
   function handleVoicePressStart() { /* no-op */ }
   function handleVoicePressEnd()   { /* no-op */ }
 
-  // ======= Dialogo: attiva/disattiva REALI =======
+  // ======= Dialogo: attiva/disattiva =======
   async function startDialog() {
     setDialogMode(true);
     dialogBufRef.current = "";
+    dialogSendingRef.current = false;
     setVoiceMode(true);
     setVoiceError(null);
     finalAccumRef.current = "";
@@ -342,6 +330,7 @@ export function useVoice({
     setDialogMode(false);
     setVoiceMode(false);
     dialogBufRef.current = "";
+    dialogSendingRef.current = false;
     micActiveRef.current = false;
     stopAll();
   }
@@ -354,17 +343,19 @@ export function useVoice({
     };
   }, []);
 
-  // ⬇️⬇️ AGGIUNTA: sospensione mic mentre parla il TTS in Dialogo e auto-ripartenza
+  // ===== Pausa mentre parla il TTS e riavvio pulito =====
   useEffect(() => {
     const id = setInterval(() => {
       if (!dialogMode) return;
       if (isTtsSpeaking()) {
-        // sospendi ascolto se serve (SR nativa)
         if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; }
         micActiveRef.current = false;
         setIsRecording(false);
       } else if (!isRecording && dialogMode && !srRef.current && !mrRef.current) {
-        // riparti quando il TTS ha finito
+        // 🔄 ripartenza DOPO il TTS: reset completo per evitare duplicazioni
+        dialogSendingRef.current = false;
+        finalAccumRef.current = "";
+        dialogBufRef.current = "";
         micActiveRef.current = true;
         if (supportsNativeSR) startNativeSR();
         else startFallbackRecorder();
@@ -372,23 +363,18 @@ export function useVoice({
     }, 150);
     return () => clearInterval(id);
   }, [dialogMode, supportsNativeSR, isRecording]);
-  // ⬆️⬆️
 
   return {
-    // stato
     isRecording, isTranscribing, voiceError,
     voiceMode, setVoiceMode,
     speakerEnabled, setSpeakerEnabled,
     lastInputWasVoice, setLastInputWasVoice,
 
-    // controlli
     handleVoicePressStart,
     handleVoicePressEnd,
     handleVoiceClick,
     startDialog,
     stopDialog,
-
-    // nuovo: stop esplicito per "Invia"
     stopMic,
   };
 }
