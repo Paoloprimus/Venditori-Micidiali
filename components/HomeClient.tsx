@@ -13,7 +13,7 @@ import { useTTS } from "../hooks/useTTS";
 import { useVoice } from "../hooks/useVoice";
 import { useAutoResize } from "../hooks/useAutoResize";
 
-export default function HomeClient({ email }: { email: string }) {
+export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const supabase = createSupabaseBrowser();
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
 
