@@ -70,6 +70,12 @@ export function useVoice({
     return /^\s*cancella\s*[.!?]*\s*$/i.test(s) || /\bcancella\b/i.test(s);
   }
 
+  function isStopCommand(t: string) {
+    const s = (t || "").trim().toLowerCase();
+    return s === "stop" || s === "esci";
+  }
+
+  
   function hasSubmitCue(raw: string) {
     return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test((raw || "").trim());
   }
@@ -144,6 +150,15 @@ export function useVoice({
               onTranscriptionToInput("");
               continue;
             }
+            
+              // ⬇️ nuovo: se dici "stop" o "esci" chiude il dialogo
+            if (isStopCommand(txt)) {
+              stopDialog();           // chiude la modalità dialogo
+              onSpeak("Dialogo terminato."); // feedback vocale opzionale
+              return;
+            }
+
+            
             finalAccumRef.current = (finalAccumRef.current + " " + txt).trim();
           } else {
             interim += txt;
