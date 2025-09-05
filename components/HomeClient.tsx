@@ -75,15 +75,28 @@ export default function HomeClient({ email }: { email: string }) {
 
   return (
     <>
-    {/* 🔝 TopBar sticky */}
-    <div style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" }}>
-      <TopBar
-        title={conv.currentConv ? conv.currentConv.title : "Venditore Micidiale"}
-        onOpenLeft={openLeft}
-        onOpenTop={openTop}
-        onLogout={logout}
-      />
-    </div>
+      {/* 🔝 TopBar fixed */}
+      <div
+        style={{
+          position: "fixed",
+          top: 0,
+          left: 0,
+          right: 0,
+          zIndex: 1000,
+          background: "var(--bg)",
+          borderBottom: "1px solid var(--ring)",
+        }}
+      >
+        <TopBar
+          title={conv.currentConv ? conv.currentConv.title : "Venditore Micidiale"}
+          onOpenLeft={openLeft}
+          onOpenTop={openTop}
+          onLogout={logout}
+        />
+      </div>
+
+      {/* spacer per evitare che la TopBar fissa copra il contenuto */}
+      <div style={{ height: 56 }} />
 
       {/* Wrapper esterno */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
@@ -128,8 +141,11 @@ export default function HomeClient({ email }: { email: string }) {
         </div>
       </div>
 
-      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
-      <RightDrawer open={topOpen} onClose={closeTop} />
+      {/* Drawer sopra la TopBar (per il bottone "Chiudi") */}
+      <div style={{ position: "relative", zIndex: 2001 }}>
+        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
+        <RightDrawer open={topOpen} onClose={closeTop} />
+      </div>
     </>
   );
 }
