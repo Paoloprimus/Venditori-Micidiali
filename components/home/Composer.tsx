@@ -30,19 +30,33 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
   const localRef = useRef<HTMLTextAreaElement | null>(null);
   const ref = taRef ?? localRef;
 
-  // Invio con Ctrl/Cmd+Enter
+  // Invio con Enter (Shift+Enter = a capo)
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
+  
     const handler = (e: KeyboardEvent) => {
+      // Shift+Enter → nuova riga
+      if (e.key === "Enter" && e.shiftKey) return;
+  
+      // Enter semplice → invia
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (!disabled && value.trim()) onSend();
+        return;
+      }
+  
+      // Cmd/Ctrl+Enter → invia (per chi è abituato)
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
         if (!disabled && value.trim()) onSend();
       }
     };
+  
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
   }, [ref, value, disabled, onSend]);
+
 
   const micDisabled = !!disabled || !!voice.ttsSpeaking || voice.isTranscribing;
   const dialogDisabled = !!disabled || !!voice.ttsSpeaking;
