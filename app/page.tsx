@@ -5,12 +5,27 @@ import HomeClient from "../components/HomeClient";
 
 export default async function Page() {
   const supabase = createSupabaseServer();
-  const { data } = await supabase.auth.getUser();
-  const user = data?.user;
 
+  // 1) Auth
+  const { data: auth } = await supabase.auth.getUser();
+  const user = auth?.user;
   if (!user) {
     redirect("/login");
   }
 
-  return <HomeClient email={user?.email ?? ""} />;
+  // 2) Profilo (nome/cognome) — opzionale: se manca, usiamo un fallback
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("first_name, last_name")
+    .eq("id", user!.id)
+    .maybeSingle();
+
+  const userName =
+    (profile?.first_name && profile?.last_name)
+      ? `${profile.first_name} ${profile.last_name}`
+      : (user?.user_metadata?.full_name ||
+         (user?.email ? user.email.split("@")[0] : "Utente"));
+
+  // 3) Render
+  return <HomeClient email={user?.email ?? ""} userName={userName} />;
 }
