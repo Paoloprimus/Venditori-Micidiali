@@ -75,12 +75,15 @@ export default function HomeClient({ email }: { email: string }) {
 
   return (
     <>
+    {/* 🔝 TopBar sticky */}
+    <div style={{ position: "sticky", top: 0, zIndex: 50, background: "var(--bg)" }}>
       <TopBar
         title={conv.currentConv ? conv.currentConv.title : "Venditore Micidiale"}
         onOpenLeft={openLeft}
         onOpenTop={openTop}
         onLogout={logout}
       />
+    </div>
 
       {/* Wrapper esterno */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
