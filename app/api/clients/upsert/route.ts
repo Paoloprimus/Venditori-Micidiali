@@ -29,7 +29,7 @@ function asArray(v: unknown): string[] | undefined {
 
 function normalizeCustom(input?: CustomFields) {
   if (!input) return undefined;
-  const out: any = {};
+  const out: Record<string, unknown> = {};
   if (input.fascia) out.fascia = input.fascia;
   if (input.pagamento) out.pagamento = String(input.pagamento);
   const pi = asArray(input.prodotti_interesse);
@@ -48,7 +48,7 @@ export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServer();
 
-    // 1) Auth sicura
+    // 1) Auth sicura (evita warning “getSession() può essere insicuro”)
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -84,9 +84,9 @@ export async function POST(req: Request) {
 
       const { data: updated, error: upErr } = await supabase
         .from("accounts")
-        .update({ custom: mergedCustom })           // niente updated_at forzato
+        .update({ custom: mergedCustom })     // niente updated_at forzato
         .eq("id", existing.id)
-        .eq("user_id", userId)                     // filtro coerente con RLS
+        .eq("user_id", userId)                // coerente con RLS
         .select("id")
         .single();
 
@@ -94,4 +94,51 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "update_failed", details: upErr.message }, { status: 500 });
       }
 
-      accountId = updated!.id;
+      // niente "!" — assegno in modo sicuro
+      accountId = (updated && (updated as { id: string }).id) || existing.id;
+    } else {
+      // 4B) INSERT
+      const { data: inserted, error: insErr } = await supabase
+        .from("accounts")
+        .insert({
+          user_id: userId,
+          name,
+          custom: incomingCustom ?? {},
+        })
+        .select("id")
+        .single();
+
+      if (insErr) {
+        return NextResponse.json({ error: "insert_failed", details: insErr.message }, { status: 500 });
+      }
+
+      accountId = (inserted as { id: string }).id;
+    }
+
+    // 5) (Opzionale) Inserisci contatti collegati
+    if (accountId && Array.isArray(body.contacts) && body.contacts.length > 0) {
+      const toInsert = body.contacts
+        .map(c => ({
+          account_id: accountId,
+          full_name: (c.full_name || "").trim(),
+          email: (c.email || "").trim() || null,
+          phone: (c.phone || "").trim() || null,
+          custom: {},
+        }))
+        .filter(c => c.full_name);
+
+      if (toInsert.length > 0) {
+        const { error: cErr } = await supabase.from("contacts").insert(toInsert);
+        if (cErr) {
+          // Non blocco l’operazione principale: segnalo comunque
+          return NextResponse.json({ accountId, warning: "contacts_insert_failed", details: cErr.message });
+        }
+      }
+    }
+
+    // 6) Risposta OK
+    return NextResponse.json({ accountId });
+  } catch (e: any) {
+    return NextResponse.json({ error: "unexpected", details: e?.message ?? String(e) }, { status: 500 });
+  }
+}
