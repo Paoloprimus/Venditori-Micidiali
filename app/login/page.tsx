@@ -63,7 +63,7 @@ export default function Login() {
   return (
     <div className="container" style={{ maxWidth: 440, paddingTop: 64 }}>
       <h1 className="title">{mode === "signin" ? "Accedi" : "Registrati"}</h1>
-      <p className="helper">Versione Beta 1.0 - Per Tester SU INVITO</p>
+      <p className="helper">Versione Beta 1.0 - Per Utenti Tester - Su Invito</p>
 
       <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {mode === "signup" && (
