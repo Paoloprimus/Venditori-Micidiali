@@ -6,15 +6,23 @@ type Props = {
   onOpenLeft: () => void;
   onOpenTop: () => void;
   onLogout: () => void;
-  userName?: string;      // ⬅️ nuovo
+  userName?: string;
 };
 
 export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout, userName }: Props) {
   const [docsOpen, setDocsOpen] = useState(false);
 
   const appName = "Venditore Micidiale";
-  const sessionTitle = title && title !== appName ? title : "";
 
+  // Data formattata in stile "sab 06/09/25"
+  const today = new Intl.DateTimeFormat("it-IT", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  }).format(new Date());
+
+  // Chiudi popup con ESC
   useEffect(() => {
     if (!docsOpen) return;
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setDocsOpen(false); };
@@ -23,66 +31,56 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout, userNam
   }, [docsOpen]);
 
   // Mostra solo il primo nome (parte prima dello spazio)
-  const firstName = userName ? userName.split(" ")[0] : null;
+  const firstName = userName ? userName.split(" ")[0] : "";
 
   return (
     <>
-      <div className="topbar">
+      <div className="topbar" style={{ justifyContent: "space-between" }}>
         {/* Drawer sinistro (conversazioni) */}
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={onOpenLeft}>☰</button>
 
-        {/* Nome app + titolo sessione */}
+        {/* Centro: Nome + AppName + Data */}
         <div
           style={{
             flex: 1,
             display: "flex",
             alignItems: "center",
+            justifyContent: "center",
             gap: 8,
             minWidth: 0,
           }}
         >
+          {firstName && <span style={{ fontWeight: 500 }}>{firstName}</span>}
           <span className="title" style={{ whiteSpace: "nowrap" }}>{appName}</span>
-          {sessionTitle && <span aria-hidden="true">·</span>}
-          {sessionTitle && (
-            <span
-              title={sessionTitle}
-              style={{
-                minWidth: 0,
-                whiteSpace: "nowrap",
-                overflow: "hidden",
-                textOverflow: "ellipsis",
-                color: "var(--muted, #64748b)",
-                fontSize: "0.9em",
-              }}
-            >
-              {sessionTitle}
-            </span>
-          )}
+          <span
+            style={{
+              color: "var(--muted, #64748b)",
+              fontSize: "0.9em",
+              whiteSpace: "nowrap",
+            }}
+          >
+            – {today}
+          </span>
         </div>
 
-        {/* Spacer */}
-        <div className="spacer" />
+        {/* Azioni a destra */}
+        <div style={{ display: "flex", gap: 8 }}>
+          {/* 📂 Docs */}
+          <button
+            className="iconbtn"
+            aria-label="Apri Docs"
+            onClick={() => setDocsOpen(true)}
+            title="Docs"
+          >
+            📂
+          </button>
 
-        {/* Nome utente */}
-        {firstName && (
-          <span style={{ marginRight: 12, fontWeight: 500 }}>{firstName}</span>
-        )}
+          {/* ⚙ Drawer destro */}
+          <button className="iconbtn" aria-label="Apri impostazioni" onClick={onOpenTop}>⚙</button>
 
-        {/* 📂 Docs */}
-        <button
-          className="iconbtn"
-          aria-label="Apri Docs"
-          onClick={() => setDocsOpen(true)}
-          title="Docs"
-        >
-          📂
-        </button>
-
-        {/* ⚙ Drawer destro */}
-        <button className="iconbtn" aria-label="Apri impostazioni" onClick={onOpenTop}>⚙</button>
-
-        {/* Esci */}
-        <button className="iconbtn" onClick={onLogout}>Esci</button>
+          {/* Esci */}
+          <button className="iconbtn" onClick={onLogout}>Esci</button>
+        </div>
       </div>
 
       {/* Popup Docs */}
