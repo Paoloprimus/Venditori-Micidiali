@@ -48,14 +48,14 @@ export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServer();
 
-    // 1) Auth obbligatoria
-    const { data: { session } } = await supabase.auth.getSession();
-    if (!session) {
+    // 1) Auth sicura
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
       return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
     }
-    const userId = session.user.id;
+    const userId = user.id;
 
-    // 2) Input JSON + validazioni minime
+    // 2) Input + validazioni minime
     const body = (await req.json()) as UpsertClientBody;
     const name = (body?.name || "").trim();
     if (!name) {
@@ -84,8 +84,9 @@ export async function POST(req: Request) {
 
       const { data: updated, error: upErr } = await supabase
         .from("accounts")
-        .update({ custom: mergedCustom, updated_at: new Date().toISOString() })
+        .update({ custom: mergedCustom })           // niente updated_at forzato
         .eq("id", existing.id)
+        .eq("user_id", userId)                     // filtro coerente con RLS
         .select("id")
         .single();
 
@@ -94,49 +95,3 @@ export async function POST(req: Request) {
       }
 
       accountId = updated!.id;
-    } else {
-      // 4B) INSERT
-      const { data: inserted, error: insErr } = await supabase
-        .from("accounts")
-        .insert({
-          user_id: userId,
-          name,
-          custom: incomingCustom ?? {},
-        })
-        .select("id")
-        .single();
-
-      if (insErr) {
-        return NextResponse.json({ error: "insert_failed", details: insErr.message }, { status: 500 });
-      }
-
-      accountId = inserted!.id;
-    }
-
-    // 5) (Opzionale) Inserisci contatti collegati
-    if (accountId && Array.isArray(body.contacts) && body.contacts.length > 0) {
-      const toInsert = body.contacts
-        .map(c => ({
-          account_id: accountId,
-          full_name: (c.full_name || "").trim(),
-          email: (c.email || "").trim() || null,
-          phone: (c.phone || "").trim() || null,
-          custom: {},
-        }))
-        .filter(c => c.full_name); // richiede almeno il nome
-
-      if (toInsert.length > 0) {
-        const { error: cErr } = await supabase.from("contacts").insert(toInsert);
-        if (cErr) {
-          // Non blocca l’operazione principale: segnaliamo comunque
-          return NextResponse.json({ accountId, warning: "contacts_insert_failed", details: cErr.message });
-        }
-      }
-    }
-
-    // 6) Risposta OK
-    return NextResponse.json({ accountId });
-  } catch (e: any) {
-    return NextResponse.json({ error: "unexpected", details: e?.message ?? String(e) }, { status: 500 });
-  }
-}
