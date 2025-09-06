@@ -89,6 +89,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       >
         <TopBar
           title={conv.currentConv ? conv.currentConv.title : "Venditore Micidiale"}
+          userName={userName} 
           onOpenLeft={openLeft}
           onOpenTop={openTop}
           onLogout={logout}
