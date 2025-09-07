@@ -104,4 +104,101 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           left: 0,
           right: 0,
           zIndex: 1000,
-          background:
+          background: "var(--bg)",
+          borderBottom: "1px solid var(--ring)",
+        }}
+      >
+        <TopBar
+          title={conv.currentConv ? conv.currentConv.title : "Venditore Micidiale"}
+          userName={userName}
+          onOpenLeft={openLeft}
+          onOpenTop={openTop}
+          onLogout={logout}
+        />
+      </div>
+
+      {/* spacer per evitare che la TopBar fissa copra il contenuto */}
+      <div style={{ height: 56 }} />
+
+      {/* 🔘 Barra modalità guida (semplice, discreta, sempre disponibile) */}
+      <div style={{ maxWidth: 980, margin: "6px auto 0", padding: "0 16px" }}>
+        <label style={{ display: "inline-flex", gap: 8, alignItems: "center", fontSize: 14, color: "var(--muted)" }}>
+          <input
+            type="checkbox"
+            checked={drivingMode}
+            onChange={(e) => {
+              const on = e.target.checked;
+              setDrivingMode(on);
+              if (on) speak("Modalità guida attivata.");
+              else speak("Modalità guida disattivata.");
+            }}
+          />
+          Modalità guida (mani libere)
+        </label>
+      </div>
+
+      {/* Wrapper esterno */}
+      <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
+        <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
+          <Thread
+            bubbles={conv.bubbles}
+            serverError={conv.serverError}
+            threadRef={conv.threadRef}
+            endRef={conv.endRef}
+          />
+          <Composer
+            value={conv.input}
+            onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
+            onSend={async () => {
+              // ✅ Se il microfono è attivo, spegnilo e finalizza la trascrizione prima di inviare
+              if (voice.isRecording) {
+                await voice.stopMic();
+              }
+              const txt = conv.input.trim();
+              if (!txt) return;
+
+              // ✅ Intercetta i comandi se Driving Mode è ON
+              if (drivingMode) {
+                const intent = matchIntent(txt);
+                if (intent.type !== "NONE") {
+                  const handled = await handleIntent(intent);
+                  if (handled) {
+                    conv.setInput("");
+                    return; // azione eseguita → non inviare al modello
+                  }
+                }
+              }
+
+              await conv.send(txt);
+              conv.setInput("");
+            }}
+            disabled={voice.isTranscribing}
+            taRef={conv.taRef}
+            voice={{
+              isRecording: voice.isRecording,
+              isTranscribing: voice.isTranscribing,
+              error: voice.voiceError,
+              onPressStart: voice.handleVoicePressStart,
+              onPressEnd: voice.handleVoicePressEnd,
+              onClick: voice.handleVoiceClick,
+              voiceMode: voice.voiceMode,
+              onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
+              speakerEnabled: voice.speakerEnabled,
+              onToggleSpeaker: () => voice.setSpeakerEnabled(s => !s),
+              canRepeat: !!lastAssistantText,
+              onRepeat: () => speakAssistant(),
+              ttsSpeaking,
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Drawer sopra la TopBar (per il bottone "Chiudi") */}
+      <div style={{ position: "relative", zIndex: 2001 }}>
+        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
+        <RightDrawer open={topOpen} onClose={closeTop} />
+      </div>
+    </>
+  );
+}
+
