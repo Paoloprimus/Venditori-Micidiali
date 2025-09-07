@@ -1,6 +1,6 @@
 // components/HomeClient.tsx
 "use client";
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
@@ -13,9 +13,16 @@ import { useTTS } from "../hooks/useTTS";
 import { useVoice } from "../hooks/useVoice";
 import { useAutoResize } from "../hooks/useAutoResize";
 
+// 🔊 Intent & dispatcher (voice-first)
+import { matchIntent } from "@/lib/voice/intents";
+import { handleIntent, speak } from "@/lib/voice/dispatch";
+
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const supabase = createSupabaseBrowser();
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
+
+  // ---- Driving mode (mani/occhi liberi)
+  const [drivingMode, setDrivingMode] = useState(false);
 
   // ---- TTS
   const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
@@ -42,7 +49,21 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   // ---- Voce (SR nativa per live transcript)
   const voice = useVoice({
     onTranscriptionToInput: (text) => { conv.setInput(text); },
-    onSendDirectly: async (text) => { await conv.send(text); },
+
+    // ✅ In modalità guida intercettiamo i comandi PRIMA di inviare al modello
+    onSendDirectly: async (text) => {
+      const raw = (text || "").trim();
+      if (!raw) return;
+      if (drivingMode) {
+        const intent = matchIntent(raw);
+        if (intent.type !== "NONE") {
+          const handled = await handleIntent(intent);
+          if (handled) return; // azione eseguita → non inviare al modello
+        }
+      }
+      await conv.send(raw);
+    },
+
     onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
       try { await conv.createConversation(titleAuto); return conv.currentConv; }
@@ -83,70 +104,4 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           left: 0,
           right: 0,
           zIndex: 1000,
-          background: "var(--bg)",
-          borderBottom: "1px solid var(--ring)",
-        }}
-      >
-        <TopBar
-          title={conv.currentConv ? conv.currentConv.title : "Venditore Micidiale"}
-          userName={userName} 
-          onOpenLeft={openLeft}
-          onOpenTop={openTop}
-          onLogout={logout}
-        />
-      </div>
-
-      {/* spacer per evitare che la TopBar fissa copra il contenuto */}
-      <div style={{ height: 56 }} />
-
-      {/* Wrapper esterno */}
-      <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
-        <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
-          <Thread
-            bubbles={conv.bubbles}
-            serverError={conv.serverError}
-            threadRef={conv.threadRef}
-            endRef={conv.endRef}
-          />
-          <Composer
-            value={conv.input}
-            onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
-            onSend={async () => {
-              // ✅ Se il microfono è attivo, spegnilo e finalizza la trascrizione prima di inviare
-              if (voice.isRecording) {
-                await voice.stopMic();
-              }
-              const txt = conv.input.trim();
-              if (!txt) return;
-              await conv.send(txt);
-              conv.setInput("");
-            }}
-            disabled={voice.isTranscribing}
-            taRef={conv.taRef}
-            voice={{
-              isRecording: voice.isRecording,
-              isTranscribing: voice.isTranscribing,
-              error: voice.voiceError,
-              onPressStart: voice.handleVoicePressStart,
-              onPressEnd: voice.handleVoicePressEnd,
-              onClick: voice.handleVoiceClick,
-              voiceMode: voice.voiceMode,
-              onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
-              speakerEnabled: voice.speakerEnabled,
-              onToggleSpeaker: () => voice.setSpeakerEnabled(s => !s),
-              canRepeat: !!lastAssistantText,
-              onRepeat: () => speakAssistant(),
-              ttsSpeaking,
-            }}
-          />
-        </div>
-      </div>
-
-      {/* Drawer sopra la TopBar (per il bottone "Chiudi") */}
-      <div style={{ position: "relative", zIndex: 2001 }}>
-        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
-        <RightDrawer open={topOpen} onClose={closeTop} />
-      </div>
-    </>
-  );
-}
+          background:
