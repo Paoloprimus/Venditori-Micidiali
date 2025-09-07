@@ -2,6 +2,12 @@
 
 import { useMemo, useState } from 'react';
 
+const [listening, setListening] = useState(false);
+let recognitionRef: any = (typeof window !== 'undefined' && ((window as any).webkitSpeechRecognition || (window as any).SpeechRecognition))
+  ? new ((window as any).webkitSpeechRecognition || (window as any).SpeechRecognition)()
+  : null;
+
+
 type CustomFields = {
   fascia?: 'A' | 'B' | 'C';
   pagamento?: string;
@@ -22,6 +28,42 @@ function splitList(v?: string) {
     .map(s => s.trim())
     .filter(Boolean);
 }
+
+function startDictation() {
+  if (!recognitionRef) {
+    alert('La dettatura non è supportata da questo browser. Prova Chrome su desktop.');
+    return;
+  }
+  setListening(true);
+  recognitionRef.lang = 'it-IT';
+  recognitionRef.continuous = true;
+  recognitionRef.interimResults = true;
+
+  let finalChunk = '';
+  recognitionRef.onresult = (event: any) => {
+    let interim = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript;
+      if (event.results[i].isFinal) finalChunk += transcript + ' ';
+      else interim += transcript;
+    }
+    // mostra anche l’interim nella textarea per feedback immediato
+    const combined = (freeText + ' ' + finalChunk + ' ' + interim).replace(/\s+/g, ' ').trim();
+    setFreeText(combined);
+  };
+  recognitionRef.onend = () => {
+    setListening(false);
+  };
+  recognitionRef.onerror = () => {
+    setListening(false);
+  };
+  recognitionRef.start();
+}
+
+function stopDictation() {
+  if (recognitionRef && listening) recognitionRef.stop();
+}
+
 
 // Heuristica semplice per “estrarre” dai testi in italiano (editabile nello step 2)
 function extractFromText(text: string) {
@@ -76,6 +118,22 @@ export default function QuickAddClientPage() {
 
   // STEP 1: input libero
   const [freeText, setFreeText] = useState('');
+
+  <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+  <button
+    onClick={() => (listening ? stopDictation() : startDictation())}
+    style={{ padding: '8px 12px', borderRadius: 8, border: '1px solid #d1d5db', background: listening ? '#111827' : 'white', color: listening ? 'white' : '#111827' }}
+    type="button"
+    aria-pressed={listening}
+  >
+    {listening ? '🛑 Stop dettatura' : '🎤 Avvia dettatura'}
+  </button>
+
+  <small style={{ color: '#6b7280' }}>
+    Suggerimento: “Aggiungi cliente: Rossi SRL; fascia B; pagamento 60 giorni…”
+  </small>
+</div>
+
 
   // STEP 2: form riepilogo/editabile
   const initial = useMemo(() => extractFromText(freeText), [freeText]);
