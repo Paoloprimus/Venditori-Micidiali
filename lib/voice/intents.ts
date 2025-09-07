@@ -16,46 +16,65 @@ function extractNameHint(t: string) {
 }
 
 function findTopic(t: string) {
-  // cattura soggetti semplici: "figli", "telefono", "pagamento", ecc.
-  const known = ['figli', 'telefono', 'pagamento', 'indirizzo', 'email', 'ordini', 'volumi'];
+  const known = ['figli', 'telefono', 'pagamento', 'indirizzo', 'email', 'ordini', 'volumi', 'interessi', 'note'];
   for (const k of known) if (new RegExp(`\\b${k}\\b`, 'i').test(t)) return k;
-  // fallback: prendi la parte dopo "se"
   const m = t.match(/se\s+(?:c'?è|esiste|risulta)?\s*(.+)$/i);
   return m?.[1] ? CLEAN(m[1]) : '';
 }
 
-export function matchIntent(raw: string): Intent {
+// ⬇️ NUOVO: riconosce domande brevi tipo "Rossi ha figli?"
+function matchShortQuestion(raw: string): { accountHint: string; topic: string } | null {
+  const r1 = raw.match(/^\s*([\wÀ-ÿ'&.\s-]{2,})\s+ha\s+([a-zà-ÿ'&.\s-]{2,})\??\s*$/i);
+  if (r1) return { accountHint: CLEAN(r1[1]), topic: CLEAN(r1[2]) };
+
+  // es. "su Rossi ci sono info su figli?", "di Rossi informazioni su pagamento?"
+  const r2 = raw.match(/^\s*(?:su|di|del|della)\s+([\wÀ-ÿ'&.\s-]{2,})\s+(?:c'?\s?è|ci sono|info|informazioni|dettagli|note|appunti)\s+(.+?)\??\s*$/i);
+  if (r2) return { accountHint: CLEAN(r2[1]), topic: CLEAN(r2[2]) };
+
+  // es. "sai se di Rossi ci sono note sui figli?"
+  const r3 = raw.match(/(?:di|del|della)\s+([\wÀ-ÿ'&.\s-]{2,}).*\b(figli|telefono|email|pagamento|indirizzo|ordini|volumi|interessi|note)\b/i);
+  if (r3) return { accountHint: CLEAN(r3[1]), topic: CLEAN(r3[2]) };
+
+  return null;
+}
+
+export function matchIntent(raw: string) {
   const text = CLEAN(raw.toLowerCase());
 
-  // NUOVO
+  // --- NUOVO CLIENTE ---
   if (/^(?:nuovo|aggiungi|crea)\s+cliente\b/.test(text)) {
     const name =
       (raw.match(/(?:nuovo|aggiungi|crea)\s+cliente\s*[:=]?\s*([^\n;,.]+)/i)?.[1] ?? extractNameHint(raw))?.trim();
-    return { type: 'CLIENT_CREATE', name, needsConfirm: true };
+    return { type: 'CLIENT_CREATE', name, needsConfirm: true } as const;
   }
 
-  // RICERCA
+  // --- RICERCA CLIENTE ---
   if (/^(?:cerca|ricerca|trova)\s+cliente\b/.test(text)) {
     const q = (raw.match(/(?:cerca|ricerca|trova)\s+cliente\s*[:=]?\s*([^\n;,.]+)/i)?.[1] ?? extractNameHint(raw)) || '';
-    return { type: 'CLIENT_SEARCH', query: CLEAN(q), needsConfirm: true };
+    return { type: 'CLIENT_SEARCH', query: CLEAN(q), needsConfirm: true } as const;
   }
 
-  // MODIFICA
+  // --- MODIFICA CLIENTE ---
   if (/^(?:modifica|aggiorna)\s+cliente\b/.test(text)) {
     const name =
       (raw.match(/(?:modifica|aggiorna)\s+cliente\s*[:=]?\s*([^\n;,.]+)/i)?.[1] ?? extractNameHint(raw))?.trim();
-    return name ? { type: 'CLIENT_UPDATE', name, needsConfirm: true } : { type: 'CLIENT_UPDATE', name: '', needsConfirm: true };
+    return name
+      ? ({ type: 'CLIENT_UPDATE', name, needsConfirm: true } as const)
+      : ({ type: 'CLIENT_UPDATE', name: '', needsConfirm: true } as const);
   }
 
-  // NOTE: domande tipo "non ricordo se rossi ha figli", "cerca nelle note di rossi ...", ecc.
+  // --- NOTE / Q&A SU CLIENTE (frasi lunghe)
   if (/note|non ricordo|cerca\s+nelle\s+note|guarda\s+nelle\s+note/i.test(text)) {
-    // prendi nome cliente
-    const acc =
-      (raw.match(/(?:di|del|della)\s+([\wÀ-ÿ'&.\s-]{2,})/i)?.[1] ?? extractNameHint(raw) ?? '').trim();
-    // prendi topic
+    const acc = (raw.match(/(?:di|del|della)\s+([\wÀ-ÿ'&.\s-]{2,})/i)?.[1] ?? extractNameHint(raw) ?? '').trim();
     const topic = findTopic(raw);
-    if (acc && topic) return { type: 'NOTES_SEARCH', accountHint: acc, topic, needsConfirm: true };
+    if (acc && topic) return { type: 'NOTES_SEARCH', accountHint: acc, topic, needsConfirm: true } as const;
   }
 
-  return { type: 'NONE' };
+  // --- NUOVO: domande brevi "Rossi ha figli?"
+  const short = matchShortQuestion(raw);
+  if (short) {
+    return { type: 'NOTES_SEARCH', accountHint: short.accountHint, topic: short.topic, needsConfirm: true } as const;
+  }
+
+  return { type: 'NONE' } as const;
 }
