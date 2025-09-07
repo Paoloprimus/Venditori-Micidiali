@@ -1,5 +1,6 @@
 'use client';
 
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 type CustomFields = {
@@ -73,6 +74,8 @@ function extractFromText(text: string) {
 
 export default function QuickAddClientPage() {
   const [step, setStep] = useState<1 | 2>(1);
+
+  const router = useRouter();
 
   // STEP 1: input libero
   const [freeText, setFreeText] = useState('');
@@ -273,12 +276,23 @@ export default function QuickAddClientPage() {
             rows={10}
             style={{ width: '100%', padding: 12, borderRadius: 10, border: '1px solid #d1d5db' }}
           />
-          <div style={{ marginTop: 12, textAlign: 'right' }}>
-            <button onClick={goRiepilogo}
-              style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#111827', color: 'white', fontWeight: 600 }}>
-              Vai al riepilogo
-            </button>
-          </div>
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => router.push('/')}
+            style={{ padding: '10px 16px', borderRadius: 10, border: '1px solid #d1d5db', background: 'white', color: '#111827', fontWeight: 600 }}
+          >
+            ← Torna in Chat
+          </button>
+        
+          <button
+            onClick={goRiepilogo}
+            style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#111827', color: 'white', fontWeight: 600 }}
+          >
+            Vai al riepilogo
+          </button>
+        </div>
+
         </div>
       )}
 
