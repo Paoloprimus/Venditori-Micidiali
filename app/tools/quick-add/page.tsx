@@ -115,8 +115,9 @@ export default function QuickAddClientPage() {
     }
 
     const recog = recognitionRef.current;
-    setListening(true);
     finalChunkRef.current = '';
+    setListening(true);
+
     recog.lang = 'it-IT';
     recog.continuous = true;
     recog.interimResults = true;
@@ -131,18 +132,16 @@ export default function QuickAddClientPage() {
           interim += transcript;
         }
       }
-      // Usa il valore precedente per evitare riferimenti fuori scope
+      // aggiornamento funzionale: nessun riferimento diretto a freeText
       setFreeText(prev =>
-        (prev + ' ' + finalChunkRef.current + ' ' + interim).replace(/\s+/g, ' ').trim()
+        (`${prev} ${finalChunkRef.current} ${interim}`).replace(/\s+/g, ' ').trim()
       );
     };
+
     recog.onend = () => setListening(false);
     recog.onerror = () => setListening(false);
-    try {
-      recog.start();
-    } catch {
-      // alcuni browser lanciano se start() chiamato due volte
-    }
+
+    try { recog.start(); } catch { /* evita errori se start() doppio */ }
   }
 
   function stopDictation() {
