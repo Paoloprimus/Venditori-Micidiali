@@ -28,9 +28,14 @@ export function useVoice({
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [voiceError, setVoiceError] = useState<string | null>(null);
 
-  const [voiceMode, setVoiceMode] = useState(false);
-  const [speakerEnabled, setSpeakerEnabled] = useState(false);
+  // === UI state ===
+  const [voiceMode, setVoiceMode] = useState(false);      // Dialogo ON/OFF
+  const [speakerEnabled, setSpeakerEnabled] = useState(false); // 🔈
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
+
+  // mirror per gating TTS anche dentro callback asincrone
+  const speakerEnabledRef = useRef(speakerEnabled);
+  useEffect(() => { speakerEnabledRef.current = speakerEnabled; }, [speakerEnabled]);
 
   // ======= SR nativa (Chrome) =======
   const isIOS =
@@ -75,7 +80,6 @@ export function useVoice({
     return s === "stop" || s === "esci";
   }
 
-  
   function hasSubmitCue(raw: string) {
     return /\binvia(?:\s+(?:ora|adesso))?\s*[.!?]*$/i.test((raw || "").trim());
   }
@@ -119,7 +123,7 @@ export function useVoice({
   // ===== Dialogo: stato, buffer e lock anti-doppio invio =====
   const [dialogMode, setDialogMode] = useState(false);
   const dialogBufRef = useRef<string>("");
-  const dialogSendingRef = useRef<boolean>(false); // ⬅️ blocca invio multiplo sullo stesso "invia"
+  const dialogSendingRef = useRef<boolean>(false);
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
@@ -150,15 +154,15 @@ export function useVoice({
               onTranscriptionToInput("");
               continue;
             }
-            
-              // ⬇️ nuovo: se dici "stop" o "esci" chiude il dialogo
+
+            // se dici "stop" o "esci" chiude il dialogo
             if (isStopCommand(txt)) {
-              stopDialog();           // chiude la modalità dialogo
-              onSpeak("Dialogo terminato."); // feedback vocale opzionale
+              const canSpeak = speakerEnabledRef.current; // ⬅ gate prima dello stop
+              stopDialog();                                // spegne dialogo + speaker
+              if (canSpeak) onSpeak("Dialogo terminato.");
               return;
             }
 
-            
             finalAccumRef.current = (finalAccumRef.current + " " + txt).trim();
           } else {
             interim += txt;
@@ -180,7 +184,7 @@ export function useVoice({
             const raw = stripSubmitCue(live).trim();
 
             if (!raw) {
-              onSpeak("Dimmi il messaggio e poi dì 'invia'.");
+              if (speakerEnabledRef.current) onSpeak("Dimmi il messaggio e poi dì 'invia'.");
               dialogBufRef.current = "";
               finalAccumRef.current = "";
               micActiveRef.current = true;
@@ -310,7 +314,7 @@ export function useVoice({
     stopAll();
   }
 
-  // ======= Toggle a TAP =======
+  // ======= Toggle a TAP (PTT) =======
   async function handleVoiceClick() {
     if (!isRecording && !micActiveRef.current) {
       setVoiceError(null);
@@ -330,17 +334,27 @@ export function useVoice({
 
   // ======= Dialogo: attiva/disattiva =======
   async function startDialog() {
+    // ⬇️ attiva modalità dialogo + speaker auto ON
     setDialogMode(true);
     dialogBufRef.current = "";
     dialogSendingRef.current = false;
     setVoiceMode(true);
     setVoiceError(null);
+    setSpeakerEnabled(true);           // ✅ SPEAKER AUTO ON in Dialogo
     finalAccumRef.current = "";
     micActiveRef.current = true;
+
     if (supportsNativeSR) startNativeSR();
     else startFallbackRecorder();
-    onSpeak("Dialogo attivo. Di' la frase e termina con 'invia'.");
+
+    // feedback iniziale solo se lo speaker è attivo
+    if (speakerEnabledRef.current || true) {
+      // dopo setSpeakerEnabled, l'effetto aggiorna speakerEnabledRef in coda al tick;
+      // qui siamo comunque in Dialogo (speaker ON) → ok dare un breve prompt
+      onSpeak("Dialogo attivo. Di' la frase e termina con 'invia'.");
+    }
   }
+
   function stopDialog() {
     setDialogMode(false);
     setVoiceMode(false);
@@ -348,6 +362,7 @@ export function useVoice({
     dialogSendingRef.current = false;
     micActiveRef.current = false;
     stopAll();
+    setSpeakerEnabled(false);          // ✅ ritorno a OFF/ OFF quando esco dal Dialogo
   }
 
   // Cleanup su unmount
@@ -377,7 +392,7 @@ export function useVoice({
       }
     }, 150);
     return () => clearInterval(id);
-  }, [dialogMode, supportsNativeSR, isRecording]);
+  }, [dialogMode, supportsNativeSR, isRecording, isTtsSpeaking]);
 
   return {
     isRecording, isTranscribing, voiceError,
