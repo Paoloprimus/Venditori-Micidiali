@@ -164,4 +164,46 @@ export default function HomeClient({ email, userName }: { email: string; userNam
             Conferma
           </button>
           <button
-            onClick={() => { speakIfEnabled("Ok, annullato."); setPendingIntent(null);
+            onClick={() => { speakIfEnabled("Ok, annullato."); setPendingIntent(null); }}
+            style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #d1d5db', background: 'white' }}
+          >
+            Annulla
+          </button>
+        </div>
+      )}
+
+      {/* Contenuto */}
+      <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
+        <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
+          <Thread bubbles={conv.bubbles} serverError={conv.serverError} threadRef={conv.threadRef} endRef={conv.endRef} />
+          <Composer
+            value={conv.input}
+            onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
+            onSend={submitFromComposer}
+            disabled={voice.isTranscribing}
+            taRef={conv.taRef}
+            voice={{
+              isRecording: voice.isRecording,
+              isTranscribing: voice.isTranscribing,
+              error: voice.voiceError,
+              // (RIMOSSI) onPressStart / onPressEnd: il nuovo Composer non li usa
+              onClick: voice.handleVoiceClick,
+              voiceMode: voice.voiceMode,
+              onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
+              speakerEnabled: voice.speakerEnabled,
+              onToggleSpeaker: () => voice.setSpeakerEnabled((s: boolean) => !s),
+              canRepeat: !!lastAssistantText,
+              onRepeat: () => speakAssistant(),
+              ttsSpeaking,
+            }}
+          />
+        </div>
+      </div>
+
+      <div style={{ position: "relative", zIndex: 2001 }}>
+        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
+        <RightDrawer open={topOpen} onClose={closeTop} />
+      </div>
+    </>
+  );
+}
