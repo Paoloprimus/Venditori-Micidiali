@@ -12,7 +12,7 @@ type Props = {
 export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout, userName }: Props) {
   const [docsOpen, setDocsOpen] = useState(false);
 
-  const appName = "Venditore Micidiale";
+  const appName = "Micidiale!";
 
   // Data formattata in stile "sab 06/09/25"
   const today = new Intl.DateTimeFormat("it-IT", {
