@@ -2,6 +2,8 @@
 "use client";
 import { useEffect, useState } from "react";
 import ProductManager from "./products/ProductManager"; // ⬅️ NEW
+import { ToastProvider } from "./ui/Toast";
+
 
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
@@ -185,7 +187,11 @@ export function RightDrawer({
         {tab === "settings" && (
           <div style={{ color: "var(--muted)" }}>Impostazioni (coming soon)</div>
         )}
-        {tab === "products" && <ProductManager onCloseDrawer={onClose} />}
+        {tab === "products" && (
+          <ToastProvider>
+          <ProductManager onCloseDrawer={onClose} />
+          </ToastProvider>
+        )}
       </div>
     </aside>
   );
