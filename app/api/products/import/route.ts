@@ -95,24 +95,24 @@ async function parseCSV(buf: Buffer): Promise<Row[]> {
 }
 
 async function parsePDF(buf: Buffer): Promise<Row[]> {
-  // import dinamico (già avevamo messo così per evitare asset di test)
-  const pdfParse = (await import("pdf-parse")).default as (
-    data: Buffer | Uint8Array | ArrayBuffer,
-    options?: any
-  ) => Promise<{ text: string }>;
+  // Import dinamico per evitare asset di test del pacchetto in bundle
+  const mod = await import("pdf-parse");
+  const pdfParse: (data: Buffer | Uint8Array | ArrayBuffer, opts?: any) => Promise<{ text: string }> =
+    (mod as any).default || (mod as any);
 
   const { text } = await pdfParse(buf);
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const out: Row[] = [];
+
   for (const l of lines) {
-    // salta intestazioni e footer pagina
+    // skip header/footer
     if (/^codice\b/i.test(l)) continue;
     if (/pagina\s+\d+\s+di\s+\d+/i.test(l)) continue;
 
-    // primo numero "lungo" = codice
+    // 1) codice = PRIMO numero lungo
     const mCode = l.match(/^(\d{5,})\b/);
-    // ultimo intero in riga = giacenza
+    // 2) giacenza = ULTIMO intero in riga
     const mQty = l.match(/(\d+)\s*$/);
 
     if (!mCode || !mQty) continue;
@@ -120,15 +120,41 @@ async function parsePDF(buf: Buffer): Promise<Row[]> {
     const codice = mCode[1].trim();
     const giacenza = parseInt(mQty[1], 10);
 
+    // 3) UM = token/i immediatamente prima della giacenza
+    const before = l.slice(0, mQty.index!).trim(); // tutto fino all'ultimo numero
+    const tokens = before.split(/\s+/);
+    let unita_misura: string | null = null;
+
+    if (tokens.length >= 2) {
+      const last = tokens[tokens.length - 1];
+      const prev = tokens[tokens.length - 2];
+      // gestisci casi composti tipo "NR Buste"
+      if ((prev + " " + last).toLowerCase() === "nr buste") {
+        unita_misura = prev + " " + last;
+      } else {
+        unita_misura = last;
+      }
+    } else if (tokens.length === 1) {
+      unita_misura = tokens[0];
+    }
+
     if (!codice) continue;
-    out.push({ codice, giacenza: Number.isFinite(giacenza) ? giacenza : null });
+
+    out.push({
+      codice,
+      giacenza: Number.isFinite(giacenza) ? giacenza : null,
+      unita_misura: unita_misura ?? null,
+      // descrizione_articolo la possiamo ricostruire dopo se servirà
+    });
   }
 
   if (!out.length) {
+    // Se capitiamo qui, è un PDF immagine oppure il layout è diverso
     throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
   }
   return out;
 }
+
 
 
 
