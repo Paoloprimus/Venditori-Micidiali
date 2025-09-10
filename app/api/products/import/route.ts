@@ -95,65 +95,88 @@ async function parseCSV(buf: Buffer): Promise<Row[]> {
 }
 
 async function parsePDF(buf: Buffer): Promise<Row[]> {
-  // Import dinamico per evitare asset di test del pacchetto in bundle
+  // import dinamico per evitare asset di test del pacchetto
   const mod = await import("pdf-parse");
   const pdfParse: (data: Buffer | Uint8Array | ArrayBuffer, opts?: any) => Promise<{ text: string }> =
     (mod as any).default || (mod as any);
 
   const { text } = await pdfParse(buf);
 
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  // normalizza: rimuove spazi “strani”/multipli → singolo spazio
+  const norm = text
+    .replace(/\u00A0/g, " ")         // NBSP → spazio
+    .replace(/\s+\r?\n/g, "\n")      // trim fine linea
+    .replace(/\r?\n\s+/g, "\n")      // trim inizio linea
+    .replace(/[ \t]+/g, " ");        // multipli → singolo
+
+  const lines = norm.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const out: Row[] = [];
 
   for (const l of lines) {
-    // skip header/footer
+    // salta header/footer/segnapagina
     if (/^codice\b/i.test(l)) continue;
-    if (/pagina\s+\d+\s+di\s+\d+/i.test(l)) continue;
+    if (/^giacenze del magazzino/i.test(l)) continue;
+    if (/^report del/i.test(l)) continue;
+    if (/^mart(ed|e)dì\b/i.test(l)) continue;     // es. "martedì 9 settembre…"
+    if (/^pagina\s+\d+\s+di\s+\d+/i.test(l)) continue;
+    if (/^nr\.\s*referenze\b/i.test(l)) continue;
 
-    // 1) codice = PRIMO numero lungo
-    const mCode = l.match(/^(\d{5,})\b/);
-    // 2) giacenza = ULTIMO intero in riga
+    // 1) codice = prima “sequenza di soli numeri”, anche separati da spazi (almeno 5 cifre totali)
+    //    es.: "3 4 2 2 3 6 0 ..." → cattura "3 4 2 2 3 6 0" → poi togliamo gli spazi
+    const mCode = l.match(/^((?:\d[ \t]*){5,})\b/);
+    if (!mCode) continue;
+    const codice = mCode[1].replace(/\D/g, ""); // solo cifre
+
+    // 2) giacenza = ultimo intero in riga
     const mQty = l.match(/(\d+)\s*$/);
-
-    if (!mCode || !mQty) continue;
-
-    const codice = mCode[1].trim();
+    if (!mQty) continue;
     const giacenza = parseInt(mQty[1], 10);
+    if (!Number.isFinite(giacenza)) continue;
 
-    // 3) UM = token/i immediatamente prima della giacenza
-    const before = l.slice(0, mQty.index!).trim(); // tutto fino all'ultimo numero
-    const tokens = before.split(/\s+/);
+    // 3) UM = token/i immediatamente prima della giacenza (gestione coppie comuni)
+    const beforeQty = l.slice(0, mQty.index!).trim();
+    const tokens = beforeQty.split(/\s+/);
     let unita_misura: string | null = null;
 
     if (tokens.length >= 2) {
       const last = tokens[tokens.length - 1];
       const prev = tokens[tokens.length - 2];
-      // gestisci casi composti tipo "NR Buste"
-      if ((prev + " " + last).toLowerCase() === "nr buste") {
+      const pair = (prev + " " + last).toLowerCase();
+
+      // coppie frequenti nel tuo PDF
+      if (["nr buste", "nr busta", "mb sc", "p z", "pz 1", "p 12"].some(p => pair.startsWith(p))) {
         unita_misura = prev + " " + last;
-      } else {
+      } else if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(last)) {
+        // singoli tipici: SC, MB, PZ, KG2,5, G110, P30, RSPOMB, SASacchetto…
         unita_misura = last;
+      } else {
+        // fallback: se l'ultimo token non sembra UM, ma il penultimo sì
+        if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(prev)) {
+          unita_misura = prev;
+        }
       }
     } else if (tokens.length === 1) {
-      unita_misura = tokens[0];
+      const only = tokens[0];
+      if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(only)) {
+        unita_misura = only;
+      }
     }
 
-    if (!codice) continue;
+    if (codice.length < 5) continue; // guard-rail
 
     out.push({
       codice,
-      giacenza: Number.isFinite(giacenza) ? giacenza : null,
+      giacenza,
       unita_misura: unita_misura ?? null,
-      // descrizione_articolo la possiamo ricostruire dopo se servirà
     });
   }
 
   if (!out.length) {
-    // Se capitiamo qui, è un PDF immagine oppure il layout è diverso
     throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
   }
   return out;
 }
+
 
 
 
