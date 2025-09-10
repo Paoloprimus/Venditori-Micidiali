@@ -1,7 +1,6 @@
 // app/api/products/import/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createSupabaseServer } from "../../../../lib/supabase/server";
-import pdfParse from "pdf-parse";
 import { parse as csvParse } from "csv-parse/sync";
 
 export const runtime = "nodejs";
@@ -94,7 +93,14 @@ async function parseCSV(buf: Buffer): Promise<Row[]> {
   const rows = csvParse(buf, { columns: true, skip_empty_lines: true, bom: true, trim: true }) as Record<string, any>[];
   return rows.map(mapHeaders).map(cleanRow).filter((x): x is Row => !!x);
 }
+
 async function parsePDF(buf: Buffer): Promise<Row[]> {
+  // import dinamico: evita che il bundler includa test/assets del pacchetto
+  const pdfParse = (await import("pdf-parse")).default as (
+    data: Buffer | Uint8Array | ArrayBuffer,
+    options?: any
+  ) => Promise<{ text: string }>;
+
   const { text } = await pdfParse(buf); // funziona solo con PDF testuali
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
   const headerLineIdx = lines.findIndex(l => {
@@ -123,6 +129,8 @@ async function parsePDF(buf: Buffer): Promise<Row[]> {
   if (!out.length) throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
   return out;
 }
+
+
 const detectKind = (name: string, mime?: string | null): "csv" | "pdf" => {
   const n = (name || "").toLowerCase();
   if (n.endsWith(".csv")) return "csv";
