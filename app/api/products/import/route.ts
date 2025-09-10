@@ -226,29 +226,37 @@ export async function POST(req: NextRequest) {
     let rows: Row[] = kind === "csv" ? await parseCSV(buf) : await parsePDF(buf);
     if (!rows.length) return NextResponse.json({ ok: false, error: "File vuoto o non valido" }, { status: 400 });
 
-    // Applica toggle e fallback 'title' (title è NOT NULL nella tua tabella)
-    rows = rows.map(r => {
-      const base: any = { codice: r.codice };
+// Applica i toggle + campi obbligatori sempre presenti
+const nowIso = new Date().toISOString();
 
-      // Fallback per title: descrizione se disponibile, altrimenti il codice
-      const fallbackTitle = (r.descrizione_articolo && r.descrizione_articolo.trim()) || r.codice;
-      base.title = fallbackTitle;
+rows = rows.map(r => {
+  // uso 'any' per includere anche 'title' e 'updated_at'
+  const base: any = { codice: r.codice };
 
-      // giacenze sempre ammesse se presenti
-      if (r.giacenza != null) base.giacenza = r.giacenza;
+  // Fallback obbligatori per colonne NOT NULL
+  const fallbackDesc = (r.descrizione_articolo && r.descrizione_articolo.trim()) || r.codice;
+  base.title = fallbackDesc;                    // title NOT NULL
+  base.descrizione_articolo = fallbackDesc;     // descrizione_articolo NOT NULL
+  base.updated_at = nowIso;                     // updated_at NOT NULL
 
-      if (!onlyStock) {
-        if (r.descrizione_articolo != null) base.descrizione_articolo = r.descrizione_articolo;
-        if (r.unita_misura != null) base.unita_misura = r.unita_misura;
-        if (r.is_active != null) base.is_active = r.is_active;
-        if (allowPriceDiscount) {
-          if (r.base_price != null) base.base_price = r.base_price;
-          if (r.sconto_merce != null) base.sconto_merce = r.sconto_merce;
-          if (r.sconto_fattura != null) base.sconto_fattura = r.sconto_fattura;
-        }
-      }
-      return base;
-    });
+  // giacenza mai null (colonna NOT NULL)
+  base.giacenza = r.giacenza != null ? Math.max(0, Math.floor(r.giacenza)) : 0;
+
+  // Se NON è "solo giacenze", aggiorna anche il resto
+  if (!onlyStock) {
+    if (r.unita_misura != null) base.unita_misura = r.unita_misura;
+    if (r.is_active != null) base.is_active = r.is_active;
+
+    if (allowPriceDiscount) {
+      if (r.base_price != null) base.base_price = r.base_price;
+      if (r.sconto_merce != null) base.sconto_merce = r.sconto_merce;
+      if (r.sconto_fattura != null) base.sconto_fattura = r.sconto_fattura;
+    }
+  }
+
+  return base;
+});
+
 
     // **DE-DUPE** per codice: vince l'ultima occorrenza nel file
     const map = new Map<string, any>();
