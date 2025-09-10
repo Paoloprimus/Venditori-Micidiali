@@ -94,90 +94,116 @@ async function parseCSV(buf: Buffer): Promise<Row[]> {
   return rows.map(mapHeaders).map(cleanRow).filter((x): x is Row => !!x);
 }
 
+/**
+ * Parser PDF robusto:
+ * - normalizza spazi/righe (NBSP, multipli, ecc.)
+ * - codice = primo gruppo di 5+ cifre ovunque nella riga
+ * - giacenza = ultimo intero in riga
+ * - unita_misura = token immediatamente prima della giacenza (best-effort)
+ * - descrizione_articolo = testo tra fine-codice e prima di UM/giacenza
+ */
 async function parsePDF(buf: Buffer): Promise<Row[]> {
-  // import dinamico per evitare asset di test del pacchetto
   const mod = await import("pdf-parse");
   const pdfParse: (data: Buffer | Uint8Array | ArrayBuffer, opts?: any) => Promise<{ text: string }> =
     (mod as any).default || (mod as any);
 
   const { text } = await pdfParse(buf);
 
-  // 1) normalizza spazi, NBSP e ritorni a capo
+  // normalizza spazi/righe
   const norm = text
-    .replace(/\u00A0/g, " ")     // NBSP -> spazio
+    .replace(/\u00A0/g, " ")
     .replace(/\r/g, "\n")
-    .replace(/[ \t]+\n/g, "\n")  // trim end of line
-    .replace(/\n[ \t]+/g, "\n")  // trim start of line
-    .replace(/[ \t]+/g, " ");    // spazi multipli -> singolo
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n[ \t]+/g, "\n")
+    .replace(/[ \t]+/g, " ");
+
+  const lines = norm.split(/\n+/).map(l => l.trim()).filter(Boolean);
+  const out: Row[] = [];
 
   const isHeaderOrFooter = (l: string) =>
     /^codice\b/i.test(l) ||
     /^giacenze del/i.test(l) ||
     /^report del/i.test(l) ||
     /^pagina\s+\d+\s+di\s+\d+/i.test(l) ||
-    /^nr\.\s*referenze\b/i.test(l) ||
-    !l.trim();
+    /^nr\.\s*referenze\b/i.test(l);
 
-  const lines = norm.split(/\n+/).map(l => l.trim()).filter(l => !isHeaderOrFooter(l));
+  const isUM = (s: string) => /^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|sasacchetto|rspomb)$/i.test(s);
 
-  const out: Row[] = [];
+  for (const raw of lines) {
+    if (isHeaderOrFooter(raw)) continue;
 
-  // 2) Primo pass: regex “robuste”
-  for (const l of lines) {
-    // codice = primo gruppo di 5+ cifre ovunque nella riga (consente 3 4 2 2 3 6 0 ecc.)
-    const mCode = l.match(/(\d{5,})/);
+    // codice = primo gruppo di 5+ cifre
+    const mCode = raw.match(/(\d{5,})/);
     // giacenza = ultimo intero in riga
-    const mQty  = l.match(/(\d+)\s*$/);
+    const mQty  = raw.match(/(\d+)\s*$/);
     if (!mCode || !mQty) continue;
 
     const codice = mCode[1].replace(/[^\d]/g, "");
     const giacenza = parseInt(mQty[1], 10);
     if (!codice || !Number.isFinite(giacenza)) continue;
 
-    // UM = token immediatamente prima della giacenza (best effort)
-    const beforeQty = l.slice(0, mQty.index!).trim();
-    const tokens = beforeQty.split(/\s+/);
+    // slot centrale: dopo il codice fino a prima della giacenza
+    const startAfterCode = raw.indexOf(mCode[0]) + mCode[0].length;
+    const beforeQty = raw.slice(0, mQty.index!).trim();
+    const mid = beforeQty.slice(startAfterCode).trim();
+
+    // prova UM sugli ultimi token
+    const tokens = mid.split(/\s+/).filter(Boolean);
     let unita_misura: string | null = null;
-    if (tokens.length) {
+    let descrTokens = tokens;
+
+    if (tokens.length >= 2) {
       const last = tokens[tokens.length - 1];
       const prev = tokens[tokens.length - 2];
-      const pair = (prev ? (prev + " " + last).toLowerCase() : "");
+      const pair = `${prev} ${last}`.toLowerCase();
+
       if (pair === "nr buste" || pair === "nr busta") {
         unita_misura = prev + " " + last;
-      } else if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(last)) {
+        descrTokens = tokens.slice(0, -2);
+      } else if (isUM(last)) {
         unita_misura = last;
-      } else if (prev && /^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(prev)) {
+        descrTokens = tokens.slice(0, -1);
+      } else if (isUM(prev)) {
         unita_misura = prev;
+        // manteniamo last nella descrizione
+        descrTokens = tokens.slice(0, -1);
+      }
+    } else if (tokens.length === 1) {
+      if (isUM(tokens[0])) {
+        unita_misura = tokens[0];
+        descrTokens = [];
       }
     }
 
-    out.push({ codice, giacenza, unita_misura: unita_misura ?? null });
+    const descrizione_articolo = (descrTokens.join(" ").trim() || null);
+
+    out.push({
+      codice,
+      giacenza,
+      unita_misura: unita_misura ?? null,
+      descrizione_articolo,
+    });
   }
 
-  // 3) Fallback: se non ha trovato nulla, tenta una passata “grezza”
+  // fallback grezzo se non è stato trovato nulla (layout inaspettato)
   if (!out.length) {
-    for (const l of lines) {
-      const qtyMatch = l.match(/(\d+)\s*$/);
-      const codeMatch = l.match(/(\d{5,})/);
+    for (const raw of lines) {
+      if (isHeaderOrFooter(raw)) continue;
+      const qtyMatch = raw.match(/(\d+)\s*$/);
+      const codeMatch = raw.match(/(\d{5,})/);
       if (!qtyMatch || !codeMatch) continue;
       const codice = codeMatch[1].replace(/[^\d]/g, "");
       const giacenza = parseInt(qtyMatch[1], 10);
       if (!codice || !Number.isFinite(giacenza)) continue;
-      out.push({ codice, giacenza, unita_misura: null });
+      out.push({ codice, giacenza, unita_misura: null, descrizione_articolo: null });
     }
   }
 
   if (!out.length) {
-    // ultima difesa: suggerisco CSV
     throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
   }
   return out;
 }
-
-
-
-
-
 
 const detectKind = (name: string, mime?: string | null): "csv" | "pdf" => {
   const n = (name || "").toLowerCase();
@@ -209,10 +235,18 @@ export async function POST(req: NextRequest) {
     let rows: Row[] = kind === "csv" ? await parseCSV(buf) : await parsePDF(buf);
     if (!rows.length) return NextResponse.json({ ok: false, error: "File vuoto o non valido" }, { status: 400 });
 
-    // applica i toggle
+    // Applica i toggle e aggiungi SEMPRE 'title' di fallback (title è NOT NULL nella tua tabella)
     rows = rows.map(r => {
-      const base: Row = { codice: r.codice };
-      if (r.giacenza != null) base.giacenza = r.giacenza; // giacenze sempre ammesse
+      // base come any per includere anche 'title' (colonna legacy)
+      const base: any = { codice: r.codice };
+
+      // Fallback per title: descrizione se disponibile, altrimenti il codice
+      const fallbackTitle = (r.descrizione_articolo && r.descrizione_articolo.trim()) || r.codice;
+      base.title = fallbackTitle;
+
+      // giacenze sempre ammesse se presenti
+      if (r.giacenza != null) base.giacenza = r.giacenza;
+
       if (!onlyStock) {
         if (r.descrizione_articolo != null) base.descrizione_articolo = r.descrizione_articolo;
         if (r.unita_misura != null) base.unita_misura = r.unita_misura;
