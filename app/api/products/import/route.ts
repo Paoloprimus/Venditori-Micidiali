@@ -95,40 +95,41 @@ async function parseCSV(buf: Buffer): Promise<Row[]> {
 }
 
 async function parsePDF(buf: Buffer): Promise<Row[]> {
-  // import dinamico: evita che il bundler includa test/assets del pacchetto
+  // import dinamico (già avevamo messo così per evitare asset di test)
   const pdfParse = (await import("pdf-parse")).default as (
     data: Buffer | Uint8Array | ArrayBuffer,
     options?: any
   ) => Promise<{ text: string }>;
 
-  const { text } = await pdfParse(buf); // funziona solo con PDF testuali
+  const { text } = await pdfParse(buf);
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const headerLineIdx = lines.findIndex(l => {
-    const s = normHeader(l);
-    return s.includes("codice") && (s.includes("giacenza") || s.includes("descrizione"));
-  });
-  if (headerLineIdx === -1) throw new Error("PDF non riconosciuto: prova a caricare un CSV.");
-
-  const splitRow = (l: string) => l.split(/\t+| {2,}/).map(x => x.trim()).filter(Boolean);
-  const headersRaw = splitRow(lines[headerLineIdx]);
-  const headersMapped = headersRaw.map(h => HEADER_MAP[normHeader(h)] || null);
 
   const out: Row[] = [];
-  for (let i = headerLineIdx + 1; i < lines.length; i++) {
-    const cols = splitRow(lines[i]);
-    if (cols.length < 2) continue;
-    const rec: Record<string, any> = {};
-    for (let c = 0; c < Math.min(cols.length, headersMapped.length); c++) {
-      const key = headersMapped[c];
-      if (!key) continue;
-      rec[key] = cols[c];
-    }
-    const row = cleanRow(rec as Row);
-    if (row) out.push(row);
+  for (const l of lines) {
+    // salta intestazioni e footer pagina
+    if (/^codice\b/i.test(l)) continue;
+    if (/pagina\s+\d+\s+di\s+\d+/i.test(l)) continue;
+
+    // primo numero "lungo" = codice
+    const mCode = l.match(/^(\d{5,})\b/);
+    // ultimo intero in riga = giacenza
+    const mQty = l.match(/(\d+)\s*$/);
+
+    if (!mCode || !mQty) continue;
+
+    const codice = mCode[1].trim();
+    const giacenza = parseInt(mQty[1], 10);
+
+    if (!codice) continue;
+    out.push({ codice, giacenza: Number.isFinite(giacenza) ? giacenza : null });
   }
-  if (!out.length) throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
+
+  if (!out.length) {
+    throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
+  }
   return out;
 }
+
 
 
 const detectKind = (name: string, mime?: string | null): "csv" | "pdf" => {
