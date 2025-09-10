@@ -102,80 +102,78 @@ async function parsePDF(buf: Buffer): Promise<Row[]> {
 
   const { text } = await pdfParse(buf);
 
-  // normalizza: rimuove spazi “strani”/multipli → singolo spazio
+  // 1) normalizza spazi, NBSP e ritorni a capo
   const norm = text
-    .replace(/\u00A0/g, " ")         // NBSP → spazio
-    .replace(/\s+\r?\n/g, "\n")      // trim fine linea
-    .replace(/\r?\n\s+/g, "\n")      // trim inizio linea
-    .replace(/[ \t]+/g, " ");        // multipli → singolo
+    .replace(/\u00A0/g, " ")     // NBSP -> spazio
+    .replace(/\r/g, "\n")
+    .replace(/[ \t]+\n/g, "\n")  // trim end of line
+    .replace(/\n[ \t]+/g, "\n")  // trim start of line
+    .replace(/[ \t]+/g, " ");    // spazi multipli -> singolo
 
-  const lines = norm.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const isHeaderOrFooter = (l: string) =>
+    /^codice\b/i.test(l) ||
+    /^giacenze del/i.test(l) ||
+    /^report del/i.test(l) ||
+    /^pagina\s+\d+\s+di\s+\d+/i.test(l) ||
+    /^nr\.\s*referenze\b/i.test(l) ||
+    !l.trim();
+
+  const lines = norm.split(/\n+/).map(l => l.trim()).filter(l => !isHeaderOrFooter(l));
+
   const out: Row[] = [];
 
+  // 2) Primo pass: regex “robuste”
   for (const l of lines) {
-    // salta header/footer/segnapagina
-    if (/^codice\b/i.test(l)) continue;
-    if (/^giacenze del magazzino/i.test(l)) continue;
-    if (/^report del/i.test(l)) continue;
-    if (/^mart(ed|e)dì\b/i.test(l)) continue;     // es. "martedì 9 settembre…"
-    if (/^pagina\s+\d+\s+di\s+\d+/i.test(l)) continue;
-    if (/^nr\.\s*referenze\b/i.test(l)) continue;
+    // codice = primo gruppo di 5+ cifre ovunque nella riga (consente 3 4 2 2 3 6 0 ecc.)
+    const mCode = l.match(/(\d{5,})/);
+    // giacenza = ultimo intero in riga
+    const mQty  = l.match(/(\d+)\s*$/);
+    if (!mCode || !mQty) continue;
 
-    // 1) codice = prima “sequenza di soli numeri”, anche separati da spazi (almeno 5 cifre totali)
-    //    es.: "3 4 2 2 3 6 0 ..." → cattura "3 4 2 2 3 6 0" → poi togliamo gli spazi
-    const mCode = l.match(/^((?:\d[ \t]*){5,})\b/);
-    if (!mCode) continue;
-    const codice = mCode[1].replace(/\D/g, ""); // solo cifre
-
-    // 2) giacenza = ultimo intero in riga
-    const mQty = l.match(/(\d+)\s*$/);
-    if (!mQty) continue;
+    const codice = mCode[1].replace(/[^\d]/g, "");
     const giacenza = parseInt(mQty[1], 10);
-    if (!Number.isFinite(giacenza)) continue;
+    if (!codice || !Number.isFinite(giacenza)) continue;
 
-    // 3) UM = token/i immediatamente prima della giacenza (gestione coppie comuni)
+    // UM = token immediatamente prima della giacenza (best effort)
     const beforeQty = l.slice(0, mQty.index!).trim();
     const tokens = beforeQty.split(/\s+/);
     let unita_misura: string | null = null;
-
-    if (tokens.length >= 2) {
+    if (tokens.length) {
       const last = tokens[tokens.length - 1];
       const prev = tokens[tokens.length - 2];
-      const pair = (prev + " " + last).toLowerCase();
-
-      // coppie frequenti nel tuo PDF
-      if (["nr buste", "nr busta", "mb sc", "p z", "pz 1", "p 12"].some(p => pair.startsWith(p))) {
+      const pair = (prev ? (prev + " " + last).toLowerCase() : "");
+      if (pair === "nr buste" || pair === "nr busta") {
         unita_misura = prev + " " + last;
       } else if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(last)) {
-        // singoli tipici: SC, MB, PZ, KG2,5, G110, P30, RSPOMB, SASacchetto…
         unita_misura = last;
-      } else {
-        // fallback: se l'ultimo token non sembra UM, ma il penultimo sì
-        if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(prev)) {
-          unita_misura = prev;
-        }
-      }
-    } else if (tokens.length === 1) {
-      const only = tokens[0];
-      if (/^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(only)) {
-        unita_misura = only;
+      } else if (prev && /^(sc|mb|pz|kg\d+(?:,\d+)?|g\d+|p\d+|rspomb|sasacchetto)$/i.test(prev)) {
+        unita_misura = prev;
       }
     }
 
-    if (codice.length < 5) continue; // guard-rail
+    out.push({ codice, giacenza, unita_misura: unita_misura ?? null });
+  }
 
-    out.push({
-      codice,
-      giacenza,
-      unita_misura: unita_misura ?? null,
-    });
+  // 3) Fallback: se non ha trovato nulla, tenta una passata “grezza”
+  if (!out.length) {
+    for (const l of lines) {
+      const qtyMatch = l.match(/(\d+)\s*$/);
+      const codeMatch = l.match(/(\d{5,})/);
+      if (!qtyMatch || !codeMatch) continue;
+      const codice = codeMatch[1].replace(/[^\d]/g, "");
+      const giacenza = parseInt(qtyMatch[1], 10);
+      if (!codice || !Number.isFinite(giacenza)) continue;
+      out.push({ codice, giacenza, unita_misura: null });
+    }
   }
 
   if (!out.length) {
+    // ultima difesa: suggerisco CSV
     throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
   }
   return out;
 }
+
 
 
 
