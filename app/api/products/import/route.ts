@@ -94,14 +94,7 @@ async function parseCSV(buf: Buffer): Promise<Row[]> {
   return rows.map(mapHeaders).map(cleanRow).filter((x): x is Row => !!x);
 }
 
-/**
- * Parser PDF robusto:
- * - normalizza spazi/righe (NBSP, multipli, ecc.)
- * - codice = primo gruppo di 5+ cifre ovunque nella riga
- * - giacenza = ultimo intero in riga
- * - unita_misura = token immediatamente prima della giacenza (best-effort)
- * - descrizione_articolo = testo tra fine-codice e prima di UM/giacenza
- */
+/** Parser PDF robusto */
 async function parsePDF(buf: Buffer): Promise<Row[]> {
   const mod = await import("pdf-parse");
   const pdfParse: (data: Buffer | Uint8Array | ArrayBuffer, opts?: any) => Promise<{ text: string }> =
@@ -185,7 +178,7 @@ async function parsePDF(buf: Buffer): Promise<Row[]> {
     });
   }
 
-  // fallback grezzo se non è stato trovato nulla (layout inaspettato)
+  // fallback grezzo
   if (!out.length) {
     for (const raw of lines) {
       if (isHeaderOrFooter(raw)) continue;
@@ -199,9 +192,7 @@ async function parsePDF(buf: Buffer): Promise<Row[]> {
     }
   }
 
-  if (!out.length) {
-    throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
-  }
+  if (!out.length) throw new Error("Nessuna riga valida trovata nel PDF (usa un CSV).");
   return out;
 }
 
@@ -235,9 +226,8 @@ export async function POST(req: NextRequest) {
     let rows: Row[] = kind === "csv" ? await parseCSV(buf) : await parsePDF(buf);
     if (!rows.length) return NextResponse.json({ ok: false, error: "File vuoto o non valido" }, { status: 400 });
 
-    // Applica i toggle e aggiungi SEMPRE 'title' di fallback (title è NOT NULL nella tua tabella)
+    // Applica toggle e fallback 'title' (title è NOT NULL nella tua tabella)
     rows = rows.map(r => {
-      // base come any per includere anche 'title' (colonna legacy)
       const base: any = { codice: r.codice };
 
       // Fallback per title: descrizione se disponibile, altrimenti il codice
@@ -260,20 +250,38 @@ export async function POST(req: NextRequest) {
       return base;
     });
 
-    // upsert a blocchi
+    // **DE-DUPE** per codice: vince l'ultima occorrenza nel file
+    const map = new Map<string, any>();
+    for (const r of rows) map.set(r.codice, r);
+    const deduped = Array.from(map.values());
+    const duplicatesDropped = rows.length - deduped.length;
+
+    // upsert a blocchi, con messaggio errore DB
     const CHUNK = 1000;
     let touched = 0, failed = 0;
-    for (let i = 0; i < rows.length; i += CHUNK) {
-      const slice = rows.slice(i, i + CHUNK);
+    let lastError: any = null;
+
+    for (let i = 0; i < deduped.length; i += CHUNK) {
+      const slice = deduped.slice(i, i + CHUNK);
       const { error } = await supabase
         .from("products")
         .upsert(slice, { onConflict: "codice" }) // richiede UNIQUE (codice)
         .select("id");
-      if (error) { failed += slice.length; }
+      if (error) { failed += slice.length; lastError = error; }
       else { touched += slice.length; }
     }
 
-    return NextResponse.json({ ok: true, total: rows.length, touched, failed, onlyStock, allowPriceDiscount, kind });
+    return NextResponse.json({
+      ok: failed === 0,
+      total: deduped.length,
+      touched,
+      failed,
+      duplicatesDropped,
+      onlyStock,
+      allowPriceDiscount,
+      kind,
+      errorMessage: lastError?.message || null
+    });
   } catch (e: any) {
     console.error("[products/import] Error:", e);
     return NextResponse.json({ ok: false, error: e.message || "Import error" }, { status: 500 });
