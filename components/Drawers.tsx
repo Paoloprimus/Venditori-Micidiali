@@ -1,6 +1,7 @@
 // components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
+import ProductManager from "./products/ProductManager"; // ⬅️ NEW
 
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
@@ -147,7 +148,7 @@ export function LeftDrawer({
   );
 }
 
-/** Drawer destro Impostazioni (vuoto per ora). */
+/** Drawer destro: impostazioni | gestione prodotti */
 export function RightDrawer({
   open,
   onClose,
@@ -155,15 +156,36 @@ export function RightDrawer({
   open: boolean;
   onClose: () => void;
 }) {
+  const [tab, setTab] = useState<"settings" | "products">("products"); // default: prodotti
+  useEffect(() => {
+    if (!open) setTab("products");
+  }, [open]);
+
   return (
     <aside className={`drawer right ${open ? "open" : ""}`}>
-      <div className="topbar">
+      <div className="topbar" style={{ gap: 8 }}>
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
-        <div className="title">Impostazioni</div>
+        <div className="title">Pannello</div>
         <div className="spacer" />
+        <button
+          className={`btn ${tab === "settings" ? "active" : ""}`}
+          onClick={() => setTab("settings")}
+        >
+          Impostazioni
+        </button>
+        <button
+          className={`btn ${tab === "products" ? "active" : ""}`}
+          onClick={() => setTab("products")}
+        >
+          Gestione prodotti
+        </button>
       </div>
-      <div className="list">
-        {/* Vuoto per ora */}
+
+      <div className="list" style={{ padding: 8 }}>
+        {tab === "settings" && (
+          <div style={{ color: "var(--muted)" }}>Impostazioni (coming soon)</div>
+        )}
+        {tab === "products" && <ProductManager onCloseDrawer={onClose} />}
       </div>
     </aside>
   );
