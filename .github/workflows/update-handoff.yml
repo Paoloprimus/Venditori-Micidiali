@@ -1,18 +1,15 @@
-name: Update Handoff
+name: Update Handoff (ogni 3 push)
 
 on:
   push:
-    branches: [ main ]
-  workflow_dispatch: {}
-  schedule:
-    - cron: "0 7 * * 1" # ogni lunedì alle 07:00 UTC (modifica se vuoi)
+    branches: [ main ]   # cambia se usi un altro branch
+  workflow_dispatch: {}  # avvio manuale, se vuoi
 
 jobs:
-  build-docs:
+  update-handoff:
     runs-on: ubuntu-latest
-
     permissions:
-      contents: write   # serve per pushare i commit
+      contents: write   # per fare commit dal workflow
 
     steps:
       - name: Checkout
@@ -23,27 +20,60 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Setup Supabase CLI (opzionale ma consigliato)
+      - name: Setup Supabase CLI (opzionale)
         uses: supabase/setup-cli@v1
         with:
           version: latest
 
-      - name: Generate handoff docs
+      # --- Logica "ogni 3 push" con file contatore ---
+      - name: Incrementa contatore e decidi se generare
+        id: gate
+        run: |
+          COUNTER_FILE=".github/handoff_counter.txt"
+          # leggi contatore (di default 0)
+          if [ -f "$COUNTER_FILE" ]; then
+            COUNT=$(cat "$COUNTER_FILE" || echo "0")
+          else
+            COUNT=0
+          fi
+          COUNT=$((COUNT+1))
+          echo "$COUNT" > "$COUNTER_FILE"
+
+          # se < 3, committa solo il contatore e salta generazione
+          if [ "$COUNT" -lt 3 ]; then
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            if [ -n "$(git status --porcelain)" ]; then
+              git add "$COUNTER_FILE"
+              git commit -m "chore(handoff): step ${COUNT}/3 [skip ci]"
+              git push
+            fi
+            echo "rungen=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+
+          # altrimenti, è il 3° push → abilita generazione e reset
+          echo "rungen=true" >> $GITHUB_OUTPUT
+
+      - name: Genera handoff (solo al 3° push)
+        if: steps.gate.outputs.rungen == 'true'
         run: |
           node scripts/update_handoff.mjs
         env:
-          # Se vuoi il dump schema remoto con CLI:
-          # Fornisci un DB URL (postgres://...) come secret del repo
+          # facoltativo: se vuoi il dump schema completo con RLS
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
-      - name: Commit & Push changes
+      - name: Commit & Push (solo al 3° push)
+        if: steps.gate.outputs.rungen == 'true'
         run: |
+          # resetta contatore a 0 + commit docs
+          echo "0" > .github/handoff_counter.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/handoff .github/handoff_counter.txt
           if [ -n "$(git status --porcelain)" ]; then
-            git add docs/handoff
-            git commit -m "chore(handoff): auto-update"
+            git commit -m "chore(handoff): auto-update (ogni 3 push) [skip ci]"
             git push
           else
-            echo "No changes to commit."
+            echo "Nessuna modifica da committare."
           fi
