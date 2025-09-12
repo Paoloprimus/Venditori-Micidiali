@@ -1,0 +1,49 @@
+name: Update Handoff
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch: {}
+  schedule:
+    - cron: "0 7 * * 1" # ogni lunedì alle 07:00 UTC (modifica se vuoi)
+
+jobs:
+  build-docs:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write   # serve per pushare i commit
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Setup Supabase CLI (opzionale ma consigliato)
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Generate handoff docs
+        run: |
+          node scripts/update_handoff.mjs
+        env:
+          # Se vuoi il dump schema remoto con CLI:
+          # Fornisci un DB URL (postgres://...) come secret del repo
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+
+      - name: Commit & Push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain)" ]; then
+            git add docs/handoff
+            git commit -m "chore(handoff): auto-update"
+            git push
+          else
+            echo "No changes to commit."
+          fi
