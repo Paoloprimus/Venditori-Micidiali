@@ -1,6 +1,4 @@
-# DB Schema (Supabase)
-
-> Schema generato concatenando le **migrations**.
+# DB Schema
 
 ```sql
 -- 2025-08-23_memory_proposals.sql

@@ -1,11 +1,5 @@
 # Handoff Overview
 
-## Stack & Deploy
-- **Frontend**: Next.js (React)
-- **Backend**: API Routes Next.js
-- **DB**: Supabase (Postgres + RLS)
-- **Deploy**: Vercel (app) / Supabase (DB)
-
 ## Scripts npm
 ```json
 {
@@ -34,16 +28,7 @@
 }
 ```
 
-## DevDependencies
-```json
-{
-  "typescript": "5.5.4",
-  "@types/react": "18.3.3",
-  "@types/node": "20.14.12"
-}
-```
-
-## API Routes rilevate
+## API Routes
 ```
 app/api/accounts/create/route.ts
 app/api/accounts/update-custom/route.ts
@@ -71,5 +56,5 @@ app/api/usage/current-chat/route.ts
 app/api/voice/transcribe/route.ts
 ```
 
-## Env files rilevati
-_(nessun file .env trovato)_
+## Env
+_(nessun file .env)_
