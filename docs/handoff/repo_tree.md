@@ -4,6 +4,7 @@
 .github/
 .github/workflows/
 .github/workflows/update-handoff.yml
+.github/handoff_counter.txt
 app/
 app/admin/
 app/admin/login/
@@ -111,6 +112,13 @@ components/Drawers.tsx
 components/HomeClient.tsx
 components/ProposalGenerator.tsx
 components/SaveNoteButton.tsx
+docs/
+docs/handoff/
+docs/handoff/db_schema.md
+docs/handoff/handoff_overview.md
+docs/handoff/handoff_pack.md
+docs/handoff/handoff_tasks.md
+docs/handoff/repo_tree.md
 hooks/
 hooks/useAutoResize.ts
 hooks/useConversations.ts
