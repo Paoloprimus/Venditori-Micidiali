@@ -1,4 +1,4 @@
-name: Update Handoff (ogni 3 push + manuale)
+name: Update Handoff (ogni 10 push + manuale)
 
 on:
   push:
@@ -37,8 +37,7 @@ jobs:
         with:
           version: latest
 
-      # --- Decidi se correre adesso o usare contatore ---
-      - name: Gate (manuale o ogni 3 push)
+      - name: Gate (manuale o ogni 10 push)
         id: gate
         run: |
           RUN_NOW="${{ inputs.run_now }}"
@@ -60,7 +59,7 @@ jobs:
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add "$COUNTER_FILE" || true
-            git diff --cached --quiet || git commit -m "chore(handoff): step ${COUNT}/3 [skip ci]"
+            git diff --cached --quiet || git commit -m "chore(handoff): step ${COUNT}/10 [skip ci]"
             git push || true
             echo "rungen=false" >> $GITHUB_OUTPUT
             exit 0
@@ -76,12 +75,22 @@ jobs:
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
 
+      - name: Lista file generati
+        if: steps.gate.outputs.rungen == 'true'
+        run: |
+          echo "=== TREE docs ==="
+          ls -la docs || true
+          echo "=== TREE docs/handoff ==="
+          ls -la docs/handoff || true
+          echo "=== TREE docs/handoff_share ==="
+          ls -la docs/handoff_share || true
+
       - name: Commit & Push
         if: steps.gate.outputs.rungen == 'true'
         run: |
           echo "0" > .github/handoff_counter.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/handoff .github/handoff_counter.txt
+          git add docs/handoff docs/handoff_share .github/handoff_counter.txt
           git diff --cached --quiet || git commit -m "chore(handoff): auto-update [skip ci]"
           git push || true
