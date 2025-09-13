@@ -428,7 +428,29 @@ docs/handoff/handoff_tasks.md:20: supabase/migrations/2025-08-23_memory_proposal
 scripts/update_handoff.mjs:136: const patterns = ["TODO", "FIXME", "@todo", "@fixme"];
 scripts/update_handoff.mjs:245: ## TODO/FIXME
 supabase/migrations/2025-08-23_memory_proposals.sql:85: -- TODO RLS policies per-user/tenant (dipende dal modello auth corrente).
+- Implementare **RLS (Row-Level Security)** su tutte le tabelle:
+  - `accounts`, `contacts`, `products`, `proposals`, `notes`, `custom_fields_registry`, ecc.
+  - Distinguere almeno due ruoli: **admin** e **venditore**.
+  - Policy: i venditori vedono solo i propri dati; admin vede tutto.
+- Configurare **autenticazione Supabase** con gestione ruoli.
+- Definire chiaramente flusso di **registrazione / login**.
+- Completare gestione **environment variables** (`SUPABASE_URL`, `SUPABASE_ANON_KEY`, `OPENAI_API_KEY`, ecc.).
+- Documentare le **pagine Next.js** con breve descrizione del loro scopo (es. `app/chat/[id]` = sessione di chat vocale con cliente).
+- Documentare il **flusso AI**: 
+  - trascrizione voce → salvataggio in DB → chiamata modello → risposta TTS.
+  - memoria (embeddings + upsert) → recupero in chat.
 ```
+
+## Roadmap a breve termine
+1. **Sicurezza & Accessi**
+   - Attivare RLS in Supabase con policies.
+   - Validare login/ruolo nel frontend (redirect se non autenticato).
+2. **User Flows**
+   - Scrivere doc breve con mapping “pagina → funzione”.
+   - Collegare ogni API route al relativo uso (es. `/api/voice/transcribe` ↔ chat vocale).
+3. **Ambiente**
+   - Sistemare file `.env.example` con tutte le variabili richieste.
+   - Aggiungere note su come configurare deploy su Vercel (env + secrets).
 
 ## Commits recenti
 ```
