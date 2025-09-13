@@ -52,6 +52,8 @@ app/api/products/create/route.ts
 app/api/products/import/route.ts
 app/api/proposals/[id]/route.ts
 app/api/proposals/generate/route.ts
+app/api/standard/normalize/route.ts
+app/api/standard/shortlist/route.ts
 app/api/usage/current-chat/route.ts
 app/api/voice/transcribe/route.ts
 ```

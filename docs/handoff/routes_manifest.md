@@ -24,6 +24,8 @@
 - API app/api/products/import/route.ts — [POST]
 - API app/api/proposals/[id]/route.ts — [GET, PATCH]
 - API app/api/proposals/generate/route.ts — [POST]
+- API app/api/standard/normalize/route.ts — [POST]
+- API app/api/standard/shortlist/route.ts — [POST]
 - API app/api/usage/current-chat/route.ts — [GET]
 - API app/api/voice/transcribe/route.ts — [POST, GET]
 - PAGE app/chat/[id]/page.tsx

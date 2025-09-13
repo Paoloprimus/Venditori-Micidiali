@@ -65,6 +65,11 @@ app/api/proposals/[id]/
 app/api/proposals/[id]/route.ts
 app/api/proposals/generate/
 app/api/proposals/generate/route.ts
+app/api/standard/
+app/api/standard/normalize/
+app/api/standard/normalize/route.ts
+app/api/standard/shortlist/
+app/api/standard/shortlist/route.ts
 app/api/usage/
 app/api/usage/current-chat/
 app/api/usage/current-chat/route.ts
@@ -117,8 +122,14 @@ docs/handoff/
 docs/handoff/db_schema.md
 docs/handoff/handoff_overview.md
 docs/handoff/handoff_pack.md
+docs/handoff/handoff_summary.md
 docs/handoff/handoff_tasks.md
 docs/handoff/repo_tree.md
+docs/handoff/routes_manifest.md
+docs/handoff_share/
+docs/handoff_share/handoff_index.md
+docs/handoff_share/handoff_pack_part_01.md
+docs/handoff_share/handoff_prompt_starter.txt
 hooks/
 hooks/useAutoResize.ts
 hooks/useConversations.ts
@@ -138,6 +149,7 @@ lib/supabase/server.ts
 lib/voice/
 lib/voice/dispatch.ts
 lib/voice/intents.ts
+lib/config.ts
 lib/embeddings.ts
 lib/openai.ts
 lib/sessionTitle.ts
@@ -157,6 +169,7 @@ next.config.mjs
 package.json
 postcss.config.js
 progetto.tsx
+README_CODER_CHANGE.md
 tailwind.config.js
 tsconfig.json
 ```
