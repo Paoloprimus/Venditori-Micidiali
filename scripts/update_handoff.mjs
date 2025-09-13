@@ -240,18 +240,37 @@ async function buildDbSchema(method, sql) {
 }
 
 async function buildTasks({ todos, gitlog, changelog }) {
+  const roadmap = `
+## Roadmap a breve termine
+1. **Sicurezza & Accessi**
+   - Attivare RLS in Supabase con policies (admin ↔ venditori).
+   - Validare login/ruolo nel frontend (redirect se non autenticato).
+2. **User Flows**
+   - Mappare ogni pagina Next.js con il suo scopo (es. \`app/chat/[id]\` = chat vocale).
+   - Collegare API routes al loro uso.
+3. **Ambiente**
+   - Aggiornare \`.env.example\` con tutte le variabili richieste.
+   - Documentare configurazione deploy su Vercel.
+4. **AI Integration**
+   - Test end-to-end: input vocale → trascrizione → memoria → proposta → TTS.
+   - Verificare embeddings e recupero in memoria.
+`;
+
   return `# Handoff Tasks
 
-## TODO/FIXME
-${todos ? block("", todos) : "_(nessuno)_"}
+## TODO / FIXME
+${todos ? block("", todos) : "_(nessuno trovato)_"}
 
 ## Commits recenti
 ${gitlog ? block("", gitlog) : "_(vuoto)_"}
 
 ## CHANGELOG
 ${changelog || "_(assente)_"}
+
+${roadmap}
 `;
 }
+
 
 async function buildPack(parts) {
   return `# Handoff Pack
