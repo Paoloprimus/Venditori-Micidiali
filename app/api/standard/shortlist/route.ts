@@ -2,10 +2,16 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 
-function ensureEnv(name: string): string {
-  const v = process.env[name];
-  if (!v) throw new Error(`Missing required env var: ${name}`);
-  return v;
+function getSupabaseUrl(): string {
+  const url =
+    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
+  if (!url) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL");
+  return url;
+}
+function getServiceKey(): string {
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  if (!key) throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
+  return key;
 }
 
 export async function POST(req: NextRequest) {
@@ -18,25 +24,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Campo 'q' mancante o vuoto.", items: [] }, { status: 400 });
     }
 
-    const supabase = createClient(
-      ensureEnv("SUPABASE_URL"),
-      // SERVICE_ROLE consigliata per bypassare RLS lato server;
-      // se preferisci ANON, assicurati che la policy di SELECT/EXECUTE lo consenta.
-      ensureEnv("SUPABASE_SERVICE_ROLE_KEY")
-    );
-
-    // Chiama la funzione SQL standard_shortlist
-    const { data, error } = await supabase.rpc("standard_shortlist", {
-      q: query,
-      k: k,
-    });
+    const supabase = createClient(getSupabaseUrl(), getServiceKey());
+    const { data, error } = await supabase.rpc("standard_shortlist", { q: query, k });
 
     if (error) {
       console.error("[shortlist] rpc error:", error);
       return NextResponse.json({ error: error.message, items: [] }, { status: 500 });
     }
 
-    // normalizza output
     const items = (data ?? []).map((row: any) => ({
       intent_key: row.intent_key,
       text: row.text,
@@ -50,6 +45,5 @@ export async function POST(req: NextRequest) {
   }
 }
 
-// opzionale: neghiamo GET
 export const GET = async () =>
   NextResponse.json({ error: "Use POST with JSON body { q, topK? }." }, { status: 405 });
