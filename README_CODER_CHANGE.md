@@ -61,7 +61,7 @@ SUPABASE_DB_URL (consigliato per dump schema completo con RLS).
 5) Avvio locale (Quickstart)
 npm install
 npm run dev
-# Apri il browser sull'URL indicato (di solito http://localhost:3000)
+# Apri il browser sull'URL indicato
 
 6) Cose da NON fare al primo colpo
 
