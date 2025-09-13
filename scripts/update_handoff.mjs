@@ -1,13 +1,9 @@
 // scripts/update_handoff.mjs
 // Auto-update Handoff docs per Next.js + Supabase + Vercel
-// - Nessuna dipendenza: usa solo Node core.
-// - Funziona in locale e in GitHub Actions.
-// - Se SUPABASE_DB_URL è settata e la CLI "supabase" è presente,
-//   fa il dump schema (con RLS). Altrimenti concatena le migrations.
-// - Include: Quickstart, Routes Manifest, Pack in chunk “share”.
+// Nessuna dipendenza extra: solo Node core
+// Genera docs/handoff/* e docs/handoff_share/*
 
 import fs from "node:fs/promises";
-import fssync from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import { exec as _exec } from "node:child_process";
@@ -23,7 +19,7 @@ const IGNORE_DIRS = new Set([
   "node_modules", ".git", ".next", "dist", "build", "coverage", ".turbo", ".vercel"
 ]);
 
-// --------------------- UTIL ---------------------
+// --------------------- UTILS ---------------------
 async function ensureDir(p) { await fs.mkdir(p, { recursive: true }); }
 async function exists(p) { try { await fs.stat(p); return true; } catch { return false; } }
 function block(lang, s) { return "```" + lang + "\n" + (s ?? "").trimEnd() + "\n```"; }
@@ -127,7 +123,6 @@ async function collectEnvFiles() {
 }
 
 async function getGitSummary() {
-  // Usa una finestra configurabile (es. 30.days) dal workflow input
   const window = process.env.GIT_WINDOW || "30.days";
   try {
     const { stdout } = await exec(`git log --since='${window}' --pretty=format:'- %h %ad %s' --date=short`);
@@ -138,7 +133,6 @@ async function getGitSummary() {
 }
 
 async function scanTodos() {
-  // Cerca TODO/FIXME nei sorgenti principali
   const patterns = ["TODO", "FIXME", "@todo", "@fixme"];
   const res = [];
   async function walk(dir) {
@@ -169,7 +163,6 @@ async function readChangelog() {
 }
 
 async function dumpSupabaseSchema() {
-  // 1) Se CLI presente e SUPABASE_DB_URL impostata, usa dump (con RLS)
   try {
     const { stdout: ver } = await exec("supabase --version");
     if (ver && process.env.SUPABASE_DB_URL) {
@@ -181,13 +174,9 @@ async function dumpSupabaseSchema() {
         if (sql.trim()) return { method: "supabase-cli", sql };
       }
     }
-  } catch { /* ignore */ }
-
-  // 2) Fallback: concatena tutte le migrations .sql
+  } catch {}
   if (await exists(MIG_DIR)) {
-    const files = (await fs.readdir(MIG_DIR))
-      .filter(f => f.endsWith(".sql"))
-      .sort();
+    const files = (await fs.readdir(MIG_DIR)).filter(f => f.endsWith(".sql")).sort();
     let sql = "";
     for (const f of files) {
       const p = path.join(MIG_DIR, f);
@@ -195,20 +184,13 @@ async function dumpSupabaseSchema() {
     }
     if (sql.trim()) return { method: "migrations", sql };
   }
-
-  // 3) Ultimo fallback
-  return { method: "fallback", sql: "-- Nessuno schema trovato. Aggiungi SUPABASE_DB_URL o le migrations in supabase/migrations." };
+  return { method: "fallback", sql: "-- Nessuno schema trovato." };
 }
 
-// --------------------- SEZIONI PACK ---------------------
+// --------------------- SEZIONI ---------------------
 async function quickstartSection(pkg, envs) {
   const run = pkg?.scripts?.dev ? "npm run dev" : (pkg?.scripts?.start ? "npm start" : "npx next dev");
-  const envKeys = envs.flatMap(e => (e.content || "")
-    .split(/\r?\n/)
-    .map(l => l.trim())
-    .filter(Boolean)
-    .map(l => l.split("=")[0])
-  );
+  const envKeys = envs.flatMap(e => (e.content || "").split(/\r?\n/).map(l => l.split("=")[0]));
   const mustHave = envKeys.filter(k => /KEY|SECRET|URL|TOKEN|PROJECT|SUPABASE|OPENAI/i.test(k));
   const publicEnv = envKeys.filter(k => /^NEXT_PUBLIC_/i.test(k));
 
@@ -219,37 +201,21 @@ async function quickstartSection(pkg, envs) {
 ${run}
 \`\`\`
 
-**Variabili importanti (da .env)**
+**Variabili importanti**
 ${mustHave.length ? mustHave.map(k => "- " + k).join("\n") : "_(nessuna individuata)_"}
 
-**Variabili pubbliche utili**
+**Variabili pubbliche**
 ${publicEnv.length ? publicEnv.map(k => "- " + k).join("\n") : "_(nessuna individuata)_"}
-
-**File chiave**
-- next.config.js (se presente)
-- vercel.json (se presente)
-- supabase/migrations/*.sql
-- app/** o pages/** (routing Next)
-- pages/api/** o app/api/** (endpoint)
 `;
 }
 
 async function buildOverview({ pkg, apiRoutes, envs }) {
   const scripts = pkg?.scripts ? block("json", JSON.stringify(pkg.scripts, null, 2)) : "_(nessuno)_";
   const deps = pkg?.dependencies ? block("json", JSON.stringify(pkg.dependencies, null, 2)) : "_(nessuno)_";
-  const devDeps = pkg?.devDependencies ? block("json", JSON.stringify(pkg.devDependencies, null, 2)) : "_(nessuno)_";
-  const routes = apiRoutes.length ? block("", apiRoutes.join("\n")) : "_(nessuna API trovata)_";
-  const envSection = envs.length
-    ? envs.map(e => `### ${e.name}\n${block("", e.content || "_(vuoto)_")}`).join("\n\n")
-    : "_(nessun file .env trovato)_";
+  const routes = apiRoutes.length ? block("", apiRoutes.join("\n")) : "_(nessuna API)_";
+  const envSection = envs.length ? envs.map(e => `### ${e.name}\n${block("", e.content)}`).join("\n\n") : "_(nessun file .env)_";
 
   return `# Handoff Overview
-
-## Stack & Deploy
-- **Frontend**: Next.js (React)
-- **Backend**: API Routes Next.js
-- **DB**: Supabase (Postgres + RLS)
-- **Deploy**: Vercel (app) / Supabase (DB)
 
 ## Scripts npm
 ${scripts}
@@ -257,13 +223,10 @@ ${scripts}
 ## Dependencies
 ${deps}
 
-## DevDependencies
-${devDeps}
-
-## API Routes rilevate
+## API Routes
 ${routes}
 
-## Env files rilevati
+## Env
 ${envSection}
 `;
 }
@@ -273,34 +236,27 @@ async function buildRepoTree(tree) {
 }
 
 async function buildDbSchema(method, sql) {
-  const note = method === "supabase-cli"
-    ? "> Schema generato via **Supabase CLI** con RLS.\n"
-    : method === "migrations"
-      ? "> Schema generato concatenando le **migrations**.\n"
-      : "> **ATTENZIONE**: nessuno schema disponibile.\n";
-
-  return `# DB Schema (Supabase)\n\n${note}\n${block("sql", sql || "--")}\n`;
+  return `# DB Schema\n\n${block("sql", sql || "--")}\n`;
 }
 
 async function buildTasks({ todos, gitlog, changelog }) {
   return `# Handoff Tasks
 
-## TODO / FIXME (scan sorgente)
-${todos ? block("", todos) : "_(nessuno trovato)_"}
+## TODO/FIXME
+${todos ? block("", todos) : "_(nessuno)_"}
 
 ## Commits recenti
 ${gitlog ? block("", gitlog) : "_(vuoto)_"}
 
-## CHANGELOG (estratto)
-${changelog ? changelog : "_(assente)_"}
+## CHANGELOG
+${changelog || "_(assente)_"}
 `;
 }
 
 async function buildPack(parts) {
   return `# Handoff Pack
 
-> Documento unico per onboarding rapido.  
-> Copia questo file nella nuova chat.
+> Documento unico per onboarding rapido.
 
 ---
 
@@ -328,7 +284,7 @@ ${parts.tasks}
 `;
 }
 
-// --------------------- SHARE (chunk) ---------------------
+// --------------------- SHARE ---------------------
 async function chunkString(str, maxLen = 100000) {
   const chunks = [];
   for (let i = 0; i < str.length; i += maxLen) {
@@ -339,8 +295,6 @@ async function chunkString(str, maxLen = 100000) {
 
 async function writeSharePack(fullPack) {
   await ensureDir(SHARE_DIR);
-
-  // 1) Spezza il pack in chunk ~100k char
   const chunks = await chunkString(fullPack, 100000);
   const indexLines = [];
   for (let i = 0; i < chunks.length; i++) {
@@ -348,22 +302,18 @@ async function writeSharePack(fullPack) {
     await fs.writeFile(path.join(SHARE_DIR, fname), chunks[i], "utf-8");
     indexLines.push(`- ${fname}`);
   }
+  const starter = `COPIA QUESTO TESTO COME PRIMO MESSAGGIO NELLA NUOVA CHAT:
 
-  // 2) Prompt starter da incollare nella nuova chat
-  const starter = `COPIA/INCOLLA QUESTO TESTO COME PRIMO MESSAGGIO NELLA NUOVA CHAT:
+Ti passo il pacchetto di handoff a pezzi (PARTI numerate).
+Leggi tutto e poi rispondi con:
+1) riassunto operativo
+2) rischi/ambiguità
+3) prossimi passi
 
-Sei un assistente tecnico. Devo continuare lo sviluppo senza perdere contesto.
-Ti fornisco il pacchetto di handoff in più messaggi (PARTI numerate).
-Leggili TUTTI, poi rispondi con:
-1) riassunto operativo,
-2) rischi/ambiguità,
-3) prossimi passi concreti.
-
-Inizio ora a incollare PARTI in ordine. Dimmi “OK, pronta/o” quando sei pront* a riceverle.
-`;
+Inizio a incollare PARTI ora. Dimmi "OK" quando sei pronto.`;
 
   await fs.writeFile(path.join(SHARE_DIR, "handoff_prompt_starter.txt"), starter, "utf-8");
-  await fs.writeFile(path.join(SHARE_DIR, "handoff_index.md"), `# Handoff Share Index\n\n${indexLines.join("\n")}\n`, "utf-8");
+  await fs.writeFile(path.join(SHARE_DIR, "handoff_index.md"), `# Index\n\n${indexLines.join("\n")}`, "utf-8");
 }
 
 // --------------------- MAIN ---------------------
@@ -379,7 +329,6 @@ Inizio ora a incollare PARTI in ordine. Dimmi “OK, pronta/o” quando sei pron
 
   const overview = await buildOverview({ pkg, apiRoutes, envs });
   const repoTree = await buildRepoTree(tree);
-
   const { method, sql } = await dumpSupabaseSchema();
   const dbSchema = await buildDbSchema(method, sql);
 
@@ -388,21 +337,18 @@ Inizio ora a incollare PARTI in ordine. Dimmi “OK, pronta/o” quando sei pron
   const changelog = await readChangelog();
   const tasks = await buildTasks({ todos, gitlog, changelog });
 
-  // Scrive i singoli file
   await fs.writeFile(path.join(OUT_DIR, "handoff_overview.md"), overview, "utf-8");
   await fs.writeFile(path.join(OUT_DIR, "routes_manifest.md"), routesManifest, "utf-8");
   await fs.writeFile(path.join(OUT_DIR, "repo_tree.md"), repoTree, "utf-8");
   await fs.writeFile(path.join(OUT_DIR, "db_schema.md"), dbSchema, "utf-8");
   await fs.writeFile(path.join(OUT_DIR, "handoff_tasks.md"), tasks, "utf-8");
 
-  // Bundle unico
   const pack = await buildPack({ quickstart, overview, routesManifest, repoTree, dbSchema, tasks });
   await fs.writeFile(path.join(OUT_DIR, "handoff_pack.md"), pack, "utf-8");
 
-  // Versione “share” a pezzi + starter
   await writeSharePack(pack);
 
-  console.log("Handoff aggiornato in docs/handoff + docs/handoff_share ✅");
+  console.log("✅ Handoff aggiornato in docs/handoff + docs/handoff_share");
 })().catch(err => {
   console.error("Errore update_handoff:", err);
   process.exit(1);
