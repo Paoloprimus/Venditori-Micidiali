@@ -79,6 +79,22 @@ function fillTemplateSimple(tpl: string, data: Record<string, any>) {
   });
 }
 
+/** Template locali (Occam) per evitare fetch al DB lato client */
+const LOCAL_TEMPLATES: Record<string, { confirm: string; response: string }> = {
+  prod_conteggio_catalogo: {
+    confirm: "Confermi che vuoi contare le referenze di «{prodotto}» a catalogo?",
+    response: "A catalogo ho trovato {count} referenze di «{prodotto}».",
+  },
+  prod_giacenza_magazzino: {
+    confirm: "Confermi che vuoi la giacenza complessiva di «{prodotto}» in deposito?",
+    response: "In deposito ci sono {stock} pezzi di «{prodotto}».",
+  },
+  prod_prezzo_sconti: {
+    confirm: "Confermi che vuoi prezzo e sconti per «{prodotto}»?",
+    response: "Il prezzo base di «{prodotto}» è {price}. Sconto applicato: {discount}.",
+  },
+};
+
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const supabase = createSupabaseBrowser();
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
@@ -176,6 +192,19 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     });
   }, [conv.bubbles]);
 
+  // Helper per appendere SEMPRE una bolla dell'assistente
+  function appendAssistantLocal(text: string) {
+    const t = patchPriceReply(text);
+    if (typeof (conv as any).appendAssistant === "function") {
+      (conv as any).appendAssistant(t);
+    } else {
+      // Fallback visibile: invio come messaggio "assistente" emulato
+      // (comparirà comunque in chat; meglio di sparire in console)
+      // Se preferisci non innescare il modello, puoi implementare un conv.appendSystem nel tuo hook.
+      conv.send(`[RISPOSTA DATI]\n${t}`);
+    }
+  }
+
   // invio da Composer (uso testuale) — versione che fa shortlist → conferma → execute → risposta
   async function submitFromComposer() {
     if (voice.isRecording) { await voice.stopMic(); }
@@ -215,23 +244,12 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           // 4) estrai {prodotto} dal testo normalizzato (sempre)
           const prodotto = extractProductTerm(unaccentLower(normalized));
 
-          // 5) conferma (template dal DB)
-          const { data: confRow } = await supabase
-            .from("standard_intents")
-            .select("confirmation_template,response_template")
-            .eq("key", intentKey)
-            .single();
-
-          const confirmation = fillTemplateSimple(
-            confRow?.confirmation_template || "Vuoi procedere?",
-            { prodotto }
-          );
-
+          // 5) conferma con template locale (niente fetch al DB)
+          const confirmTpl = LOCAL_TEMPLATES[intentKey]?.confirm || "Vuoi procedere?";
+          const confirmation = fillTemplateSimple(confirmTpl, { prodotto });
           const userOk = window.confirm(confirmation);
           if (!userOk) {
-            if (typeof (conv as any).appendAssistant === "function") {
-              (conv as any).appendAssistant("Ok, annullato.");
-            }
+            appendAssistantLocal("Ok, annullato.");
             conv.setInput("");
             return;
           }
@@ -257,15 +275,11 @@ export default function HomeClient({ email, userName }: { email: string; userNam
             dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
             dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
           }
-          const responseTpl = confRow?.response_template || "Fatto.";
+          const responseTpl = LOCAL_TEMPLATES[intentKey]?.response || "Fatto.";
           const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
 
           // 8) mostra in chat (assistant)
-          if (typeof (conv as any).appendAssistant === "function") {
-            (conv as any).appendAssistant(finalText);
-          } else {
-            console.log("[assistant]", finalText);
-          }
+          appendAssistantLocal(finalText);
 
           conv.setInput("");
           return; // NON proseguire con conv.send()
