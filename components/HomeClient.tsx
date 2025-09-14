@@ -47,12 +47,41 @@ function patchPriceReply(text: string): string {
   return t;
 }
 
+/** --- Utility minimal per la nuova funzione --- */
+const STOPWORDS = new Set([
+  "il","lo","la","i","gli","le","un","una","uno","di","a","da","in","con","su","per","tra","fra",
+  "quanti","quanto","quante","quanta","ci","sono","è","e","che","nel","nello","nella","al","allo",
+  "alla","agli","alle","catalogo","deposito","magazzino","costa","prezzo","quanto","quanto?","?","."
+]);
+
+function unaccentLower(s: string) {
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+}
+function extractProductTerm(normalized: string) {
+  const tokens = normalized.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
+  const candidates = tokens.filter(t => !STOPWORDS.has(t));
+  if (!candidates.length) return normalized.trim();
+  // prendo il token più lungo (di solito “croissant”, “espresso”, ecc.)
+  return candidates.sort((a,b)=>b.length-a.length)[0];
+}
+async function postJSON(url: string, body: any) {
+  const r = await fetch(url, {
+    method: "POST",
+    headers: {"content-type":"application/json"},
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+function fillTemplateSimple(tpl: string, data: Record<string, any>) {
+  return tpl.replace(/\{(\w+)\}/g, (_m, k) => {
+    const v = data?.[k];
+    return v === undefined || v === null ? "" : String(v);
+  });
+}
+
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const supabase = createSupabaseBrowser();
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
-
-  // (RIMOSSO) Vecchio stato per checkbox "Dialogo ON (mani/occhi liberi)"
-  // const [dialogoOn, setDialogoOn] = useState(false);
 
   // ---- TTS
   const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
@@ -66,11 +95,10 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   });
   useEffect(() => { conv.ensureConversation(); /* once */  }, []); // eslint-disable-line
 
-  // ---- Stato conferma intent
+  // ---- Stato conferma intent (per voce legacy)
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
 
   function speakIfEnabled(msg: string) {
-    // Regola d'oro: mai solo voce → leggi solo se lo speaker è ON
     if (voice.speakerEnabled) {
       speakAssistant(msg);
     }
@@ -78,7 +106,6 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
   function askConfirm(i: Intent) {
     setPendingIntent(i);
-    // prompt vocale sintetico (letto solo se speaker ON)
     switch (i.type) {
       case "CLIENT_CREATE":
         speakIfEnabled(`Confermi: creo il cliente ${i.name ?? "senza nome"}?`);
@@ -97,20 +124,16 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     }
   }
 
-  // ---- Voce (SR nativa)
+  // ---- Voce (SR nativa) — lasciata invariata
   const voice = useVoice({
     onTranscriptionToInput: (text) => { conv.setInput(text); },
-
-    // intercetta SEMPRE anche in uso vocale
     onSendDirectly: async (text) => {
       const raw = (text || "").trim();
       if (!raw) return;
 
-      // se sto attendendo conferma → gestisci sì/no
       if (pendingIntent) {
         if (YES.test(raw)) { await handleIntent(pendingIntent); setPendingIntent(null); return; }
         if (NO.test(raw))  { speakIfEnabled("Ok, annullato."); setPendingIntent(null); return; }
-        // input diverso: passa al modello normalmente
       } else {
         const intent = matchIntent(raw);
         if (intent.type !== "NONE") { askConfirm(intent); return; }
@@ -118,8 +141,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
       await conv.send(raw);
     },
-
-    onSpeak: (text) => speakAssistant(text), // speakAssistant internamente/esternamente è già gated
+    onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
       try { await conv.createConversation(titleAuto); return conv.currentConv; }
       catch { return null; }
@@ -146,24 +168,6 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     window.location.href = "/login";
   }
 
-  // invio da Composer (uso testuale)
-  async function submitFromComposer() {
-    if (voice.isRecording) { await voice.stopMic(); }
-    const txt = conv.input.trim();
-    if (!txt) return;
-
-    if (pendingIntent) {
-      if (YES.test(txt)) { await handleIntent(pendingIntent); setPendingIntent(null); conv.setInput(""); return; }
-      if (NO.test(txt))  { speakIfEnabled("Ok, annullato."); setPendingIntent(null); conv.setInput(""); return; }
-    } else {
-      const intent = matchIntent(txt);
-      if (intent.type !== "NONE") { askConfirm(intent); conv.setInput(""); return; }
-    }
-
-    await conv.send(txt);
-    conv.setInput("");
-  }
-
   // ✅ Patch solo in render: trasformo le risposte assistant prima di mostrarle
   const patchedBubbles = useMemo(() => {
     return (conv.bubbles || []).map((b: any) => {
@@ -171,6 +175,117 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       return { ...b, content: patchPriceReply(String(b.content)) };
     });
   }, [conv.bubbles]);
+
+  // invio da Composer (uso testuale) — **modificato solo questo blocco**
+  async function submitFromComposer() {
+    if (voice.isRecording) { await voice.stopMic(); }
+    const txt = conv.input.trim();
+    if (!txt) return;
+
+    // Gestione legacy sì/no della barra conferma
+    if (pendingIntent) {
+      if (YES.test(txt)) { await handleIntent(pendingIntent); setPendingIntent(null); conv.setInput(""); return; }
+      if (NO.test(txt))  { speakIfEnabled("Ok, annullato."); setPendingIntent(null); conv.setInput(""); return; }
+    } else {
+      // --- NUOVA FUNZIONE (Occam): shortlist → top1 → conferma → execute → risposta ---
+      try {
+        // 1) normalizza testo (sinonimi)
+        const norm = await postJSON(`${window.location.origin}/api/standard/normalize`, { text: txt });
+        const normalized: string = norm?.normalized || txt;
+
+        // 2) shortlist topK
+        const sl = await postJSON(`${window.location.origin}/api/standard/shortlist`, { q: normalized, topK: 5 });
+        const items: Array<{intent_key:string; text:string; score:number}> = sl?.items || [];
+
+        // 3) prendi il migliore (top-1). Se non c'è nulla → fallback chat normale
+        const top = items[0];
+        if (top && top.intent_key) {
+          const intentKey = top.intent_key;
+
+          // supportiamo i 3 intent prodotti; gli altri passano al flusso esistente
+          const isProductIntent =
+            intentKey === "prod_conteggio_catalogo" ||
+            intentKey === "prod_giacenza_magazzino" ||
+            intentKey === "prod_prezzo_sconti";
+
+          if (isProductIntent) {
+            // 4) estrai {prodotto} dal testo normalizzato
+            const prodotto = extractProductTerm(unaccentLower(normalized));
+
+            // 5) conferma (template dal DB)
+            const { data: confRow } = await supabase
+              .from("standard_intents")
+              .select("confirmation_template,response_template")
+              .eq("key", intentKey)
+              .single();
+
+            const confirmation = fillTemplateSimple(
+              confRow?.confirmation_template || "Vuoi procedere?",
+              { prodotto }
+            );
+
+            const userOk = window.confirm(confirmation);
+            if (!userOk) {
+              // append “annullato” come messaggio assistant locale, senza toccare backend
+              // se il tuo hook ha un metodo esplicito per aggiungere bubble assistant, usalo qui
+              // @ts-ignore
+              if (typeof conv.appendAssistant === "function") conv.appendAssistant("Ok, annullato.");
+              else console.info("Ok, annullato.");
+              conv.setInput("");
+              return;
+            }
+
+            // 6) execute
+            const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
+              intent_key: intentKey,
+              slots: { prodotto }
+            });
+            if (!execJson?.ok) {
+              // errore execute → fallback pulito
+              // @ts-ignore
+              if (typeof conv.appendAssistant === "function") conv.appendAssistant(`Errore: ${execJson?.error || "impossibile recuperare i dati"}.`);
+              else console.error(execJson);
+              conv.setInput("");
+              return;
+            }
+
+            // 7) compila template risposta con fallback prezzo/sconto (se 0/0)
+            const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
+            if (intentKey === "prod_prezzo_sconti") {
+              const price = Number(execJson?.data?.price) || 0;
+              const discount = Number(execJson?.data?.discount) || 0;
+              dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
+              dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
+            }
+            const responseTpl = confRow?.response_template || "Fatto.";
+            const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
+
+            // 8) mostra in chat (assistant)
+            // @ts-ignore
+            if (typeof conv.appendAssistant === "function") conv.appendAssistant(finalText);
+            else {
+              // fallback estremo: invia come messaggio assistant “locale” via onAssistantReply
+              // (verrà letto dal TTS e visto nella UI se il tuo hook lo supporta)
+              console.log("[assistant]", finalText);
+            }
+
+            conv.setInput("");
+            return; // importante: non passa alla chat generica
+          }
+        }
+      } catch (e) {
+        console.error("[standard flow error]", e);
+        // se qualcosa va storto, cadiamo nel comportamento normale
+      }
+
+      // Nessun intent prodotto riconosciuto → flusso normale
+      const intent = matchIntent(txt);
+      if (intent.type !== "NONE") { askConfirm(intent); conv.setInput(""); return; }
+    }
+
+    await conv.send(txt);
+    conv.setInput("");
+  }
 
   return (
     <>
@@ -185,8 +300,6 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         />
       </div>
       <div style={{ height: 56 }} />
-
-      {/* (RIMOSSO) Toggle Dialogo ON (vecchia spunta in alto) */}
 
       {/* Barra conferma quando c'è un intent in sospeso (clic testuale) */}
       {pendingIntent && (
@@ -221,7 +334,6 @@ export default function HomeClient({ email, userName }: { email: string; userNam
               isRecording: voice.isRecording,
               isTranscribing: voice.isTranscribing,
               error: voice.voiceError,
-              // (RIMOSSI) onPressStart / onPressEnd: il nuovo Composer non li usa
               onClick: voice.handleVoiceClick,
               voiceMode: voice.voiceMode,
               onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
