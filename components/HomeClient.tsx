@@ -47,7 +47,7 @@ function patchPriceReply(text: string): string {
   return t;
 }
 
-/** --- Utility minimal per la funzione standard --- */
+/** --- Utility minimal per il flusso standard --- */
 const STOPWORDS = new Set([
   "il","lo","la","i","gli","le","un","una","uno","di","a","da","in","con","su","per","tra","fra",
   "quanti","quanto","quante","quanta","ci","sono","è","e","che","nel","nello","nella","al","allo",
@@ -79,17 +79,14 @@ function fillTemplateSimple(tpl: string, data: Record<string, any>) {
 }
 
 /** Template locali (Occam) per evitare fetch al DB lato client */
-const LOCAL_TEMPLATES: Record<string, { confirm: string; response: string }> = {
+const LOCAL_TEMPLATES: Record<string, { response: string }> = {
   prod_conteggio_catalogo: {
-    confirm: "Confermi che vuoi contare le referenze di «{prodotto}» a catalogo?",
     response: "A catalogo ho trovato {count} referenze di «{prodotto}».",
   },
   prod_giacenza_magazzino: {
-    confirm: "Confermi che vuoi la giacenza complessiva di «{prodotto}» in deposito?",
     response: "In deposito ci sono {stock} pezzi di «{prodotto}».",
   },
   prod_prezzo_sconti: {
-    confirm: "Confermi che vuoi prezzo e sconti per «{prodotto}»?",
     response: "Il prezzo base di «{prodotto}» è {price}. Sconto applicato: {discount}.",
   },
 };
@@ -110,7 +107,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   });
   useEffect(() => { conv.ensureConversation(); /* once */  }, []); // eslint-disable-line
 
-  // ---- Stato conferma intent (per voce legacy)
+  // ---- Stato conferma intent (legacy voce) — lasciato invariato
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
 
   function speakIfEnabled(msg: string) {
@@ -139,7 +136,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     }
   }
 
-  // ---- Voce (SR nativa) — lasciata invariata
+  // ---- Voce (SR nativa) — invariata
   const voice = useVoice({
     onTranscriptionToInput: (text) => { conv.setInput(text); },
     onSendDirectly: async (text) => {
@@ -191,13 +188,31 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     });
   }, [conv.bubbles]);
 
-  // invio da Composer (uso testuale) — shortlist → conferma (popup) → execute → **conv.send(finalText)**
+  // --- Stato per bolle locali (domanda e risposta) ---
+  const [localUser, setLocalUser] = useState<string[]>([]);
+  const [localAssistant, setLocalAssistant] = useState<string[]>([]);
+
+  function appendUserLocal(text: string) {
+    setLocalUser(prev => [...prev, text]);
+  }
+  function appendAssistantLocal(text: string) {
+    setLocalAssistant(prev => [...prev, patchPriceReply(text)]);
+  }
+
+  // Unione bolle: prima remote (model), poi locali (standard flow)
+  const mergedBubbles = useMemo(() => {
+    const localsUser = localUser.map((t) => ({ role: "user", content: t }));
+    const localsAssistant = localAssistant.map((t) => ({ role: "assistant", content: t }));
+    return [...patchedBubbles, ...localsUser, ...localsAssistant];
+  }, [patchedBubbles, localUser, localAssistant]);
+
+  // invio da Composer (uso testuale) — NIENTE popup; domanda e risposta come in una chat normale
   async function submitFromComposer() {
     if (voice.isRecording) { await voice.stopMic(); }
     const txt = conv.input.trim();
     if (!txt) return;
 
-    // (Legacy) sì/no barra (teniamo la logica, ma rimuoviamo la barra UI sotto)
+    // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
     if (pendingIntent) {
       if (YES.test(txt)) {
         await handleIntent(pendingIntent);
@@ -212,7 +227,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         return;
       }
     } else {
-      // --- Flusso standard ---
+      // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
       try {
         // 1) normalizza
         const norm = await postJSON(`${window.location.origin}/api/standard/normalize`, { text: txt });
@@ -222,7 +237,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         const sl = await postJSON(`${window.location.origin}/api/standard/shortlist`, { q: normalized, topK: 5 });
         const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
 
-        // 3) top-1 → se esiste, conferma ed esegui
+        // 3) top-1 → se esiste, esegui direttamente
         const top = items[0];
         if (top && top.intent_key) {
           const intentKey = top.intent_key;
@@ -230,29 +245,23 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           // 4) estrai {prodotto}
           const prodotto = extractProductTerm(unaccentLower(normalized));
 
-          // 5) conferma (popup) con template locale
-          const confirmTpl = LOCAL_TEMPLATES[intentKey]?.confirm || "Vuoi procedere?";
-          const confirmation = fillTemplateSimple(confirmTpl, { prodotto });
-          const userOk = window.confirm(confirmation);
-          if (!userOk) {
-            conv.setInput("");
-            return;
-          }
+          // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
+          appendUserLocal(txt);
 
-          // 6) execute
+          // 5) execute
           const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
             intent_key: intentKey,
             slots: { prodotto }
           });
 
-          // Se non gestito → fallback normale
+          // Se non gestito → fallback al modello (abbiamo già scritto la domanda locale)
           if (!execJson?.ok) {
             await conv.send(txt);
             conv.setInput("");
             return;
           }
 
-          // 7) compila template risposta (con fallback prezzo/sconto se 0)
+          // 6) compila template risposta (con fallback prezzo/sconto se 0)
           const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
           if (intentKey === "prod_prezzo_sconti") {
             const price = Number(execJson?.data?.price) || 0;
@@ -260,14 +269,18 @@ export default function HomeClient({ email, userName }: { email: string; userNam
             dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
             dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
           }
-          const responseTpl = LOCAL_TEMPLATES[intentKey]?.response || "Fatto.";
+
+          const responseTpl =
+            LOCAL_TEMPLATES[intentKey]?.response ||
+            "Fatto.";
+
           const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
 
-          // 8) invia al modello (UNA SOLA risposta, nessuna bolla locale)
-          await conv.send(finalText);
+          // 👉 6.1: UNA SOLA risposta in chat (assistant locale)
+          appendAssistantLocal(finalText);
 
           conv.setInput("");
-          return;
+          return; // NON chiamare conv.send() qui: evitiamo la seconda risposta del modello
         }
       } catch (e) {
         console.error("[standard flow error]", e);
@@ -283,7 +296,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       }
     }
 
-    // Fallback: invia al modello generico
+    // Fallback: invia al modello generico (mostra domanda/risposta gestite dal tuo hook)
     await conv.send(txt);
     conv.setInput("");
   }
@@ -291,8 +304,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   return (
     <>
       {/* TopBar */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "var(--bg)", borderBottom: "1px solid " +
-      "var(--ring)" }}>
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "var(--bg)", borderBottom: "1px solid var(--ring)" }}>
         <TopBar
           title={conv.currentConv ? conv.currentConv.title : "Venditori Micidiali"}
           userName={userName}
@@ -303,12 +315,17 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       </div>
       <div style={{ height: 56 }} />
 
-      {/* ❌ RIMOSSA la barra di conferma richiesta sotto la TopBar */}
+      {/* ❌ Nessuna barra di conferma richiesta sotto la TopBar */}
 
       {/* Contenuto */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
         <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
-          <Thread bubbles={patchedBubbles} serverError={conv.serverError} threadRef={conv.threadRef} endRef={conv.endRef} />
+          <Thread
+            bubbles={mergedBubbles}
+            serverError={conv.serverError}
+            threadRef={conv.threadRef}
+            endRef={conv.endRef}
+          />
           <Composer
             value={conv.input}
             onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
