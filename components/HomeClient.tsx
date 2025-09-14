@@ -198,42 +198,64 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         const items: Array<{intent_key:string; text:string; score:number}> = sl?.items || [];
 
         // 3) prendi il migliore (top-1). Se non c'è nulla → fallback chat normale
-        const top = items[0];
-        if (top && top.intent_key) {
-          const intentKey = top.intent_key;
+const top = items[0];
+if (top && top.intent_key) {
+  const intentKey = top.intent_key;
 
-          // supportiamo i 3 intent prodotti; gli altri passano al flusso esistente
-          const isProductIntent =
-            intentKey === "prod_conteggio_catalogo" ||
-            intentKey === "prod_giacenza_magazzino" ||
-            intentKey === "prod_prezzo_sconti";
+  // 4) estrai {prodotto} dal testo normalizzato (sempre)
+  const prodotto = extractProductTerm(unaccentLower(normalized));
 
-          if (isProductIntent) {
-            // 4) estrai {prodotto} dal testo normalizzato
-            const prodotto = extractProductTerm(unaccentLower(normalized));
+  // 5) conferma (template dal DB)
+  const { data: confRow } = await supabase
+    .from("standard_intents")
+    .select("confirmation_template,response_template")
+    .eq("key", intentKey)
+    .single();
 
-            // 5) conferma (template dal DB)
-            const { data: confRow } = await supabase
-              .from("standard_intents")
-              .select("confirmation_template,response_template")
-              .eq("key", intentKey)
-              .single();
+  const confirmation = fillTemplateSimple(
+    confRow?.confirmation_template || "Vuoi procedere?",
+    { prodotto }
+  );
 
-            const confirmation = fillTemplateSimple(
-              confRow?.confirmation_template || "Vuoi procedere?",
-              { prodotto }
-            );
+  const userOk = window.confirm(confirmation);
+  if (!userOk) {
+    if (typeof (conv as any).appendAssistant === "function") (conv as any).appendAssistant("Ok, annullato.");
+    conv.setInput("");
+    return;
+  }
 
-            const userOk = window.confirm(confirmation);
-            if (!userOk) {
-              // append “annullato” come messaggio assistant locale, senza toccare backend
-              // se il tuo hook ha un metodo esplicito per aggiungere bubble assistant, usalo qui
-              // @ts-ignore
-              if (typeof conv.appendAssistant === "function") conv.appendAssistant("Ok, annullato.");
-              else console.info("Ok, annullato.");
-              conv.setInput("");
-              return;
-            }
+  // 6) execute (proviamo SEMPRE con il top intent)
+  const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
+    intent_key: intentKey,
+    slots: { prodotto }
+  });
+
+  // Se non gestito dall'execute, fallback alla chat normale
+  if (!execJson?.ok) {
+    await conv.send(txt);
+    conv.setInput("");
+    return;
+  }
+
+  // 7) compila template risposta con fallback prezzo/sconto (se 0/0)
+  const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
+  if (intentKey === "prod_prezzo_sconti") {
+    const price = Number(execJson?.data?.price) || 0;
+    const discount = Number(execJson?.data?.discount) || 0;
+    dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
+    dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
+  }
+  const responseTpl = confRow?.response_template || "Fatto.";
+  const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
+
+  // 8) mostra in chat (assistant)
+  if (typeof (conv as any).appendAssistant === "function") (conv as any).appendAssistant(finalText);
+  else console.log("[assistant]", finalText);
+
+  conv.setInput("");
+  return; // importante: NON passare a conv.send()
+}
+
 
             // 6) execute
             const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
