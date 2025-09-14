@@ -1,6 +1,6 @@
 // components/HomeClient.tsx
 "use client";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
 import { createSupabaseBrowser } from "../lib/supabase/client";
 
@@ -19,6 +19,33 @@ import { handleIntent } from "@/lib/voice/dispatch"; // ⬅️ rimosso import 's
 
 const YES = /\b(s[ìi]|esatto|ok|procedi|vai|confermo|invia)\b/i;
 const NO  = /\b(no|annulla|stop|ferma|negativo|non ancora)\b/i;
+
+/** Patch minima: se la risposta sul prezzo contiene 0 o 0% sostituisco con fallback chiari. */
+function patchPriceReply(text: string): string {
+  if (!text) return text;
+
+  let t = text;
+
+  // "Il prezzo base di «X» è 0." → "Il prezzo base di «X» è non disponibile a catalogo."
+  t = t.replace(
+    /(Il prezzo base di «[^»]+» è )0([.,\s]|$)/i,
+    "$1non disponibile a catalogo$2"
+  );
+
+  // "Sconto applicato: 0%" → "Sconto applicato: nessuno"
+  t = t.replace(
+    /(Sconto(?:\sapplicato)?:\s*)0\s*%/i,
+    "$1nessuno"
+  );
+
+  // "Attualmente lo sconto applicato è 0%." → "Attualmente lo sconto applicato è nessuno."
+  t = t.replace(
+    /(Attualmente lo sconto applicato è\s*)0\s*%/i,
+    "$1nessuno"
+  );
+
+  return t;
+}
 
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const supabase = createSupabaseBrowser();
@@ -137,6 +164,14 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     conv.setInput("");
   }
 
+  // ✅ Patch solo in render: trasformo le risposte assistant prima di mostrarle
+  const patchedBubbles = useMemo(() => {
+    return (conv.bubbles || []).map((b: any) => {
+      if (b?.role !== "assistant" || !b?.content) return b;
+      return { ...b, content: patchPriceReply(String(b.content)) };
+    });
+  }, [conv.bubbles]);
+
   return (
     <>
       {/* TopBar */}
@@ -175,7 +210,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       {/* Contenuto */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
         <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
-          <Thread bubbles={conv.bubbles} serverError={conv.serverError} threadRef={conv.threadRef} endRef={conv.endRef} />
+          <Thread bubbles={patchedBubbles} serverError={conv.serverError} threadRef={conv.threadRef} endRef={conv.endRef} />
           <Composer
             value={conv.input}
             onChange={(v) => { conv.setInput(v); voice.setLastInputWasVoice?.(false); }}
