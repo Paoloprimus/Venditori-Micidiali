@@ -176,7 +176,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     });
   }, [conv.bubbles]);
 
-  // invio da Composer (uso testuale) — **modificato solo questo blocco**
+  // invio da Composer (uso testuale) — versione che fa shortlist → conferma → execute → risposta
   async function submitFromComposer() {
     if (voice.isRecording) { await voice.stopMic(); }
     const txt = conv.input.trim();
@@ -184,127 +184,107 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
     // Gestione legacy sì/no della barra conferma
     if (pendingIntent) {
-      if (YES.test(txt)) { await handleIntent(pendingIntent); setPendingIntent(null); conv.setInput(""); return; }
-      if (NO.test(txt))  { speakIfEnabled("Ok, annullato."); setPendingIntent(null); conv.setInput(""); return; }
+      if (YES.test(txt)) {
+        await handleIntent(pendingIntent);
+        setPendingIntent(null);
+        conv.setInput("");
+        return;
+      }
+      if (NO.test(txt)) {
+        speakIfEnabled("Ok, annullato.");
+        setPendingIntent(null);
+        conv.setInput("");
+        return;
+      }
     } else {
-      // --- NUOVA FUNZIONE (Occam): shortlist → top1 → conferma → execute → risposta ---
+      // --- NUOVA FUNZIONE: shortlist → top1 → conferma → execute → risposta ---
       try {
-        // 1) normalizza testo (sinonimi)
+        // 1) normalizza
         const norm = await postJSON(`${window.location.origin}/api/standard/normalize`, { text: txt });
         const normalized: string = norm?.normalized || txt;
 
         // 2) shortlist topK
         const sl = await postJSON(`${window.location.origin}/api/standard/shortlist`, { q: normalized, topK: 5 });
-        const items: Array<{intent_key:string; text:string; score:number}> = sl?.items || [];
+        const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
 
         // 3) prendi il migliore (top-1). Se non c'è nulla → fallback chat normale
-const top = items[0];
-if (top && top.intent_key) {
-  const intentKey = top.intent_key;
+        const top = items[0];
+        if (top && top.intent_key) {
+          const intentKey = top.intent_key;
 
-  // 4) estrai {prodotto} dal testo normalizzato (sempre)
-  const prodotto = extractProductTerm(unaccentLower(normalized));
+          // 4) estrai {prodotto} dal testo normalizzato (sempre)
+          const prodotto = extractProductTerm(unaccentLower(normalized));
 
-  // 5) conferma (template dal DB)
-  const { data: confRow } = await supabase
-    .from("standard_intents")
-    .select("confirmation_template,response_template")
-    .eq("key", intentKey)
-    .single();
+          // 5) conferma (template dal DB)
+          const { data: confRow } = await supabase
+            .from("standard_intents")
+            .select("confirmation_template,response_template")
+            .eq("key", intentKey)
+            .single();
 
-  const confirmation = fillTemplateSimple(
-    confRow?.confirmation_template || "Vuoi procedere?",
-    { prodotto }
-  );
+          const confirmation = fillTemplateSimple(
+            confRow?.confirmation_template || "Vuoi procedere?",
+            { prodotto }
+          );
 
-  const userOk = window.confirm(confirmation);
-  if (!userOk) {
-    if (typeof (conv as any).appendAssistant === "function") (conv as any).appendAssistant("Ok, annullato.");
-    conv.setInput("");
-    return;
-  }
-
-  // 6) execute (proviamo SEMPRE con il top intent)
-  const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
-    intent_key: intentKey,
-    slots: { prodotto }
-  });
-
-  // Se non gestito dall'execute, fallback alla chat normale
-  if (!execJson?.ok) {
-    await conv.send(txt);
-    conv.setInput("");
-    return;
-  }
-
-  // 7) compila template risposta con fallback prezzo/sconto (se 0/0)
-  const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
-  if (intentKey === "prod_prezzo_sconti") {
-    const price = Number(execJson?.data?.price) || 0;
-    const discount = Number(execJson?.data?.discount) || 0;
-    dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
-    dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
-  }
-  const responseTpl = confRow?.response_template || "Fatto.";
-  const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
-
-  // 8) mostra in chat (assistant)
-  if (typeof (conv as any).appendAssistant === "function") (conv as any).appendAssistant(finalText);
-  else console.log("[assistant]", finalText);
-
-  conv.setInput("");
-  return; // importante: NON passare a conv.send()
-}
-
-
-            // 6) execute
-            const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
-              intent_key: intentKey,
-              slots: { prodotto }
-            });
-            if (!execJson?.ok) {
-              // errore execute → fallback pulito
-              // @ts-ignore
-              if (typeof conv.appendAssistant === "function") conv.appendAssistant(`Errore: ${execJson?.error || "impossibile recuperare i dati"}.`);
-              else console.error(execJson);
-              conv.setInput("");
-              return;
+          const userOk = window.confirm(confirmation);
+          if (!userOk) {
+            if (typeof (conv as any).appendAssistant === "function") {
+              (conv as any).appendAssistant("Ok, annullato.");
             }
-
-            // 7) compila template risposta con fallback prezzo/sconto (se 0/0)
-            const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
-            if (intentKey === "prod_prezzo_sconti") {
-              const price = Number(execJson?.data?.price) || 0;
-              const discount = Number(execJson?.data?.discount) || 0;
-              dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
-              dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
-            }
-            const responseTpl = confRow?.response_template || "Fatto.";
-            const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
-
-            // 8) mostra in chat (assistant)
-            // @ts-ignore
-            if (typeof conv.appendAssistant === "function") conv.appendAssistant(finalText);
-            else {
-              // fallback estremo: invia come messaggio assistant “locale” via onAssistantReply
-              // (verrà letto dal TTS e visto nella UI se il tuo hook lo supporta)
-              console.log("[assistant]", finalText);
-            }
-
             conv.setInput("");
-            return; // importante: non passa alla chat generica
+            return;
           }
+
+          // 6) execute (proviamo SEMPRE con il top intent)
+          const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
+            intent_key: intentKey,
+            slots: { prodotto }
+          });
+
+          // Se non gestito dall'execute, fallback alla chat normale
+          if (!execJson?.ok) {
+            await conv.send(txt);
+            conv.setInput("");
+            return;
+          }
+
+          // 7) compila template risposta con fallback prezzo/sconto (se 0/0)
+          const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
+          if (intentKey === "prod_prezzo_sconti") {
+            const price = Number(execJson?.data?.price) || 0;
+            const discount = Number(execJson?.data?.discount) || 0;
+            dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
+            dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
+          }
+          const responseTpl = confRow?.response_template || "Fatto.";
+          const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
+
+          // 8) mostra in chat (assistant)
+          if (typeof (conv as any).appendAssistant === "function") {
+            (conv as any).appendAssistant(finalText);
+          } else {
+            console.log("[assistant]", finalText);
+          }
+
+          conv.setInput("");
+          return; // NON proseguire con conv.send()
         }
       } catch (e) {
         console.error("[standard flow error]", e);
-        // se qualcosa va storto, cadiamo nel comportamento normale
+        // in caso di errore proseguiamo con il flusso normale
       }
 
-      // Nessun intent prodotto riconosciuto → flusso normale
+      // Nessun intent standard riconosciuto → flusso normale
       const intent = matchIntent(txt);
-      if (intent.type !== "NONE") { askConfirm(intent); conv.setInput(""); return; }
+      if (intent.type !== "NONE") {
+        askConfirm(intent);
+        conv.setInput("");
+        return;
+      }
     }
 
+    // Fallback: invia al modello generico
     await conv.send(txt);
     conv.setInput("");
   }
