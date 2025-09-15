@@ -1,0 +1,31 @@
+name: Sync Supabase schema & update handoff
+
+on:
+  workflow_dispatch: # lo lanci a mano
+  schedule:
+    - cron: "0 3 * * *" # ogni notte alle 3:00 UTC
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Install Supabase CLI
+        run: npm install -g supabase
+
+      - name: Dump Supabase schema
+        run: supabase db dump --db-url ${{ secrets.SUPABASE_DB_URL }} --schema public --file supabase/schema.sql
+
+      - name: Update handoff
+        run: node scripts/update_handoff.mjs
+
+      - name: Commit & Push changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add supabase/schema.sql docs/handoff/ docs/handoff_share/
+          git commit -m "chore: sync supabase schema & update handoff" || echo "No changes to commit"
+          git push
