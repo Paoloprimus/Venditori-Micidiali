@@ -66,6 +66,8 @@ app/api/proposals/[id]/route.ts
 app/api/proposals/generate/
 app/api/proposals/generate/route.ts
 app/api/standard/
+app/api/standard/execute/
+app/api/standard/execute/route.ts
 app/api/standard/normalize/
 app/api/standard/normalize/route.ts
 app/api/standard/shortlist/
