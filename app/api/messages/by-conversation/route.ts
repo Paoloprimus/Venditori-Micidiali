@@ -24,7 +24,9 @@ export async function GET(req: Request) {
     .select("id, role, content, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
+    .order("id", { ascending: true })   // ⬅️ tie-break stabile
     .limit(limit);
+
 
   if (error) return NextResponse.json({ error: "DB_LIST_MSG", details: error.message }, { status: 500 });
   return NextResponse.json({ items: data ?? [] });
