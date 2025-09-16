@@ -45,6 +45,7 @@ app/api/custom-fields/propose/route.ts
 app/api/debug/auth/route.ts
 app/api/memory/search/route.ts
 app/api/memory/upsert/route.ts
+app/api/messages/append/route.ts
 app/api/messages/by-conversation/route.ts
 app/api/messages/send/route.ts
 app/api/model/route.ts

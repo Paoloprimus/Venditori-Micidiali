@@ -50,6 +50,8 @@ app/api/memory/search/route.ts
 app/api/memory/upsert/
 app/api/memory/upsert/route.ts
 app/api/messages/
+app/api/messages/append/
+app/api/messages/append/route.ts
 app/api/messages/by-conversation/
 app/api/messages/by-conversation/route.ts
 app/api/messages/send/
@@ -134,6 +136,13 @@ docs/handoff_share/handoff_index.md
 docs/handoff_share/handoff_pack_part_01.md
 docs/handoff_share/handoff_pack_part_02.md
 docs/handoff_share/handoff_pack_part_03.md
+docs/handoff_share/handoff_pack_part_04.md
+docs/handoff_share/handoff_pack_part_05.md
+docs/handoff_share/handoff_pack_part_06.md
+docs/handoff_share/handoff_pack_part_07.md
+docs/handoff_share/handoff_pack_part_08.md
+docs/handoff_share/handoff_pack_part_09.md
+docs/handoff_share/handoff_pack_part_10.md
 docs/handoff_share/handoff_prompt_starter.txt
 hooks/
 hooks/useAutoResize.ts

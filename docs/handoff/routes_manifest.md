@@ -17,6 +17,7 @@
 - API app/api/debug/auth/route.ts — [GET]
 - API app/api/memory/search/route.ts — [POST]
 - API app/api/memory/upsert/route.ts — [POST]
+- API app/api/messages/append/route.ts — [POST, GET]
 - API app/api/messages/by-conversation/route.ts — [GET]
 - API app/api/messages/send/route.ts — [POST, GET]
 - API app/api/model/route.ts
