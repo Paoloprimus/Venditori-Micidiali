@@ -26,19 +26,16 @@ function patchPriceReply(text: string): string {
 
   let t = text;
 
-  // "Il prezzo base di «X» è 0." → "Il prezzo base di «X» è non disponibile a catalogo."
   t = t.replace(
     /(Il prezzo base di «[^»]+» è )0([.,\s]|$)/i,
     "$1non disponibile a catalogo$2"
   );
 
-  // "Sconto applicato: 0%" → "Sconto applicato: nessuno"
   t = t.replace(
     /(Sconto(?:\sapplicato)?:\s*)0\s*%/i,
     "$1nessuno"
   );
 
-  // "Attualmente lo sconto applicato è 0%." → "Attualmente lo sconto applicato è nessuno."
   t = t.replace(
     /(Attualmente lo sconto applicato è\s*)0\s*%/i,
     "$1nessuno"
@@ -192,6 +189,9 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   const [localUser, setLocalUser] = useState<string[]>([]);
   const [localAssistant, setLocalAssistant] = useState<string[]>([]);
 
+  // 🆕 Memorizzo ultimo prodotto valido per “e quanti in …”
+  const [lastProduct, setLastProduct] = useState<string | null>(null);
+
   function appendUserLocal(text: string) {
     setLocalUser(prev => [...prev, text]);
   }
@@ -230,11 +230,11 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
       try {
         // 1) normalizza
-        const norm = await postJSON(`${window.location.origin}/api/standard/normalize`, { text: txt });
+        const norm = await postJSON(`/api/standard/normalize`, { text: txt });
         const normalized: string = norm?.normalized || txt;
 
         // 2) shortlist topK
-        const sl = await postJSON(`${window.location.origin}/api/standard/shortlist`, { q: normalized, topK: 5 });
+        const sl = await postJSON(`/api/standard/shortlist`, { q: normalized, topK: 5 });
         const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
 
         // 3) top-1 → se esiste, esegui direttamente
@@ -242,20 +242,17 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         if (top && top.intent_key) {
           const intentKey = top.intent_key;
 
-          // 4) estrai {prodotto}
-          // dopo (fallback se non trovi una singola parola “buona”):
+          // 4) estrai {prodotto} con fallback all’ultimo valido per “e quanti …”
           let prodotto = extractProductTerm(unaccentLower(normalized));
           if (!prodotto || /\s/.test(prodotto)) {
-            // se il “prodotto” estratto è vuoto o è una frase (“e quanti in catalogo”),
-            // riusa l’ultimo prodotto valido della sessione
             if (lastProduct) prodotto = lastProduct;
           }
-          
+
           // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
           appendUserLocal(txt);
 
           // 5) execute
-          const execJson = await postJSON(`${window.location.origin}/api/standard/execute`, {
+          const execJson = await postJSON(`/api/standard/execute`, {
             intent_key: intentKey,
             slots: { prodotto }
           });
@@ -282,41 +279,37 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
           const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
 
+          // 🆕 Memorizza ultimo prodotto valido (singola parola)
+          if (prodotto && !/\s/.test(prodotto)) {
+            setLastProduct(prodotto);
+          }
+
           // 👉 6.1: UNA SOLA risposta in chat (assistant locale)
           appendAssistantLocal(finalText);
 
+          // ⬇️ salva user+assistant nel DB
+          const convId = conv.currentConv?.id;
+          if (convId) {
+            await fetch("/api/messages/append", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                conversationId: convId,
+                userText: txt,
+                assistantText: finalText,
+              }),
+            });
 
-          
-// ⬇️ salva user+assistant nel DB
-const convId = conv.currentConv?.id;
-if (convId) {
-  // salva user+assistant nel DB
-  await fetch("/api/messages/append", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      conversationId: convId,
-      userText: txt,
-      assistantText: finalText,
-    }),
-  });
+            // ricarica subito dal server (evita che le bolle “scompaiano”)
+            const res = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+            const j = await res.json();
+            conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
 
-  // ricarica subito dal server (evita che le bolle “scompaiano”)
-  const res = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-  const j = await res.json();
-  conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+            // ora puoi svuotare eventuali bolle locali
+            setLocalUser([]);
+            setLocalAssistant([]);
+          }
 
-  // ora puoi svuotare eventuali bolle ottimistiche/locali
-  setLocalUser([]);
-  setLocalAssistant([]);
-
-}
-
-
-
-
-
-          
           conv.setInput("");
           return; // NON chiamare conv.send() qui: evitiamo la seconda risposta del modello
         }
