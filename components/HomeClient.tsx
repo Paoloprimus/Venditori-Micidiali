@@ -243,8 +243,14 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           const intentKey = top.intent_key;
 
           // 4) estrai {prodotto}
-          const prodotto = extractProductTerm(unaccentLower(normalized));
-
+          // dopo (fallback se non trovi una singola parola “buona”):
+          let prodotto = extractProductTerm(unaccentLower(normalized));
+          if (!prodotto || /\s/.test(prodotto)) {
+            // se il “prodotto” estratto è vuoto o è una frase (“e quanti in catalogo”),
+            // riusa l’ultimo prodotto valido della sessione
+            if (lastProduct) prodotto = lastProduct;
+          }
+          
           // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
           appendUserLocal(txt);
 
