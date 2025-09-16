@@ -33,20 +33,26 @@ export async function POST(req: NextRequest) {
     const ownerUserId = conv.data.user_id;
 
     // inserisco i due messaggi in ordine
-    const { error: insErr } = await sb.from("messages").insert([
-      {
-        conversation_id: conversationId,
-        user_id: ownerUserId,
-        role: "user",
-        content: userText,
-      },
-      {
-        conversation_id: conversationId,
-        user_id: ownerUserId,
-        role: "assistant",
-        content: assistantText,
-      },
-    ]);
+
+const now = new Date();
+const later = new Date(now.getTime() + 1); // +1 ms
+
+const { error: insErr } = await sb.from("messages").insert([
+  {
+    conversation_id: conversationId,
+    user_id: ownerUserId,
+    role: "user",
+    content: userText,
+    created_at: now.toISOString(),
+  },
+  {
+    conversation_id: conversationId,
+    user_id: ownerUserId,
+    role: "assistant",
+    content: assistantText,
+    created_at: later.toISOString(),
+  },
+]);
 
     if (insErr) {
       return NextResponse.json({ error: "INSERT_FAILED", details: insErr.message }, { status: 500 });
