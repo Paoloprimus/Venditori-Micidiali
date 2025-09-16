@@ -284,6 +284,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 // ⬇️ salva user+assistant nel DB
 const convId = conv.currentConv?.id;
 if (convId) {
+  // salva user+assistant nel DB
   await fetch("/api/messages/append", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -294,16 +295,15 @@ if (convId) {
     }),
   });
 
-  // ⬇️ ricarica SUBITO dal server (evita il “buco” di 2s)
+  // ricarica subito dal server (evita che le bolle “scompaiano”)
   const res = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
   const j = await res.json();
-  // se il tuo hook espone questo setter, usalo; altrimenti mantieni le bolle locali
-  conv.setBubbles?.(j.items?.map((r: any) => ({ id: r.id, role: r.role, content: r.content })) || []);
+  conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
 
-  // ora puoi pulire le bolle locali
-  setLocalUser([]);
-  setLocalAssistant([]);
+  // ora puoi svuotare eventuali bolle ottimistiche/locali
+  setOptimistic([]);
 }
+
 
 
 
