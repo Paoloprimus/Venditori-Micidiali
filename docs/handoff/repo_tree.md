@@ -3,6 +3,7 @@
 ```
 .github/
 .github/workflows/
+.github/workflows/db-sync.yml
 .github/workflows/update-handoff.yml
 .github/handoff_counter.txt
 app/
@@ -163,6 +164,7 @@ supabase/.temp/
 supabase/.temp/cli-latest
 supabase/migrations/
 supabase/migrations/2025-08-23_memory_proposals.sql
+supabase/schema.sql
 types/
 types/pdf-parse.d.ts
 .gitignore
