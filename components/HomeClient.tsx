@@ -281,27 +281,30 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
 
           
-          // ⬇️ salva user+assistant nel DB per la conversazione corrente
-          const convId = conv.currentConv?.id;
-          if (convId) {
-            await fetch("/api/messages/append", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                conversationId: convId,
-                userText: txt,
-                assistantText: finalText,
-              }),
-            });
-          
-            // pulisci le bolle locali (ora i messaggi sono persistiti)
-            setLocalUser([]);
-            setLocalAssistant([]);
-          
-            // ricarica elenco messaggi dal server (usa il metodo del tuo hook, se c'è)
-            // se il tuo hook ha un metodo tipo conv.reload() o conv.fetchMessages(), chiamalo:
-            // await conv.reload?.();
-          }
+// ⬇️ salva user+assistant nel DB
+const convId = conv.currentConv?.id;
+if (convId) {
+  await fetch("/api/messages/append", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      conversationId: convId,
+      userText: txt,
+      assistantText: finalText,
+    }),
+  });
+
+  // ⬇️ ricarica SUBITO dal server (evita il “buco” di 2s)
+  const res = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+  const j = await res.json();
+  // se il tuo hook espone questo setter, usalo; altrimenti mantieni le bolle locali
+  conv.setBubbles?.(j.items?.map((r: any) => ({ id: r.id, role: r.role, content: r.content })) || []);
+
+  // ora puoi pulire le bolle locali
+  setLocalUser([]);
+  setLocalAssistant([]);
+}
+
 
 
 
