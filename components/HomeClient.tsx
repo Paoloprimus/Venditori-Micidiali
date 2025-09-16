@@ -301,7 +301,9 @@ if (convId) {
   conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
 
   // ora puoi svuotare eventuali bolle ottimistiche/locali
-  setOptimistic([]);
+  setLocalUser([]);
+  setLocalAssistant([]);
+
 }
 
 
