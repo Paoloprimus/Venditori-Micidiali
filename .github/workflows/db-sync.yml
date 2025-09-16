@@ -1,9 +1,12 @@
 name: Sync Supabase schema & update handoff
 
 on:
-  workflow_dispatch: # lancio manuale
+  workflow_dispatch:
   schedule:
-    - cron: "0 3 * * *" # ogni notte alle 03:00 UTC
+    - cron: "0 3 * * *"
+
+permissions:
+  contents: write
 
 jobs:
   sync:
