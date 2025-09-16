@@ -279,6 +279,33 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           // 👉 6.1: UNA SOLA risposta in chat (assistant locale)
           appendAssistantLocal(finalText);
 
+
+          
+          // ⬇️ salva user+assistant nel DB per la conversazione corrente
+          const convId = conv.currentConv?.id;
+          if (convId) {
+            await fetch("/api/messages/append", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                conversationId: convId,
+                userText: txt,
+                assistantText: finalText,
+              }),
+            });
+          
+            // pulisci le bolle locali (ora i messaggi sono persistiti)
+            setLocalUser([]);
+            setLocalAssistant([]);
+          
+            // ricarica elenco messaggi dal server (usa il metodo del tuo hook, se c'è)
+            // se il tuo hook ha un metodo tipo conv.reload() o conv.fetchMessages(), chiamalo:
+            // await conv.reload?.();
+          }
+
+
+
+          
           conv.setInput("");
           return; // NON chiamare conv.send() qui: evitiamo la seconda risposta del modello
         }
