@@ -132,6 +132,8 @@ docs/handoff/routes_manifest.md
 docs/handoff_share/
 docs/handoff_share/handoff_index.md
 docs/handoff_share/handoff_pack_part_01.md
+docs/handoff_share/handoff_pack_part_02.md
+docs/handoff_share/handoff_pack_part_03.md
 docs/handoff_share/handoff_prompt_starter.txt
 hooks/
 hooks/useAutoResize.ts
@@ -164,6 +166,7 @@ supabase/.temp/
 supabase/.temp/cli-latest
 supabase/migrations/
 supabase/migrations/2025-08-23_memory_proposals.sql
+supabase/migrations/2025-09-16_add_synonyms.sql
 supabase/schema.sql
 types/
 types/pdf-parse.d.ts
