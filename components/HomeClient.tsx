@@ -337,7 +337,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       {/* TopBar */}
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "var(--bg)", borderBottom: "1px solid var(--ring)" }}>
         <TopBar
-          title={conv.currentConv ? conv.currentConv.title : "Venditori Micidiali"}
+          title={conv.currentConv?.title ?? ""}
           userName={userName}
           onOpenLeft={openLeft}
           onOpenTop={openTop}
