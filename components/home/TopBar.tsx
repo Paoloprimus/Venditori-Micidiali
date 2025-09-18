@@ -17,12 +17,12 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout }: Props
   const brand = APP_NAME; // "Repping"
 
   // Data formattata in stile "gio 18/09/25"
-  const today = new Intl.DateTimeFormat("it-IT", {
-    weekday: "short",
-    day: "2-digit",
-    month: "2-digit",
-    year: "2-digit",
-  }).format(new Date());
+  // const today = new Intl.DateTimeFormat("it-IT", {
+  //  weekday: "short",
+  //  day: "2-digit",
+  //  month: "2-digit",
+  //  year: "2-digit",
+//  }).format(new Date());
 
   // Chiudi popup con ESC
   useEffect(() => {
