@@ -16,14 +16,6 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout }: Props
 
   const brand = APP_NAME; // "Repping"
 
-  // Data formattata in stile "gio 18/09/25"
-  // const today = new Intl.DateTimeFormat("it-IT", {
-  //  weekday: "short",
-  //  day: "2-digit",
-  //  month: "2-digit",
-  //  year: "2-digit",
-//  }).format(new Date());
-
   // Chiudi popup con ESC
   useEffect(() => {
     if (!docsOpen) return;
@@ -38,7 +30,7 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout }: Props
         {/* Drawer sinistro (conversazioni) */}
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={onOpenLeft}>☰</button>
 
-        {/* Centro: Repping (bold) + titolo chat + " - " + data */}
+        {/* Centro: Repping (bold) + titolo chat */}
         <div
           style={{
             flex: 1,
@@ -57,15 +49,6 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout }: Props
               {" "}{title.trim()}
             </span>
           )}
-          <span
-            style={{
-              color: "var(--muted, #64748b)",
-              fontSize: "0.9em",
-              whiteSpace: "nowrap",
-            }}
-          >
-            {" - "}{today}
-          </span>
         </div>
 
         {/* Azioni a destra */}
@@ -108,4 +91,3 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout }: Props
     </>
   );
 }
-
