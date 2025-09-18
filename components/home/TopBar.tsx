@@ -31,7 +31,7 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout, userNam
     return () => window.removeEventListener("keydown", onKey);
   }, [docsOpen]);
 
-  const firstName = userName ? userName.split(" ")[0] : "";
+  const firstName = "Repping";
 
   return (
     <>
@@ -39,7 +39,6 @@ export default function TopBar({ title, onOpenLeft, onOpenTop, onLogout, userNam
         <button className="iconbtn" aria-label="Apri conversazioni" onClick={onOpenLeft}>☰</button>
 
         <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 8, minWidth: 0 }}>
-          {firstName && <span style={{ fontWeight: 500 }}>{firstName}</span>}
           <span className="title" style={{ whiteSpace: "nowrap" }}>{headline}</span>
           <span style={{ color: "var(--muted, #64748b)", fontSize: "0.9em", whiteSpace: "nowrap" }}>– {today}</span>
         </div>
