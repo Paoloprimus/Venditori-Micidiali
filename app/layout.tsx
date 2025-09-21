@@ -2,8 +2,9 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
+// Se ti dà errore sull'alias "@", cambia la riga sopra in:
+// import { CryptoProvider } from "../lib/crypto/CryptoProvider";
 import UnlockButton from "../components/UnlockButton";
-
 
 export const metadata: Metadata = {
   title: "La tua App",
