@@ -2,7 +2,8 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
-import UnlockButton from "@/components/UnlockButton"; // lo creiamo al passo 3
+import UnlockButton from "../components/UnlockButton";
+
 
 export const metadata: Metadata = {
   title: "La tua App",
