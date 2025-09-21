@@ -1,28 +1,20 @@
-// Server Component: verifica login e mostra la home con chat integrata (stato interno)
+// app/page.tsx  (Server Component)
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "../lib/supabase/server";
 import HomeClient from "../components/HomeClient";
+import CryptoShell from "../components/CryptoShell";
 
 function deriveNames(email?: string | null, fullName?: string | null) {
   const safe = (s?: string | null) => (s || "").trim();
-
-  // 1) se abbiamo full_name, usiamo quello
   const fn = safe(fullName);
   if (fn) {
     const parts = fn.split(/\s+/);
-    return {
-      first_name: parts[0] || "Utente",
-      last_name: parts.slice(1).join(" ") || "",
-    };
+    return { first_name: parts[0] || "Utente", last_name: parts.slice(1).join(" ") || "" };
   }
-
-  // 2) altrimenti deriviamo dalla email
   const local = safe(email?.split("@")[0]);
   if (!local) return { first_name: "Utente", last_name: "" };
   const bySep = local.split(/[._-]+/).filter(Boolean);
-  if (bySep.length >= 2) {
-    return { first_name: bySep[0], last_name: bySep.slice(1).join(" ") };
-  }
+  if (bySep.length >= 2) return { first_name: bySep[0], last_name: bySep.slice(1).join(" ") };
   return { first_name: local, last_name: "" };
 }
 
@@ -34,7 +26,7 @@ export default async function Page() {
   const user = auth?.user;
   if (!user) redirect("/login");
 
-  // 2) Leggi profilo; se manca, crealo (RLS: INSERT consentito con auth.uid() = id)
+  // 2) Profilo
   const { data: profile } = await supabase
     .from("profiles")
     .select("first_name, last_name")
@@ -46,7 +38,6 @@ export default async function Page() {
 
   if (!first_name && !last_name) {
     const derived = deriveNames(user?.email ?? null, (user?.user_metadata as any)?.full_name ?? null);
-    // prova a inserire il profilo minimo; se fallisce, prosegui comunque
     await supabase
       .from("profiles")
       .upsert({ id: user!.id, first_name: derived.first_name, last_name: derived.last_name }, { onConflict: "id" });
@@ -56,6 +47,11 @@ export default async function Page() {
 
   const userName = [first_name, last_name].filter(Boolean).join(" ").trim();
 
-  // 3) Render
-  return <HomeClient email={user?.email ?? ""} userName={userName} />;
+  // 3) Render: avvolgiamo il contenuto nel guscio client con Provider + bottone
+  return (
+    <CryptoShell>
+      <p>Se vedi il bottone in alto, clicca “🔒 Sblocca dati”.</p>
+      <HomeClient email={user?.email ?? ""} userName={userName} />
+    </CryptoShell>
+  );
 }
