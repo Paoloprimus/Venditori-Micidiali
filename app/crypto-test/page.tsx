@@ -4,6 +4,7 @@
 import { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useCrypto } from "../../lib/crypto/CryptoProvider";
+import { useEffect } from "react";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,7 +34,6 @@ function biDualRepr(b64: string) {
 
 export default function CryptoTestPage() {
   const { ready, crypto } = useCrypto();
-
   const [name, setName] = useState("Pasticceria Verdi");
   const [email, setEmail] = useState("info@verdi.it");
   const [phone, setPhone] = useState("+39 045 1234567");
@@ -44,6 +44,15 @@ export default function CryptoTestPage() {
   const [log, setLog] = useState<string>("");
   const [results, setResults] = useState<{ id: string; name?: string; email?: string }[]>([]);
 
+const [authInfo, setAuthInfo] = useState<string>("(verifico login...)");
+useEffect(() => {
+  (async () => {
+    const { data } = await supabase.auth.getSession();
+    const uid = data.session?.user?.id;
+    setAuthInfo(uid ? `Logged in ✅ uid=${uid}` : "Anonimo ❌ (fai login)");
+  })();
+}, []);
+  
   function appendLog(s: string) {
     setLog((prev) => (prev ? prev + "\n" : "") + s);
   }
@@ -157,7 +166,9 @@ export default function CryptoTestPage() {
       <p style={{ opacity: 0.8 }}>
         Stato cifratura: {ready ? "🔓 attiva" : "🔒 da sbloccare (usa il bottone in alto)"}
       </p>
-
+      
+<p style={{opacity:.8}}>Auth: {authInfo}</p>
+      
       <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
         <h2 style={{ marginTop: 0 }}>1) Crea account cifrato</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
