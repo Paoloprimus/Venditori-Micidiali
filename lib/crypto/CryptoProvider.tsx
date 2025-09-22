@@ -297,5 +297,4 @@ export class CryptoService {
     this.wrappedMkNonce = nonce;
   }
 }
-export { useCrypto }; // assicura l’export nominato
 
