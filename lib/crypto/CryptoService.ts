@@ -1,286 +1,299 @@
-// /lib/crypto/CryptoService.ts
-// Client-side Field-Level Encryption for Repping (AES-GCM + HKDF + HMAC BI)
-// - KEK from passphrase (PBKDF2) — stays on device
-// - DEK per scope (e.g., "table:accounts") — wrapped with KEK and saved in public.encryption_keys
-// - Blind Index: HMAC-SHA-256 over normalized value using a BI key derived from DEK (HKDF)
+// lib/crypto/CryptoService.ts
+"use client";
 
-import type { SupabaseClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-/** ---------- tiny utils ---------- */
+// ---------- tipi ----------
+type KdfParams =
+  | { algo: "pbkdf2"; iterations: number; hash: "SHA-256" }
+  // estendibile: { algo: "scrypt"; N:number; r:number; p:number }
+  ;
 
-const te = new TextEncoder();
-const td = new TextDecoder();
+type ScopeKeys = {
+  DEK: Uint8Array;     // Data-Encryption Key (32B)
+  BI: Uint8Array | null; // Blind Index key (opzionale, 32B)
+};
 
-function toB64(u8: Uint8Array): string {
-  // URL-safe base64
-  const str = btoa(String.fromCharCode(...u8));
-  return str.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+type ProfileRow = {
+  wrapped_master_key: string | null; // bytea (base64)
+  kdf_salt: string | null;           // bytea (base64)
+  kdf_params: KdfParams | null;
+};
+
+// ---------- util byte/base64 ----------
+function toBase64(u8: Uint8Array): string {
+  if (typeof window === "undefined") return Buffer.from(u8).toString("base64");
+  let s = "";
+  u8.forEach((b) => (s += String.fromCharCode(b)));
+  return btoa(s);
 }
-function fromB64(s: string): Uint8Array {
-  const pad = s.length % 4 === 0 ? "" : "=".repeat(4 - (s.length % 4));
-  const b64 = s.replace(/-/g, "+").replace(/_/g, "/") + pad;
+function fromBase64(b64: string): Uint8Array {
+  if (!b64) return new Uint8Array();
+  if (typeof window === "undefined") return new Uint8Array(Buffer.from(b64, "base64"));
   const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-async function sha256(u8: Uint8Array): Promise<Uint8Array> {
-  const d = await crypto.subtle.digest("SHA-256", u8);
-  return new Uint8Array(d);
-}
-function normalizeBI(value: string): string {
-  return value.trim().toLowerCase(); // puoi aggiungere normalizzazione Unicode NFC se serve
-}
-function concatU8(...parts: Uint8Array[]): Uint8Array {
-  const len = parts.reduce((a, p) => a + p.length, 0);
-  const out = new Uint8Array(len);
-  let off = 0;
-  for (const p of parts) {
-    out.set(p, off);
-    off += p.length;
-  }
-  return out;
+  const u8 = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+  return u8;
 }
 
-/** ---------- key derivation ---------- */
-
-async function importRawAesKey(raw: Uint8Array, usages: KeyUsage[] = ["encrypt","decrypt"]) {
-  return crypto.subtle.importKey("raw", raw, "AES-GCM", true, usages);
+// ---------- WebCrypto helpers ----------
+async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ["encrypt", "decrypt"]): Promise<CryptoKey> {
+  return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, usages);
 }
-
-async function deriveKekFromPassphrase(passphrase: string, salt: Uint8Array): Promise<CryptoKey> {
-  // PBKDF2 (nativo WebCrypto). Iter elevati per sicurezza.
-  const base = await crypto.subtle.importKey("raw", te.encode(passphrase), "PBKDF2", false, ["deriveKey","deriveBits"]);
-  return crypto.subtle.deriveKey(
-    { name: "PBKDF2", salt, iterations: 310000, hash: "SHA-256" },
-    base,
-    { name: "AES-GCM", length: 256 },
-    true,
-    ["encrypt","decrypt"]
+async function aesGcmEncrypt(keyBytes: Uint8Array, nonce: Uint8Array, plaintext: Uint8Array, aad?: Uint8Array): Promise<Uint8Array> {
+  const key = await importAesKey(keyBytes);
+  const ct = await crypto.subtle.encrypt(
+    { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 },
+    key,
+    plaintext
   );
+  return new Uint8Array(ct); // ciphertext || tag
+}
+async function aesGcmDecrypt(keyBytes: Uint8Array, nonce: Uint8Array, ciphertext: Uint8Array, aad?: Uint8Array): Promise<Uint8Array> {
+  const key = await importAesKey(keyBytes);
+  const pt = await crypto.subtle.decrypt(
+    { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 },
+    key,
+    ciphertext
+  );
+  return new Uint8Array(pt);
 }
 
-async function hkdfBytes(keyMaterial: CryptoKey, info: string, length: number): Promise<Uint8Array> {
-  // WebCrypto HKDF requires "deriveBits" with a base key of type "HKDF"
-  // We convert the AES key raw to use as HKDF IKM
-  const raw = new Uint8Array(await crypto.subtle.exportKey("raw", keyMaterial));
-  const ikm = await crypto.subtle.importKey("raw", raw, "HKDF", false, ["deriveBits"]);
+// “Wrap”/“unwrap” generici (usiamo AES-GCM per avvolgere bytes)
+async function wrapKey(rawToWrap: Uint8Array, kek: Uint8Array): Promise<{ wrapped: string; nonce: string }> {
+  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const wrapped = await aesGcmEncrypt(kek, nonce, rawToWrap);
+  return { wrapped: toBase64(wrapped), nonce: toBase64(nonce) };
+}
+async function unwrapKey(wrapped_b64: string, nonce_b64: string, kek: Uint8Array): Promise<Uint8Array> {
+  const ct = fromBase64(wrapped_b64);
+  const iv = fromBase64(nonce_b64);
+  return await aesGcmDecrypt(kek, iv, ct);
+}
+
+// PBKDF2 (WebCrypto native)
+async function deriveKEK(passphrase: string, salt: Uint8Array, params: KdfParams): Promise<Uint8Array> {
+  if (params.algo !== "pbkdf2") {
+    throw new Error("KDF non supportato su WebCrypto: usa pbkdf2");
+  }
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey(
+    "raw",
+    enc.encode(passphrase),
+    { name: "PBKDF2" },
+    false,
+    ["deriveBits", "deriveKey"]
+  );
   const bits = await crypto.subtle.deriveBits(
-    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(0), info: te.encode(info) },
-    ikm,
+    { name: "PBKDF2", salt, iterations: params.iterations, hash: params.hash },
+    keyMaterial,
+    256
+  );
+  return new Uint8Array(bits);
+}
+
+// HKDF helper (se ti serve derivare sotto-chiavi dalla MK)
+async function hkdfExtractAndExpand(ikm: Uint8Array, info: string, length = 32): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "HKDF", hash: "SHA-256", salt: new Uint8Array(32), info: new TextEncoder().encode(info) },
+    key,
     length * 8
   );
   return new Uint8Array(bits);
 }
 
-/** ---------- envelope (wrap/unwrap) ---------- */
-
-async function wrapRawWithKEK(kek: CryptoKey, raw: Uint8Array): Promise<{ wrapped: Uint8Array; iv: Uint8Array }> {
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const wrapped = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv }, kek, raw));
-  return { wrapped, iv };
-}
-async function unwrapRawWithKEK(kek: CryptoKey, wrapped: Uint8Array, iv: Uint8Array): Promise<Uint8Array> {
-  const raw = new Uint8Array(await crypto.subtle.decrypt({ name: "AES-GCM", iv }, kek, wrapped));
-  return raw;
+// HMAC-SHA256 (per Blind Index)
+async function hmacSha256(keyBytes: Uint8Array, msg: Uint8Array): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, msg);
+  return new Uint8Array(sig);
 }
 
-/** ---------- BI (HMAC) ---------- */
-
-async function importHmacKey(raw: Uint8Array): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+function canonicalizeForBI(input: string): Uint8Array {
+  const s = input.trim().toLowerCase().normalize("NFKC");
+  return new TextEncoder().encode(s);
 }
 
-async function hmacSha256(key: CryptoKey, payload: Uint8Array): Promise<Uint8Array> {
-  const mac = await crypto.subtle.sign("HMAC", key, payload);
-  return new Uint8Array(mac);
-}
-
-/** ---------- types ---------- */
-
-type KeyRow = {
-  id: string;
-  account_id: string | null;
-  scope: string;
-  dek_wrapped: string; // b64
-  dek_iv: string;      // b64
-  kek_fingerprint: string; // b64 (first 16 bytes of SHA-256(KEK raw))
-  key_bi_wrapped: string | null; // b64
-  key_bi_iv: string | null;      // b64
-};
-
-type EncryptResult = {
-  ciphertext_b64: string;
-  iv_b64: string;
-  // tag is implicit in AES-GCM ciphertext (WebCrypto appends it). We store entire ct into *_enc.
-};
-
-/** ---------- main service ---------- */
-
+// ---------- CryptoService ----------
 export class CryptoService {
-  private supabase: SupabaseClient;
-  private accountId: string | null;
-  private kek: CryptoKey | null = null;
-  private kekSalt: Uint8Array | null = null;
-  private kekFingerprint: string | null = null;
+  private sb: SupabaseClient;
+  private accountId: string | null; // multi-tenant, se ti serve in futuro
+  private MK: Uint8Array | null = null; // Master Key in memoria (mai persistita in chiaro)
+  private kekSalt?: Uint8Array;
+  private kdfParams?: KdfParams;
+  private wrappedMkNonce?: string; // per eventuale rotazione
+  private scopeCache: Record<string, ScopeKeys> = {};
 
-  // cache per scope
-  private dekByScope: Map<string, CryptoKey> = new Map();
-  private biKeyByScope: Map<string, CryptoKey> = new Map();
-
-  constructor(supabase: SupabaseClient, accountId: string | null) {
-    this.supabase = supabase;
+  constructor(sb?: SupabaseClient, accountId: string | null = null) {
+    this.sb =
+      sb ??
+      createClient(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      );
     this.accountId = accountId;
   }
 
-  /**
-   * 1) Sblocca KEK dalla passphrase (o da credenziale/Passkey).
-   *    Genera e memorizza un salt locale (localStorage) se assente.
-   */
-  async unlockWithPassphrase(passphrase: string) {
-    const saltKey = "repping:kek_salt";
-    let saltB64 = localStorage.getItem(saltKey);
-    if (!saltB64) {
-      const salt = crypto.getRandomValues(new Uint8Array(16));
-      saltB64 = toB64(salt);
-      localStorage.setItem(saltKey, saltB64);
-    }
-    const salt = fromB64(saltB64);
-    this.kekSalt = salt;
-    this.kek = await deriveKekFromPassphrase(passphrase, salt);
-
-    // fingerprint (primi 16B di SHA-256(raw KEK)) per audit
-    const kekRaw = new Uint8Array(await crypto.subtle.exportKey("raw", this.kek));
-    const fp = await sha256(kekRaw);
-    this.kekFingerprint = toB64(fp.slice(0, 16));
+  // -- helper user id
+  private async getUserId(): Promise<string> {
+    const { data, error } = await this.sb.auth.getUser();
+    if (error || !data.user) throw new Error("Utente non autenticato");
+    return data.user.id;
   }
 
-  /**
-   * 2) Ottiene (o crea) DEK e BI key per uno scope (es. "table:accounts").
-   *    Salva/legge su public.encryption_keys.
-   */
-  async getOrCreateScopeKeys(scope: string) {
-    if (!this.kek) throw new Error("KEK not unlocked");
-    if (this.dekByScope.has(scope) && this.biKeyByScope.has(scope)) return;
+  // ========== 1) Sblocco con passphrase (1 pw → KEK → MK) ==========
+  public async unlockWithPassphrase(passphrase: string): Promise<void> {
+    const userId = await this.getUserId();
 
-    // prova a leggere da encryption_keys
-    const { data, error } = await this.supabase
-      .from("encryption_keys")
-      .select("*")
-      .eq("scope", scope)
-      .eq("account_id", this.accountId ?? null)
+    const { data: prof, error } = await this.sb
+      .from("profiles")
+      .select(
+        "wrapped_master_key, wrapped_master_key_iv, kdf_salt, kdf_params"
+      ) // NB: aggiungiamo colonna iv per la MK (se non esiste, gestiamo fallback)
+      .eq("id", userId)
       .single();
 
-    if (!error && data) {
-      // unwrap DEK
-      const dekRaw = await unwrapRawWithKEK(this.kek, fromB64(data.dek_wrapped), fromB64(data.dek_iv));
-      const dek = await importRawAesKey(dekRaw);
-      this.dekByScope.set(scope, dek);
+    if (error) throw new Error("Profilo non trovato o accesso negato");
 
-      // BI key: se non esiste, la deriviamo con HKDF dal DEK
-      if (data.key_bi_wrapped && data.key_bi_iv) {
-        const biRaw = await unwrapRawWithKEK(this.kek, fromB64(data.key_bi_wrapped), fromB64(data.key_bi_iv));
-        const biKey = await importHmacKey(biRaw);
-        this.biKeyByScope.set(scope, biKey);
-      } else {
-        const biRaw = await hkdfBytes(dek, `repping:bi:${scope}`, 32);
-        const biKey = await importHmacKey(biRaw);
-        this.biKeyByScope.set(scope, biKey);
+    const p = (prof as any) as (ProfileRow & { wrapped_master_key_iv?: string | null });
+
+    // Se non esistono parametri KDF, prima inizializzazione
+    let kdfParams: KdfParams = p.kdf_params ?? { algo: "pbkdf2", iterations: 310_000, hash: "SHA-256" };
+    let salt: Uint8Array = p.kdf_salt ? fromBase64(p.kdf_salt) : crypto.getRandomValues(new Uint8Array(16));
+    const KEK = await deriveKEK(passphrase, salt, kdfParams);
+
+    // Se MK già presente → unwrap
+    if (p.wrapped_master_key) {
+      // se non abbiamo salvato l'IV a parte, assumiamo iv zero? Meglio salvarlo.
+      // Aggiungiamo campo 'wrapped_master_key_iv' in profiles, se non presente mettiamo errore esplicito
+      const ivB64 = (p as any).wrapped_master_key_iv;
+      if (!ivB64) {
+        throw new Error("Manca IV per la chiave master wrappata: aggiungi colonna 'wrapped_master_key_iv bytea' in profiles");
       }
-
+      const MK = await unwrapKey(p.wrapped_master_key, ivB64, KEK);
+      this.MK = MK;
+      this.kekSalt = salt;
+      this.kdfParams = kdfParams;
+      this.wrappedMkNonce = ivB64;
       return;
     }
 
-    // non esistono -> crea nuove chiavi
-    const dekRaw = crypto.getRandomValues(new Uint8Array(32));
-    const dek = await importRawAesKey(dekRaw);
-    const { wrapped: dekWrapped, iv: dekIv } = await wrapRawWithKEK(this.kek, dekRaw);
+    // Altrimenti prima volta: genera MK e salvala wrappata
+    const MK = crypto.getRandomValues(new Uint8Array(32));
+    const { wrapped, nonce } = await wrapKey(MK, KEK);
 
-    // BI key separata (random) — opzionale. In alternativa usa HKDF da DEK.
-    const biRaw = crypto.getRandomValues(new Uint8Array(32));
-    const biKey = await importHmacKey(biRaw);
-    const { wrapped: biWrapped, iv: biIv } = await wrapRawWithKEK(this.kek, biRaw);
-
-    // persist
-    const row = {
-      account_id: this.accountId,
-      scope,
-      dek_wrapped: toB64(dekWrapped),
-      dek_iv: toB64(dekIv),
-      kek_fingerprint: this.kekFingerprint!,
-      key_bi_wrapped: toB64(biWrapped),
-      key_bi_iv: toB64(biIv),
-    };
-    const { error: upErr } = await this.supabase.from("encryption_keys").upsert(row, { onConflict: "account_id,scope" });
+    // persistiamo tutto in profiles
+    const { error: upErr } = await this.sb
+      .from("profiles")
+      .update({
+        wrapped_master_key: wrapped,
+        wrapped_master_key_iv: nonce,     // <-- aggiungi questa colonna bytea in SQL se manca
+        kdf_salt: toBase64(salt),
+        kdf_params: kdfParams
+      })
+      .eq("id", userId);
     if (upErr) throw upErr;
 
-    this.dekByScope.set(scope, dek);
-    this.biKeyByScope.set(scope, biKey);
+    this.MK = MK;
+    this.kekSalt = salt;
+    this.kdfParams = kdfParams;
+    this.wrappedMkNonce = nonce;
   }
 
-  /** 3) Cifra un campo (string) con AES-GCM + AAD (tabella, campo, recordId opzionale) */
-  async encryptField(scope: string, table: string, field: string, plaintext: string, aadParts: (string | Uint8Array)[] = []): Promise<EncryptResult> {
-    const dek = this.dekByScope.get(scope);
-    if (!dek) throw new Error(`DEK not loaded for scope ${scope}`);
+  // ========== 2) Chiavi per scope (DEK/BI) ==========
+  public async getOrCreateScopeKeys(scope: string): Promise<void> {
+    if (!this.MK) throw new Error("Cifratura non sbloccata");
+    if (this.scopeCache[scope]) return;
 
-    const iv = crypto.getRandomValues(new Uint8Array(12));
-    const aad = concatU8(te.encode(scope), te.encode("|"), te.encode(table), te.encode("|"), te.encode(field), ...(aadParts.map(p => typeof p === "string" ? te.encode(p) : p)));
-    const ct = new Uint8Array(await crypto.subtle.encrypt({ name: "AES-GCM", iv, additionalData: aad }, dek, te.encode(plaintext)));
-    return { ciphertext_b64: toB64(ct), iv_b64: toB64(iv) };
-  }
+    const { data: row, error } = await this.sb
+      .from("encryption_keys")
+      .select("id, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, scope")
+      .eq("scope", scope)
+      .maybeSingle();
 
-  /** 4) Decifra un campo (string) con AES-GCM + AAD */
-  async decryptField(scope: string, table: string, field: string, ciphertext_b64: string, iv_b64: string, aadParts: (string | Uint8Array)[] = []): Promise<string> {
-    const dek = this.dekByScope.get(scope);
-    if (!dek) throw new Error(`DEK not loaded for scope ${scope}`);
+    if (error) throw error;
 
-    const iv = fromB64(iv_b64);
-    const aad = concatU8(te.encode(scope), te.encode("|"), te.encode(table), te.encode("|"), te.encode(field), ...(aadParts.map(p => typeof p === "string" ? te.encode(p) : p)));
-    const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv, additionalData: aad }, dek, fromB64(ciphertext_b64));
-    return td.decode(pt);
-  }
-
-  /** 5) Blind Index deterministico (troncato a 32B) */
-  async blindIndex(scope: string, value: string): Promise<string> {
-    const key = this.biKeyByScope.get(scope);
-    if (!key) throw new Error(`BI key not loaded for scope ${scope}`);
-    const mac = await hmacSha256(key, te.encode(normalizeBI(value)));
-    // tronchiamo a 32 bytes per risparmiare spazio (va bene per equality)
-    return toB64(mac.slice(0, 32));
-  }
-
-  /** Helpers: comode per mappe di campi */
-  async encryptFields(
-    scope: string,
-    table: string,
-    recordId: string | null,
-    fields: Record<string, string | null | undefined>
-  ): Promise<Record<string, any>> {
-    const out: Record<string, any> = {};
-    for (const [field, val] of Object.entries(fields)) {
-      if (val == null) continue;
-      const res = await this.encryptField(scope, table, field, val, recordId ? [recordId] : []);
-      out[`${field}_enc`] = res.ciphertext_b64;
-      out[`${field}_iv`] = res.iv_b64;
-      // *_tag non serve: AES-GCM tag è incluso nel ciphertext in WebCrypto
+    if (row) {
+      const DEK = await unwrapKey(row.dek_wrapped, row.dek_wrapped_iv, this.MK);
+      const BI = row.bi_wrapped ? await unwrapKey(row.bi_wrapped, row.bi_wrapped_iv, this.MK) : null;
+      this.scopeCache[scope] = { DEK, BI };
+      return;
     }
-    return out;
+
+    // genera chiavi nuove
+    const DEK = crypto.getRandomValues(new Uint8Array(32));
+    const BI  = crypto.getRandomValues(new Uint8Array(32)); // se non vuoi BI per quello scope, metti null
+
+    const { wrapped: dek_wrapped, nonce: dek_wrapped_iv } = await wrapKey(DEK, this.MK);
+    const { wrapped: bi_wrapped,  nonce: bi_wrapped_iv  } = await wrapKey(BI,  this.MK);
+
+    const { error: insErr } = await this.sb
+      .from("encryption_keys")
+      .insert({
+        scope,
+        dek_wrapped,
+        dek_wrapped_iv,
+        bi_wrapped,
+        bi_wrapped_iv
+      });
+    if (insErr) throw insErr;
+
+    this.scopeCache[scope] = { DEK, BI };
   }
 
-  async decryptFields(
-    scope: string,
-    table: string,
-    recordId: string | null,
-    row: any,
-    fieldNames: string[]
-  ): Promise<Record<string, string | null>> {
-    const out: Record<string, string | null> = {};
-    for (const field of fieldNames) {
-      const ct = row?.[`${field}_enc`];
-      const iv = row?.[`${field}_iv`];
-      if (!ct || !iv) { out[field] = null; continue; }
-      out[field] = await this.decryptField(scope, table, field, ct, iv, recordId ? [recordId] : []);
-    }
-    return out;
+  // ========== 3) Encrypt / Decrypt campo/record ==========
+  public async encryptJSON(scope: string, table: string, field: string, recordId: string, obj: any): Promise<{ enc_b64: string; iv_b64: string }> {
+    if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+    const { DEK } = this.scopeCache[scope];
+    const nonce = crypto.getRandomValues(new Uint8Array(12));
+    const aad = new TextEncoder().encode(`${table}|${field}|${recordId}`);
+    const plaintext = new TextEncoder().encode(JSON.stringify(obj));
+    const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad);
+    return { enc_b64: toBase64(ciphertext), iv_b64: toBase64(nonce) };
+  }
+
+  public async decryptJSON(scope: string, table: string, field: string, recordId: string, enc_b64: string, iv_b64: string): Promise<any> {
+    if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+    const { DEK } = this.scopeCache[scope];
+    const aad = new TextEncoder().encode(`${table}|${field}|${recordId}`);
+    const plaintext = await aesGcmDecrypt(DEK, fromBase64(iv_b64), fromBase64(enc_b64), aad);
+    return JSON.parse(new TextDecoder().decode(plaintext));
+  }
+
+  // ========== 4) Blind Index (uguaglianza) ==========
+  public async computeBlindIndex(scope: string, value: string): Promise<string> {
+    if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+    const { BI } = this.scopeCache[scope];
+    if (!BI) throw new Error(`BI non configurato per scope: ${scope}`);
+    const canon = canonicalizeForBI(value);
+    const mac = await hmacSha256(BI, canon);
+    return toBase64(mac); // salva in colonna *_bi (bytea)
+  }
+
+  // ========== 5) Cambio passphrase (re-wrap MK) ==========
+  public async rewrapMasterKey(newPassphrase: string): Promise<void> {
+    if (!this.MK) throw new Error("Cifratura non sbloccata");
+    const userId = await this.getUserId();
+    const newSalt = crypto.getRandomValues(new Uint8Array(16));
+    const newParams: KdfParams = { algo: "pbkdf2", iterations: 310_000, hash: "SHA-256" };
+    const newKEK = await deriveKEK(newPassphrase, newSalt, newParams);
+    const { wrapped, nonce } = await wrapKey(this.MK, newKEK);
+
+    const { error } = await this.sb
+      .from("profiles")
+      .update({
+        wrapped_master_key: wrapped,
+        wrapped_master_key_iv: nonce,
+        kdf_salt: toBase64(newSalt),
+        kdf_params: newParams
+      })
+      .eq("id", userId);
+
+    if (error) throw error;
+
+    this.kekSalt = newSalt;
+    this.kdfParams = newParams;
+    this.wrappedMkNonce = nonce;
   }
 }
