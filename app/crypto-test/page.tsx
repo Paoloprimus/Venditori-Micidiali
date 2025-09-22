@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useCrypto } from "../../lib/crypto/CryptoProvider";
+import { useCrypto } from "@/lib/crypto/CryptoProvider"; // <— usa alias
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
