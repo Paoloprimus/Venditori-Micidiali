@@ -1,10 +1,9 @@
 // app/crypto-test/page.tsx
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import { useCrypto } from "../../lib/crypto/CryptoProvider";
-import { useEffect } from "react";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -26,7 +25,6 @@ function b64ToU8(b64: string): Uint8Array {
 function u8ToHex(u8: Uint8Array): string {
   return Array.from(u8).map(x => x.toString(16).padStart(2, "0")).join("");
 }
-/** Restituisce sia base64 (per BI salvati come text) che \\xHEX (per BI salvati come bytea) */
 function biDualRepr(b64: string) {
   const hex = u8ToHex(b64ToU8(b64));
   return { asText: b64, asBytea: "\\x" + hex };
@@ -34,52 +32,99 @@ function biDualRepr(b64: string) {
 
 export default function CryptoTestPage() {
   const { ready, crypto } = useCrypto();
+
+  // ---- stato auth ----
+  const [uid, setUid] = useState<string | null>(null);
+  const [authInfo, setAuthInfo] = useState<string>("(verifico login...)");
+  const [emailLogin, setEmailLogin] = useState("");
+  const [pwdLogin, setPwdLogin] = useState("");
+  const [authBusy, setAuthBusy] = useState(false);
+
+  useEffect(() => {
+    let unsub: (() => void) | undefined;
+
+    (async () => {
+      const { data } = await supabase.auth.getSession();
+      const u = data.session?.user ?? null;
+      setUid(u ? u.id : null);
+      setAuthInfo(u ? `Logged in ✅ uid=${u.id}` : "Anonimo ❌ (fai login)");
+
+      // ascolta i cambi di sessione in tempo reale
+      const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
+        const user = session?.user ?? null;
+        setUid(user ? user.id : null);
+        setAuthInfo(user ? `Logged in ✅ uid=${user.id}` : "Anonimo ❌ (fai login)");
+      });
+      unsub = sub?.subscription.unsubscribe;
+    })();
+
+    return () => { try { unsub?.(); } catch {} };
+  }, []);
+
+  // ---- test form stato ----
   const [name, setName] = useState("Pasticceria Verdi");
   const [email, setEmail] = useState("info@verdi.it");
   const [phone, setPhone] = useState("+39 045 1234567");
   const [vat, setVat] = useState("IT01234567890");
-
   const [searchEmail, setSearchEmail] = useState("info@verdi.it");
-
   const [log, setLog] = useState<string>("");
   const [results, setResults] = useState<{ id: string; name?: string; email?: string }[]>([]);
 
-const [authInfo, setAuthInfo] = useState<string>("(verifico login...)");
-useEffect(() => {
-  (async () => {
-    const { data } = await supabase.auth.getSession();
-    const uid = data.session?.user?.id;
-    setAuthInfo(uid ? `Logged in ✅ uid=${uid}` : "Anonimo ❌ (fai login)");
-  })();
-}, []);
-  
   function appendLog(s: string) {
-    setLog((prev) => (prev ? prev + "\n" : "") + s);
+    setLog(prev => (prev ? prev + "\n" : "") + s);
   }
 
+  // ---- azioni auth ----
+  async function doLoginPassword() {
+    try {
+      setAuthBusy(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        email: emailLogin.trim(),
+        password: pwdLogin,
+      });
+      if (error) appendLog(`❌ Login (password) fallito: ${error.message}`);
+      else appendLog("✅ Login (password) ok");
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+  async function doLoginGoogle() {
+    try {
+      setAuthBusy(true);
+      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
+      if (error) appendLog(`❌ Login Google fallito: ${error.message}`);
+      // Nota: verrai reindirizzato; al ritorno la pagina noterà la sessione
+    } finally {
+      setAuthBusy(false);
+    }
+  }
+  async function doLogout() {
+    await supabase.auth.signOut();
+    appendLog("🔒 Logout effettuato");
+  }
+
+  // ---- azioni crypto test ----
   async function onCreate() {
     try {
       setResults([]);
+      if (!uid) {
+        alert("Devi essere loggato (usa il box Login qui sopra).");
+        return;
+      }
       if (!ready || !crypto) {
         alert("Prima clicca '🔒 Sblocca dati' in alto per attivare la cifratura.");
         return;
       }
 
-      // 1) cifra i campi
       const enc = await crypto.encryptFields(SCOPE, TABLE, null, {
-        name,
-        email,
-        phone,
-        vat_number: vat,
+        name, email, phone, vat_number: vat,
       });
 
-      // 2) BI (due rappresentazioni: testo base64 E bytea esadecimale)
       const nameBI = biDualRepr(await crypto.blindIndex(SCOPE, name));
       const emailBI = biDualRepr(await crypto.blindIndex(SCOPE, email));
       const phoneBI = biDualRepr(await crypto.blindIndex(SCOPE, phone));
       const vatBI = biDualRepr(await crypto.blindIndex(SCOPE, vat));
 
-      // 3) insert (proviamo prima in formato bytea; se la colonna è text Postgres lo accetta comunque come stringa)
       const payload: any = {
         name_enc: enc.name_enc, name_iv: enc.name_iv, name_bi: nameBI.asBytea,
         email_enc: enc.email_enc, email_iv: enc.email_iv, email_bi: emailBI.asBytea,
@@ -88,11 +133,8 @@ useEffect(() => {
       };
 
       const { data, error, status } = await supabase.from(TABLE).insert([payload]).select("id").single();
-
       if (error) {
-        // Se fallisce (es. type mismatch o RLS), riprova salvando BI come text base64
         appendLog(`⚠️ INSERT (bytea) fallita [${status}]: ${error.message}. Riprovo come text…`);
-
         const payloadText: any = {
           name_enc: enc.name_enc, name_iv: enc.name_iv, name_bi: nameBI.asText,
           email_enc: enc.email_enc, email_iv: enc.email_iv, email_bi: emailBI.asText,
@@ -102,13 +144,14 @@ useEffect(() => {
         const retry = await supabase.from(TABLE).insert([payloadText]).select("id").single();
         if (retry.error) {
           appendLog(`❌ INSERT fallita anche come text: ${retry.error.message} (status ${retry.status}).`);
-          // Tip: se status 401/403 è **RLS**: serve policy che permetta INSERT all’utente loggato.
           return;
         } else {
           appendLog(`✅ Creato record (text) id: ${retry.data.id}`);
+          setSearchEmail(email);
         }
       } else {
         appendLog(`✅ Creato record (bytea) id: ${data.id}`);
+        setSearchEmail(email);
       }
     } catch (e: any) {
       console.error(e);
@@ -119,16 +162,17 @@ useEffect(() => {
   async function onSearch() {
     try {
       setResults([]);
+      if (!uid) {
+        alert("Devi essere loggato (usa il box Login qui sopra).");
+        return;
+      }
       if (!ready || !crypto) {
         alert("Prima clicca '🔒 Sblocca dati' in alto per attivare la cifratura.");
         return;
       }
 
-      // 1) preparo entrambe le sonde (text e bytea)
       const probe = biDualRepr(await crypto.blindIndex(SCOPE, searchEmail));
 
-      // 2) query: tentiamo match su entrambe le rappresentazioni con OR
-      //    NB: PostgREST usa filtro 'or' in una stringa.
       const { data, error, status } = await supabase
         .from(TABLE)
         .select("id, name_enc, name_iv, email_enc, email_iv")
@@ -137,16 +181,13 @@ useEffect(() => {
 
       if (error) {
         appendLog(`❌ SELECT fallita [${status}]: ${error.message}`);
-        // Tip: se status 401/403 → RLS blocca la SELECT
         return;
       }
-
       if (!data || data.length === 0) {
-        appendLog("ℹ️ Nessun risultato (controlla: 1) INSERT riuscita? 2) RLS consente SELECT? 3) Inserisci la stessa email).");
+        appendLog("ℹ️ Nessun risultato (controlla INSERT ok, RLS, e che l'email coincida).");
         return;
       }
 
-      // 3) decifra
       const out: { id: string; name?: string; email?: string }[] = [];
       for (const row of data) {
         const dec = await crypto.decryptFields(SCOPE, TABLE, row.id ?? null, row, ["name", "email"]);
@@ -161,25 +202,41 @@ useEffect(() => {
   }
 
   return (
-    <div style={{ maxWidth: 720, margin: "24px auto", padding: 16 }}>
+    <div style={{ maxWidth: 760, margin: "24px auto", padding: 16 }}>
       <h1>Test cifratura — Accounts</h1>
-      <p style={{ opacity: 0.8 }}>
-        Stato cifratura: {ready ? "🔓 attiva" : "🔒 da sbloccare (usa il bottone in alto)"}
+
+      <section style={{ marginTop: 8, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
+        <h2 style={{ marginTop: 0 }}>Login</h2>
+        <p style={{ opacity: 0.8 }}>Stato: {authInfo}</p>
+        {!uid ? (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
+            <input placeholder="email" value={emailLogin} onChange={e => setEmailLogin(e.target.value)} />
+            <input placeholder="password" type="password" value={pwdLogin} onChange={e => setPwdLogin(e.target.value)} />
+            <button onClick={doLoginPassword} disabled={authBusy}>Entra</button>
+            <button onClick={doLoginGoogle} disabled={authBusy} style={{ gridColumn: "1 / span 3" }}>
+              Entra con Google
+            </button>
+          </div>
+        ) : (
+          <button onClick={doLogout}>Logout</button>
+        )}
+      </section>
+
+      <p style={{ marginTop: 8, opacity: 0.75 }}>
+        Suggerimento: il login deve avvenire **sullo stesso dominio** (es. <code>repping.it</code> vs <code>www.repping.it</code> sono diversi).
       </p>
-      
-<p style={{opacity:.8}}>Auth: {authInfo}</p>
-      
+
       <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
         <h2 style={{ marginTop: 0 }}>1) Crea account cifrato</h2>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <label><div>Nome</div><input value={name} onChange={(e) => setName(e.target.value)} style={{ width: "100%" }} /></label>
-          <label><div>Email</div><input value={email} onChange={(e) => setEmail(e.target.value)} style={{ width: "100%" }} /></label>
-          <label><div>Telefono</div><input value={phone} onChange={(e) => setPhone(e.target.value)} style={{ width: "100%" }} /></label>
-          <label><div>VAT</div><input value={vat} onChange={(e) => setVat(e.target.value)} style={{ width: "100%" }} /></label>
+          <label><div>Nome</div><input value={name} onChange={(e) => setName(e.target.value)} /></label>
+          <label><div>Email</div><input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
+          <label><div>Telefono</div><input value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
+          <label><div>VAT</div><input value={vat} onChange={(e) => setVat(e.target.value)} /></label>
         </div>
         <button onClick={onCreate} style={{ marginTop: 12 }}>+ Crea account cifrato</button>
         <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-          In DB vedrai solo colonne cifrate (name_enc/email_enc/...) e i blind index (name_bi/email_bi/...) come bytea (\\xHEX) o text (base64).
+          In DB vedrai solo colonne cifrate e blind index (bytea \\xHEX o text base64).
         </p>
       </section>
 
@@ -216,12 +273,8 @@ useEffect(() => {
 
       <section style={{ marginTop: 16 }}>
         <h3>Log</h3>
-        <pre style={{ background: "#fafafa", padding: 12, borderRadius: 6, minHeight: 100 }}>{log}</pre>
+        <pre style={{ background: "#fafafa", padding: 12, borderRadius: 6, minHeight: 120 }}>{log}</pre>
       </section>
-
-      <p style={{ fontSize: 12, opacity: 0.7 }}>
-        Nota: se nel log vedi status 401/403 su INSERT/SELECT, devi aggiungere/adeguare le policy RLS su <code>accounts</code> per l'utente autenticato.
-      </p>
     </div>
   );
 }
