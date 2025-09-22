@@ -116,16 +116,27 @@ export default function CryptoTestPage() {
         return;
       }
 
+      // Cifro i campi sensibili
       const enc = await crypto.encryptFields(SCOPE, TABLE, null, {
         name, email, phone, vat_number: vat,
       });
 
+      // Blind index in doppia rappresentazione
       const nameBI = biDualRepr(await crypto.blindIndex(SCOPE, name));
       const emailBI = biDualRepr(await crypto.blindIndex(SCOPE, email));
       const phoneBI = biDualRepr(await crypto.blindIndex(SCOPE, phone));
       const vatBI = biDualRepr(await crypto.blindIndex(SCOPE, vat));
 
+      // ⚠️ FIX: campi legacy obbligatori -> user_id NOT NULL + name (placeholder) + owner_id per RLS
+      const baseLegacy = {
+        user_id: uid,
+        owner_id: uid,
+        name: "(encrypted)", // placeholder non sensibile se 'name' è NOT NULL nello schema legacy
+      };
+
+      // Insert (bytea)
       const payload: any = {
+        ...baseLegacy,
         name_enc: enc.name_enc, name_iv: enc.name_iv, name_bi: nameBI.asBytea,
         email_enc: enc.email_enc, email_iv: enc.email_iv, email_bi: emailBI.asBytea,
         phone_enc: enc.phone_enc, phone_iv: enc.phone_iv, phone_bi: phoneBI.asBytea,
@@ -135,7 +146,9 @@ export default function CryptoTestPage() {
       const { data, error, status } = await supabase.from(TABLE).insert([payload]).select("id").single();
       if (error) {
         appendLog(`⚠️ INSERT (bytea) fallita [${status}]: ${error.message}. Riprovo come text…`);
+        // Retry (text)
         const payloadText: any = {
+          ...baseLegacy,
           name_enc: enc.name_enc, name_iv: enc.name_iv, name_bi: nameBI.asText,
           email_enc: enc.email_enc, email_iv: enc.email_iv, email_bi: emailBI.asText,
           phone_enc: enc.phone_enc, phone_iv: enc.phone_iv, phone_bi: phoneBI.asText,
@@ -184,7 +197,7 @@ export default function CryptoTestPage() {
         return;
       }
       if (!data || data.length === 0) {
-        appendLog("ℹ️ Nessun risultato (controlla INSERT ok, RLS, e che l'email coincida).");
+        appendLog("ℹ️ Nessun risultato (controlla INSERT ok, RLS, o che l'email coincida esattamente).");
         return;
       }
 
@@ -223,7 +236,7 @@ export default function CryptoTestPage() {
       </section>
 
       <p style={{ marginTop: 8, opacity: 0.75 }}>
-        Suggerimento: il login deve avvenire **sullo stesso dominio** (es. <code>repping.it</code> vs <code>www.repping.it</code> sono diversi).
+        Suggerimento: il login deve avvenire <b>sullo stesso dominio</b> (es. <code>repping.it</code> vs <code>www.repping.it</code> sono diversi).
       </p>
 
       <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
