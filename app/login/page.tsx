@@ -50,14 +50,19 @@ export default function Login() {
           .upsert({ id: uid!, first_name: fn, last_name: ln }, { onConflict: "id" });
         if (upsertErr) throw upsertErr;
 
-      } else {
-        // Accesso
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
-        if (error) throw error;
-      }
+        } else {
+           // Accesso
+          const { error } = await supabase.auth.signInWithPassword({ email, password });
+           if (error) throw error;
+          // ⬇️ verifica che la sessione esista davvero
+          const { data: sess } = await supabase.auth.getSession();
+          if (!sess.session) {
+            throw new Error("Accesso non riuscito: sessione assente");
+          }
+        }
 
       await supabase.auth.getSession();     // sincronizza cookie/sessione
-      window.location.assign("/");          // hard navigate (niente cache Router)
+      window.location.replace("/");          // hard navigate (niente cache Router)
 
     } catch (err: any) {
       // Se vedi 401 qui, quasi sempre è per sessione assente + RLS: vedi note sopra
