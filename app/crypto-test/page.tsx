@@ -122,10 +122,12 @@ export default function CryptoTestPage() {
       });
 
       // Blind index in doppia rappresentazione
-      const nameBI = biDualRepr(await crypto.blindIndex(SCOPE, name));
-      const emailBI = biDualRepr(await crypto.blindIndex(SCOPE, email));
-      const phoneBI = biDualRepr(await crypto.blindIndex(SCOPE, phone));
-      const vatBI = biDualRepr(await crypto.blindIndex(SCOPE, vat));
+      // DOPO (corretto con CryptoService nuovo)
+      const name_bi  = await crypto.computeBlindIndex(SCOPE, name);
+      const email_bi = await crypto.computeBlindIndex(SCOPE, email);
+      const phone_bi = await crypto.computeBlindIndex(SCOPE, phone);
+      const vat_bi   = await crypto.computeBlindIndex(SCOPE, vat);
+
 
       // ⚠️ FIX: campi legacy obbligatori -> user_id NOT NULL + name (placeholder) + owner_id per RLS
       const baseLegacy = {
@@ -184,7 +186,7 @@ export default function CryptoTestPage() {
         return;
       }
 
-      const probe = biDualRepr(await crypto.blindIndex(SCOPE, searchEmail));
+      const probe = biDualRepr(await crypto.computeblindIndex(SCOPE, searchEmail));
 
       const { data, error, status } = await supabase
         .from(TABLE)
