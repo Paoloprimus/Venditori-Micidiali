@@ -1,10 +1,10 @@
 "use client";
 import { useState } from "react";
-import { createSupabaseBrowser } from "../../lib/supabase/client";
+import { supabase } from "../../lib/supabase/client"; // <- cambiato
 import { useRouter } from "next/navigation";
 
 export default function Login() {
-  const supabase = createSupabaseBrowser();
+  // const supabase = createSupabaseBrowser(); // <- rimossa
   const router = useRouter();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
 
@@ -18,53 +18,52 @@ export default function Login() {
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-async function submit(e: React.FormEvent) {
-  e.preventDefault();
-  setMsg(null);
-  setLoading(true);
-  try {
-    if (mode === "signup") {
-      // 1) Registrazione
-      const { data, error } = await supabase.auth.signUp({ email, password });
-      if (error) throw error;
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setMsg(null);
+    setLoading(true);
+    try {
+      if (mode === "signup") {
+        // 1) Registrazione
+        const { data, error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
 
-      // 2) Se non abbiamo sessione (es. conferma email attiva), proviamo login immediato
-      let uid = data.user?.id;
-      if (!data.session) {
-        const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password });
-        if (siErr) {
-          setMsg("Registrazione riuscita. Controlla l'email per confermare l'account, poi accedi.");
-          setLoading(false);
-          return; // fermiamoci: senza sessione l'upsert verrebbe bloccato da RLS
+        // 2) Se non abbiamo sessione (es. conferma email attiva), proviamo login immediato
+        let uid = data.user?.id;
+        if (!data.session) {
+          const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (siErr) {
+            setMsg("Registrazione riuscita. Controlla l'email per confermare l'account, poi accedi.");
+            setLoading(false);
+            return; // fermiamoci: senza sessione l'upsert verrebbe bloccato da RLS
+          }
+          uid = si.user?.id;
         }
-        uid = si.user?.id;
+
+        // 3) Upsert profilo (richiede sessione attiva)
+        const fn = firstName.trim();
+        const ln = lastName.trim();
+        if (!fn || !ln) throw new Error("Inserisci nome e cognome per completare la registrazione.");
+
+        const { error: upsertErr } = await supabase
+          .from("profiles")
+          .upsert({ id: uid!, first_name: fn, last_name: ln }, { onConflict: "id" });
+        if (upsertErr) throw upsertErr;
+
+      } else {
+        // Accesso
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
       }
 
-      // 3) Upsert profilo (richiede sessione attiva)
-      const fn = firstName.trim();
-      const ln = lastName.trim();
-      if (!fn || !ln) throw new Error("Inserisci nome e cognome per completare la registrazione.");
-
-      const { error: upsertErr } = await supabase
-        .from("profiles")
-        .upsert({ id: uid!, first_name: fn, last_name: ln }, { onConflict: "id" });
-      if (upsertErr) throw upsertErr;
-
-    } else {
-      // Accesso
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (error) throw error;
+      router.push("/");
+    } catch (err: any) {
+      // Se vedi 401 qui, quasi sempre è per sessione assente + RLS: vedi note sopra
+      setMsg(err?.message ?? "Errore.");
+    } finally {
+      setLoading(false);
     }
-
-    router.push("/");
-  } catch (err: any) {
-    // Se vedi 401 qui, quasi sempre è per sessione assente + RLS: vedi note sopra
-    setMsg(err?.message ?? "Errore.");
-  } finally {
-    setLoading(false);
   }
-}
-
 
   return (
     <div className="container" style={{ maxWidth: 440, paddingTop: 64 }}>
