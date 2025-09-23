@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
-import { createSupabaseBrowser } from "../../lib/supabase/client";
+import { supabase } from "../../lib/supabase/client";
 import { useToast } from "../ui/Toast";
 
 type Product = {
@@ -16,7 +16,6 @@ type Product = {
 };
 
 export default function ProductManual({ onSaved }: { onSaved?: () => void }) {
-  const supabase = useMemo(() => createSupabaseBrowser(), []);
   const toast = useToast();
   const [items, setItems] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
