@@ -76,7 +76,7 @@ export default function Login() {
       <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {mode === "signup" && (
           <>
-            <input
+            <input id="firstName" name="firstName"
               type="text"
               placeholder="Nome"
               value={firstName}
@@ -87,7 +87,7 @@ export default function Login() {
                 background: "#0B1220", color: "#C9D1E7"
               }}
             />
-            <input
+            <input id="lastName" name="lastName"
               type="text"
               placeholder="Cognome"
               value={lastName}
@@ -101,7 +101,7 @@ export default function Login() {
           </>
         )}
 
-        <input
+        <input id="email" name="email"
           type="email"
           placeholder="la-tua-email@esempio.it"
           value={email}
@@ -112,7 +112,7 @@ export default function Login() {
             background: "#0B1220", color: "#C9D1E7"
           }}
         />
-        <input
+        <input id="password" name="password"
           type="password"
           placeholder="password (min 6)"
           value={password}
