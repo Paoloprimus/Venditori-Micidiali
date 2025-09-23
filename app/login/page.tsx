@@ -56,9 +56,8 @@ export default function Login() {
         if (error) throw error;
       }
 
-      await supabase.auth.getSession();
-      router.push("/");
-      router.refresh();
+      await supabase.auth.getSession();     // sincronizza cookie/sessione
+      window.location.assign("/");          // hard navigate (niente cache Router)
 
     } catch (err: any) {
       // Se vedi 401 qui, quasi sempre è per sessione assente + RLS: vedi note sopra
