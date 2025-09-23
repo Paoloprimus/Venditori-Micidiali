@@ -2,7 +2,7 @@
 "use client";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useDrawers, LeftDrawer, RightDrawer } from "./Drawers";
-import { createSupabaseBrowser } from "../lib/supabase/client";
+import { supabase } from "../lib/supabase/client";
 
 import TopBar from "./home/TopBar";
 import Thread from "./home/Thread";
