@@ -109,7 +109,6 @@ export default function ProductManual({ onSaved }: { onSaved?: () => void }) {
 }
 
 function ProductForm({ mode, product, onClose }: { mode: "edit"|"create"; product: Product; onClose: () => void }) {
-  const supabase = createSupabaseBrowser();
   const toast = useToast();
   const [form, setForm] = useState<Product>({ ...product });
   const [busy, setBusy] = useState(false);
