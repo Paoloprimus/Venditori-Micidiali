@@ -5,11 +5,6 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
-
 // === Assunzioni (lasciale così) ===
 const SCOPE = "table:accounts";
 const TABLE = "accounts";
