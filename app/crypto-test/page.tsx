@@ -10,12 +10,12 @@ const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
-// === Assunzioni (puoi lasciarle così) ===
+// === Assunzioni (lasciale così) ===
 const SCOPE = "table:accounts";
 const TABLE = "accounts";
 
 export default function CryptoTestPage() {
-  const { ready, unlock, crypto, error } = useCrypto();
+  const { ready, unlock, crypto: cryptoSvc, error } = useCrypto();
 
   // form
   const [pw, setPw] = useState("");
@@ -30,15 +30,15 @@ export default function CryptoTestPage() {
   // Prepara chiavi dello scope quando sbloccato
   useEffect(() => {
     (async () => {
-      if (!ready || !crypto) return;
+      if (!ready || !cryptoSvc) return;
       try {
-        await crypto.getOrCreateScopeKeys(SCOPE);
+        await cryptoSvc.getOrCreateScopeKeys(SCOPE);
         pushLog("Chiavi scope pronte");
       } catch (e: any) {
         pushLog("Errore scope keys: " + (e?.message ?? e));
       }
     })();
-  }, [ready, crypto]);
+  }, [ready, cryptoSvc]);
 
   async function handleUnlock() {
     try {
@@ -52,14 +52,16 @@ export default function CryptoTestPage() {
 
   // INSERT cifrata su accounts
   async function handleInsert() {
-    if (!ready || !crypto) return pushLog("Sblocca prima la cifratura");
+    if (!ready || !cryptoSvc) return pushLog("Sblocca prima la cifratura");
     if (!name || !email) return pushLog("Inserisci almeno Nome ed Email");
 
     try {
-      const id = crypto.randomUUID ? crypto.randomUUID() : (globalThis.crypto as any).randomUUID();
+      const id =
+        globalThis.crypto?.randomUUID?.() ??
+        `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
-      // 1) Cifra i campi sensibili (seguono la convenzione *_enc / *_iv già presente in tabella)
-      const enc = await crypto.encryptFields(SCOPE, TABLE, id, {
+      // 1) Cifra i campi sensibili (convenzione *_enc / *_iv già presente in tabella)
+      const enc = await cryptoSvc.encryptFields(SCOPE, TABLE, id, {
         name,
         email,
         phone: phone || undefined,
@@ -67,7 +69,7 @@ export default function CryptoTestPage() {
       });
 
       // 2) Blind index per email (per ricerca equality)
-      const email_bi = await crypto.computeBlindIndex(SCOPE, email);
+      const email_bi = await cryptoSvc.computeBlindIndex(SCOPE, email);
 
       // 3) Costruisci la riga da inserire (colonne della tua tabella)
       const row: any = {
@@ -82,14 +84,17 @@ export default function CryptoTestPage() {
         ...(enc.vat_number_enc ? { vat_number_enc: enc.vat_number_enc, vat_number_iv: enc.vat_number_iv } : {}),
         // blind index
         email_bi,
-        // NON tocchiamo campi non sensibili; i trigger pensano a user_id/owner_id
+        // i trigger pensano a user_id/owner_id
       };
 
       const ins = await supabase.from(TABLE).insert(row).select().single();
       if (ins.error) throw ins.error;
 
       pushLog("Inserito account cifrato id=" + ins.data.id);
-      setName(""); setEmail(""); setPhone(""); setVat("");
+      setName("");
+      setEmail("");
+      setPhone("");
+      setVat("");
     } catch (e: any) {
       pushLog("Errore insert: " + (e?.message ?? e));
     }
@@ -97,12 +102,13 @@ export default function CryptoTestPage() {
 
   // SELECT per email (via BI) + decifra i campi
   async function handleSearchByEmail() {
-    if (!ready || !crypto) return pushLog("Sblocca prima la cifratura");
+    if (!ready || !cryptoSvc) return pushLog("Sblocca prima la cifratura");
     if (!email) return pushLog("Inserisci l'email da cercare");
 
     try {
-      const probe = await crypto.computeBlindIndex(SCOPE, email);
-      const sel = await supabase.from(TABLE)
+      const probe = await cryptoSvc.computeBlindIndex(SCOPE, email);
+      const sel = await supabase
+        .from(TABLE)
         .select("*")
         .eq("email_bi", probe)
         .limit(1)
@@ -112,11 +118,16 @@ export default function CryptoTestPage() {
       if (!sel.data) return pushLog("Nessun account trovato per quell'email");
 
       const recordId = sel.data.id ?? "";
-      const dec = await crypto.decryptFields(SCOPE, TABLE, recordId, sel.data, [
-        "name", "email", "phone", "vat_number"
+      const dec = await cryptoSvc.decryptFields(SCOPE, TABLE, recordId, sel.data, [
+        "name",
+        "email",
+        "phone",
+        "vat_number",
       ]);
 
-      pushLog(`Trovato: name=${dec.name ?? "—"} | email=${dec.email ?? "—"} | phone=${dec.phone ?? "—"} | vat=${dec.vat_number ?? "—"}`);
+      pushLog(
+        `Trovato: name=${dec.name ?? "—"} | email=${dec.email ?? "—"} | phone=${dec.phone ?? "—"} | vat=${dec.vat_number ?? "—"}`
+      );
     } catch (e: any) {
       pushLog("Errore search/decifra: " + (e?.message ?? e));
     }
@@ -129,8 +140,13 @@ export default function CryptoTestPage() {
       {!ready && (
         <div className="border rounded p-3 space-y-2">
           <div className="font-medium">Sblocca cifratura</div>
-          <input type="password" className="border rounded p-2 w-full"
-                 placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <input
+            type="password"
+            className="border rounded p-2 w-full"
+            placeholder="Password"
+            value={pw}
+            onChange={(e) => setPw(e.target.value)}
+          />
           <button className="bg-blue-600 text-white rounded px-3 py-2" onClick={handleUnlock}>
             Sblocca
           </button>
@@ -141,10 +157,30 @@ export default function CryptoTestPage() {
       {ready && (
         <div className="border rounded p-3 space-y-3">
           <div className="grid grid-cols-1 gap-2">
-            <input className="border rounded p-2" placeholder="Nome (name)" value={name} onChange={(e) => setName(e.target.value)} />
-            <input className="border rounded p-2" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
-            <input className="border rounded p-2" placeholder="Telefono (opzionale)" value={phone} onChange={(e) => setPhone(e.target.value)} />
-            <input className="border rounded p-2" placeholder="Partita IVA (opzionale)" value={vat} onChange={(e) => setVat(e.target.value)} />
+            <input
+              className="border rounded p-2"
+              placeholder="Nome (name)"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <input
+              className="border rounded p-2"
+              placeholder="Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+            <input
+              className="border rounded p-2"
+              placeholder="Telefono (opzionale)"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
+            <input
+              className="border rounded p-2"
+              placeholder="Partita IVA (opzionale)"
+              value={vat}
+              onChange={(e) => setVat(e.target.value)}
+            />
           </div>
           <div className="flex gap-2">
             <button className="bg-green-600 text-white rounded px-3 py-2" onClick={handleInsert}>
@@ -160,7 +196,9 @@ export default function CryptoTestPage() {
       <div className="border rounded p-3">
         <div className="font-medium mb-2">Log</div>
         <ul className="text-sm space-y-1">
-          {log.map((l, i) => <li key={i}>• {l}</li>)}
+          {log.map((l, i) => (
+            <li key={i}>• {l}</li>
+          ))}
         </ul>
       </div>
     </div>
