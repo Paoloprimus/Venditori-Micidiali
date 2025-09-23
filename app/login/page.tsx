@@ -56,7 +56,10 @@ export default function Login() {
         if (error) throw error;
       }
 
+      await supabase.auth.getSession();
       router.push("/");
+      router.refresh();
+
     } catch (err: any) {
       // Se vedi 401 qui, quasi sempre è per sessione assente + RLS: vedi note sopra
       setMsg(err?.message ?? "Errore.");
