@@ -1,295 +1,168 @@
 // app/crypto-test/page.tsx
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
-import { useCrypto } from "@/lib/crypto/CryptoProvider"; // <— usa alias
+import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 );
 
+// === Assunzioni (puoi lasciarle così) ===
 const SCOPE = "table:accounts";
 const TABLE = "accounts";
 
-/** Helpers per BI: base64 -> hex (con prefisso \\x per bytea) */
-function b64ToU8(b64: string): Uint8Array {
-  const pad = b64.length % 4 === 0 ? "" : "=".repeat(4 - (b64.length % 4));
-  const s = (b64 + pad).replace(/-/g, "+").replace(/_/g, "/");
-  const bin = atob(s);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-function u8ToHex(u8: Uint8Array): string {
-  return Array.from(u8).map(x => x.toString(16).padStart(2, "0")).join("");
-}
-function biDualRepr(b64: string) {
-  const hex = u8ToHex(b64ToU8(b64));
-  return { asText: b64, asBytea: "\\x" + hex };
-}
-
 export default function CryptoTestPage() {
-  const { ready, crypto } = useCrypto();
+  const { ready, unlock, crypto, error } = useCrypto();
 
-  // ---- stato auth ----
-  const [uid, setUid] = useState<string | null>(null);
-  const [authInfo, setAuthInfo] = useState<string>("(verifico login...)");
-  const [emailLogin, setEmailLogin] = useState("");
-  const [pwdLogin, setPwdLogin] = useState("");
-  const [authBusy, setAuthBusy] = useState(false);
+  // form
+  const [pw, setPw] = useState("");
+  const [name, setName] = useState("");
+  const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
+  const [vat, setVat] = useState("");
 
+  const [log, setLog] = useState<string[]>([]);
+  const pushLog = (s: string) => setLog((L) => [s, ...L].slice(0, 100));
+
+  // Prepara chiavi dello scope quando sbloccato
   useEffect(() => {
-    let unsub: (() => void) | undefined;
-
     (async () => {
-      const { data } = await supabase.auth.getSession();
-      const u = data.session?.user ?? null;
-      setUid(u ? u.id : null);
-      setAuthInfo(u ? `Logged in ✅ uid=${u.id}` : "Anonimo ❌ (fai login)");
-
-      // ascolta i cambi di sessione in tempo reale
-      const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => {
-        const user = session?.user ?? null;
-        setUid(user ? user.id : null);
-        setAuthInfo(user ? `Logged in ✅ uid=${user.id}` : "Anonimo ❌ (fai login)");
-      });
-      unsub = sub?.subscription.unsubscribe;
+      if (!ready || !crypto) return;
+      try {
+        await crypto.getOrCreateScopeKeys(SCOPE);
+        pushLog("Chiavi scope pronte");
+      } catch (e: any) {
+        pushLog("Errore scope keys: " + (e?.message ?? e));
+      }
     })();
+  }, [ready, crypto]);
 
-    return () => { try { unsub?.(); } catch {} };
-  }, []);
-
-  // ---- test form stato ----
-  const [name, setName] = useState("Pasticceria Verdi");
-  const [email, setEmail] = useState("info@verdi.it");
-  const [phone, setPhone] = useState("+39 045 1234567");
-  const [vat, setVat] = useState("IT01234567890");
-  const [searchEmail, setSearchEmail] = useState("info@verdi.it");
-  const [log, setLog] = useState<string>("");
-  const [results, setResults] = useState<{ id: string; name?: string; email?: string }[]>([]);
-
-  function appendLog(s: string) {
-    setLog(prev => (prev ? prev + "\n" : "") + s);
-  }
-
-  // ---- azioni auth ----
-  async function doLoginPassword() {
+  async function handleUnlock() {
     try {
-      setAuthBusy(true);
-      const { error } = await supabase.auth.signInWithPassword({
-        email: emailLogin.trim(),
-        password: pwdLogin,
-      });
-      if (error) appendLog(`❌ Login (password) fallito: ${error.message}`);
-      else appendLog("✅ Login (password) ok");
-    } finally {
-      setAuthBusy(false);
+      await unlock(pw, [SCOPE]); // sblocca e pre-warm dello scope
+      setPw("");
+      pushLog("Cifratura sbloccata");
+    } catch (e: any) {
+      pushLog("Errore sblocco: " + (e?.message ?? e));
     }
   }
-  async function doLoginGoogle() {
-    try {
-      setAuthBusy(true);
-      const { error } = await supabase.auth.signInWithOAuth({ provider: "google" });
-      if (error) appendLog(`❌ Login Google fallito: ${error.message}`);
-      // Nota: verrai reindirizzato; al ritorno la pagina noterà la sessione
-    } finally {
-      setAuthBusy(false);
-    }
-  }
-  async function doLogout() {
-    await supabase.auth.signOut();
-    appendLog("🔒 Logout effettuato");
-  }
 
-  // ---- azioni crypto test ----
-  async function onCreate() {
-    try {
-      setResults([]);
-      if (!uid) {
-        alert("Devi essere loggato (usa il box Login qui sopra).");
-        return;
-      }
-      if (!ready || !crypto) {
-        alert("Prima clicca '🔒 Sblocca dati' in alto per attivare la cifratura.");
-        return;
-      }
+  // INSERT cifrata su accounts
+  async function handleInsert() {
+    if (!ready || !crypto) return pushLog("Sblocca prima la cifratura");
+    if (!name || !email) return pushLog("Inserisci almeno Nome ed Email");
 
-      // Cifro i campi sensibili
-      const enc = await crypto.encryptFields(SCOPE, TABLE, null, {
-        name, email, phone, vat_number: vat,
+    try {
+      const id = crypto.randomUUID ? crypto.randomUUID() : (globalThis.crypto as any).randomUUID();
+
+      // 1) Cifra i campi sensibili (seguono la convenzione *_enc / *_iv già presente in tabella)
+      const enc = await crypto.encryptFields(SCOPE, TABLE, id, {
+        name,
+        email,
+        phone: phone || undefined,
+        vat_number: vat || undefined,
       });
 
-      // Blind index in doppia rappresentazione
-      // DOPO (corretto con CryptoService nuovo)
-      const name_bi  = await crypto.computeBlindIndex(SCOPE, name);
+      // 2) Blind index per email (per ricerca equality)
       const email_bi = await crypto.computeBlindIndex(SCOPE, email);
-      const phone_bi = await crypto.computeBlindIndex(SCOPE, phone);
-      const vat_bi   = await crypto.computeBlindIndex(SCOPE, vat);
 
-
-      // ⚠️ FIX: campi legacy obbligatori -> user_id NOT NULL + name (placeholder) + owner_id per RLS
-      const baseLegacy = {
-        user_id: uid,
-        owner_id: uid,
-        name: "(encrypted)", // placeholder non sensibile se 'name' è NOT NULL nello schema legacy
+      // 3) Costruisci la riga da inserire (colonne della tua tabella)
+      const row: any = {
+        id, // opzionale: hai già default gen_random_uuid(); se vuoi, puoi togliere questa riga
+        // cifrati
+        name_enc: enc.name_enc,
+        name_iv: enc.name_iv,
+        email_enc: enc.email_enc,
+        email_iv: enc.email_iv,
+        // opzionali se forniti
+        ...(enc.phone_enc ? { phone_enc: enc.phone_enc, phone_iv: enc.phone_iv } : {}),
+        ...(enc.vat_number_enc ? { vat_number_enc: enc.vat_number_enc, vat_number_iv: enc.vat_number_iv } : {}),
+        // blind index
+        email_bi,
+        // NON tocchiamo campi non sensibili; i trigger pensano a user_id/owner_id
       };
 
-      // Insert (bytea)
-      const payload: any = {
-        ...baseLegacy,
-        name_enc: enc.name_enc, name_iv: enc.name_iv, name_bi: nameBI.asBytea,
-        email_enc: enc.email_enc, email_iv: enc.email_iv, email_bi: emailBI.asBytea,
-        phone_enc: enc.phone_enc, phone_iv: enc.phone_iv, phone_bi: phoneBI.asBytea,
-        vat_number_enc: enc.vat_number_enc, vat_number_iv: enc.vat_number_iv, vat_number_bi: vatBI.asBytea,
-      };
+      const ins = await supabase.from(TABLE).insert(row).select().single();
+      if (ins.error) throw ins.error;
 
-      const { data, error, status } = await supabase.from(TABLE).insert([payload]).select("id").single();
-      if (error) {
-        appendLog(`⚠️ INSERT (bytea) fallita [${status}]: ${error.message}. Riprovo come text…`);
-        // Retry (text)
-        const payloadText: any = {
-          ...baseLegacy,
-          name_enc: enc.name_enc, name_iv: enc.name_iv, name_bi: nameBI.asText,
-          email_enc: enc.email_enc, email_iv: enc.email_iv, email_bi: emailBI.asText,
-          phone_enc: enc.phone_enc, phone_iv: enc.phone_iv, phone_bi: phoneBI.asText,
-          vat_number_enc: enc.vat_number_enc, vat_number_iv: enc.vat_number_iv, vat_number_bi: vatBI.asText,
-        };
-        const retry = await supabase.from(TABLE).insert([payloadText]).select("id").single();
-        if (retry.error) {
-          appendLog(`❌ INSERT fallita anche come text: ${retry.error.message} (status ${retry.status}).`);
-          return;
-        } else {
-          appendLog(`✅ Creato record (text) id: ${retry.data.id}`);
-          setSearchEmail(email);
-        }
-      } else {
-        appendLog(`✅ Creato record (bytea) id: ${data.id}`);
-        setSearchEmail(email);
-      }
+      pushLog("Inserito account cifrato id=" + ins.data.id);
+      setName(""); setEmail(""); setPhone(""); setVat("");
     } catch (e: any) {
-      console.error(e);
-      appendLog(`❌ Errore CREATE: ${e?.message || e}`);
+      pushLog("Errore insert: " + (e?.message ?? e));
     }
   }
 
-  async function onSearch() {
+  // SELECT per email (via BI) + decifra i campi
+  async function handleSearchByEmail() {
+    if (!ready || !crypto) return pushLog("Sblocca prima la cifratura");
+    if (!email) return pushLog("Inserisci l'email da cercare");
+
     try {
-      setResults([]);
-      if (!uid) {
-        alert("Devi essere loggato (usa il box Login qui sopra).");
-        return;
-      }
-      if (!ready || !crypto) {
-        alert("Prima clicca '🔒 Sblocca dati' in alto per attivare la cifratura.");
-        return;
-      }
+      const probe = await crypto.computeBlindIndex(SCOPE, email);
+      const sel = await supabase.from(TABLE)
+        .select("*")
+        .eq("email_bi", probe)
+        .limit(1)
+        .maybeSingle();
 
-      const probe = biDualRepr(await crypto.computeblindIndex(SCOPE, searchEmail));
+      if (sel.error) throw sel.error;
+      if (!sel.data) return pushLog("Nessun account trovato per quell'email");
 
-      const { data, error, status } = await supabase
-        .from(TABLE)
-        .select("id, name_enc, name_iv, email_enc, email_iv")
-        .or(`email_bi.eq.${probe.asBytea},email_bi.eq.${probe.asText}`)
-        .limit(10);
+      const recordId = sel.data.id ?? "";
+      const dec = await crypto.decryptFields(SCOPE, TABLE, recordId, sel.data, [
+        "name", "email", "phone", "vat_number"
+      ]);
 
-      if (error) {
-        appendLog(`❌ SELECT fallita [${status}]: ${error.message}`);
-        return;
-      }
-      if (!data || data.length === 0) {
-        appendLog("ℹ️ Nessun risultato (controlla INSERT ok, RLS, o che l'email coincida esattamente).");
-        return;
-      }
-
-      const out: { id: string; name?: string; email?: string }[] = [];
-      for (const row of data) {
-        const dec = await crypto.decryptFields(SCOPE, TABLE, row.id ?? null, row, ["name", "email"]);
-        out.push({ id: row.id, name: dec.name ?? "", email: dec.email ?? "" });
-      }
-      setResults(out);
-      appendLog(`🔎 Trovati ${out.length} record per email = ${searchEmail}`);
+      pushLog(`Trovato: name=${dec.name ?? "—"} | email=${dec.email ?? "—"} | phone=${dec.phone ?? "—"} | vat=${dec.vat_number ?? "—"}`);
     } catch (e: any) {
-      console.error(e);
-      appendLog(`❌ Errore SEARCH: ${e?.message || e}`);
+      pushLog("Errore search/decifra: " + (e?.message ?? e));
     }
   }
 
   return (
-    <div style={{ maxWidth: 760, margin: "24px auto", padding: 16 }}>
-      <h1>Test cifratura — Accounts</h1>
+    <div className="max-w-xl mx-auto p-4 space-y-4">
+      <h1 className="text-xl font-semibold">Crypto Test</h1>
 
-      <section style={{ marginTop: 8, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <h2 style={{ marginTop: 0 }}>Login</h2>
-        <p style={{ opacity: 0.8 }}>Stato: {authInfo}</p>
-        {!uid ? (
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8 }}>
-            <input placeholder="email" value={emailLogin} onChange={e => setEmailLogin(e.target.value)} />
-            <input placeholder="password" type="password" value={pwdLogin} onChange={e => setPwdLogin(e.target.value)} />
-            <button onClick={doLoginPassword} disabled={authBusy}>Entra</button>
-            <button onClick={doLoginGoogle} disabled={authBusy} style={{ gridColumn: "1 / span 3" }}>
-              Entra con Google
+      {!ready && (
+        <div className="border rounded p-3 space-y-2">
+          <div className="font-medium">Sblocca cifratura</div>
+          <input type="password" className="border rounded p-2 w-full"
+                 placeholder="Password" value={pw} onChange={(e) => setPw(e.target.value)} />
+          <button className="bg-blue-600 text-white rounded px-3 py-2" onClick={handleUnlock}>
+            Sblocca
+          </button>
+          {error && <div className="text-red-600 text-sm">{error}</div>}
+        </div>
+      )}
+
+      {ready && (
+        <div className="border rounded p-3 space-y-3">
+          <div className="grid grid-cols-1 gap-2">
+            <input className="border rounded p-2" placeholder="Nome (name)" value={name} onChange={(e) => setName(e.target.value)} />
+            <input className="border rounded p-2" placeholder="Email" value={email} onChange={(e) => setEmail(e.target.value)} />
+            <input className="border rounded p-2" placeholder="Telefono (opzionale)" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            <input className="border rounded p-2" placeholder="Partita IVA (opzionale)" value={vat} onChange={(e) => setVat(e.target.value)} />
+          </div>
+          <div className="flex gap-2">
+            <button className="bg-green-600 text-white rounded px-3 py-2" onClick={handleInsert}>
+              Inserisci cifrato
+            </button>
+            <button className="bg-gray-800 text-white rounded px-3 py-2" onClick={handleSearchByEmail}>
+              Cerca per email (BI)
             </button>
           </div>
-        ) : (
-          <button onClick={doLogout}>Logout</button>
-        )}
-      </section>
-
-      <p style={{ marginTop: 8, opacity: 0.75 }}>
-        Suggerimento: il login deve avvenire <b>sullo stesso dominio</b> (es. <code>repping.it</code> vs <code>www.repping.it</code> sono diversi).
-      </p>
-
-      <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <h2 style={{ marginTop: 0 }}>1) Crea account cifrato</h2>
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-          <label><div>Nome</div><input value={name} onChange={(e) => setName(e.target.value)} /></label>
-          <label><div>Email</div><input value={email} onChange={(e) => setEmail(e.target.value)} /></label>
-          <label><div>Telefono</div><input value={phone} onChange={(e) => setPhone(e.target.value)} /></label>
-          <label><div>VAT</div><input value={vat} onChange={(e) => setVat(e.target.value)} /></label>
         </div>
-        <button onClick={onCreate} style={{ marginTop: 12 }}>+ Crea account cifrato</button>
-        <p style={{ fontSize: 12, opacity: 0.7, marginTop: 8 }}>
-          In DB vedrai solo colonne cifrate e blind index (bytea \\xHEX o text base64).
-        </p>
-      </section>
+      )}
 
-      <section style={{ marginTop: 16, padding: 12, border: "1px solid #eee", borderRadius: 8 }}>
-        <h2 style={{ marginTop: 0 }}>2) Cerca per email (blind index)</h2>
-        <div style={{ display: "flex", gap: 8 }}>
-          <input value={searchEmail} onChange={(e) => setSearchEmail(e.target.value)} placeholder="email da cercare" style={{ flex: 1 }} />
-          <button onClick={onSearch}>🔎 Cerca</button>
-        </div>
-
-        {results.length > 0 && (
-          <div style={{ marginTop: 12 }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
-              <thead>
-                <tr>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>ID</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>Name (decifrato)</th>
-                  <th style={{ textAlign: "left", borderBottom: "1px solid #ddd" }}>Email (decifrata)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r) => (
-                  <tr key={r.id}>
-                    <td style={{ padding: "6px 0" }}>{r.id}</td>
-                    <td style={{ padding: "6px 0" }}>{r.name}</td>
-                    <td style={{ padding: "6px 0" }}>{r.email}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </section>
-
-      <section style={{ marginTop: 16 }}>
-        <h3>Log</h3>
-        <pre style={{ background: "#fafafa", padding: 12, borderRadius: 6, minHeight: 120 }}>{log}</pre>
-      </section>
+      <div className="border rounded p-3">
+        <div className="font-medium mb-2">Log</div>
+        <ul className="text-sm space-y-1">
+          {log.map((l, i) => <li key={i}>• {l}</li>)}
+        </ul>
+      </div>
     </div>
   );
 }
