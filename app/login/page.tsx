@@ -76,7 +76,7 @@ export default function Login() {
       <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {mode === "signup" && (
           <>
-            <input id="firstName" name="firstName"
+            <input name="firstName" id="firstName" autoComplete="given-name"
               type="text"
               placeholder="Nome"
               value={firstName}
@@ -87,7 +87,7 @@ export default function Login() {
                 background: "#0B1220", color: "#C9D1E7"
               }}
             />
-            <input id="lastName" name="lastName"
+            <input name="lastName" id="lastName" autoComplete="family-name"
               type="text"
               placeholder="Cognome"
               value={lastName}
@@ -101,7 +101,7 @@ export default function Login() {
           </>
         )}
 
-        <input id="email" name="email"
+        <input name="email" id="email" autoComplete="username"
           type="email"
           placeholder="la-tua-email@esempio.it"
           value={email}
@@ -112,7 +112,8 @@ export default function Login() {
             background: "#0B1220", color: "#C9D1E7"
           }}
         />
-        <input id="password" name="password"
+        <input name="password" id="password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
           type="password"
           placeholder="password (min 6)"
           value={password}
