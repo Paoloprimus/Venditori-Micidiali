@@ -4,6 +4,8 @@ import { createSupabaseServer } from "../lib/supabase/server";
 import HomeClient from "../components/HomeClient";
 import CryptoShell from "../components/CryptoShell";
 
+export const dynamic = "force-dynamic";
+
 function deriveNames(email?: string | null, fullName?: string | null) {
   const safe = (s?: string | null) => (s || "").trim();
   const fn = safe(fullName);
