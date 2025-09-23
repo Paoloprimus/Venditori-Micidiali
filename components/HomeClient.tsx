@@ -89,7 +89,6 @@ const LOCAL_TEMPLATES: Record<string, { response: string }> = {
 };
 
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
-  const supabase = createSupabaseBrowser();
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
 
   // ---- TTS
