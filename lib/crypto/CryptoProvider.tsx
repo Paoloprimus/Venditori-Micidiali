@@ -75,4 +75,3 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-export { useCrypto }; // export nominato, utile per evitare problemi di import
