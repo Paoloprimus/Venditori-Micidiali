@@ -12,9 +12,9 @@ type ScopeKeys = {
 };
 
 type ProfileRow = {
-  wrapped_master_key: string | null; // base64 (bytea)
-  wrapped_master_key_iv?: string | null; // base64 (bytea)
-  kdf_salt: string | null;           // base64 (bytea)
+  wrapped_master_key: string | null;      // base64 (bytea)
+  wrapped_master_key_iv?: string | null;  // base64 (bytea)
+  kdf_salt: string | null;                // base64 (bytea)
   kdf_params: KdfParams | null;
 };
 
@@ -34,23 +34,43 @@ function fromBase64(b64: string): Uint8Array {
   return u8;
 }
 
+/** ---------- Buffer helpers (fix AAD) ---------- */
+function asBufferView(a: any): ArrayBufferView | undefined {
+  if (a == null) return undefined;
+  if (a instanceof Uint8Array) return a;
+  if (ArrayBuffer.isView(a)) return a as ArrayBufferView;
+  if (a instanceof ArrayBuffer) return new Uint8Array(a);
+  if (typeof a === "string") return new TextEncoder().encode(a);
+  try { return new Uint8Array(a); } catch { return undefined; }
+}
+
 /** ---------- WebCrypto helpers ---------- */
 async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ["encrypt", "decrypt"]): Promise<CryptoKey> {
   return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, usages);
 }
-async function aesGcmEncrypt(keyBytes: Uint8Array, nonce: Uint8Array, plaintext: Uint8Array, aad?: Uint8Array): Promise<Uint8Array> {
+async function aesGcmEncrypt(
+  keyBytes: Uint8Array,
+  nonce: Uint8Array,
+  plaintext: Uint8Array,
+  aad?: any
+): Promise<Uint8Array> {
   const key = await importAesKey(keyBytes);
   const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 },
+    { name: "AES-GCM", iv: nonce, additionalData: asBufferView(aad), tagLength: 128 },
     key,
     plaintext
   );
   return new Uint8Array(ct); // ciphertext || tag
 }
-async function aesGcmDecrypt(keyBytes: Uint8Array, nonce: Uint8Array, ciphertext: Uint8Array, aad?: Uint8Array): Promise<Uint8Array> {
+async function aesGcmDecrypt(
+  keyBytes: Uint8Array,
+  nonce: Uint8Array,
+  ciphertext: Uint8Array,
+  aad?: any
+): Promise<Uint8Array> {
   const key = await importAesKey(keyBytes);
   const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: nonce, additionalData: aad, tagLength: 128 },
+    { name: "AES-GCM", iv: nonce, additionalData: asBufferView(aad), tagLength: 128 },
     key,
     ciphertext
   );
@@ -70,7 +90,6 @@ async function unwrapKey(wrapped_b64: string, nonce_b64: string, kek: Uint8Array
 }
 
 /** ---------- KDF / HKDF / HMAC ---------- */
-// PBKDF2 → KEK (Uint8Array)
 async function deriveKEK(passphrase: string, salt: Uint8Array, params: KdfParams): Promise<Uint8Array> {
   if (params.algo !== "pbkdf2") throw new Error("KDF non supportato: usa pbkdf2");
   const enc = new TextEncoder();
@@ -82,7 +101,6 @@ async function deriveKEK(passphrase: string, salt: Uint8Array, params: KdfParams
   );
   return new Uint8Array(bits);
 }
-// HKDF (se serve derivare sotto-chiavi dalla MK)
 async function hkdfExtractAndExpand(ikm: Uint8Array, info: string, length = 32): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
@@ -92,7 +110,6 @@ async function hkdfExtractAndExpand(ikm: Uint8Array, info: string, length = 32):
   );
   return new Uint8Array(bits);
 }
-// HMAC-SHA256 per Blind Index
 async function hmacSha256(keyBytes: Uint8Array, msg: Uint8Array): Promise<Uint8Array> {
   const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const sig = await crypto.subtle.sign("HMAC", key, msg);
@@ -106,7 +123,7 @@ function canonicalizeForBI(input: string): Uint8Array {
 /** ---------- CryptoService ---------- */
 export class CryptoService {
   private sb: SupabaseClient;
-  private accountId: string | null; // opzionale: multi-tenant
+  private accountId: string | null;
   private MK: Uint8Array | null = null; // Master Key in memoria
   private kekSalt?: Uint8Array;
   private kdfParams?: KdfParams;
@@ -224,7 +241,7 @@ export class CryptoService {
     const nonce = crypto.getRandomValues(new Uint8Array(12));
     const aad = new TextEncoder().encode(`${table}|${field}|${recordId}`);
     const plaintext = new TextEncoder().encode(JSON.stringify(obj));
-    const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad);
+    const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad); // aad sempre BufferView
     return { enc_b64: toBase64(ciphertext), iv_b64: toBase64(nonce) };
   }
 
@@ -234,7 +251,7 @@ export class CryptoService {
     if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
     const { DEK } = this.scopeCache[scope];
     const aad = new TextEncoder().encode(`${table}|${field}|${recordId}`);
-    const plaintext = await aesGcmDecrypt(DEK, fromBase64(iv_b64), fromBase64(enc_b64), aad);
+    const plaintext = await aesGcmDecrypt(DEK, fromBase64(iv_b64), fromBase64(enc_b64), aad); // aad sempre BufferView
     return JSON.parse(new TextDecoder().decode(plaintext));
   }
 
