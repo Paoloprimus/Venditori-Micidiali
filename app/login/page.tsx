@@ -1,6 +1,6 @@
 "use client";
 import { useState } from "react";
-import { supabase } from "../../lib/supabase/client"; // <- cambiato
+import { supabase } from "../../lib/supabase/client"; // <- singleton
 import { useRouter } from "next/navigation";
 
 export default function Login() {
@@ -50,19 +50,32 @@ export default function Login() {
           .upsert({ id: uid!, first_name: fn, last_name: ln }, { onConflict: "id" });
         if (upsertErr) throw upsertErr;
 
-        } else {
-           // Accesso
-          const { error } = await supabase.auth.signInWithPassword({ email, password });
-           if (error) throw error;
-          // ⬇️ verifica che la sessione esista davvero
-          const { data: sess } = await supabase.auth.getSession();
-          if (!sess.session) {
-            throw new Error("Accesso non riuscito: sessione assente");
-          }
-        }
+      } else {
+        // Accesso
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
 
-      await supabase.auth.getSession();     // sincronizza cookie/sessione
-      window.location.replace("/");          // hard navigate (niente cache Router)
+        // ⬇️ verifica che la sessione esista davvero
+        const { data: sessCheck } = await supabase.auth.getSession();
+        if (!sessCheck.session) throw new Error("Accesso non riuscito: sessione assente");
+      }
+
+      // ⬇️ allinea i cookie lato server (scrive i cookie sb-*)
+      const { data: sess } = await supabase.auth.getSession();
+      if (!sess.session) throw new Error("Sessione assente dopo login");
+
+      await fetch("/api/auth/sync", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          access_token: sess.session.access_token,
+          refresh_token: sess.session.refresh_token,
+        }),
+        credentials: "same-origin",
+      });
+
+      // redirect “hard” alla home
+      window.location.replace("/");
 
     } catch (err: any) {
       // Se vedi 401 qui, quasi sempre è per sessione assente + RLS: vedi note sopra
@@ -80,7 +93,8 @@ export default function Login() {
       <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
         {mode === "signup" && (
           <>
-            <input name="firstName" id="firstName" autoComplete="given-name"
+            <input
+              name="firstName" id="firstName" autoComplete="given-name"
               type="text"
               placeholder="Nome"
               value={firstName}
@@ -91,7 +105,8 @@ export default function Login() {
                 background: "#0B1220", color: "#C9D1E7"
               }}
             />
-            <input name="lastName" id="lastName" autoComplete="family-name"
+            <input
+              name="lastName" id="lastName" autoComplete="family-name"
               type="text"
               placeholder="Cognome"
               value={lastName}
@@ -105,7 +120,8 @@ export default function Login() {
           </>
         )}
 
-        <input name="email" id="email" autoComplete="username"
+        <input
+          name="email" id="email" autoComplete="username"
           type="email"
           placeholder="la-tua-email@esempio.it"
           value={email}
@@ -116,8 +132,9 @@ export default function Login() {
             background: "#0B1220", color: "#C9D1E7"
           }}
         />
-        <input name="password" id="password"
-              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+        <input
+          name="password" id="password"
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
           type="password"
           placeholder="password (min 6)"
           value={password}
