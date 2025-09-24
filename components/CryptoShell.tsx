@@ -12,46 +12,40 @@ const DEFAULT_SCOPES = [
 
 export default function CryptoShell({ children }: { children: React.ReactNode }) {
   const { ready, unlock, prewarm, error } = useCrypto();
-  const [unlockTried, setUnlockTried] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
 
   useEffect(() => {
-    if (ready || unlockTried) return;
+    if (ready || unlocking) return;
+
+    const pass = typeof window !== "undefined"
+      ? sessionStorage.getItem("repping:pph")
+      : null;
+
+    if (!pass) return; // nessuna pass in sessione: non blocchiamo la UI
+
     (async () => {
-      setUnlockTried(true);
-      // prompt immediato
-      const pass = window.prompt("Inserisci la passphrase per sbloccare i dati");
-      if (!pass) { setUnlockTried(false); return; }
       try {
-        await unlock(pass, DEFAULT_SCOPES); // sblocca + prewarm
-        await prewarm(DEFAULT_SCOPES);      // idempotente
-      } catch {
-        // riprova al prossimo render
-        setUnlockTried(false);
+        setUnlocking(true);
+        await unlock(pass, DEFAULT_SCOPES); // sblocca + crea scope keys se servono
+        await prewarm(DEFAULT_SCOPES);
+      } finally {
+        // pulizia: non teniamo la pw in storage oltre lo sblocco
+        sessionStorage.removeItem("repping:pph");
+        setUnlocking(false);
       }
     })();
-  }, [ready, unlockTried, unlock, prewarm]);
+  }, [ready, unlocking, unlock, prewarm]);
 
-  // UI: finché non sbloccato mostro overlay semplice
-  if (!ready) {
+  // Se non siamo ancora sbloccati ma stiamo sbloccando, mostriamo solo un loader breve
+  if (!ready && unlocking) {
     return (
-      <div style={{
-        minHeight: "100vh", display: "grid", placeItems: "center",
-        padding: 24
-      }}>
-        <div style={{
-          border: "1px solid var(--ring)", borderRadius: 12, padding: 20,
-          background: "var(--bg)"
-        }}>
-          <div style={{fontWeight:600, marginBottom: 8}}>Dati protetti</div>
-          <div style={{opacity:.8, marginBottom: 12}}>
-            Inserisci la passphrase per sbloccare la cifratura.
-          </div>
-          {error && <div style={{color:"#dc2626"}}>{error}</div>}
-        </div>
+      <div style={{minHeight:"100vh",display:"grid",placeItems:"center"}}>
+        <div style={{opacity:.8}}>Sblocco dati…</div>
+        {error && <div style={{color:"#dc2626",marginTop:8}}>{error}</div>}
       </div>
     );
   }
 
-  // sbloccato → niente bottone, niente badge: app “normale”
+  // NIENTE prompt. Se pass non c'era, lasciamo la UI partire (puoi sbloccare più tardi da debug).
   return <>{children}</>;
 }
