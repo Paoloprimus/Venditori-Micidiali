@@ -38,6 +38,8 @@ export default function Login() {
             return; // fermiamoci: senza sessione l'upsert verrebbe bloccato da RLS
           }
           uid = si.user?.id;
+          // ⬇️ aggiungi questa riga
+          sessionStorage.setItem("repping:pph", password);
         }
 
         // 3) Upsert profilo (richiede sessione attiva)
@@ -58,6 +60,8 @@ export default function Login() {
         // ⬇️ verifica che la sessione esista davvero
         const { data: sessCheck } = await supabase.auth.getSession();
         if (!sessCheck.session) throw new Error("Accesso non riuscito: sessione assente");
+        // ⬇️ aggiungi questa riga
+        sessionStorage.setItem("repping:pph", password);
       }
 
       // ⬇️ allinea i cookie lato server (scrive i cookie sb-*)
