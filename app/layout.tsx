@@ -7,8 +7,8 @@ import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
 import UnlockButton from "../components/UnlockButton";
 
 export const metadata: Metadata = {
-  title: "La tua App",
-  description: "Repping",
+  title: "REPPING",
+  description: "REPPING",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
