@@ -54,7 +54,6 @@ export default async function Page() {
   // 3) Render: avvolgiamo il contenuto nel guscio client con Provider + bottone
   return (
     <CryptoShell>
-      <p>Se vedi il bottone in alto, clicca “🔒 Sblocca dati”.</p>
       <HomeClient email={user?.email ?? ""} userName={userName} />
     </CryptoShell>
   );
