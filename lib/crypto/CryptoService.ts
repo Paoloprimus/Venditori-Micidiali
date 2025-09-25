@@ -73,7 +73,7 @@ async function aesGcmEncrypt(
   const params: AesGcmParams = { name: "AES-GCM", iv: nonce, tagLength: 128 };
   const aadBytes = aad == null ? undefined : asBytes(aad);
   if (aadBytes && aadBytes.byteLength > 0) {
-    // @ts-expect-error: additionalData non è tipizzato in alcuni TS target
+
     (params as any).additionalData = aadBytes;
   }
 
@@ -93,7 +93,7 @@ async function aesGcmDecrypt(
   const params: AesGcmParams = { name: "AES-GCM", iv: nonce, tagLength: 128 };
   const aadBytes = aad == null ? undefined : asBytes(aad);
   if (aadBytes && aadBytes.byteLength > 0) {
-    // @ts-expect-error: additionalData non è tipizzato in alcuni TS target
+
     (params as any).additionalData = aadBytes;
   }
 
