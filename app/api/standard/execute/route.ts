@@ -1,79 +1,87 @@
 // app/api/standard/execute/route.ts
-import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
+import { NextResponse } from "next/server";
+import { cookies } from "next/headers";
+import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
-function getSupabaseUrl(): string {
-  const url =
-    process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
-  if (!url) throw new Error("Missing env: NEXT_PUBLIC_SUPABASE_URL or SUPABASE_URL");
-  return url;
-}
-function getServiceKey(): string {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  if (!key) throw new Error("Missing env: SUPABASE_SERVICE_ROLE_KEY");
-  return key;
-}
+const PRIVACY_ON = process.env.PRIVACY_BY_BI === "on";
 
-type ExecInput = {
-  intent_key: string;
-  slots?: Record<string, any>;
-};
+// Utilità per risposte pulite
+const bad = (msg: string, code = 400) => NextResponse.json({ ok: false, error: msg }, { status: code });
+const ok = (data: any) => NextResponse.json({ ok: true, data });
 
-export async function POST(req: NextRequest) {
+// NB: Questa rotta NON deve loggare body/payload utenti.
+
+export async function POST(req: Request) {
+  let body: any;
   try {
-    const body = (await req.json().catch(() => ({}))) as ExecInput;
-    const intent = (body.intent_key || "").trim();
-    const slots = body.slots || {};
+    body = await req.json();
+  } catch {
+    return bad("Invalid JSON body");
+  }
 
-    if (!intent) {
-      return NextResponse.json({ ok: false, error: "intent_key mancante." }, { status: 400 });
+  const { intent_key, slots } = body || {};
+  if (!intent_key) return bad("Missing intent_key");
+
+  // Input possibili:
+  // - slots.term      (vecchio mondo, testo)
+  // - slots.bi_list   (nuovo mondo, array di BI in hex string: ["\\x...."])
+  const term: string | undefined = slots?.prodotto || slots?.term; // compat
+  const bi_list: string[] | undefined = Array.isArray(slots?.bi_list) ? slots.bi_list : undefined;
+
+  const supabase = createRouteHandlerClient({ cookies });
+
+  // --- SWITCH sugli intent supportati ---
+  switch (intent_key) {
+    case "prod_conteggio_catalogo": {
+      if (PRIVACY_ON && bi_list?.length) {
+        // Nuovo flusso privacy-safe
+        const { data, error } = await supabase.rpc("product_count_by_bi", { bi_list });
+        if (error) return bad("RPC error: product_count_by_bi", 500);
+        return ok({ count: data ?? 0 });
+      } else {
+        // Compat testuale (fallback)
+        if (!term) return bad("Missing term or bi_list");
+        const { data, error } = await supabase.rpc("product_count_catalog", { term });
+        if (error) return bad("RPC error: product_count_catalog", 500);
+        return ok({ count: data?.count ?? 0 });
+      }
     }
 
-    const supabase = createClient(getSupabaseUrl(), getServiceKey());
-
-    // Dispatcher minimale per i 3 intent "Prodotti"
-    if (intent === "prod_conteggio_catalogo") {
-      const term = (slots.prodotto || "").toString().trim();
-      if (!term) return NextResponse.json({ ok:false, error:"slot 'prodotto' mancante." }, { status: 400 });
-
-      const { data, error } = await supabase.rpc("product_count_catalog", { term });
-      if (error) throw new Error(error.message);
-      return NextResponse.json({ ok: true, data: { count: data ?? 0 } }, { status: 200 });
+    case "prod_giacenza_magazzino": {
+      if (PRIVACY_ON && bi_list?.length) {
+        const { data, error } = await supabase.rpc("product_stock_by_bi", { bi_list });
+        if (error) return bad("RPC error: product_stock_by_bi", 500);
+        return ok({ stock: data ?? 0 });
+      } else {
+        if (!term) return bad("Missing term or bi_list");
+        const { data, error } = await supabase.rpc("product_stock_sum", { term });
+        if (error) return bad("RPC error: product_stock_sum", 500);
+        return ok({ stock: data?.stock ?? 0 });
+      }
     }
 
-    if (intent === "prod_giacenza_magazzino") {
-      const term = (slots.prodotto || "").toString().trim();
-      if (!term) return NextResponse.json({ ok:false, error:"slot 'prodotto' mancante." }, { status: 400 });
-
-      const { data, error } = await supabase.rpc("product_stock_sum", { term });
-      if (error) throw new Error(error.message);
-      return NextResponse.json({ ok: true, data: { stock: data ?? 0 } }, { status: 200 });
+    case "prod_prezzo_sconti": {
+      if (PRIVACY_ON && bi_list?.length) {
+        // Privacy-safe: ottengo solo gli ID via RPC e faccio decrypt/calcolo prezzo lato client (in una fase successiva)
+        const { data, error } = await supabase.rpc("product_list_by_bi", { bi_list, lim: 50, off: 0 });
+        if (error) return bad("RPC error: product_list_by_bi", 500);
+        return ok({ items: data ?? [] }); // [{ id }] — il client poi decritta e calcola prezzo/sconto
+      } else {
+        if (!term) return bad("Missing term or bi_list");
+        const { data, error } = await supabase.rpc("product_price_and_discount", { term });
+        if (error) return bad("RPC error: product_price_and_discount", 500);
+        return ok(data ?? {});
+      }
     }
 
-    if (intent === "prod_prezzo_sconti") {
-      const term = (slots.prodotto || "").toString().trim();
-      if (!term) return NextResponse.json({ ok:false, error:"slot 'prodotto' mancante." }, { status: 400 });
-
-      const { data, error } = await supabase.rpc("product_price_and_discount", { term });
-      if (error) throw new Error(error.message);
-
-      const row = Array.isArray(data) && data.length ? data[0] : { price: 0, discount: 0 };
-      return NextResponse.json(
-        { ok: true, data: { price: row.price ?? 0, discount: row.discount ?? 0 } },
-        { status: 200 }
-      );
+    case "count_clients": {
+      // Totalmente privacy-safe (nessun testo)
+      const { data, error } = await supabase.rpc("count_clients");
+      if (error) return bad("RPC error: count_clients", 500);
+      return ok({ count: data ?? 0 });
     }
 
-    // Per gli altri intent (clienti/report) li aggiungiamo qui in seguito.
-    return NextResponse.json(
-      { ok: false, error: `Intent non gestito: ${intent}` },
-      { status: 400 }
-    );
-  } catch (e: any) {
-    console.error("[/api/standard/execute] error:", e);
-    return NextResponse.json({ ok: false, error: String(e?.message || e) }, { status: 500 });
+    default:
+      return bad(`Intent not supported: ${intent_key}`, 400);
   }
 }
-
-export const GET = async () =>
-  NextResponse.json({ error: "Use POST with JSON body { intent_key, slots }." }, { status: 405 });
