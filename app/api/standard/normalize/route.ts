@@ -8,16 +8,23 @@ type SynRow = {
   canonical: string;
 };
 
+type MappedSyn = {
+  aliasNorm: string;
+  canonicalNorm: string;
+  rx: RegExp;
+};
+
+/** ============ utils ============ */
 function unaccentLower(s: string): string {
+  // normalizza + rimuove accenti + minuscolo + trim
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 }
-
 function makeAliasRegex(aliasNorm: string): RegExp {
+  // parola intera o separata da punteggiatura/spazi
   const escaped = aliasNorm.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const pattern = `(?<=^|[\\s,.;:!?()\\[\\]{}"'])${escaped}(?=$|[\\s,.;:!?()\\[\\]{}"'])`;
   return new RegExp(pattern, "gi");
 }
-
 function getSupabaseUrl(): string {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL || "";
@@ -30,6 +37,41 @@ function getServiceKey(): string {
   return key;
 }
 
+/** ============ cache (5 minuti) ============ */
+const CACHE_TTL_MS = 5 * 60 * 1000;
+let SYN_CACHE: { ts: number; mapped: MappedSyn[] } = { ts: 0, mapped: [] };
+
+async function loadSynonymsMapped(): Promise<MappedSyn[]> {
+  const now = Date.now();
+  if (now - SYN_CACHE.ts < CACHE_TTL_MS && SYN_CACHE.mapped.length) {
+    return SYN_CACHE.mapped;
+  }
+
+  const supabase = createClient(getSupabaseUrl(), getServiceKey());
+  const { data: syns, error } = await supabase
+    .from("synonyms")
+    .select("entity,alias,canonical");
+  if (error) throw new Error(`Errore lettura synonyms: ${error.message}`);
+
+  // pre-elabora: normalizza e crea regex; ordina per lunghezza alias (match più specifici prima)
+  const mapped: MappedSyn[] = ((syns ?? []) as SynRow[])
+    .map((r) => {
+      const aliasNorm = unaccentLower(r.alias);
+      const canonicalNorm = unaccentLower(r.canonical);
+      return {
+        aliasNorm,
+        canonicalNorm,
+        rx: makeAliasRegex(aliasNorm),
+      };
+    })
+    .filter((m) => m.aliasNorm && m.canonicalNorm)
+    .sort((a, b) => b.aliasNorm.length - a.aliasNorm.length);
+
+  SYN_CACHE = { ts: now, mapped };
+  return mapped;
+}
+
+/** ============ handler ============ */
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json().catch(() => ({}));
@@ -42,39 +84,27 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1) base normalize
+    // base normalize una sola volta
     let normalized = unaccentLower(rawText);
 
-    // 2) synonyms from Supabase (server-side, service key)
-    const supabase = createClient(getSupabaseUrl(), getServiceKey());
-    const { data: syns, error } = await supabase
-      .from("synonyms")
-      .select("entity,alias,canonical");
-
-    if (error) throw new Error(`Errore lettura synonyms: ${error.message}`);
-
-    const rows: SynRow[] = (syns ?? []) as SynRow[];
-
-    if (rows.length) {
-      const mapped = rows
-        .map((r) => ({
-          entity: r.entity,
-          aliasNorm: unaccentLower(r.alias),
-          canonicalNorm: unaccentLower(r.canonical),
-        }))
-        .filter((r) => r.aliasNorm && r.canonicalNorm)
-        .sort((a, b) => b.aliasNorm.length - a.aliasNorm.length);
-
-      for (const { aliasNorm, canonicalNorm } of mapped) {
-        const rx = makeAliasRegex(aliasNorm);
-        normalized = normalized.replace(rx, canonicalNorm);
-      }
-      normalized = normalized.replace(/\s+/g, " ").trim();
+    // micro-ottimizzazione: se la stringa è molto corta, evita query
+    if (normalized.length < 2) {
+      return NextResponse.json({ normalized }, { status: 200 });
     }
+
+    // carica sinonimi (cached)
+    const mapped = await loadSynonymsMapped();
+
+    // applica replace in ordine (alias lunghi prima)
+    for (const m of mapped) {
+      normalized = normalized.replace(m.rx, m.canonicalNorm);
+    }
+    normalized = normalized.replace(/\s+/g, " ").trim();
 
     return NextResponse.json({ normalized }, { status: 200 });
   } catch (err: any) {
-    console.error("[/api/standard/normalize] error:", err);
+    // log minimo e non sensibile
+    console.error("[/api/standard/normalize] error");
     return NextResponse.json(
       { error: String(err?.message || err), normalized: "" },
       { status: 500 }
