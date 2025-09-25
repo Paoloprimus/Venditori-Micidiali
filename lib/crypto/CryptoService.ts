@@ -34,14 +34,25 @@ function fromBase64(b64: string): Uint8Array {
   return u8;
 }
 
-/** ---------- Buffer helpers (fix AAD) ---------- */
-function asBufferView(a: any): ArrayBufferView | undefined {
-  if (a == null) return undefined;
-  if (a instanceof Uint8Array) return a;
-  if (ArrayBuffer.isView(a)) return a as ArrayBufferView;
-  if (a instanceof ArrayBuffer) return new Uint8Array(a);
-  if (typeof a === "string") return new TextEncoder().encode(a);
-  try { return new Uint8Array(a); } catch { return undefined; }
+/** ---------- Buffer helpers (fix AAD & bytes) ---------- */
+function asBytes(x: unknown): Uint8Array {
+  if (x instanceof Uint8Array) return x;
+  if (x instanceof ArrayBuffer) return new Uint8Array(x);
+  if (ArrayBuffer.isView(x)) {
+    const v = x as ArrayBufferView;
+    return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  }
+  return new TextEncoder().encode(String(x ?? ""));
+}
+function ensureIv(iv?: ArrayBufferView | ArrayBuffer | Uint8Array): Uint8Array {
+  // AES-GCM richiede IV da 12 byte per interoperabilità
+  if (iv) {
+    const v = asBytes(iv);
+    if (v.byteLength === 12) return v;
+  }
+  const iv12 = new Uint8Array(12);
+  crypto.getRandomValues(iv12);
+  return iv12;
 }
 
 /** ---------- WebCrypto helpers ---------- */
@@ -50,36 +61,49 @@ async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ["encrypt", "d
 }
 async function aesGcmEncrypt(
   keyBytes: Uint8Array,
-  nonce: Uint8Array,
-  plaintext: Uint8Array,
-  aad?: any
+  iv: Uint8Array | ArrayBufferView | ArrayBuffer,
+  plaintext: Uint8Array | ArrayBufferView | ArrayBuffer,
+  aad?: unknown
 ): Promise<Uint8Array> {
-  const key = await importAesKey(keyBytes);
-  const ct = await crypto.subtle.encrypt(
-    { name: "AES-GCM", iv: nonce, additionalData: asBufferView(aad), tagLength: 128 },
-    key,
-    plaintext
-  );
+  const key = await importAesKey(asBytes(keyBytes));
+  const nonce = ensureIv(iv);
+  const data = asBytes(plaintext);
+
+  // Costruiamo i parametri garantendo BufferSource
+  const params: AesGcmParams = { name: "AES-GCM", iv: nonce, tagLength: 128 };
+  const aadBytes = aad == null ? undefined : asBytes(aad);
+  if (aadBytes && aadBytes.byteLength > 0) {
+    // @ts-expect-error: additionalData non è tipizzato in alcuni TS target
+    params.additionalData = aadBytes;
+  }
+
+  const ct = await crypto.subtle.encrypt(params, key, data);
   return new Uint8Array(ct); // ciphertext || tag
 }
 async function aesGcmDecrypt(
   keyBytes: Uint8Array,
-  nonce: Uint8Array,
-  ciphertext: Uint8Array,
-  aad?: any
+  iv: Uint8Array | ArrayBufferView | ArrayBuffer,
+  ciphertext: Uint8Array | ArrayBufferView | ArrayBuffer,
+  aad?: unknown
 ): Promise<Uint8Array> {
-  const key = await importAesKey(keyBytes);
-  const pt = await crypto.subtle.decrypt(
-    { name: "AES-GCM", iv: nonce, additionalData: asBufferView(aad), tagLength: 128 },
-    key,
-    ciphertext
-  );
+  const key = await importAesKey(asBytes(keyBytes));
+  const nonce = ensureIv(iv);
+  const data = asBytes(ciphertext);
+
+  const params: AesGcmParams = { name: "AES-GCM", iv: nonce, tagLength: 128 };
+  const aadBytes = aad == null ? undefined : asBytes(aad);
+  if (aadBytes && aadBytes.byteLength > 0) {
+    // @ts-expect-error: additionalData non è tipizzato in alcuni TS target
+    params.additionalData = aadBytes;
+  }
+
+  const pt = await crypto.subtle.decrypt(params, key, data);
   return new Uint8Array(pt);
 }
 
 /** ---------- Envelope (wrap/unwrap) con AES-GCM ---------- */
 async function wrapKey(rawToWrap: Uint8Array, kek: Uint8Array): Promise<{ wrapped: string; nonce: string }> {
-  const nonce = crypto.getRandomValues(new Uint8Array(12));
+  const nonce = ensureIv(); // 12B
   const wrapped = await aesGcmEncrypt(kek, nonce, rawToWrap);
   return { wrapped: toBase64(wrapped), nonce: toBase64(nonce) };
 }
@@ -238,10 +262,10 @@ export class CryptoService {
   ): Promise<{ enc_b64: string; iv_b64: string }> {
     if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
     const { DEK } = this.scopeCache[scope];
-    const nonce = crypto.getRandomValues(new Uint8Array(12));
-    const aad = new TextEncoder().encode(`${table}|${field}|${recordId}`);
-    const plaintext = new TextEncoder().encode(JSON.stringify(obj));
-    const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad); // aad sempre BufferView
+    const nonce = ensureIv(); // 12 byte garantiti
+    const aad = asBytes(`${table}|${field}|${recordId}`); // AAD sempre BufferSource
+    const plaintext = asBytes(JSON.stringify(obj));
+    const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad);
     return { enc_b64: toBase64(ciphertext), iv_b64: toBase64(nonce) };
   }
 
@@ -250,8 +274,8 @@ export class CryptoService {
   ): Promise<any> {
     if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
     const { DEK } = this.scopeCache[scope];
-    const aad = new TextEncoder().encode(`${table}|${field}|${recordId}`);
-    const plaintext = await aesGcmDecrypt(DEK, fromBase64(iv_b64), fromBase64(enc_b64), aad); // aad sempre BufferView
+    const aad = asBytes(`${table}|${field}|${recordId}`); // AAD sempre BufferSource
+    const plaintext = await aesGcmDecrypt(DEK, fromBase64(iv_b64), fromBase64(enc_b64), aad);
     return JSON.parse(new TextDecoder().decode(plaintext));
   }
 
@@ -262,7 +286,7 @@ export class CryptoService {
     if (!BI) throw new Error(`BI non configurato per scope: ${scope}`);
     const canon = canonicalizeForBI(value);
     const mac = await hmacSha256(BI, canon);
-    return toBase64(mac); // salva in colonna *_bi (bytea)
+    return toBase64(mac); // salva in colonna *_bi (bytea). NB: per invio RPC usa forma \xHEX se serve.
   }
 
   /** ========== 5) Helpers multipli (campi *_enc / *_iv) ========== */
