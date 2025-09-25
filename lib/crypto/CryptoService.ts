@@ -74,7 +74,7 @@ async function aesGcmEncrypt(
   const aadBytes = aad == null ? undefined : asBytes(aad);
   if (aadBytes && aadBytes.byteLength > 0) {
     // @ts-expect-error: additionalData non è tipizzato in alcuni TS target
-    params.additionalData = aadBytes;
+    (params as any).additionalData = aadBytes;
   }
 
   const ct = await crypto.subtle.encrypt(params, key, data);
@@ -94,7 +94,7 @@ async function aesGcmDecrypt(
   const aadBytes = aad == null ? undefined : asBytes(aad);
   if (aadBytes && aadBytes.byteLength > 0) {
     // @ts-expect-error: additionalData non è tipizzato in alcuni TS target
-    params.additionalData = aadBytes;
+    (params as any).additionalData = aadBytes;
   }
 
   const pt = await crypto.subtle.decrypt(params, key, data);
