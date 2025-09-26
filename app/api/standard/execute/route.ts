@@ -5,12 +5,17 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
 export const dynamic = "force-dynamic";
 
+// UX prima: restiamo compat con il tuo frontend.
+// Nota: lasciamo SERVICE ROLE lato supabase client a livello di backend globale,
+// ma questo handler usa createRouteHandlerClient (sessione) per gli endpoint by_bi.
+// Le vecchie RPC testuali sono chiamate come prima; se nel tuo progetto le invocavi con service role centralizzato, resta invariato.
+
 const PRIVACY_ON = process.env.PRIVACY_BY_BI === "on";
 
-// Risposte: ok:true sempre (evita fallback LLM)
+// Risposta sempre ok:true per evitare il fallback LLM del frontend
 const reply = (data: any) => NextResponse.json({ ok: true, data }, { status: 200 });
 
-/** ========== Normalizzazione leggera per estrarre l’oggetto ========== */
+/** === Estrazione oggetto dalla frase (es. "torte") === */
 const STOP = new Set([
   "quanti","quante","quanto","quanta","tipi","tipo","referenze","referenza",
   "abbiamo","ho","ci","sono",
@@ -34,30 +39,27 @@ function extractObject(raw?: string): string | null {
   const tokens = cand.split(" ").filter(w => w && !STOP.has(w));
   return tokens.length ? tokens.join(" ") : null;
 }
-/** ================================================================ */
 
 export async function POST(req: Request) {
   let body: any = {};
   try { body = await req.json(); } catch {}
 
-  // Compat: intent in tutte le varianti storiche
+  // Compat intent
   const intent_key: string | undefined =
     body.intent_key || body.intent || body.key || body?.slots?.intent_key || body?.args?.intent_key;
 
-  // Compat: slots/args
+  // Compat slots/args
   const slots: any = body.slots ?? body.args ?? {};
 
-  // 🔴 Patch 1: usa anche `slots.prodotto` come termine principale
+  // 🔴 Importante: usa anche slots.prodotto (storico)
   let term: string | undefined =
     slots.prodotto ?? slots.term ?? body.term ?? body.text ?? body.q ?? body.query ?? slots.q ?? slots.text;
 
-  // Se arriva una frase intera, estrai l’oggetto (“torte”, “arancino”, …)
   if (typeof term === "string") {
     const extracted = extractObject(term);
     if (extracted) term = extracted;
   }
 
-  // bi_list (privacy)
   const bi_list: string[] | undefined = Array.isArray(slots?.bi_list) ? slots.bi_list : undefined;
 
   if (!intent_key) {
@@ -66,7 +68,6 @@ export async function POST(req: Request) {
 
   const supabase = createRouteHandlerClient({ cookies });
 
-  // helper per messaggi coerenti
   const sayCount = (count: number, label?: string) =>
     label ? `A catalogo ho trovato ${count} referenze di «${label}».`
           : `A catalogo ho trovato ${count} referenze.`;
@@ -80,18 +81,16 @@ export async function POST(req: Request) {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_count_by_bi", { bi_list });
         if (error) return reply({ message: "Errore conteggio by_bi." });
-        const count = (data ?? 0) as number;
+        const count = Number(data ?? 0);
         return reply({ count, message: sayCount(count) });
       } else {
         if (!term) return reply({ message: "Dimmi cosa contare (es. 'torte')." });
         const { data, error } = await supabase.rpc("product_count_catalog", { term });
         if (error) return reply({ message: "Errore conteggio testuale." });
-
-        // 🔴 Patch 2: questa RPC ritorna **un intero**
+        // Alcune RPC vecchie restituiscono direttamente un intero
         const count = typeof data === "number"
           ? data
           : (data as any)?.count ?? (Array.isArray(data) ? (data[0]?.count ?? 0) : 0);
-
         return reply({ count, term, message: sayCount(count, term) });
       }
     }
@@ -100,18 +99,15 @@ export async function POST(req: Request) {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_stock_by_bi", { bi_list });
         if (error) return reply({ message: "Errore stock by_bi." });
-        const stock = (data ?? 0) as number;
+        const stock = Number(data ?? 0);
         return reply({ stock, message: sayStock(stock) });
       } else {
         if (!term) return reply({ message: "Dimmi il prodotto (es. 'arancino')." });
         const { data, error } = await supabase.rpc("product_stock_sum", { term });
         if (error) return reply({ message: "Errore giacenza testuale." });
-
-        // 🔴 Patch 2: anche questa RPC ritorna **un intero**
         const stock = typeof data === "number"
           ? data
           : (data as any)?.stock ?? (Array.isArray(data) ? (data[0]?.stock ?? 0) : 0);
-
         return reply({ stock, term, message: sayStock(stock, term) });
       }
     }
@@ -132,7 +128,7 @@ export async function POST(req: Request) {
     case "count_clients": {
       const { data, error } = await supabase.rpc("count_clients");
       if (error) return reply({ message: "Errore count clients." });
-      const count = (data ?? 0) as number;
+      const count = Number(data ?? 0);
       return reply({ count, message: `Hai ${count} clienti.` });
     }
 
