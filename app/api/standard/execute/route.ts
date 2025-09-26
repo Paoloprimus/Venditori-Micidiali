@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const PRIVACY_ON = process.env.PRIVACY_BY_BI === "on";
 
-// Risposte: ok:true sempre, per evitare fallback LLM
+// Risposte: ok:true sempre (evita fallback LLM)
 const reply = (data: any) => NextResponse.json({ ok: true, data }, { status: 200 });
 
 /** ========== Normalizzazione leggera per estrarre l’oggetto ========== */
@@ -47,12 +47,14 @@ export async function POST(req: Request) {
   // Compat: slots/args
   const slots: any = body.slots ?? body.args ?? {};
 
-  // Compat: term e frase intera → estrai oggetto
+  // 🔴 Patch 1: usa anche `slots.prodotto` come termine principale
   let term: string | undefined =
-    slots.term ?? body.term ?? body.text ?? body.q ?? body.query ?? slots.q ?? slots.text;
+    slots.prodotto ?? slots.term ?? body.term ?? body.text ?? body.q ?? body.query ?? slots.q ?? slots.text;
+
+  // Se arriva una frase intera, estrai l’oggetto (“torte”, “arancino”, …)
   if (typeof term === "string") {
     const extracted = extractObject(term);
-    if (extracted) term = extracted; // "quanti tipi di torte..." → "torte"
+    if (extracted) term = extracted;
   }
 
   // bi_list (privacy)
@@ -84,7 +86,12 @@ export async function POST(req: Request) {
         if (!term) return reply({ message: "Dimmi cosa contare (es. 'torte')." });
         const { data, error } = await supabase.rpc("product_count_catalog", { term });
         if (error) return reply({ message: "Errore conteggio testuale." });
-        const count = (data as any)?.count ?? (Array.isArray(data) ? (data[0]?.count ?? 0) : 0);
+
+        // 🔴 Patch 2: questa RPC ritorna **un intero**
+        const count = typeof data === "number"
+          ? data
+          : (data as any)?.count ?? (Array.isArray(data) ? (data[0]?.count ?? 0) : 0);
+
         return reply({ count, term, message: sayCount(count, term) });
       }
     }
@@ -99,7 +106,12 @@ export async function POST(req: Request) {
         if (!term) return reply({ message: "Dimmi il prodotto (es. 'arancino')." });
         const { data, error } = await supabase.rpc("product_stock_sum", { term });
         if (error) return reply({ message: "Errore giacenza testuale." });
-        const stock = (data as any)?.stock ?? (Array.isArray(data) ? (data[0]?.stock ?? 0) : 0);
+
+        // 🔴 Patch 2: anche questa RPC ritorna **un intero**
+        const stock = typeof data === "number"
+          ? data
+          : (data as any)?.stock ?? (Array.isArray(data) ? (data[0]?.stock ?? 0) : 0);
+
         return reply({ stock, term, message: sayStock(stock, term) });
       }
     }
