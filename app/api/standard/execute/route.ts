@@ -5,17 +5,12 @@ import { createRouteHandlerClient } from "@supabase/auth-helpers-nextjs";
 
 export const dynamic = "force-dynamic";
 
-// UX prima: restiamo compat con il tuo frontend.
-// Nota: lasciamo SERVICE ROLE lato supabase client a livello di backend globale,
-// ma questo handler usa createRouteHandlerClient (sessione) per gli endpoint by_bi.
-// Le vecchie RPC testuali sono chiamate come prima; se nel tuo progetto le invocavi con service role centralizzato, resta invariato.
-
 const PRIVACY_ON = process.env.PRIVACY_BY_BI === "on";
 
-// Risposta sempre ok:true per evitare il fallback LLM del frontend
+// Risposte: ok:true sempre (evita fallback LLM)
 const reply = (data: any) => NextResponse.json({ ok: true, data }, { status: 200 });
 
-/** === Estrazione oggetto dalla frase (es. "torte") === */
+/** ========== Normalizzazione leggera / estrazione oggetto ========== */
 const STOP = new Set([
   "quanti","quante","quanto","quanta","tipi","tipo","referenze","referenza",
   "abbiamo","ho","ci","sono",
@@ -39,31 +34,56 @@ function extractObject(raw?: string): string | null {
   const tokens = cand.split(" ").filter(w => w && !STOP.has(w));
   return tokens.length ? tokens.join(" ") : null;
 }
+function isStopwordTerm(t?: string) {
+  if (!t) return false;
+  const n = norm(t);
+  return !n || STOP.has(n);
+}
+/** ================================================================ */
 
 export async function POST(req: Request) {
   let body: any = {};
   try { body = await req.json(); } catch {}
 
-  // Compat intent
+  // Compat: intent
   const intent_key: string | undefined =
     body.intent_key || body.intent || body.key || body?.slots?.intent_key || body?.args?.intent_key;
 
-  // Compat slots/args
+  // Compat: slots/args
   const slots: any = body.slots ?? body.args ?? {};
 
-  // 🔴 Importante: usa anche slots.prodotto (storico)
+  // 1) prendiamo TUTTE le varianti note del "termine"
   let term: string | undefined =
-    slots.prodotto ?? slots.term ?? body.term ?? body.text ?? body.q ?? body.query ?? slots.q ?? slots.text;
+    // preferisci ciò che la pipeline potrebbe aver già normalizzato
+    slots.normalized ??
+    // storico: prodotto
+    slots.prodotto ??
+    // altre varianti
+    slots.term ?? body.term ?? body.text ?? body.q ?? body.query ?? slots.q ?? slots.text;
 
+  // 2) se è una frase, prova a estrarre l’oggetto
   if (typeof term === "string") {
     const extracted = extractObject(term);
     if (extracted) term = extracted;
   }
 
+  // 3) se il "term" è ANCORA una stopword (es. "abbiamo"), prova a usare body.text
+  if (isStopwordTerm(term) && typeof body?.text === "string") {
+    const tryFromText = extractObject(body.text);
+    if (tryFromText) term = tryFromText;
+  }
+
+  // 4) se è ancora stopword, NON interrogare il DB: rispondi guida
+  if (isStopwordTerm(term)) {
+    // Nota: NON mettiamo il termine nelle virgolette per evitare “«abbiamo»”
+    return reply({ message: "Dimmi cosa contare (es. «torte», «cornetti», «cheesecake»)." });
+  }
+
+  // Privacy: BI (se presenti)
   const bi_list: string[] | undefined = Array.isArray(slots?.bi_list) ? slots.bi_list : undefined;
 
   if (!intent_key) {
-    return reply({ message: "Dimmi cosa vuoi sapere (es. 'quanti tipi di torte a catalogo?')." });
+    return reply({ message: "Dimmi cosa vuoi sapere (es. «quanti tipi di torte a catalogo?»)." });
   }
 
   const supabase = createRouteHandlerClient({ cookies });
@@ -84,10 +104,9 @@ export async function POST(req: Request) {
         const count = Number(data ?? 0);
         return reply({ count, message: sayCount(count) });
       } else {
-        if (!term) return reply({ message: "Dimmi cosa contare (es. 'torte')." });
+        if (!term) return reply({ message: "Dimmi cosa contare (es. «torte»)." });
         const { data, error } = await supabase.rpc("product_count_catalog", { term });
         if (error) return reply({ message: "Errore conteggio testuale." });
-        // Alcune RPC vecchie restituiscono direttamente un intero
         const count = typeof data === "number"
           ? data
           : (data as any)?.count ?? (Array.isArray(data) ? (data[0]?.count ?? 0) : 0);
@@ -102,7 +121,7 @@ export async function POST(req: Request) {
         const stock = Number(data ?? 0);
         return reply({ stock, message: sayStock(stock) });
       } else {
-        if (!term) return reply({ message: "Dimmi il prodotto (es. 'arancino')." });
+        if (!term) return reply({ message: "Dimmi il prodotto (es. «arancino»)." });
         const { data, error } = await supabase.rpc("product_stock_sum", { term });
         if (error) return reply({ message: "Errore giacenza testuale." });
         const stock = typeof data === "number"
