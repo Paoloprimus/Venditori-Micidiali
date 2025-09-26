@@ -7,11 +7,10 @@ export const dynamic = "force-dynamic";
 
 const PRIVACY_ON = process.env.PRIVACY_BY_BI === "on";
 
-// risposte rapide (mai 4xx per input utente: evitiamo fallback LLM)
-const fail = (msg: string) => NextResponse.json({ ok: false, error: msg }, { status: 200 });
-const ok = (data: any) => NextResponse.json({ ok: true, data });
+// Risposte: mai ok:false → evitiamo il fallback LLM del frontend
+const reply = (data: any) => NextResponse.json({ ok: true, data }, { status: 200 });
 
-/** ================== Normalizzazione leggera per estrarre l’oggetto ================== */
+/** ========== Normalizzazione leggera per estrarre l’oggetto ========== */
 const STOP = new Set([
   "quanti","quante","quanto","quanta","tipi","tipo","referenze","referenza",
   "abbiamo","ho","ci","sono",
@@ -34,32 +33,32 @@ function extractObject(raw?: string): string | null {
   const tokens = cand.split(" ").filter(w => w && !STOP.has(w));
   return tokens.length ? tokens.join(" ") : null;
 }
-/** =============================================================================== */
+/** ================================================================ */
 
 export async function POST(req: Request) {
   let body: any = {};
   try { body = await req.json(); } catch {}
 
-  // ✅ Compat: recupera intent in tutti i modi storici
+  // Compat: intent in tutte le varianti storiche
   const intent_key: string | undefined =
     body.intent_key || body.intent || body.key || body?.slots?.intent_key || body?.args?.intent_key;
 
-  // ✅ Compat: recupera slots/args in modo robusto
+  // Compat: slots/args
   const slots: any = body.slots ?? body.args ?? {};
 
-  // ✅ Compat: recupera term in tutti i modi + estrazione dall’intera frase
+  // Compat: term e frase intera → estrai oggetto
   let term: string | undefined =
     slots.term ?? body.term ?? body.text ?? body.q ?? body.query ?? slots.q ?? slots.text;
   if (typeof term === "string") {
     const extracted = extractObject(term);
-    if (extracted) term = extracted; // es. "quanti tipi di torte..." → "torte"
+    if (extracted) term = extracted; // "quanti tipi di torte..." → "torte"
   }
 
-  // ✅ Compat: bi_list se presente
+  // bi_list (privacy)
   const bi_list: string[] | undefined = Array.isArray(slots?.bi_list) ? slots.bi_list : undefined;
 
   if (!intent_key) {
-    return fail("Intent non riconosciuto. (serve intent_key/intent)");
+    return reply({ message: "Dimmi cosa vuoi sapere (es. 'quanti tipi di torte a catalogo?')." });
   }
 
   const supabase = createRouteHandlerClient({ cookies });
@@ -68,51 +67,51 @@ export async function POST(req: Request) {
     case "prod_conteggio_catalogo": {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_count_by_bi", { bi_list });
-        if (error) return fail("RPC error: product_count_by_bi");
-        return ok({ count: data ?? 0 });
+        if (error) return reply({ message: "Errore conteggio by_bi." });
+        return reply({ count: data ?? 0 });
       } else {
-        if (!term) return fail("Dimmi cosa contare (es. 'torte').");
+        if (!term) return reply({ message: "Dimmi cosa contare (es. 'torte')." });
         const { data, error } = await supabase.rpc("product_count_catalog", { term });
-        if (error) return fail("RPC error: product_count_catalog");
+        if (error) return reply({ message: "Errore conteggio testuale." });
         const count = (data as any)?.count ?? (Array.isArray(data) ? (data[0]?.count ?? 0) : 0);
-        return ok({ count });
+        return reply({ count });
       }
     }
 
     case "prod_giacenza_magazzino": {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_stock_by_bi", { bi_list });
-        if (error) return fail("RPC error: product_stock_by_bi");
-        return ok({ stock: data ?? 0 });
+        if (error) return reply({ message: "Errore stock by_bi." });
+        return reply({ stock: data ?? 0 });
       } else {
-        if (!term) return fail("Dimmi di quale prodotto vuoi la giacenza (es. 'arancino').");
+        if (!term) return reply({ message: "Dimmi il prodotto (es. 'arancino')." });
         const { data, error } = await supabase.rpc("product_stock_sum", { term });
-        if (error) return fail("RPC error: product_stock_sum");
+        if (error) return reply({ message: "Errore giacenza testuale." });
         const stock = (data as any)?.stock ?? (Array.isArray(data) ? (data[0]?.stock ?? 0) : 0);
-        return ok({ stock });
+        return reply({ stock });
       }
     }
 
     case "prod_prezzo_sconti": {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_list_by_bi", { bi_list, lim: 50, off: 0 });
-        if (error) return fail("RPC error: product_list_by_bi");
-        return ok({ items: data ?? [] }); // [{id}]
+        if (error) return reply({ message: "Errore lista by_bi." });
+        return reply({ items: data ?? [] }); // [{id}] → il client decritta e calcola
       } else {
-        if (!term) return fail("Dimmi di quale prodotto vuoi il prezzo.");
+        if (!term) return reply({ message: "Dimmi il prodotto di cui vuoi il prezzo." });
         const { data, error } = await supabase.rpc("product_price_and_discount", { term });
-        if (error) return fail("RPC error: product_price_and_discount");
-        return ok(data ?? {});
+        if (error) return reply({ message: "Errore prezzo testuale." });
+        return reply(data ?? {});
       }
     }
 
     case "count_clients": {
       const { data, error } = await supabase.rpc("count_clients");
-      if (error) return fail("RPC error: count_clients");
-      return ok({ count: data ?? 0 });
+      if (error) return reply({ message: "Errore count clients." });
+      return reply({ count: data ?? 0 });
     }
 
     default:
-      return fail(`Intent non supportato: ${intent_key}`);
+      return reply({ message: `Intent non supportato: ${intent_key}` });
   }
 }
