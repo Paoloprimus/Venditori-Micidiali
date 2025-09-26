@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 
 const PRIVACY_ON = process.env.PRIVACY_BY_BI === "on";
 
-// Risposte: mai ok:false → evitiamo il fallback LLM del frontend
+// Risposte: ok:true sempre, per evitare fallback LLM
 const reply = (data: any) => NextResponse.json({ ok: true, data }, { status: 200 });
 
 /** ========== Normalizzazione leggera per estrarre l’oggetto ========== */
@@ -19,7 +19,8 @@ const STOP = new Set([
   "catalogo","magazzino","deposito","pezzi","disponibili","oltre"
 ]);
 function norm(s: string) {
-  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/\s+/g, " ").trim();
+  return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+           .toLowerCase().replace(/\s+/g, " ").trim();
 }
 function extractObject(raw?: string): string | null {
   if (!raw) return null;
@@ -63,18 +64,28 @@ export async function POST(req: Request) {
 
   const supabase = createRouteHandlerClient({ cookies });
 
+  // helper per messaggi coerenti
+  const sayCount = (count: number, label?: string) =>
+    label ? `A catalogo ho trovato ${count} referenze di «${label}».`
+          : `A catalogo ho trovato ${count} referenze.`;
+
+  const sayStock = (stock: number, label?: string) =>
+    label ? `In deposito ci sono ${stock} pezzi di «${label}».`
+          : `In deposito ci sono ${stock} pezzi.`;
+
   switch (intent_key) {
     case "prod_conteggio_catalogo": {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_count_by_bi", { bi_list });
         if (error) return reply({ message: "Errore conteggio by_bi." });
-        return reply({ count: data ?? 0 });
+        const count = (data ?? 0) as number;
+        return reply({ count, message: sayCount(count) });
       } else {
         if (!term) return reply({ message: "Dimmi cosa contare (es. 'torte')." });
         const { data, error } = await supabase.rpc("product_count_catalog", { term });
         if (error) return reply({ message: "Errore conteggio testuale." });
         const count = (data as any)?.count ?? (Array.isArray(data) ? (data[0]?.count ?? 0) : 0);
-        return reply({ count });
+        return reply({ count, term, message: sayCount(count, term) });
       }
     }
 
@@ -82,13 +93,14 @@ export async function POST(req: Request) {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_stock_by_bi", { bi_list });
         if (error) return reply({ message: "Errore stock by_bi." });
-        return reply({ stock: data ?? 0 });
+        const stock = (data ?? 0) as number;
+        return reply({ stock, message: sayStock(stock) });
       } else {
         if (!term) return reply({ message: "Dimmi il prodotto (es. 'arancino')." });
         const { data, error } = await supabase.rpc("product_stock_sum", { term });
         if (error) return reply({ message: "Errore giacenza testuale." });
         const stock = (data as any)?.stock ?? (Array.isArray(data) ? (data[0]?.stock ?? 0) : 0);
-        return reply({ stock });
+        return reply({ stock, term, message: sayStock(stock, term) });
       }
     }
 
@@ -96,19 +108,20 @@ export async function POST(req: Request) {
       if (PRIVACY_ON && bi_list?.length) {
         const { data, error } = await supabase.rpc("product_list_by_bi", { bi_list, lim: 50, off: 0 });
         if (error) return reply({ message: "Errore lista by_bi." });
-        return reply({ items: data ?? [] }); // [{id}] → il client decritta e calcola
+        return reply({ items: data ?? [], message: "Ho recuperato le referenze richieste." });
       } else {
         if (!term) return reply({ message: "Dimmi il prodotto di cui vuoi il prezzo." });
         const { data, error } = await supabase.rpc("product_price_and_discount", { term });
         if (error) return reply({ message: "Errore prezzo testuale." });
-        return reply(data ?? {});
+        return reply({ ...(data ?? {}), term });
       }
     }
 
     case "count_clients": {
       const { data, error } = await supabase.rpc("count_clients");
       if (error) return reply({ message: "Errore count clients." });
-      return reply({ count: data ?? 0 });
+      const count = (data ?? 0) as number;
+      return reply({ count, message: `Hai ${count} clienti.` });
     }
 
     default:
