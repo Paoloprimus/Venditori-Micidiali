@@ -4,7 +4,6 @@ import { useEffect, useState } from "react";
 import ProductManager from "./products/ProductManager"; // ⬅️ NEW
 import { ToastProvider } from "./ui/Toast";
 
-
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [topOpen, setTopOpen] = useState(false); // riusato per il drawer destro
@@ -65,21 +64,20 @@ export function LeftDrawer({
 
   async function remove(id: string) {
     if (!confirm("Eliminare questa sessione?")) return;
-  
+
     const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
     let data: any = {};
     try { data = await res.json(); } catch {}
-  
+
     if (!res.ok) {
       alert(data?.details || data?.error || `Errore eliminazione (HTTP ${res.status})`);
       return;
     }
-  
+
     // ottimismo + sync server
     setItems(prev => prev.filter(x => x.id !== id));
     await load(true); // ricarica l’elenco dal server per allinearti al DB
   }
-
 
   // Crea una nuova sessione chiedendo il titolo e la apre subito (stato interno)
   async function createNew() {
@@ -105,6 +103,12 @@ export function LeftDrawer({
     onSelect(conv); // nessuna navigazione: resta su /
   }
 
+  // 👉 NAVIGA a Quick Add clienti
+  function goQuickAdd() {
+    onClose();
+    window.location.href = "/tools/quick-add";
+  }
+
   return (
     <aside className={`drawer ${open ? "open" : ""}`}>
       <div className="topbar">
@@ -118,6 +122,11 @@ export function LeftDrawer({
         {/* Pulsante per creare rapidamente una nuova sessione */}
         <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <button className="btn" onClick={createNew}>Crea + nomina nuova sessione</button>
+        </div>
+
+        {/* 🆕 Link rapido al Quick Add clienti */}
+        <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+          <button className="btn" onClick={goQuickAdd}>Quick Add clienti</button>
         </div>
 
         {error && <div className="row" style={{ color: "#F59E0B" }}>Errore: {error}</div>}
@@ -189,7 +198,7 @@ export function RightDrawer({
         )}
         {tab === "products" && (
           <ToastProvider>
-          <ProductManager onCloseDrawer={onClose} />
+            <ProductManager onCloseDrawer={onClose} />
           </ToastProvider>
         )}
       </div>
