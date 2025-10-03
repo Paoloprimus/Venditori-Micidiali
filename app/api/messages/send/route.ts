@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       .from(MESSAGES_TABLE)
       .insert({
         conversation_id: conversationId,
-        user_id: ownerUserId,          // ✅ FIX: valorizza user_id
+        user_id: ownerUserId,          // ✅ valorizza user_id
         role: "user",
         content,
       })
@@ -65,7 +65,43 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2) ➜ Chiama il modello
+    // 1.b) ➜ INTENTO LOCALE: "quanti clienti ho?" (prima di chiamare il modello)
+    const normalized = content.toLowerCase().trim();
+    const askClients = /^(quanti|numero|n\.)\s+(clienti|accounts?)(\s+ho)?\??$/.test(normalized);
+
+    if (askClients) {
+      // Conta i clienti dell'utente (copriamo sia owner_id sia user_id)
+      const { count, error } = await supabase
+        .from("accounts")
+        .select("id", { count: "exact", head: true })
+        .or(`owner_id.eq.${ownerUserId},user_id.eq.${ownerUserId}`);
+
+      const n = count ?? 0;
+      const reply =
+        error
+          ? "Non riesco a contare i clienti adesso."
+          : `Hai ${n} ${n === 1 ? "cliente" : "clienti"}.`;
+
+      // Salva messaggio ASSISTANT con la risposta locale
+      const insAsstLocal = await supabase
+        .from(MESSAGES_TABLE)
+        .insert({
+          conversation_id: conversationId,
+          user_id: ownerUserId,
+          role: "assistant",
+          content: reply,
+        })
+        .select("id")
+        .single();
+
+      if (insAsstLocal.error) {
+        console.error("[send] insert assistant (count) msg error:", insAsstLocal.error);
+      }
+
+      return NextResponse.json({ reply }, { status: 200 });
+    }
+
+    // 2) ➜ Chiama il modello (solo se non intercettato sopra)
     const sys = SYSTEM + (terse ? " Rispondi molto brevemente." : "");
     const completion = await openai.chat.completions.create({
       model: MODEL,
