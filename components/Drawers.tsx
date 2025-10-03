@@ -1,9 +1,10 @@
 // components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
-import ProductManager from "./products/ProductManager"; // ⬅️ NEW
+import ProductManager from "./products/ProductManager";
 import { ToastProvider } from "./ui/Toast";
 
+/* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
   const [topOpen, setTopOpen] = useState(false); // riusato per il drawer destro
@@ -17,8 +18,16 @@ export function useDrawers() {
   };
 }
 
+/* ---------------------------- Tipi conversazioni ---------------------------- */
 type Conv = { id: string; title: string; updated_at?: string };
 
+/* -------------------------------- LeftDrawer --------------------------------
+   - Elenco sessioni
+   - Crea nuova sessione
+   - Elimina sessione
+   - Seleziona sessione (onSelect)
+   (Nessun link Quick Add qui)
+----------------------------------------------------------------------------- */
 export function LeftDrawer({
   open,
   onClose,
@@ -40,7 +49,7 @@ export function LeftDrawer({
     setError(null);
     const q = new URLSearchParams({ limit: "20", offset: String(reset ? 0 : offset) });
     const res = await fetch(`/api/conversations/list?${q.toString()}`);
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       setError(data?.details || data?.error || "Errore");
       setLoading(false);
@@ -66,8 +75,7 @@ export function LeftDrawer({
     if (!confirm("Eliminare questa sessione?")) return;
 
     const res = await fetch(`/api/conversations/${id}`, { method: "DELETE" });
-    let data: any = {};
-    try { data = await res.json(); } catch {}
+    const data = await res.json().catch(() => ({}));
 
     if (!res.ok) {
       alert(data?.details || data?.error || `Errore eliminazione (HTTP ${res.status})`);
@@ -75,21 +83,21 @@ export function LeftDrawer({
     }
 
     // ottimismo + sync server
-    setItems(prev => prev.filter(x => x.id !== id));
-    await load(true); // ricarica l’elenco dal server per allinearti al DB
+    setItems((prev) => prev.filter((x) => x.id !== id));
+    await load(true);
   }
 
-  // Crea una nuova sessione chiedendo il titolo e la apre subito (stato interno)
   async function createNew() {
     const t = prompt("Titolo nuova sessione:");
     const title = (t ?? "").trim();
     if (!title) return;
+
     const res = await fetch("/api/conversations/new", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ title }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       alert(data?.details || data?.error || "Errore creazione");
       return;
@@ -100,13 +108,7 @@ export function LeftDrawer({
       return;
     }
     setItems((prev) => [conv, ...prev]);
-    onSelect(conv); // nessuna navigazione: resta su /
-  }
-
-  // 👉 NAVIGA a Quick Add clienti
-  function goQuickAdd() {
-    onClose();
-    window.location.href = "/tools/quick-add";
+    onSelect(conv);
   }
 
   return (
@@ -119,14 +121,9 @@ export function LeftDrawer({
       </div>
 
       <div className="list">
-        {/* Pulsante per creare rapidamente una nuova sessione */}
+        {/* Crea rapidamente una nuova sessione */}
         <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <button className="btn" onClick={createNew}>Crea + nomina nuova sessione</button>
-        </div>
-
-        {/* 🆕 Link rapido al Quick Add clienti */}
-        <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-          <button className="btn" onClick={goQuickAdd}>Quick Add clienti</button>
         </div>
 
         {error && <div className="row" style={{ color: "#F59E0B" }}>Errore: {error}</div>}
@@ -159,7 +156,10 @@ export function LeftDrawer({
   );
 }
 
-/** Drawer destro: impostazioni | gestione prodotti */
+/* ------------------------------- RightDrawer -------------------------------
+   - Tabs: Impostazioni | Gestione prodotti
+   - 🆕 Pulsante "Quick Add clienti" qui (non nel left)
+----------------------------------------------------------------------------- */
 export function RightDrawer({
   open,
   onClose,
@@ -168,9 +168,15 @@ export function RightDrawer({
   onClose: () => void;
 }) {
   const [tab, setTab] = useState<"settings" | "products">("products"); // default: prodotti
+
   useEffect(() => {
     if (!open) setTab("products");
   }, [open]);
+
+  function goQuickAdd() {
+    onClose();
+    window.location.href = "/tools/quick-add";
+  }
 
   return (
     <aside className={`drawer right ${open ? "open" : ""}`}>
@@ -193,9 +199,15 @@ export function RightDrawer({
       </div>
 
       <div className="list" style={{ padding: 8 }}>
+        {/* 🆕 Link rapido al Quick Add clienti (SOLO nel drawer destro) */}
+        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 8 }}>
+          <button className="btn" onClick={goQuickAdd}>Quick Add clienti</button>
+        </div>
+
         {tab === "settings" && (
           <div style={{ color: "var(--muted)" }}>Impostazioni (coming soon)</div>
         )}
+
         {tab === "products" && (
           <ToastProvider>
             <ProductManager onCloseDrawer={onClose} />
