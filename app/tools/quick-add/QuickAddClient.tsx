@@ -53,6 +53,23 @@ export default function QuickAddClient() {
     const s = cmd.toLowerCase().trim();
     append('🗣️ ' + cmd);
 
+    // DOMANDA: "quanti clienti ho?" / "numero clienti" / "n. clienti"
+    let q = s.match(/^(quanti|numero|n\.)\s+(clienti|accounts?)(\s+ho)?\??$/i);
+    if (q) {
+      try {
+        const res = await fetch('/api/clients/count', { method: 'GET' });
+        const data = await res.json();
+        if (data?.ok) {
+          append(`👥 Hai ${data.count} ${data.count === 1 ? 'cliente' : 'clienti'}.`);
+        } else {
+          append(`❌ Impossibile contare i clienti ora${data?.error ? `: ${data.error}` : ''}`);
+        }
+      } catch (e: any) {
+        append('❌ Errore di rete durante il conteggio clienti');
+      }
+      return;
+    }
+
     // CREA ACCOUNT — "crea account rossi"
     let m = s.match(/(crea|nuovo)\s+account\s+(.+)/);
     if (m) {
@@ -126,7 +143,8 @@ export default function QuickAddClient() {
       </div>
       <p className="text-sm text-gray-600">
         Suggerimenti: “crea account Rossi” • “crea prodotto Assistenza Premium a 1200 euro” •
-        “crea contatto Mario Rossi per account &lt;UUID&gt; email mario@x.it”
+        “crea contatto Mario Rossi per account &lt;UUID&gt; email mario@x.it” •
+        “quanti clienti ho?”
       </p>
     </div>
   );
