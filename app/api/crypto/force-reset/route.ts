@@ -4,12 +4,21 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
+/**
+ * Abilita il reset SOLO se la variabile server-side è impostata.
+ * Su Vercel imposta:  CRYPTO_DEV_AUTO_RESET=1   (Development/Preview)
+ * NON usare NEXT_PUBLIC_ qui: quelle sono client-side.
+ */
+function resetEnabled() {
+  return process.env.CRYPTO_DEV_AUTO_RESET === "1";
+}
+
 export async function POST(req: NextRequest) {
   try {
-    // Sicurezza: abilita SOLO in dev
-    if (process.env.NODE_ENV === "production") {
+    if (!resetEnabled()) {
       return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
     }
+
     const { userId } = await req.json().catch(() => ({} as any));
     if (!userId) {
       return NextResponse.json({ error: "userId mancante" }, { status: 400 });
@@ -17,26 +26,28 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // Elimina tutte le chiavi collegate a quell’utente (keyring)
-    // NB: Adegua qui se hai altre tabelle legate al keyring
-    const del1 = await supabase.from("encryption_keys").delete().eq("user_id", userId);
-
-    if (del1.error) {
+    // Cancella le chiavi dell'utente (adatta il nome tabella se diverso)
+    const delKeys = await supabase.from("encryption_keys").delete().eq("user_id", userId);
+    if (delKeys.error) {
       return NextResponse.json(
-        { error: "delete_failed", details: del1.error.message },
+        { error: "delete_failed", details: delKeys.error.message },
         { status: 500 }
       );
     }
 
-    // Puoi aggiungere altre delete se hai tabelle tipo scope_keys, key_meta, ecc.
-    // await supabase.from("scope_keys").delete().eq("user_id", userId);
+    // Se hai altre tabelle keyring, aggiungi qui ulteriori delete…
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, removed: delKeys.count ?? null });
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "Errore interno" }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, env: process.env.NODE_ENV || "unknown" });
+  // Utile per check rapido da browser
+  return NextResponse.json({
+    ok: true,
+    enabled: resetEnabled(),
+    env: process.env.NODE_ENV || "unknown",
+  });
 }
