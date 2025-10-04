@@ -18,6 +18,17 @@ type ProfileRow = {
   kdf_params: KdfParams | null;
 };
 
+type EncryptionRow = {
+  id: string;
+  user_id: string;
+  scope: string;
+  dek_wrapped: string;
+  dek_wrapped_iv: string;
+  bi_wrapped: string | null;
+  bi_wrapped_iv: string | null;
+  created_at?: string;
+};
+
 /** ---------- Utils byte/base64 ---------- */
 function toBase64(u8: Uint8Array): string {
   if (typeof window === "undefined") return Buffer.from(u8).toString("base64");
@@ -190,6 +201,7 @@ export class CryptoService {
     if (p.wrapped_master_key) {
       const ivB64 = p.wrapped_master_key_iv;
       if (!ivB64) throw new Error("Manca 'wrapped_master_key_iv' in profiles");
+      // può lanciare OperationError se la passphrase non corrisponde a questa MK
       this.MK = await unwrapKey(p.wrapped_master_key, ivB64, KEK);
       this.kekSalt = salt;
       this.kdfParams = kdfParams;
@@ -218,26 +230,34 @@ export class CryptoService {
     this.wrappedMkNonce = nonce;
   }
 
-  /** 2) Chiavi per scope (DEK/BI) */
+  /** 2) Chiavi per scope (DEK/BI) — **per-utente** */
   public async getOrCreateScopeKeys(scope: string): Promise<void> {
     if (!this.MK) throw new Error("Cifratura non sbloccata");
     if (this.scopeCache[scope]) return;
 
+    const user_id = await this.getUserId();
+
+    // ✅ CERCA SOLO LE CHIAVI DELL’UTENTE CORRENTE
     const { data: row, error } = await this.sb
       .from("encryption_keys")
-      .select("id, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, scope")
+      .select("id, user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, created_at")
+      .eq("user_id", user_id)
       .eq("scope", scope)
+      .order("created_at", { ascending: false })
+      .limit(1)
       .maybeSingle();
+
     if (error) throw error;
 
     if (row) {
-      const DEK = await unwrapKey(row.dek_wrapped, row.dek_wrapped_iv, this.MK);
-      const BI = row.bi_wrapped ? await unwrapKey(row.bi_wrapped, row.bi_wrapped_iv, this.MK) : null;
+      const r = row as EncryptionRow;
+      const DEK = await unwrapKey(r.dek_wrapped, r.dek_wrapped_iv, this.MK);
+      const BI = r.bi_wrapped ? await unwrapKey(r.bi_wrapped, r.bi_wrapped_iv!, this.MK) : null;
       this.scopeCache[scope] = { DEK, BI };
       return;
     }
 
-    // genera nuove
+    // genera nuove per QUESTO utente
     const DEK = crypto.getRandomValues(new Uint8Array(32));
     const BI  = crypto.getRandomValues(new Uint8Array(32));
 
@@ -246,7 +266,7 @@ export class CryptoService {
 
     const { error: insErr } = await this.sb
       .from("encryption_keys")
-      .insert({ scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv });
+      .insert({ user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv });
     if (insErr) throw insErr;
 
     this.scopeCache[scope] = { DEK, BI };
@@ -280,7 +300,9 @@ export class CryptoService {
     return toBase64(mac);
   }
 
-  /** 5) Helpers multipli (campi *_enc / *_iv) */
+  /** 5) Helpers multipli (campi *_enc / *_iv)
+   *  Compat: supporta SIA (row + fieldNames[]) SIA (mappa { field: {enc, iv} })
+   */
   public async encryptFields(scope: string, table: string, recordId: string | null, fields: Record<string, string | null | undefined>) {
     const out: Record<string, any> = {};
     for (const [field, val] of Object.entries(fields)) {
@@ -291,11 +313,40 @@ export class CryptoService {
     }
     return out;
   }
-  public async decryptFields(scope: string, table: string, recordId: string | null, row: any, fieldNames: string[]) {
+
+  public async decryptFields(
+    scope: string,
+    table: string,
+    recordId: string | null,
+    rowOrMap: any,
+    fieldNamesMaybe?: string[]
+  ) {
     const out: Record<string, string | null> = {};
-    for (const field of fieldNames) {
-      const enc = row?.[`${field}_enc`];
-      const iv  = row?.[`${field}_iv`];
+
+    // Ramo A: compatibilità con uso "mappa { field: {enc, iv} }"
+    // es. decryptFields("accounts", "accounts", id, { name: {enc,iv}, ... })
+    const looksLikeMap =
+      rowOrMap &&
+      typeof rowOrMap === "object" &&
+      Object.values(rowOrMap).every(
+        (v: any) => v && typeof v === "object" && ("enc" in v) && ("iv" in v)
+      );
+
+    if (looksLikeMap) {
+      for (const field of Object.keys(rowOrMap)) {
+        const enc = rowOrMap[field]?.enc;
+        const iv  = rowOrMap[field]?.iv;
+        if (!enc || !iv) { out[field] = null; continue; }
+        out[field] = await this.decryptJSON(scope, table, field, recordId ?? "", enc, iv);
+      }
+      return out;
+    }
+
+    // Ramo B: firma originale (row + fieldNames[])
+    const fields: string[] = fieldNamesMaybe ?? [];
+    for (const field of fields) {
+      const enc = rowOrMap?.[`${field}_enc`];
+      const iv  = rowOrMap?.[`${field}_iv`];
       if (!enc || !iv) { out[field] = null; continue; }
       out[field] = await this.decryptJSON(scope, table, field, recordId ?? "", enc, iv);
     }
