@@ -1,7 +1,7 @@
 // app/clients/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
@@ -28,7 +28,7 @@ type PlainAccount = {
 const PAGE_SIZE = 25;
 type SortKey = "name" | "email" | "phone" | "vat_number" | "created_at";
 
-// ---- Gli scope usati dalla cifratura (coerenti con CryptoShell/CryptoProvider)
+// Gli scope usati in tutto l’app
 const DEFAULT_SCOPES = [
   "table:accounts","table:contacts","table:products",
   "table:profiles","table:notes","table:conversations",
@@ -36,9 +36,7 @@ const DEFAULT_SCOPES = [
 ];
 
 export default function ClientsPage(): JSX.Element {
-  const { crypto, ready, autoUnlock, prewarm } = useCrypto() as ReturnType<typeof useCrypto> & {
-    autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean>;
-  };
+  const { crypto, ready, unlock, prewarm } = useCrypto();
 
   const [rows, setRows] = useState<PlainAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -51,9 +49,18 @@ export default function ClientsPage(): JSX.Element {
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
-  const [diag, setDiag] = useState<{ auth?: string; ready?: boolean; loaded?: number }>({});
+  // Diagnostica
+  const [diag, setDiag] = useState<{
+    auth?: string;
+    ready?: boolean;
+    passInStorage?: boolean;
+    unlockAttempts?: number;
+    loaded?: number;
+  }>({});
 
-  // 0) Verifica sessione autenticata
+  const unlockingRef = useRef(false);
+
+  // 0) Check sessione autenticata
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -71,29 +78,44 @@ export default function ClientsPage(): JSX.Element {
     return () => { alive = false; };
   }, []);
 
-  // 0.b) Auto-unlock forzato QUI se chiavi non pronte (usa passphrase salvata al login)
+  // 0.b) Forza sblocco qui (bypass helper) se non pronto ma la pass esiste
   useEffect(() => {
-    let cancelled = false;
+    if (!authChecked) return;       // aspetta auth
+    if (ready) return;              // già sbloccato
+    if (unlockingRef.current) return;
+
+    // leggi pass salvata al login
+    const pass =
+      typeof window !== "undefined"
+        ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
+        : "";
+
+    const hasPass = !!pass;
+    setDiag((d) => ({ ...d, passInStorage: hasPass }));
+
+    if (!hasPass) return; // niente da fare: la pagina resterà in attesa finché non c’è login/pass
+
     (async () => {
-      if (ready) return;
-      // tenta autoUnlock dal provider se disponibile
       try {
-        const fn = (autoUnlock ?? (crypto as any)?.autoUnlock) as (undefined | ((pass?: string, scopes?: string[]) => Promise<boolean>));
-        if (fn) {
-          // passa undefined: il provider leggerà da session/localStorage (repping:pph)
-          await fn(undefined, DEFAULT_SCOPES);
-          // opzionale: prewarm per performance
-          await prewarm(DEFAULT_SCOPES);
-        }
+        unlockingRef.current = true;
+        setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
+
+        // 🔑 sblocca direttamente dal provider
+        await unlock(pass, DEFAULT_SCOPES);
+        await prewarm(DEFAULT_SCOPES);
+
+        // pulizia: togli la pass dai persistent storage
+        try { sessionStorage.removeItem("repping:pph"); } catch {}
+        try { localStorage.removeItem("repping:pph"); } catch {}
       } catch (e) {
-        // non bloccare la UI
-        console.warn("[/clients] autoUnlock failed:", e);
+        // Non blocchiamo la UI; mostriamo info in console
+        console.error("[/clients] unlock failed:", e);
+      } finally {
+        unlockingRef.current = false;
       }
-      if (cancelled) return;
-      setDiag((d) => ({ ...d, ready }));
     })();
-    return () => { cancelled = true; };
-  }, [ready, autoUnlock, crypto, prewarm]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authChecked, ready, unlock, prewarm]);
 
   // 1) Carica una pagina quando: autenticato + chiavi pronte
   async function loadPage(p: number): Promise<void> {
@@ -244,9 +266,9 @@ export default function ClientsPage(): JSX.Element {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
-      {/* Banner diagnostico (puoi rimuoverlo quando tutto ok) */}
+      {/* Banner diagnostico (rimuovilo quando tutto ok) */}
       <div className="text-xs text-gray-500">
-        auth:{diag.auth ?? "…"} · ready:{String(ready)} · loaded:{diag.loaded ?? 0}
+        auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
       </div>
 
       <h1 className="text-2xl font-bold">Clienti</h1>
@@ -311,7 +333,7 @@ export default function ClientsPage(): JSX.Element {
         <button
           className="px-3 py-2 rounded border"
           disabled={loading || !ready || rows.length < PAGE_SIZE}
-          onClick={() => setPage((p) => p + 1)}
+          onClick={() => setPage((p) => p + 1))}
         >
           Successivi ▶︎
         </button>
