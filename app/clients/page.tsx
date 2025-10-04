@@ -8,14 +8,11 @@ import { useCrypto } from "@/lib/crypto/CryptoProvider";
 type RawAccount = {
   id: string;
   created_at: string;
-
-  name_enc: any;  name_iv: any;
+  name_enc: any; name_iv: any;
   email_enc: any; email_iv: any;
   phone_enc: any; phone_iv: any;
   vat_number_enc: any; vat_number_iv: any;
   notes_enc: any; notes_iv: any;
-
-  // eventuali altri campi non sensibili
 };
 
 type PlainAccount = {
@@ -42,9 +39,17 @@ export default function ClientsPage() {
 
   const [q, setQ] = useState("");
 
-  // carica pagina grezza (cifrata) da Supabase
+  // Carica pagina di clienti (cifrati)
   async function loadPage(p: number) {
     setLoading(true);
+
+    // Evita errori se crypto non è pronto
+    if (!crypto) {
+      console.warn("[clients] crypto non ancora pronto");
+      setLoading(false);
+      return;
+    }
+
     const from = p * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
@@ -67,32 +72,36 @@ export default function ClientsPage() {
       return;
     }
 
-    // decifra lato client
     const plain: PlainAccount[] = [];
+
     for (const r of (data as RawAccount[])) {
       try {
         const dec = await crypto.decryptFields("accounts", "accounts", r.id, {
-          name:        { enc: r.name_enc,        iv: r.name_iv },
-          email:       { enc: r.email_enc,       iv: r.email_iv },
-          phone:       { enc: r.phone_enc,       iv: r.phone_iv },
-          vat_number:  { enc: r.vat_number_enc,  iv: r.vat_number_iv },
-          notes:       { enc: r.notes_enc,       iv: r.notes_iv },
+          name: { enc: r.name_enc, iv: r.name_iv },
+          email: { enc: r.email_enc, iv: r.email_iv },
+          phone: { enc: r.phone_enc, iv: r.phone_iv },
+          vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
+          notes: { enc: r.notes_enc, iv: r.notes_iv },
         });
         plain.push({
           id: r.id,
           created_at: r.created_at,
-          name:        (dec as any)?.name ?? "",
-          email:       (dec as any)?.email ?? "",
-          phone:       (dec as any)?.phone ?? "",
-          vat_number:  (dec as any)?.vat_number ?? "",
-          notes:       (dec as any)?.notes ?? "",
+          name: (dec as any)?.name ?? "",
+          email: (dec as any)?.email ?? "",
+          phone: (dec as any)?.phone ?? "",
+          vat_number: (dec as any)?.vat_number ?? "",
+          notes: (dec as any)?.notes ?? "",
         });
       } catch (e) {
         console.warn("decrypt error for", r.id, e);
         plain.push({
           id: r.id,
           created_at: r.created_at,
-          name: "", email: "", phone: "", vat_number: "", notes: "",
+          name: "",
+          email: "",
+          phone: "",
+          vat_number: "",
+          notes: "",
         });
       }
     }
@@ -101,24 +110,26 @@ export default function ClientsPage() {
     setLoading(false);
   }
 
+  // Carica i dati quando crypto è pronto
   useEffect(() => {
     if (!ready || !crypto) return;
     loadPage(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, crypto, page]);
 
-  // ordina & filtra in locale
+  // Ordinamento e filtro locale
   const view = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
     let arr = [...rows];
     if (q.trim()) {
       const qq = norm(q);
-      arr = arr.filter(r =>
-        norm(r.name).includes(qq) ||
-        norm(r.email).includes(qq) ||
-        norm(r.phone).includes(qq) ||
-        norm(r.vat_number).includes(qq) ||
-        norm(r.notes).includes(qq)
+      arr = arr.filter(
+        (r) =>
+          norm(r.name).includes(qq) ||
+          norm(r.email).includes(qq) ||
+          norm(r.phone).includes(qq) ||
+          norm(r.vat_number).includes(qq) ||
+          norm(r.notes).includes(qq)
       );
     }
     arr.sort((a, b) => {
@@ -140,11 +151,15 @@ export default function ClientsPage() {
 
   function toggleSort(k: SortKey) {
     if (sortBy === k) {
-      setSortDir(d => (d === "asc" ? "desc" : "asc"));
+      setSortDir((d) => (d === "asc" ? "desc" : "asc"));
     } else {
       setSortBy(k);
       setSortDir(k === "created_at" ? "desc" : "asc");
     }
+  }
+
+  if (!ready || !crypto) {
+    return <div className="p-6 text-gray-600">Carico chiavi di cifratura…</div>;
   }
 
   return (
@@ -160,7 +175,7 @@ export default function ClientsPage() {
         />
         <button
           className="px-3 py-2 rounded border"
-          onClick={() => { setQ(""); }}
+          onClick={() => setQ("")}
         >
           Pulisci
         </button>
@@ -170,11 +185,11 @@ export default function ClientsPage() {
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
             <tr>
-              <Th label="Nome"        k="name"        sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="Email"       k="email"       sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="Telefono"    k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="P. IVA"      k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
-              <Th label="Creato il"   k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Nome" k="name" sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Email" k="email" sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Telefono" k="phone" sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="P. IVA" k="vat_number" sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
+              <Th label="Creato il" k="created_at" sortBy={sortBy} sortDir={sortDir} onClick={toggleSort} />
               <th className="px-3 py-2 text-left">Note</th>
             </tr>
           </thead>
@@ -185,12 +200,21 @@ export default function ClientsPage() {
                 <td className="px-3 py-2">{r.email || "—"}</td>
                 <td className="px-3 py-2">{r.phone || "—"}</td>
                 <td className="px-3 py-2">{r.vat_number || "—"}</td>
-                <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
+                <td className="px-3 py-2">
+                  {new Date(r.created_at).toLocaleString()}
+                </td>
                 <td className="px-3 py-2">{r.notes || "—"}</td>
               </tr>
             ))}
             {!loading && view.length === 0 && (
-              <tr><td className="px-3 py-8 text-center text-gray-500" colSpan={6}>Nessun cliente trovato.</td></tr>
+              <tr>
+                <td
+                  className="px-3 py-8 text-center text-gray-500"
+                  colSpan={6}
+                >
+                  Nessun cliente trovato.
+                </td>
+              </tr>
             )}
           </tbody>
         </table>
@@ -200,7 +224,7 @@ export default function ClientsPage() {
         <button
           className="px-3 py-2 rounded border"
           disabled={page === 0 || loading}
-          onClick={() => setPage(p => Math.max(0, p - 1))}
+          onClick={() => setPage((p) => Math.max(0, p - 1))}
         >
           ◀︎ Precedenti
         </button>
@@ -208,7 +232,7 @@ export default function ClientsPage() {
         <button
           className="px-3 py-2 rounded border"
           disabled={loading || rows.length < PAGE_SIZE}
-          onClick={() => setPage(p => p + 1)}
+          onClick={() => setPage((p) => p + 1)}
         >
           Successivi ▶︎
         </button>
@@ -234,7 +258,10 @@ function Th({
 }) {
   const active = sortBy === k;
   return (
-    <th className="px-3 py-2 text-left cursor-pointer select-none" onClick={() => onClick(k)}>
+    <th
+      className="px-3 py-2 text-left cursor-pointer select-none"
+      onClick={() => onClick(k)}
+    >
       <span className={active ? "font-semibold" : ""}>{label}</span>
       {active && <span> {sortDir === "asc" ? "▲" : "▼"}</span>}
     </th>
