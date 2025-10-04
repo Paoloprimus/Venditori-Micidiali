@@ -13,16 +13,20 @@ import React, {
 import { supabase } from "@/lib/supabase/client";
 import { CryptoService } from "@/lib/crypto/CryptoService";
 
+type ExposedCrypto = CryptoService & {
+  autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean>;
+};
+
 type Ctx = {
   ready: boolean;
-  crypto: (CryptoService & { autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean> }) | null;
+  crypto: ExposedCrypto | null;
   unlock: (passphrase: string, scopes?: string[]) => Promise<void>;
   autoUnlock: (passphrase?: string, scopes?: string[]) => Promise<boolean>;
   prewarm: (scopes: string[]) => Promise<void>;
+  forceReady: () => void; // solo dev/emergenza
   error: string | null;
 };
 
-// Scope usati in tutto l’app (tabelle cifrate)
 const DEFAULT_SCOPES = [
   "table:accounts",
   "table:contacts",
@@ -40,6 +44,7 @@ const CryptoCtx = createContext<Ctx>({
   unlock: async () => {},
   autoUnlock: async () => false,
   prewarm: async () => {},
+  forceReady: () => {},
   error: null,
 });
 
@@ -49,10 +54,10 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const [cryptoSvc, setCryptoSvc] = useState<CryptoService | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
   const triedAuto = useRef(false);
   const unlocking = useRef(false);
 
-  // Crea/recupera singleton del servizio
   const ensureSvc = useCallback((): CryptoService => {
     if (cryptoSvc) return cryptoSvc;
     const svc = new CryptoService(supabase, null);
@@ -60,7 +65,6 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     return svc;
   }, [cryptoSvc]);
 
-  // Precarica/genera chiavi per scope
   const prewarm = useCallback(
     async (scopes: string[]) => {
       const svc = ensureSvc();
@@ -68,26 +72,48 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
         try {
           await svc.getOrCreateScopeKeys(s);
         } catch (e) {
-          // non bloccare tutto se uno scope fallisce
-          console.warn("[crypto prewarm] scope error", s, e);
+          console.warn("[crypto][prewarm] scope error:", s, e);
+          throw e;
         }
       }
     },
     [ensureSvc]
   );
 
-  // Sblocco con passphrase
+  function normalizeOk(ret: unknown): boolean {
+    if (ret === undefined) return true;           // molte implementazioni non ritornano nulla su successo
+    if (typeof ret === "boolean") return ret;
+    if (ret && typeof ret === "object" && "ok" in (ret as any)) {
+      return Boolean((ret as any).ok);
+    }
+    // qualunque altro valore lo consideriamo “non garantito”
+    return false;
+  }
+
   const unlock = useCallback(
     async (passphrase: string, scopes: string[] = []) => {
       setError(null);
       const svc = ensureSvc();
+      console.info("[crypto][unlock] start, scopes:", scopes);
       try {
-        await svc.unlockWithPassphrase(passphrase);
+        const ret = await (svc as any).unlockWithPassphrase(passphrase);
+        const ok = normalizeOk(ret);
+        if (!ok) {
+          throw new Error("unlockWithPassphrase did not succeed (no-ok return)");
+        }
+
+        // sanity check immediato: almeno uno scope deve funzionare
+        const checkScope = scopes[0] ?? DEFAULT_SCOPES[0];
+        await svc.getOrCreateScopeKeys(checkScope);
+
+        // prewarm opzionale
         if (scopes.length) {
           await prewarm(scopes);
         }
         setReady(true);
+        console.info("[crypto][unlock] ready=true");
       } catch (e: any) {
+        console.error("[crypto][unlock] ERROR:", e);
         setReady(false);
         setError(e?.message ?? "Errore sblocco");
         throw e;
@@ -96,7 +122,6 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     [ensureSvc, prewarm]
   );
 
-  // Auto-unlock: legge pass da session/localStorage (salvata al login)
   const autoUnlock = useCallback(
     async (passphrase?: string, scopes: string[] = DEFAULT_SCOPES) => {
       if (unlocking.current) return false;
@@ -108,21 +133,19 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           localStorage.getItem("repping:pph") ||
           "";
       }
-      if (!pass) return false;
+      if (!pass) {
+        console.info("[crypto][autoUnlock] no pass in storage");
+        return false;
+      }
 
       try {
         unlocking.current = true;
         await unlock(pass, scopes);
-        // pulizia: non tenere la passphrase
-        try {
-          sessionStorage.removeItem("repping:pph");
-        } catch {}
-        try {
-          localStorage.removeItem("repping:pph");
-        } catch {}
+        try { sessionStorage.removeItem("repping:pph"); } catch {}
+        try { localStorage.removeItem("repping:pph"); } catch {}
         return true;
       } catch (e) {
-        console.warn("[crypto] autoUnlock failed:", e);
+        console.warn("[crypto][autoUnlock] failed:", e);
         return false;
       } finally {
         unlocking.current = false;
@@ -131,34 +154,34 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     [unlock]
   );
 
-  // Espone autoUnlock anche sull’istanza crypto (per compatibilità con codice esistente)
+  const forceReady = useCallback(() => {
+    // SOLO DEV: usa NEXT_PUBLIC_CRYPTO_FORCE_READY=1 per abilitare questo comportamento
+    if (typeof window !== "undefined" && process?.env?.NEXT_PUBLIC_CRYPTO_FORCE_READY === "1") {
+      console.warn("[crypto][forceReady] FORZATO (dev only).");
+      setReady(true);
+      setError(null);
+    } else {
+      console.warn("[crypto][forceReady] ignorato: non in dev / env mancante.");
+    }
+  }, []);
+
   const cryptoExposed = useMemo(() => {
-    const svc = ensureSvc() as CryptoService & {
-      autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean>;
-    };
+    const svc = ensureSvc() as ExposedCrypto;
     svc.autoUnlock = autoUnlock;
     return svc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cryptoSvc, autoUnlock]);
 
-  // 🔁 Auto-unlock all’avvio del provider (una sola volta)
   useEffect(() => {
     if (triedAuto.current) return;
     triedAuto.current = true;
 
     (async () => {
-      // se già sbloccato, esci
       if (ready) return;
-
-      // tenta con pass salvata dal login (session/local)
       const ok = await autoUnlock(undefined, DEFAULT_SCOPES);
-      if (ok) {
-        setReady(true);
-        return;
+      if (!ok) {
+        console.info("[crypto][init] autoUnlock not ok - waiting for manual/page unlock");
       }
-
-      // se fallisce, lascia ready=false: le pagine mostreranno "Preparazione chiavi…"
-      // o eventuali flussi di sblocco custom. Ma niente errori bloccanti qui.
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -171,6 +194,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
         unlock,
         autoUnlock,
         prewarm,
+        forceReady,
         error,
       }}
     >
