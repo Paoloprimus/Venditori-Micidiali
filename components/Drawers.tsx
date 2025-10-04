@@ -21,13 +21,7 @@ export function useDrawers() {
 /* ---------------------------- Tipi conversazioni ---------------------------- */
 type Conv = { id: string; title: string; updated_at?: string };
 
-/* -------------------------------- LeftDrawer --------------------------------
-   - Elenco sessioni
-   - Crea nuova sessione
-   - Elimina sessione
-   - Seleziona sessione (onSelect)
-   (Nessun link Quick Add qui)
------------------------------------------------------------------------------ */
+/* -------------------------------- LeftDrawer -------------------------------- */
 export function LeftDrawer({
   open,
   onClose,
@@ -82,7 +76,6 @@ export function LeftDrawer({
       return;
     }
 
-    // ottimismo + sync server
     setItems((prev) => prev.filter((x) => x.id !== id));
     await load(true);
   }
@@ -121,7 +114,6 @@ export function LeftDrawer({
       </div>
 
       <div className="list">
-        {/* Crea rapidamente una nuova sessione */}
         <div className="row" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
           <button className="btn" onClick={createNew}>Crea + nomina nuova sessione</button>
         </div>
@@ -144,9 +136,7 @@ export function LeftDrawer({
         ))}
 
         {hasMore && items.length > 0 && !loading && (
-          <button className="iconbtn" onClick={() => load(false)}>
-            Carica altro…
-          </button>
+          <button className="iconbtn" onClick={() => load(false)}>Carica altro…</button>
         )}
 
         {loading && <div className="helper">Caricamento…</div>}
@@ -156,10 +146,7 @@ export function LeftDrawer({
   );
 }
 
-/* ------------------------------- RightDrawer -------------------------------
-   - Tabs: Impostazioni | Gestione prodotti
-   - 🆕 Pulsante "Quick Add clienti" qui (non nel left)
------------------------------------------------------------------------------ */
+/* ------------------------------- RightDrawer ------------------------------- */
 export function RightDrawer({
   open,
   onClose,
@@ -167,7 +154,7 @@ export function RightDrawer({
   open: boolean;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"settings" | "products">("products"); // default: prodotti
+  const [tab, setTab] = useState<"settings" | "products">("products");
 
   useEffect(() => {
     if (!open) setTab("products");
@@ -176,6 +163,10 @@ export function RightDrawer({
   function goQuickAdd() {
     onClose();
     window.location.href = "/tools/quick-add";
+  }
+  function goClientsList() {
+    onClose();
+    window.location.href = "/clients";
   }
 
   return (
@@ -199,9 +190,10 @@ export function RightDrawer({
       </div>
 
       <div className="list" style={{ padding: 8 }}>
-        {/* 🆕 Link rapido al Quick Add clienti (SOLO nel drawer destro) */}
-        <div style={{ display: "flex", justifyContent: "flex-start", marginBottom: 8 }}>
+        {/* Link rapidi */}
+        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
           <button className="btn" onClick={goQuickAdd}>Quick Add clienti</button>
+          <button className="btn" onClick={goClientsList}>Lista clienti</button>
         </div>
 
         {tab === "settings" && (
