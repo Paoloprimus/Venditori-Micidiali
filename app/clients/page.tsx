@@ -13,6 +13,8 @@ type RawAccount = {
   phone_enc: any; phone_iv: any;
   vat_number_enc: any; vat_number_iv: any;
   notes_enc: any; notes_iv: any;
+  owner_id?: string | null;
+  user_id?: string | null;
 };
 
 type PlainAccount = {
@@ -37,12 +39,31 @@ export default function ClientsPage(): JSX.Element {
 
   const [sortBy, setSortBy] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
-
   const [q, setQ] = useState<string>("");
 
-  // Carica una pagina (quando crypto è pronto)
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
+  // 0) Assicurati che la sessione ci sia davvero (altrimenti RLS filtra tutto in silenzio)
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const { data, error } = await supabase.auth.getUser();
+      if (!alive) return;
+      if (error) {
+        console.warn("[/clients] getUser error:", error);
+        setUserId(null);
+      } else {
+        setUserId(data.user?.id ?? null);
+      }
+      setAuthChecked(true);
+    })();
+    return () => { alive = false; };
+  }, []);
+
+  // 1) Carica una pagina (quando crypto è pronto **e** l’utente è autenticato)
   async function loadPage(p: number): Promise<void> {
-    if (!crypto) return;
+    if (!crypto || !userId) return;
     setLoading(true);
 
     const from = p * PAGE_SIZE;
@@ -56,7 +77,8 @@ export default function ClientsPage(): JSX.Element {
         email_enc, email_iv,
         phone_enc, phone_iv,
         vat_number_enc, vat_number_iv,
-        notes_enc, notes_iv
+        notes_enc, notes_iv,
+        owner_id, user_id
       `)
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -120,22 +142,19 @@ export default function ClientsPage(): JSX.Element {
     setLoading(false);
   }
 
-  // 1) Appena le chiavi diventano pronte, carica i dati
+  // 2) Appena abbiamo: (A) sessione valida e (B) chiavi pronte ⇒ carica dati
   useEffect(() => {
-    if (!ready || !crypto) return;
+    if (!authChecked) return;          // aspetta il getUser
+    if (!userId) return;               // non autenticato → niente lista
+    if (!ready || !crypto) return;     // aspetta chiavi
     loadPage(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready, crypto, page]);
+  }, [authChecked, userId, ready, crypto, page]);
 
-  // 2) Se l’utente atterra “a freddo” qui, la pagina resta in attesa silenziosa.
-  //    CryptoShell farà auto-unlock in background; quando ready=true, questo effect sopra parte.
-
-  // Ordinamento + filtro locale
+  // 3) Ordinamento + filtro locale
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
-
     let arr = [...rows];
-
     if (q.trim()) {
       const qq = norm(q);
       arr = arr.filter((r) =>
@@ -146,11 +165,9 @@ export default function ClientsPage(): JSX.Element {
         norm(r.notes).includes(qq)
       );
     }
-
     arr.sort((a, b) => {
       let va: string | number;
       let vb: string | number;
-
       if (sortBy === "created_at") {
         va = new Date(a.created_at).getTime();
         vb = new Date(b.created_at).getTime();
@@ -158,12 +175,10 @@ export default function ClientsPage(): JSX.Element {
         va = (a as any)[sortBy] ?? "";
         vb = (b as any)[sortBy] ?? "";
       }
-
       if (va < vb) return sortDir === "asc" ? -1 : 1;
       if (va > vb) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
-
     return arr;
   }, [rows, q, sortBy, sortDir]);
 
@@ -176,11 +191,28 @@ export default function ClientsPage(): JSX.Element {
     }
   }
 
+  // 4) Messaggi di stato chiari
+  if (!authChecked) {
+    return <div className="p-6 text-gray-600">Verifico sessione…</div>;
+  }
+  if (!userId) {
+    return (
+      <div className="p-6">
+        <div className="mb-2 font-semibold">Sessione non attiva</div>
+        <p className="text-sm text-gray-600">
+          Effettua di nuovo l’accesso per vedere i tuoi clienti.
+        </p>
+        <button className="px-3 py-2 rounded border mt-3" onClick={() => (window.location.href = "/login")}>
+          Vai al login
+        </button>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Clienti</h1>
 
-      {/* Barra ricerca + azioni */}
       <div className="flex gap-2 items-center">
         <input
           className="border rounded p-2 flex-1"
@@ -188,20 +220,13 @@ export default function ClientsPage(): JSX.Element {
           value={q}
           onChange={(e) => setQ(e.target.value)}
         />
-        <button
-          className="px-3 py-2 rounded border"
-          onClick={() => setQ("")}
-        >
+        <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>
           Pulisci
         </button>
       </div>
 
-      {/* Stato: chiavi non pronte → attendo in silenzio */}
-      {!ready && (
-        <div className="text-sm text-gray-600">Preparazione dati…</div>
-      )}
+      {!ready && <div className="text-sm text-gray-600">Preparazione chiavi…</div>}
 
-      {/* Tabella */}
       <div className="overflow-auto border rounded">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
@@ -236,7 +261,6 @@ export default function ClientsPage(): JSX.Element {
         </table>
       </div>
 
-      {/* Paginazione */}
       <div className="flex items-center justify-between">
         <button
           className="px-3 py-2 rounded border"
