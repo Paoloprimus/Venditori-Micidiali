@@ -25,6 +25,8 @@ type Ctx = {
   prewarm: (scopes: string[]) => Promise<void>;
   forceReady: () => void; // dev/emergenza
   error: string | null;
+  userId: string | null;
+  authChecked: boolean;
 };
 
 const DEFAULT_SCOPES = [
@@ -38,8 +40,6 @@ const DEFAULT_SCOPES = [
   "table:proposals",
 ];
 
-// lato client possiamo leggere solo la public env; usiamo questa per pilotare UI,
-// ma il vero guard per il reset è lato server (CRYPTO_DEV_AUTO_RESET)
 const CLIENT_FORCE_READY =
   typeof process !== "undefined" &&
   (process as any).env?.NEXT_PUBLIC_CRYPTO_FORCE_READY === "1";
@@ -52,6 +52,8 @@ const CryptoCtx = createContext<Ctx>({
   prewarm: async () => {},
   forceReady: () => {},
   error: null,
+  userId: null,
+  authChecked: false,
 });
 
 export const useCrypto = () => useContext(CryptoCtx);
@@ -61,9 +63,44 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // stato auth
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
+
   const triedAuto = useRef(false);
   const unlocking = useRef(false);
 
+  // ---- AUTH GATE ----
+  useEffect(() => {
+    let alive = true;
+
+    // check iniziale
+    (async () => {
+      const { data } = await supabase.auth.getUser();
+      if (!alive) return;
+      setUserId(data.user?.id ?? null);
+      setAuthChecked(true);
+    })();
+
+    // listener cambi sessione (login/logout/refresh)
+    const { data: sub } = supabase.auth.onAuthStateChange((_evt, session) => {
+      setUserId(session?.user?.id ?? null);
+      setAuthChecked(true);
+      // se siamo usciti e rimane una pass orfana in storage, rimuovila
+      if (!session) {
+        try { sessionStorage.removeItem("repping:pph"); } catch {}
+        try { localStorage.removeItem("repping:pph"); } catch {}
+        setReady(false);
+      }
+    });
+
+    return () => {
+      alive = false;
+      sub.subscription.unsubscribe();
+    };
+  }, []);
+
+  // ---- SERVICE ----
   const ensureSvc = useCallback((): CryptoService => {
     if (cryptoSvc) return cryptoSvc;
     const svc = new CryptoService(supabase, null);
@@ -97,26 +134,20 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   async function tryServerResetKeyring(): Promise<boolean> {
     try {
-      // chiediamo al server se il reset è abilitato (CRYPTO_DEV_AUTO_RESET=1)
+      // abilita solo se server-side ha CRYPTO_DEV_AUTO_RESET=1
       const probe = await fetch("/api/crypto/force-reset", { method: "GET" });
-      const probeJson = await probe.json().catch(() => ({}));
-      if (!probe.ok || !probeJson?.enabled) return false;
-
+      const j = await probe.json().catch(() => ({}));
+      if (!probe.ok || !j?.enabled) return false;
       const { data: u } = await supabase.auth.getUser();
-      const userId = u?.user?.id;
-      if (!userId) return false;
-
+      const uid = u?.user?.id;
+      if (!uid) return false;
       const res = await fetch("/api/crypto/force-reset", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ userId }),
+        body: JSON.stringify({ userId: uid }),
         credentials: "same-origin",
       });
-      if (!res.ok) {
-        console.warn("[crypto][reset] server returned", res.status);
-        return false;
-      }
-      return true;
+      return res.ok;
     } catch (e) {
       console.warn("[crypto][reset] error:", e);
       return false;
@@ -126,37 +157,40 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const unlock = useCallback(
     async (passphrase: string, scopes: string[] = []) => {
       setError(null);
+
+      // ✅ GATE: non provare a sbloccare se non c’è utente autenticato
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id;
+      if (!uid) {
+        setError("Utente non autenticato");
+        throw new Error("Utente non autenticato");
+      }
+
       const svc = ensureSvc();
-      console.info("[crypto][unlock] start, scopes:", scopes);
       try {
         const ret = await (svc as any).unlockWithPassphrase(passphrase);
         const ok = normalizeOk(ret);
-        if (!ok) throw new Error("unlockWithPassphrase did not succeed (no-ok return)");
+        if (!ok) throw new Error("unlockWithPassphrase did not succeed");
 
-        // sanity check: almeno uno scope deve funzionare
         const checkScope = scopes[0] ?? DEFAULT_SCOPES[0];
         await svc.getOrCreateScopeKeys(checkScope);
 
         if (scopes.length) await prewarm(scopes);
         setReady(true);
-        console.info("[crypto][unlock] ready=true");
       } catch (e: any) {
         const msg = String(e?.message || e || "");
-        console.error("[crypto][unlock] ERROR:", e);
-        // Se fallisce con OperationError, prova un reset del keyring in DEV/Preview (server-side abilitato)
+        // OperationError → keyring incoerente: prova reset DEV
         if (/OperationError/i.test(msg)) {
           const resetOk = await tryServerResetKeyring();
           if (resetOk) {
-            console.warn("[crypto][unlock] keyring reset → retry unlock");
             const ret2 = await (svc as any).unlockWithPassphrase(passphrase);
             const ok2 = normalizeOk(ret2);
-            if (!ok2) throw new Error("unlock retry failed (no-ok return)");
+            if (!ok2) throw new Error("unlock retry failed");
             const checkScope2 = scopes[0] ?? DEFAULT_SCOPES[0];
             await svc.getOrCreateScopeKeys(checkScope2);
             if (scopes.length) await prewarm(scopes);
             setReady(true);
             setError(null);
-            console.info("[crypto][unlock] ready=true (after reset)");
             return;
           }
         }
@@ -172,6 +206,16 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     async (passphrase?: string, scopes: string[] = DEFAULT_SCOPES) => {
       if (unlocking.current) return false;
 
+      // ✅ GATE: tenta solo se autenticato
+      const { data } = await supabase.auth.getUser();
+      const uid = data.user?.id;
+      if (!uid) {
+        // se non autenticato ma c’è una pass orfana salvata, puliscila (siamo probabilmente su /login)
+        try { sessionStorage.removeItem("repping:pph"); } catch {}
+        try { localStorage.removeItem("repping:pph"); } catch {}
+        return false;
+      }
+
       let pass = (passphrase ?? "").trim();
       if (!pass && typeof window !== "undefined") {
         pass =
@@ -179,10 +223,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           localStorage.getItem("repping:pph") ||
           "";
       }
-      if (!pass) {
-        console.info("[crypto][autoUnlock] no pass in storage");
-        return false;
-      }
+      if (!pass) return false;
 
       try {
         unlocking.current = true;
@@ -190,8 +231,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
         try { sessionStorage.removeItem("repping:pph"); } catch {}
         try { localStorage.removeItem("repping:pph"); } catch {}
         return true;
-      } catch (e) {
-        console.warn("[crypto][autoUnlock] failed:", e);
+      } catch {
         return false;
       } finally {
         unlocking.current = false;
@@ -202,11 +242,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   const forceReady = useCallback(() => {
     if (CLIENT_FORCE_READY) {
-      console.warn("[crypto][forceReady] FORZATO (dev only).");
       setReady(true);
       setError(null);
-    } else {
-      console.warn("[crypto][forceReady] ignorato (env mancante).");
     }
   }, []);
 
@@ -217,19 +254,20 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cryptoSvc, autoUnlock]);
 
-  // Auto-unlock iniziale
+  // Auto-unlock iniziale: SOLO quando abbiamo verificato l’auth
   useEffect(() => {
+    if (!authChecked) return;
     if (triedAuto.current) return;
     triedAuto.current = true;
+
     (async () => {
       if (ready) return;
-      const ok = await autoUnlock(undefined, DEFAULT_SCOPES);
-      if (!ok) {
-        console.info("[crypto][init] autoUnlock not ok - waiting page unlock");
-      }
+      // tenta solo se autenticato
+      if (!userId) return;
+      await autoUnlock(undefined, DEFAULT_SCOPES);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [authChecked, userId, ready]);
 
   return (
     <CryptoCtx.Provider
@@ -241,6 +279,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
         prewarm,
         forceReady,
         error,
+        userId,
+        authChecked,
       }}
     >
       {children}
