@@ -74,23 +74,33 @@ export default function ClientsPage() {
 
     const plain: PlainAccount[] = [];
 
+    // firma compatibile: decryptFields(schema, table, id, fieldsMap, options)
+    const decryptFields = (crypto as any).decryptFields as (
+      schema: string,
+      table: string,
+      id: string,
+      fields: Record<string, { enc: any; iv: any }>,
+      opts?: any
+    ) => Promise<any>;
+
     for (const r of (data as RawAccount[])) {
       try {
-        const dec = await crypto.decryptFields("accounts", "accounts", r.id, {
-          name: { enc: r.name_enc, iv: r.name_iv },
-          email: { enc: r.email_enc, iv: r.email_iv },
-          phone: { enc: r.phone_enc, iv: r.phone_iv },
+        const dec = await decryptFields("accounts", "accounts", r.id, {
+          name:       { enc: r.name_enc,       iv: r.name_iv },
+          email:      { enc: r.email_enc,      iv: r.email_iv },
+          phone:      { enc: r.phone_enc,      iv: r.phone_iv },
           vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
-          notes: { enc: r.notes_enc, iv: r.notes_iv },
-        });
+          notes:      { enc: r.notes_enc,      iv: r.notes_iv },
+        }, {}); // 5° argomento opzionale (options)
+
         plain.push({
           id: r.id,
           created_at: r.created_at,
-          name: (dec as any)?.name ?? "",
-          email: (dec as any)?.email ?? "",
-          phone: (dec as any)?.phone ?? "",
-          vat_number: (dec as any)?.vat_number ?? "",
-          notes: (dec as any)?.notes ?? "",
+          name:        (dec as any)?.name ?? "",
+          email:       (dec as any)?.email ?? "",
+          phone:       (dec as any)?.phone ?? "",
+          vat_number:  (dec as any)?.vat_number ?? "",
+          notes:       (dec as any)?.notes ?? "",
         });
       } catch (e) {
         console.warn("decrypt error for", r.id, e);
