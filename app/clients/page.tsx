@@ -1,7 +1,7 @@
 // app/clients/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
@@ -40,47 +40,10 @@ export default function ClientsPage(): JSX.Element {
 
   const [q, setQ] = useState<string>("");
 
-  const [unlocking, setUnlocking] = useState(false);
-  const [unlockTried, setUnlockTried] = useState(false);
-  const [unlockError, setUnlockError] = useState<string | null>(null);
-
-  // ---- Prova sblocco automatico (se il provider lo supporta) ----
-  const tryAutoUnlock = useCallback(async () => {
-    if (!crypto || ready) return;
-    if (unlocking) return;
-    setUnlockError(null);
-    setUnlocking(true);
-    try {
-      // molte implementazioni espongono autoUnlock(); la chiamiamo in modo "safe"
-      const fn = (crypto as any).autoUnlock as (() => Promise<void>) | undefined;
-      if (fn) {
-        await fn();
-      }
-      // se non esiste, non falliamo: resterà la schermata con il bottone / link Home
-    } catch (e: any) {
-      setUnlockError(e?.message || "Impossibile sbloccare automaticamente.");
-    } finally {
-      setUnlocking(false);
-      setUnlockTried(true);
-    }
-  }, [crypto, ready, unlocking]);
-
-  useEffect(() => {
-    // al primo mount proviamo una volta sola
-    if (!ready && crypto && !unlockTried) {
-      void tryAutoUnlock();
-    }
-  }, [ready, crypto, unlockTried, tryAutoUnlock]);
-
-  // ---- Data loader (paginato) ----
+  // Carica una pagina (quando crypto è pronto)
   async function loadPage(p: number): Promise<void> {
+    if (!crypto) return;
     setLoading(true);
-
-    if (!crypto) {
-      console.warn("[/clients] crypto non pronto");
-      setLoading(false);
-      return;
-    }
 
     const from = p * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
@@ -127,7 +90,7 @@ export default function ClientsPage(): JSX.Element {
             vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
             notes:      { enc: r.notes_enc,      iv: r.notes_iv },
           },
-          {} // options
+          {}
         );
 
         plain.push({
@@ -157,14 +120,17 @@ export default function ClientsPage(): JSX.Element {
     setLoading(false);
   }
 
-  // ---- Effetto: carica quando crypto/ready/page cambiano ----
+  // 1) Appena le chiavi diventano pronte, carica i dati
   useEffect(() => {
     if (!ready || !crypto) return;
     loadPage(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, crypto, page]);
 
-  // ---- Ordinamento + Filtro locale ----
+  // 2) Se l’utente atterra “a freddo” qui, la pagina resta in attesa silenziosa.
+  //    CryptoShell farà auto-unlock in background; quando ready=true, questo effect sopra parte.
+
+  // Ordinamento + filtro locale
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
 
@@ -201,7 +167,6 @@ export default function ClientsPage(): JSX.Element {
     return arr;
   }, [rows, q, sortBy, sortDir]);
 
-  // ---- Toggle ordinamento ----
   function toggleSort(k: SortKey): void {
     if (sortBy === k) {
       setSortDir((d) => (d === "asc" ? "desc" : "asc"));
@@ -211,43 +176,11 @@ export default function ClientsPage(): JSX.Element {
     }
   }
 
-  // ---- Guard iniziale: sblocco chiavi ----
-  if (!ready || !crypto) {
-    return (
-      <div className="p-6 max-w-2xl mx-auto space-y-4">
-        <h1 className="text-xl font-semibold">Carico chiavi di cifratura…</h1>
-        <p className="text-sm text-gray-600">
-          Se resta bloccato, prova a sbloccare ora o torna alla Home (la passphrase si sblocca dopo il login).
-        </p>
-        {unlockError && (
-          <div className="text-sm text-red-600">
-            {unlockError}
-          </div>
-        )}
-        <div className="flex gap-2">
-          <button
-            className="px-3 py-2 rounded border"
-            disabled={unlocking}
-            onClick={() => tryAutoUnlock()}
-          >
-            {unlocking ? "Sblocco…" : "Sblocca ora"}
-          </button>
-          <button
-            className="px-3 py-2 rounded border"
-            onClick={() => { window.location.href = "/"; }}
-          >
-            Vai alla Home
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // ---- Render ----
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
       <h1 className="text-2xl font-bold">Clienti</h1>
 
+      {/* Barra ricerca + azioni */}
       <div className="flex gap-2 items-center">
         <input
           className="border rounded p-2 flex-1"
@@ -263,6 +196,12 @@ export default function ClientsPage(): JSX.Element {
         </button>
       </div>
 
+      {/* Stato: chiavi non pronte → attendo in silenzio */}
+      {!ready && (
+        <div className="text-sm text-gray-600">Preparazione dati…</div>
+      )}
+
+      {/* Tabella */}
       <div className="overflow-auto border rounded">
         <table className="min-w-full text-sm">
           <thead className="bg-gray-50">
@@ -286,7 +225,7 @@ export default function ClientsPage(): JSX.Element {
                 <td className="px-3 py-2">{r.notes || "—"}</td>
               </tr>
             ))}
-            {!loading && view.length === 0 && (
+            {!loading && ready && view.length === 0 && (
               <tr>
                 <td className="px-3 py-8 text-center text-gray-500" colSpan={6}>
                   Nessun cliente trovato.
@@ -297,10 +236,11 @@ export default function ClientsPage(): JSX.Element {
         </table>
       </div>
 
+      {/* Paginazione */}
       <div className="flex items-center justify-between">
         <button
           className="px-3 py-2 rounded border"
-          disabled={page === 0 || loading}
+          disabled={page === 0 || loading || !ready}
           onClick={() => setPage((p) => Math.max(0, p - 1))}
         >
           ◀︎ Precedenti
@@ -308,7 +248,7 @@ export default function ClientsPage(): JSX.Element {
         <div className="text-sm text-gray-600">Pagina {page + 1}</div>
         <button
           className="px-3 py-2 rounded border"
-          disabled={loading || rows.length < PAGE_SIZE}
+          disabled={loading || !ready || rows.length < PAGE_SIZE}
           onClick={() => setPage((p) => p + 1)}
         >
           Successivi ▶︎
@@ -320,7 +260,6 @@ export default function ClientsPage(): JSX.Element {
   );
 }
 
-// ---- Header cell component ----
 function Th(props: {
   label: string;
   k: SortKey;
