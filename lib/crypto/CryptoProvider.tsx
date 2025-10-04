@@ -1,20 +1,28 @@
 // lib/crypto/CryptoProvider.tsx
 "use client";
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from "react";
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { supabase } from "@/lib/supabase/client";
 import { CryptoService } from "@/lib/crypto/CryptoService";
 
 type Ctx = {
   ready: boolean;
-  crypto: CryptoService | (CryptoService & { autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean> }) | null;
+  crypto: (CryptoService & { autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean> }) | null;
   unlock: (passphrase: string, scopes?: string[]) => Promise<void>;
   autoUnlock: (passphrase?: string, scopes?: string[]) => Promise<boolean>;
   prewarm: (scopes: string[]) => Promise<void>;
   error: string | null;
 };
 
-// opzionale: gli scope che usiamo più spesso
+// Scope usati in tutto l’app (tabelle cifrate)
 const DEFAULT_SCOPES = [
   "table:accounts",
   "table:contacts",
@@ -41,14 +49,18 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const [cryptoSvc, setCryptoSvc] = useState<CryptoService | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const triedAuto = useRef(false);
+  const unlocking = useRef(false);
 
-  const ensureSvc = useCallback(() => {
+  // Crea/recupera singleton del servizio
+  const ensureSvc = useCallback((): CryptoService => {
     if (cryptoSvc) return cryptoSvc;
-    const svc = new CryptoService(supabase, null); // istanza condivisa
+    const svc = new CryptoService(supabase, null);
     setCryptoSvc(svc);
     return svc;
   }, [cryptoSvc]);
 
+  // Precarica/genera chiavi per scope
   const prewarm = useCallback(
     async (scopes: string[]) => {
       const svc = ensureSvc();
@@ -57,14 +69,14 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
           await svc.getOrCreateScopeKeys(s);
         } catch (e) {
           // non bloccare tutto se uno scope fallisce
-          // eslint-disable-next-line no-console
-          console.warn("[crypto prewarm] scope error:", s, e);
+          console.warn("[crypto prewarm] scope error", s, e);
         }
       }
     },
     [ensureSvc]
   );
 
+  // Sblocco con passphrase
   const unlock = useCallback(
     async (passphrase: string, scopes: string[] = []) => {
       setError(null);
@@ -72,51 +84,84 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       try {
         await svc.unlockWithPassphrase(passphrase);
         if (scopes.length) {
-          for (const s of scopes) await svc.getOrCreateScopeKeys(s);
+          await prewarm(scopes);
         }
         setReady(true);
       } catch (e: any) {
-        setError(e?.message ?? "Errore sblocco");
         setReady(false);
+        setError(e?.message ?? "Errore sblocco");
         throw e;
       }
     },
-    [ensureSvc]
+    [ensureSvc, prewarm]
   );
 
+  // Auto-unlock: legge pass da session/localStorage (salvata al login)
   const autoUnlock = useCallback(
-    async (passphrase?: string, scopes: string[] = []) => {
-      // 1) passphrase passata a runtime
-      let pass = passphrase?.trim();
-      // 2) altrimenti prova session/local storage
+    async (passphrase?: string, scopes: string[] = DEFAULT_SCOPES) => {
+      if (unlocking.current) return false;
+
+      let pass = (passphrase ?? "").trim();
       if (!pass && typeof window !== "undefined") {
-        pass = sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "";
+        pass =
+          sessionStorage.getItem("repping:pph") ||
+          localStorage.getItem("repping:pph") ||
+          "";
       }
       if (!pass) return false;
 
       try {
+        unlocking.current = true;
         await unlock(pass, scopes);
-        // pulizia: non tenere la passphrase in storage
-        if (typeof window !== "undefined") {
-          try { sessionStorage.removeItem("repping:pph"); } catch {}
-          try { localStorage.removeItem("repping:pph"); } catch {}
-        }
+        // pulizia: non tenere la passphrase
+        try {
+          sessionStorage.removeItem("repping:pph");
+        } catch {}
+        try {
+          localStorage.removeItem("repping:pph");
+        } catch {}
         return true;
-      } catch {
+      } catch (e) {
+        console.warn("[crypto] autoUnlock failed:", e);
         return false;
+      } finally {
+        unlocking.current = false;
       }
     },
     [unlock]
   );
 
-  // Espone anche autoUnlock direttamente sull’istanza crypto (per compatibilità con pagine che fanno (crypto as any).autoUnlock())
+  // Espone autoUnlock anche sull’istanza crypto (per compatibilità con codice esistente)
   const cryptoExposed = useMemo(() => {
-    const svc = ensureSvc();
-    (svc as any).autoUnlock = async (pass?: string, scopes?: string[]) =>
-      autoUnlock(pass, scopes ?? DEFAULT_SCOPES);
-    return svc as CryptoService & { autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean> };
+    const svc = ensureSvc() as CryptoService & {
+      autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean>;
+    };
+    svc.autoUnlock = autoUnlock;
+    return svc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cryptoSvc, autoUnlock]); // usa cryptoSvc come origine, ma richiama ensureSvc
+  }, [cryptoSvc, autoUnlock]);
+
+  // 🔁 Auto-unlock all’avvio del provider (una sola volta)
+  useEffect(() => {
+    if (triedAuto.current) return;
+    triedAuto.current = true;
+
+    (async () => {
+      // se già sbloccato, esci
+      if (ready) return;
+
+      // tenta con pass salvata dal login (session/local)
+      const ok = await autoUnlock(undefined, DEFAULT_SCOPES);
+      if (ok) {
+        setReady(true);
+        return;
+      }
+
+      // se fallisce, lascia ready=false: le pagine mostreranno "Preparazione chiavi…"
+      // o eventuali flussi di sblocco custom. Ma niente errori bloccanti qui.
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <CryptoCtx.Provider
