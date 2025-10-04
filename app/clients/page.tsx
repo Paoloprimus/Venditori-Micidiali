@@ -26,7 +26,8 @@ type PlainAccount = {
 };
 
 const PAGE_SIZE = 25;
-type SortKey = "name" | "created_at" | "email" | "vat_number";
+// ⬅️ Fix: includiamo anche "phone"
+type SortKey = "name" | "created_at" | "email" | "vat_number" | "phone";
 
 export default function ClientsPage() {
   const { crypto, ready } = useCrypto();
@@ -242,7 +243,7 @@ export default function ClientsPage() {
         <button
           className="px-3 py-2 rounded border"
           disabled={loading || rows.length < PAGE_SIZE}
-          onClick={() => setPage((p) => p + 1)}
+          onClick={() => setPage((p) => p + 1))}
         >
           Successivi ▶︎
         </button>
