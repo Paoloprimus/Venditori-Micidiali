@@ -13,8 +13,6 @@ type RawAccount = {
   phone_enc: any; phone_iv: any;
   vat_number_enc: any; vat_number_iv: any;
   notes_enc: any; notes_iv: any;
-  owner_id?: string | null;
-  user_id?: string | null;
 };
 
 type PlainAccount = {
@@ -30,8 +28,17 @@ type PlainAccount = {
 const PAGE_SIZE = 25;
 type SortKey = "name" | "email" | "phone" | "vat_number" | "created_at";
 
+// ---- Gli scope usati dalla cifratura (coerenti con CryptoShell/CryptoProvider)
+const DEFAULT_SCOPES = [
+  "table:accounts","table:contacts","table:products",
+  "table:profiles","table:notes","table:conversations",
+  "table:messages","table:proposals",
+];
+
 export default function ClientsPage(): JSX.Element {
-  const { crypto, ready } = useCrypto();
+  const { crypto, ready, autoUnlock, prewarm } = useCrypto() as ReturnType<typeof useCrypto> & {
+    autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean>;
+  };
 
   const [rows, setRows] = useState<PlainAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
@@ -44,24 +51,51 @@ export default function ClientsPage(): JSX.Element {
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
 
-  // 0) Assicurati che la sessione ci sia davvero (altrimenti RLS filtra tutto in silenzio)
+  const [diag, setDiag] = useState<{ auth?: string; ready?: boolean; loaded?: number }>({});
+
+  // 0) Verifica sessione autenticata
   useEffect(() => {
     let alive = true;
     (async () => {
       const { data, error } = await supabase.auth.getUser();
       if (!alive) return;
       if (error) {
-        console.warn("[/clients] getUser error:", error);
         setUserId(null);
+        setDiag((d) => ({ ...d, auth: `getUser error: ${error.message}` }));
       } else {
         setUserId(data.user?.id ?? null);
+        setDiag((d) => ({ ...d, auth: data.user?.id ? "ok" : "null" }));
       }
       setAuthChecked(true);
     })();
     return () => { alive = false; };
   }, []);
 
-  // 1) Carica una pagina (quando crypto è pronto **e** l’utente è autenticato)
+  // 0.b) Auto-unlock forzato QUI se chiavi non pronte (usa passphrase salvata al login)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (ready) return;
+      // tenta autoUnlock dal provider se disponibile
+      try {
+        const fn = (autoUnlock ?? (crypto as any)?.autoUnlock) as (undefined | ((pass?: string, scopes?: string[]) => Promise<boolean>));
+        if (fn) {
+          // passa undefined: il provider leggerà da session/localStorage (repping:pph)
+          await fn(undefined, DEFAULT_SCOPES);
+          // opzionale: prewarm per performance
+          await prewarm(DEFAULT_SCOPES);
+        }
+      } catch (e) {
+        // non bloccare la UI
+        console.warn("[/clients] autoUnlock failed:", e);
+      }
+      if (cancelled) return;
+      setDiag((d) => ({ ...d, ready }));
+    })();
+    return () => { cancelled = true; };
+  }, [ready, autoUnlock, crypto, prewarm]);
+
+  // 1) Carica una pagina quando: autenticato + chiavi pronte
   async function loadPage(p: number): Promise<void> {
     if (!crypto || !userId) return;
     setLoading(true);
@@ -77,8 +111,7 @@ export default function ClientsPage(): JSX.Element {
         email_enc, email_iv,
         phone_enc, phone_iv,
         vat_number_enc, vat_number_iv,
-        notes_enc, notes_iv,
-        owner_id, user_id
+        notes_enc, notes_iv
       `)
       .order("created_at", { ascending: false })
       .range(from, to);
@@ -140,18 +173,18 @@ export default function ClientsPage(): JSX.Element {
 
     setRows(plain);
     setLoading(false);
+    setDiag((d) => ({ ...d, loaded: plain.length }));
   }
 
-  // 2) Appena abbiamo: (A) sessione valida e (B) chiavi pronte ⇒ carica dati
   useEffect(() => {
-    if (!authChecked) return;          // aspetta il getUser
-    if (!userId) return;               // non autenticato → niente lista
+    if (!authChecked) return;          // aspetta check auth
+    if (!userId) return;               // non autenticato
     if (!ready || !crypto) return;     // aspetta chiavi
     loadPage(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready, crypto, page]);
 
-  // 3) Ordinamento + filtro locale
+  // Ordinamento + filtro locale
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
     let arr = [...rows];
@@ -191,7 +224,7 @@ export default function ClientsPage(): JSX.Element {
     }
   }
 
-  // 4) Messaggi di stato chiari
+  // UI di stato chiara (non blocca)
   if (!authChecked) {
     return <div className="p-6 text-gray-600">Verifico sessione…</div>;
   }
@@ -211,6 +244,11 @@ export default function ClientsPage(): JSX.Element {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
+      {/* Banner diagnostico (puoi rimuoverlo quando tutto ok) */}
+      <div className="text-xs text-gray-500">
+        auth:{diag.auth ?? "…"} · ready:{String(ready)} · loaded:{diag.loaded ?? 0}
+      </div>
+
       <h1 className="text-2xl font-bold">Clienti</h1>
 
       <div className="flex gap-2 items-center">
