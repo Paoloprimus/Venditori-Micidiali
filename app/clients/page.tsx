@@ -28,7 +28,6 @@ type PlainAccount = {
 const PAGE_SIZE = 25;
 type SortKey = "name" | "email" | "phone" | "vat_number" | "created_at";
 
-// Gli scope usati in tutto l’app
 const DEFAULT_SCOPES = [
   "table:accounts","table:contacts","table:products",
   "table:profiles","table:notes","table:conversations",
@@ -47,7 +46,7 @@ export default function ClientsPage(): JSX.Element {
   const [q, setQ] = useState<string>("");
 
   const [userId, setUserId] = useState<string | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const [authChecked, setAuthChecked] = useState<boolean>(false);
 
   // Diagnostica
   const [diag, setDiag] = useState<{
@@ -58,9 +57,9 @@ export default function ClientsPage(): JSX.Element {
     loaded?: number;
   }>({});
 
-  const unlockingRef = useRef(false);
+  const unlockingRef = useRef<boolean>(false);
 
-  // 0) Check sessione autenticata
+  // 0) Verifica sessione autenticata
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -70,21 +69,21 @@ export default function ClientsPage(): JSX.Element {
         setUserId(null);
         setDiag((d) => ({ ...d, auth: `getUser error: ${error.message}` }));
       } else {
-        setUserId(data.user?.id ?? null);
-        setDiag((d) => ({ ...d, auth: data.user?.id ? "ok" : "null" }));
+        const uid = data.user?.id ?? null;
+        setUserId(uid);
+        setDiag((d) => ({ ...d, auth: uid ? "ok" : "null" }));
       }
       setAuthChecked(true);
     })();
     return () => { alive = false; };
   }, []);
 
-  // 0.b) Forza sblocco qui (bypass helper) se non pronto ma la pass esiste
+  // 0.b) Forza sblocco se non pronto ma la pass è in storage
   useEffect(() => {
-    if (!authChecked) return;       // aspetta auth
+    if (!authChecked) return;       // aspetta check auth
     if (ready) return;              // già sbloccato
     if (unlockingRef.current) return;
 
-    // leggi pass salvata al login
     const pass =
       typeof window !== "undefined"
         ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
@@ -93,28 +92,22 @@ export default function ClientsPage(): JSX.Element {
     const hasPass = !!pass;
     setDiag((d) => ({ ...d, passInStorage: hasPass }));
 
-    if (!hasPass) return; // niente da fare: la pagina resterà in attesa finché non c’è login/pass
+    if (!hasPass) return;
 
     (async () => {
       try {
         unlockingRef.current = true;
         setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-
-        // 🔑 sblocca direttamente dal provider
         await unlock(pass, DEFAULT_SCOPES);
         await prewarm(DEFAULT_SCOPES);
-
-        // pulizia: togli la pass dai persistent storage
         try { sessionStorage.removeItem("repping:pph"); } catch {}
         try { localStorage.removeItem("repping:pph"); } catch {}
       } catch (e) {
-        // Non blocchiamo la UI; mostriamo info in console
         console.error("[/clients] unlock failed:", e);
       } finally {
         unlockingRef.current = false;
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, ready, unlock, prewarm]);
 
   // 1) Carica una pagina quando: autenticato + chiavi pronte
@@ -199,9 +192,9 @@ export default function ClientsPage(): JSX.Element {
   }
 
   useEffect(() => {
-    if (!authChecked) return;          // aspetta check auth
-    if (!userId) return;               // non autenticato
-    if (!ready || !crypto) return;     // aspetta chiavi
+    if (!authChecked) return;      // aspetta auth
+    if (!userId) return;           // non autenticato
+    if (!ready || !crypto) return; // aspetta chiavi
     loadPage(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready, crypto, page]);
@@ -246,10 +239,11 @@ export default function ClientsPage(): JSX.Element {
     }
   }
 
-  // UI di stato chiara (non blocca)
+  // ---- UI di stato ----
   if (!authChecked) {
     return <div className="p-6 text-gray-600">Verifico sessione…</div>;
   }
+
   if (!userId) {
     return (
       <div className="p-6">
@@ -257,7 +251,10 @@ export default function ClientsPage(): JSX.Element {
         <p className="text-sm text-gray-600">
           Effettua di nuovo l’accesso per vedere i tuoi clienti.
         </p>
-        <button className="px-3 py-2 rounded border mt-3" onClick={() => (window.location.href = "/login")}>
+        <button
+          className="px-3 py-2 rounded border mt-3"
+          onClick={() => { window.location.href = "/login"; }}
+        >
           Vai al login
         </button>
       </div>
@@ -266,7 +263,7 @@ export default function ClientsPage(): JSX.Element {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
-      {/* Banner diagnostico (rimuovilo quando tutto ok) */}
+      {/* Banner diagnostico (puoi rimuoverlo quando tutto ok) */}
       <div className="text-xs text-gray-500">
         auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
       </div>
@@ -333,7 +330,7 @@ export default function ClientsPage(): JSX.Element {
         <button
           className="px-3 py-2 rounded border"
           disabled={loading || !ready || rows.length < PAGE_SIZE}
-          onClick={() => setPage((p) => p + 1))}
+          onClick={() => setPage((p) => p + 1)}
         >
           Successivi ▶︎
         </button>
@@ -344,6 +341,7 @@ export default function ClientsPage(): JSX.Element {
   );
 }
 
+// ---- Header cell component ----
 function Th(props: {
   label: string;
   k: SortKey;
