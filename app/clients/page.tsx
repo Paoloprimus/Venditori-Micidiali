@@ -1,7 +1,7 @@
 // app/clients/page.tsx
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
@@ -39,6 +39,38 @@ export default function ClientsPage(): JSX.Element {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
 
   const [q, setQ] = useState<string>("");
+
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockTried, setUnlockTried] = useState(false);
+  const [unlockError, setUnlockError] = useState<string | null>(null);
+
+  // ---- Prova sblocco automatico (se il provider lo supporta) ----
+  const tryAutoUnlock = useCallback(async () => {
+    if (!crypto || ready) return;
+    if (unlocking) return;
+    setUnlockError(null);
+    setUnlocking(true);
+    try {
+      // molte implementazioni espongono autoUnlock(); la chiamiamo in modo "safe"
+      const fn = (crypto as any).autoUnlock as (() => Promise<void>) | undefined;
+      if (fn) {
+        await fn();
+      }
+      // se non esiste, non falliamo: resterà la schermata con il bottone / link Home
+    } catch (e: any) {
+      setUnlockError(e?.message || "Impossibile sbloccare automaticamente.");
+    } finally {
+      setUnlocking(false);
+      setUnlockTried(true);
+    }
+  }, [crypto, ready, unlocking]);
+
+  useEffect(() => {
+    // al primo mount proviamo una volta sola
+    if (!ready && crypto && !unlockTried) {
+      void tryAutoUnlock();
+    }
+  }, [ready, crypto, unlockTried, tryAutoUnlock]);
 
   // ---- Data loader (paginato) ----
   async function loadPage(p: number): Promise<void> {
@@ -179,9 +211,36 @@ export default function ClientsPage(): JSX.Element {
     }
   }
 
-  // ---- Guard iniziale ----
+  // ---- Guard iniziale: sblocco chiavi ----
   if (!ready || !crypto) {
-    return <div className="p-6 text-gray-600">Carico chiavi di cifratura…</div>;
+    return (
+      <div className="p-6 max-w-2xl mx-auto space-y-4">
+        <h1 className="text-xl font-semibold">Carico chiavi di cifratura…</h1>
+        <p className="text-sm text-gray-600">
+          Se resta bloccato, prova a sbloccare ora o torna alla Home (la passphrase si sblocca dopo il login).
+        </p>
+        {unlockError && (
+          <div className="text-sm text-red-600">
+            {unlockError}
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            className="px-3 py-2 rounded border"
+            disabled={unlocking}
+            onClick={() => tryAutoUnlock()}
+          >
+            {unlocking ? "Sblocco…" : "Sblocca ora"}
+          </button>
+          <button
+            className="px-3 py-2 rounded border"
+            onClick={() => { window.location.href = "/"; }}
+          >
+            Vai alla Home
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ---- Render ----
