@@ -307,7 +307,7 @@ export class CryptoService {
 
     const { error: insErr } = await this.sb
       .from("encryption_keys")
-      .insert({ user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv });
+      .insert({ user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint });
     if (insErr) throw insErr;
 
     this.scopeCache[scope] = { DEK, BI };
