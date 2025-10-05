@@ -58,7 +58,13 @@ const CryptoCtx = createContext<Ctx>({
 
 export const useCrypto = () => useContext(CryptoCtx);
 
+// Counter globale per tracciare i montaggi
+let providerMountCount = 0;
+
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
+  providerMountCount++;
+  console.log('🔐 [PROVIDER] CryptoProvider montato - count:', providerMountCount, 'timestamp:', Date.now());
+  
   const [cryptoSvc, setCryptoSvc] = useState<CryptoService | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,7 +167,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     async (passphrase: string, scopes: string[] = []) => {
       setError(null);
 
-      // ✅ GATE: non provare a sbloccare se non c’è utente autenticato
+      // ✅ GATE: non provare a sbloccare se non c'è utente autenticato
       const { data } = await supabase.auth.getUser();
       const uid = data.user?.id;
       if (!uid) {
@@ -219,7 +225,7 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       const { data } = await supabase.auth.getUser();
       const uid = data.user?.id;
       if (!uid) {
-        // se non autenticato ma c’è una pass orfana salvata, puliscila (siamo probabilmente su /login)
+        // se non autenticato ma c'è una pass orfana salvata, puliscila (siamo probabilmente su /login)
         try { sessionStorage.removeItem("repping:pph"); } catch {}
         try { localStorage.removeItem("repping:pph"); } catch {}
         return false;
@@ -262,10 +268,11 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     return svc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cryptoSvc, autoUnlock]);
-  
-/*
-  // Auto-unlock iniziale: SOLO quando abbiamo verificato l’auth
+
+  // Auto-unlock iniziale: SOLO quando abbiamo verificato l'auth
   useEffect(() => {
+    console.log('🔐 [PROVIDER] useEffect auto-unlock - authChecked:', authChecked, 'userId:', userId, 'ready:', ready);
+    
     if (!authChecked) return;
     if (triedAuto.current) return;
     triedAuto.current = true;
@@ -274,14 +281,13 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       if (ready) return;
       // tenta solo se autenticato
       if (!userId) return;
-      // 👇 AGGIUNTO: Log auto-unlock
-      console.log('🔐 Auto-unlock per user:', userId);
-      await autoUnlock(undefined, DEFAULT_SCOPES);
+      
+      console.log('🔐 [PROVIDER] Auto-unlock DISABILITATO - non eseguo');
+      // await autoUnlock(undefined, DEFAULT_SCOPES); // 👈 COMMENTATO
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready]);
-  */
-  
+
   // 👇 AGGIUNGI QUESTO EFFECT PER DEBUG
   useEffect(() => {
     if (typeof window !== 'undefined') {
