@@ -262,7 +262,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     return svc;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cryptoSvc, autoUnlock]);
-
+  
+/*
   // Auto-unlock iniziale: SOLO quando abbiamo verificato l’auth
   useEffect(() => {
     if (!authChecked) return;
@@ -279,7 +280,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready]);
-
+  */
+  
   // 👇 AGGIUNGI QUESTO EFFECT PER DEBUG
   useEffect(() => {
     if (typeof window !== 'undefined') {
