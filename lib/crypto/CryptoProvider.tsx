@@ -298,3 +298,13 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     </CryptoCtx.Provider>
   );
 }
+
+// 👇 AGGIUNGI QUESTE RIGHE QUI - DOPO la chiusura del componente
+// 👇 AGGIUNGI QUESTA LINEA TEMPORANEA PER DEBUG
+if (typeof window !== 'undefined') {
+  (window as any).getCryptoContext = () => {
+    const context = useContext(CryptoCtx);
+    return context;
+  };
+  console.log('🔐 CryptoContext esposto globalmente come window.getCryptoContext()');
+}
