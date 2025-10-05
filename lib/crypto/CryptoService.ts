@@ -210,9 +210,11 @@ export class CryptoService {
     }
 
     // Primo sblocco: genera MK e salva wrappata
+    console.log('🔐 [DEBUG] Generazione nuova MK per user:', userId);
     const MK = crypto.getRandomValues(new Uint8Array(32));
     const { wrapped, nonce } = await wrapKey(MK, KEK);
 
+    console.log('🔐 [DEBUG] Tentativo salvataggio MK nel database...');
     const { error: upErr } = await this.sb
       .from("profiles")
       .update({
@@ -222,8 +224,15 @@ export class CryptoService {
         kdf_params: kdfParams,
       })
       .eq("id", userId);
-    if (upErr) throw upErr;
 
+    console.log('🔐 [DEBUG] Risultato UPDATE MK:', { error: upErr, hasError: !!upErr });
+
+    if (upErr) {
+      console.error('🔐 [DEBUG] ERRORE durante salvataggio MK:', upErr);
+      throw upErr;
+    }
+
+    console.log('🔐 [DEBUG] MK salvata con successo, impostando stato interno...');
     this.MK = MK;
     this.kekSalt = salt;
     this.kdfParams = kdfParams;
@@ -237,7 +246,7 @@ export class CryptoService {
 
     const user_id = await this.getUserId();
 
-    // ✅ CERCA SOLO LE CHIAVI DELL’UTENTE CORRENTE
+    // ✅ CERCA SOLO LE CHIAVI DELL'UTENTE CORRENTE
     const { data: row, error } = await this.sb
       .from("encryption_keys")
       .select("id, user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, created_at")
