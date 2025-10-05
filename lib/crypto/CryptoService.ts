@@ -238,14 +238,11 @@ export class CryptoService {
       }
     }
 
-    // 👇 DISABILITATO: Generazione nuova MK
-    console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK - DISABILITATO');
+    // 👇 Generazione nuova MK
+    console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK');
     const MK = crypto.getRandomValues(new Uint8Array(32));
-
-    // CODICE COMMENTATO:
-     const MK = crypto.getRandomValues(new Uint8Array(32));
-     console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
-
+    console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
+    
      const { wrapped, nonce } = await wrapKey(MK, KEK);
      console.log('🔐 [DEBUG] MK wrappata, tentativo salvataggio nel database...');
 
