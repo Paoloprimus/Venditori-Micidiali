@@ -59,6 +59,9 @@ const CryptoCtx = createContext<Ctx>({
 export const useCrypto = () => useContext(CryptoCtx);
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
+  // 👇 AGGIUNTO: Log quando il componente si monta
+  console.log('🔐 CryptoProvider montato - authChecked:', authChecked, 'userId:', userId, 'ready:', ready);
+  
   const [cryptoSvc, setCryptoSvc] = useState<CryptoService | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -168,6 +171,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
       const svc = ensureSvc();
       try {
+        // 👇 AGGIUNTO: Log prima dell'unlock
+        console.log('🔐 Tentativo unlock per user:', uid);
         const ret = await (svc as any).unlockWithPassphrase(passphrase);
         const ok = normalizeOk(ret);
         if (!ok) throw new Error("unlockWithPassphrase did not succeed");
@@ -177,8 +182,12 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
         if (scopes.length) await prewarm(scopes);
         setReady(true);
+        // 👇 AGGIUNTO: Log successo unlock
+        console.log('✅ Unlock riuscito, ready=true');
       } catch (e: any) {
         const msg = String(e?.message || e || "");
+        // 👇 AGGIUNTO: Log errore unlock
+        console.error('❌ Errore unlock:', msg);
         // OperationError → keyring incoerente: prova reset DEV
         if (/OperationError/i.test(msg)) {
           const resetOk = await tryServerResetKeyring();
@@ -264,6 +273,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       if (ready) return;
       // tenta solo se autenticato
       if (!userId) return;
+      // 👇 AGGIUNTO: Log auto-unlock
+      console.log('🔐 Auto-unlock per user:', userId);
       await autoUnlock(undefined, DEFAULT_SCOPES);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
