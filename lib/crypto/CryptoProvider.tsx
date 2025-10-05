@@ -280,31 +280,34 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready]);
 
-  return (
-    <CryptoCtx.Provider
-      value={{
-        ready,
-        crypto: cryptoExposed,
-        unlock,
-        autoUnlock,
-        prewarm,
-        forceReady,
-        error,
-        userId,
-        authChecked,
-      }}
-    >
-      {children}
-    </CryptoCtx.Provider>
-  );
-}
-
-// 👇 AGGIUNGI QUESTE RIGHE QUI - DOPO la chiusura del componente
-// 👇 AGGIUNGI QUESTA LINEA TEMPORANEA PER DEBUG
-if (typeof window !== 'undefined') {
-  (window as any).getCryptoContext = () => {
-    const context = useContext(CryptoCtx);
-    return context;
-  };
-  console.log('🔐 CryptoContext esposto globalmente come window.getCryptoContext()');
-}
+// 👇 AGGIUNGI QUESTO EFFECT PER DEBUG
+useEffect(() => {
+  if (typeof window !== 'undefined') {
+    (window as any).debugCrypto = {
+      unlock: (passphrase: string) => unlock(passphrase),
+      ready,
+      userId,
+      authChecked,
+      error
+    };
+    console.log('🔐 Crypto debug esposto come window.debugCrypto');
+  }
+}, [unlock, ready, userId, authChecked, error]);
+  
+return (
+  <CryptoCtx.Provider
+    value={{
+      ready,
+      crypto: cryptoExposed,
+      unlock,
+      autoUnlock,
+      prewarm,
+      forceReady,
+      error,
+      userId,
+      authChecked,
+    }}
+  >
+    {children}
+  </CryptoCtx.Provider>
+);
