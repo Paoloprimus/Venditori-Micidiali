@@ -1,24 +1,27 @@
-"use client"; // 👈 AGGIUNGI QUESTA LINEA IN ALTO
-
+// app/layout.tsx - MODIFICA TEMPORANEA
 import "./globals.css";
 import type { Metadata } from "next";
-import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
-import CryptoShell from "@/components/CryptoShell";
-import { SupabaseProvider } from "@/lib/supabase/SupabaseProvider";
+// import { CryptoProvider } from "@/lib/crypto/CryptoProvider"; // 👈 COMMENTA
+// import CryptoShell from "@/components/CryptoShell"; // 👈 COMMENTA
 
-// Rimuovi metadata export se usi "use client"
+export const metadata: Metadata = {
+  title: "REPPING",
+  description: "REPPING",
+};
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
       <body>
-        <SupabaseProvider>
-          <CryptoProvider>
-            <CryptoShell>
-              <main>{children}</main>
-            </CryptoShell>
-          </CryptoProvider>
-        </SupabaseProvider>
+        {/* COMMENTA TUTTO IL CRYPTO */}
+        {/* <CryptoProvider>
+          <CryptoShell>
+            <main>{children}</main>
+          </CryptoShell>
+        </CryptoProvider> */}
+        
+        {/* SOLO IL CONTENUTO BASE */}
+        <main>{children}</main>
       </body>
     </html>
   );
