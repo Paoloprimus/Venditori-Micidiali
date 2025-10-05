@@ -240,7 +240,7 @@ export class CryptoService {
 
     // 👇 DISABILITATO: Generazione nuova MK
     console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK - DISABILITATO');
-    throw new Error("Generazione MK disabilitata per debug - la MK dovrebbe essere NULL ma non lo è");
+    const MK = crypto.getRandomValues(new Uint8Array(32));
 
     // CODICE COMMENTATO:
      const MK = crypto.getRandomValues(new Uint8Array(32));
