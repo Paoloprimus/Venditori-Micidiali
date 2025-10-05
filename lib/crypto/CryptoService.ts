@@ -243,36 +243,35 @@ export class CryptoService {
     throw new Error("Generazione MK disabilitata per debug - la MK dovrebbe essere NULL ma non lo è");
 
     // CODICE COMMENTATO:
-    // const MK = crypto.getRandomValues(new Uint8Array(32));
-    // console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
+     const MK = crypto.getRandomValues(new Uint8Array(32));
+     console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
 
-    // const { wrapped, nonce } = await wrapKey(MK, KEK);
-    // console.log('🔐 [DEBUG] MK wrappata, tentativo salvataggio nel database...');
+     const { wrapped, nonce } = await wrapKey(MK, KEK);
+     console.log('🔐 [DEBUG] MK wrappata, tentativo salvataggio nel database...');
 
-    // const { error: upErr } = await this.sb
-    //   .from("profiles")
-    //   .update({
-    //     wrapped_master_key: wrapped,
-    //     wrapped_master_key_iv: nonce,
-    //     kdf_salt: toBase64(salt),
-    //     kdf_params: kdfParams,
-    //   })
-    //   .eq("id", userId);
+     const { error: upErr } = await this.sb
+       .from("profiles")
+       .update({
+         wrapped_master_key: wrapped,
+         wrapped_master_key_iv: nonce,
+         kdf_salt: toBase64(salt),
+         kdf_params: kdfParams,
+       })
+       .eq("id", userId);
+       console.log('🔐 [DEBUG] Risultato UPDATE MK:', { error: upErr, hasError: !!upErr });
 
-    // console.log('🔐 [DEBUG] Risultato UPDATE MK:', { error: upErr, hasError: !!upErr });
+     if (upErr) {
+       console.error('🔐 [DEBUG] ERRORE durante salvataggio MK:', upErr);
+       console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (ERRORE) ===');
+       throw upErr;
+     }
 
-    // if (upErr) {
-    //   console.error('🔐 [DEBUG] ERRORE durante salvataggio MK:', upErr);
-    //   console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (ERRORE) ===');
-    //   throw upErr;
-    // }
-
-    // console.log('🔐 [DEBUG] MK salvata con successo, impostando stato interno...');
-    // this.MK = MK;
-    // this.kekSalt = salt;
-    // this.kdfParams = kdfParams;
-    // this.wrappedMkNonce = nonce;
-    // console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
+     console.log('🔐 [DEBUG] MK salvata con successo, impostando stato interno...');
+     this.MK = MK;
+     this.kekSalt = salt;
+     this.kdfParams = kdfParams;
+     this.wrappedMkNonce = nonce;
+     console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
   }
 
   /** 2) Chiavi per scope (DEK/BI) — **per-utente** */
