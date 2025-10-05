@@ -305,6 +305,10 @@ export class CryptoService {
     const { wrapped: dek_wrapped, nonce: dek_wrapped_iv } = await wrapKey(DEK, this.MK);
     const { wrapped: bi_wrapped,  nonce: bi_wrapped_iv  } = await wrapKey(BI,  this.MK);
 
+// Calcola un fingerprint dalla MK
+const mkHash = await crypto.subtle.digest('SHA-256', this.MK!);
+const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
+    
     const { error: insErr } = await this.sb
       .from("encryption_keys")
       .insert({ user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint });
