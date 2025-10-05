@@ -59,9 +59,6 @@ const CryptoCtx = createContext<Ctx>({
 export const useCrypto = () => useContext(CryptoCtx);
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
-  // 👇 AGGIUNTO: Log quando il componente si monta
-  console.log('🔐 CryptoProvider montato - authChecked:', authChecked, 'userId:', userId, 'ready:', ready);
-  
   const [cryptoSvc, setCryptoSvc] = useState<CryptoService | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -72,6 +69,9 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   const triedAuto = useRef(false);
   const unlocking = useRef(false);
+
+  // 👇 AGGIUNTO: Log quando il componente si monta (DOPO le dichiarazioni)
+  console.log('🔐 CryptoProvider montato - authChecked:', authChecked, 'userId:', userId, 'ready:', ready);
 
   // ---- AUTH GATE ----
   useEffect(() => {
