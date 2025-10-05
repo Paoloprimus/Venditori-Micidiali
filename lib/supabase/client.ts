@@ -1,4 +1,3 @@
-// lib/supabase/client.ts
 "use client";
 
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
@@ -6,7 +5,6 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-// Singleton browser client con sessione persistente
 let _supabase: SupabaseClient | null = null;
 
 export function getSupabaseBrowser(): SupabaseClient {
@@ -14,9 +12,9 @@ export function getSupabaseBrowser(): SupabaseClient {
 
   _supabase = createClient(supabaseUrl, supabaseAnon, {
     auth: {
-      persistSession: true,         // ✅ conserva la sessione (localStorage)
-      autoRefreshToken: true,       // ✅ refresh automatico
-      detectSessionInUrl: true,     // ✅ supporta redirect OAuth (se servisse)
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: true,
       flowType: "pkce",
     },
     global: {
@@ -24,8 +22,15 @@ export function getSupabaseBrowser(): SupabaseClient {
     },
   });
 
+  // 👇 AGGIUNGI QUESTA LINEA TEMPORANEA
+  console.log('🔐 Supabase client creato con URL:', supabaseUrl);
+  
+  // 👇 ESPORTA SU WINDOW PER DEBUG
+  if (typeof window !== 'undefined') {
+    (window as any).debugSupabase = _supabase;
+  }
+
   return _supabase;
 }
 
-// Export “compatibile” con i vecchi import
 export const supabase = getSupabaseBrowser();
