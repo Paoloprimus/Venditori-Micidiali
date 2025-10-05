@@ -185,36 +185,66 @@ export class CryptoService {
 
   /** 1) Sblocco con passphrase */
   public async unlockWithPassphrase(passphrase: string): Promise<void> {
+    console.log('🔐 [DEBUG] === INIZIO unlockWithPassphrase ===');
+    
     const userId = await this.getUserId();
+    console.log('🔐 [DEBUG] UserID:', userId);
+    
     const { data: prof, error } = await this.sb
       .from("profiles")
       .select("wrapped_master_key, wrapped_master_key_iv, kdf_salt, kdf_params")
       .eq("id", userId)
       .single();
-    if (error) throw new Error("Profilo non trovato o accesso negato");
-
-    const p = prof as unknown as ProfileRow;
-    const kdfParams: KdfParams = p.kdf_params ?? { algo: "pbkdf2", iterations: 310_000, hash: "SHA-256" };
-    const salt: Uint8Array = p.kdf_salt ? fromBase64Safe(p.kdf_salt) : crypto.getRandomValues(new Uint8Array(16));
-    const KEK = await deriveKEK(passphrase, salt, kdfParams);
-
-    if (p.wrapped_master_key) {
-      const ivB64 = p.wrapped_master_key_iv;
-      if (!ivB64) throw new Error("Manca 'wrapped_master_key_iv' in profiles");
-      // può lanciare OperationError se la passphrase non corrisponde a questa MK
-      this.MK = await unwrapKey(p.wrapped_master_key, ivB64, KEK);
-      this.kekSalt = salt;
-      this.kdfParams = kdfParams;
-      this.wrappedMkNonce = ivB64;
-      return;
+    
+    if (error) {
+      console.error('🔐 [DEBUG] ERRORE query profilo:', error);
+      throw new Error("Profilo non trovato o accesso negato");
     }
 
-    // Primo sblocco: genera MK e salva wrappata
-    console.log('🔐 [DEBUG] Generazione nuova MK per user:', userId);
-    const MK = crypto.getRandomValues(new Uint8Array(32));
-    const { wrapped, nonce } = await wrapKey(MK, KEK);
+    const p = prof as unknown as ProfileRow;
+    console.log('🔐 [DEBUG] Stato profilo dal DB:', {
+      has_mk: p.wrapped_master_key !== null,
+      has_iv: p.wrapped_master_key_iv !== null,
+      has_salt: p.kdf_salt !== null,
+      kdf_params: p.kdf_params
+    });
 
-    console.log('🔐 [DEBUG] Tentativo salvataggio MK nel database...');
+    const kdfParams: KdfParams = p.kdf_params ?? { algo: "pbkdf2", iterations: 310_000, hash: "SHA-256" };
+    const salt: Uint8Array = p.kdf_salt ? fromBase64Safe(p.kdf_salt) : crypto.getRandomValues(new Uint8Array(16));
+    console.log('🔐 [DEBUG] KDF params:', kdfParams);
+    console.log('🔐 [DEBUG] Salt:', salt.length, 'bytes');
+
+    const KEK = await deriveKEK(passphrase, salt, kdfParams);
+    console.log('🔐 [DEBUG] KEK derivata:', KEK.length, 'bytes');
+
+    if (p.wrapped_master_key) {
+      console.log('🔐 [DEBUG] Entrando in branch UNWRAP MK esistente');
+      const ivB64 = p.wrapped_master_key_iv;
+      if (!ivB64) throw new Error("Manca 'wrapped_master_key_iv' in profiles");
+      
+      console.log('🔐 [DEBUG] Tentativo unwrap MK...');
+      try {
+        this.MK = await unwrapKey(p.wrapped_master_key, ivB64, KEK);
+        console.log('🔐 [DEBUG] UNWRAP SUCCESSO! MK:', this.MK?.length, 'bytes');
+        this.kekSalt = salt;
+        this.kdfParams = kdfParams;
+        this.wrappedMkNonce = ivB64;
+        console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
+        return;
+      } catch (unwrapError) {
+        console.error('🔐 [DEBUG] ERRORE durante unwrap:', unwrapError);
+        console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (ERRORE) ===');
+        throw unwrapError;
+      }
+    }
+
+    console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK');
+    const MK = crypto.getRandomValues(new Uint8Array(32));
+    console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
+
+    const { wrapped, nonce } = await wrapKey(MK, KEK);
+    console.log('🔐 [DEBUG] MK wrappata, tentativo salvataggio nel database...');
+
     const { error: upErr } = await this.sb
       .from("profiles")
       .update({
@@ -229,6 +259,7 @@ export class CryptoService {
 
     if (upErr) {
       console.error('🔐 [DEBUG] ERRORE durante salvataggio MK:', upErr);
+      console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (ERRORE) ===');
       throw upErr;
     }
 
@@ -237,6 +268,7 @@ export class CryptoService {
     this.kekSalt = salt;
     this.kdfParams = kdfParams;
     this.wrappedMkNonce = nonce;
+    console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
   }
 
   /** 2) Chiavi per scope (DEK/BI) — **per-utente** */
