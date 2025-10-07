@@ -238,7 +238,15 @@ export class CryptoService {
       }
     }
 
-    // 👇 Generazione nuova MK
+
+  console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK - DISABILITATA');
+  // NON generare MK, lascia tutti i campi NULL
+  this.MK = new Uint8Array(32); // MK vuota per testing
+  console.log('🔐 [DEBUG] MK impostata come vuota per testing');
+  console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO FORZATO) ===');
+  return;
+    
+    /* // 👇 Generazione nuova MK
     console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK');
     const MK = crypto.getRandomValues(new Uint8Array(32));
     console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
@@ -269,7 +277,7 @@ export class CryptoService {
      this.kdfParams = kdfParams;
      this.wrappedMkNonce = nonce;
      console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
-  }
+  } */
 
   /** 2) Chiavi per scope (DEK/BI) — **per-utente** */
   public async getOrCreateScopeKeys(scope: string): Promise<void> {
