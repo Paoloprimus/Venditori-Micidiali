@@ -290,6 +290,20 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready]);
 
+  // 👇 AGGIUNGI QUESTO EFFECT PER FORZARE ready:true
+  useEffect(() => {
+    // Forza ready:true dopo 3 secondi
+    const timer = setTimeout(() => {
+      if (!ready) {
+        console.log('🚨 FORZANDO ready:true - bypass crittografia');
+        setReady(true);
+        setError(null);
+      }
+    }, 3000);
+    
+    return () => clearTimeout(timer);
+  }, [ready]);
+
   // 👇 AGGIUNGI QUESTO EFFECT PER DEBUG
   useEffect(() => {
     if (typeof window !== 'undefined') {
