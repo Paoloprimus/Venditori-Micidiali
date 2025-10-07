@@ -276,8 +276,8 @@ export class CryptoService {
      this.kekSalt = salt;
      this.kdfParams = kdfParams;
      this.wrappedMkNonce = nonce;
-     console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
-  } */
+     console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ==='); */
+  } 
 
   /** 2) Chiavi per scope (DEK/BI) — **per-utente** */
   public async getOrCreateScopeKeys(scope: string): Promise<void> {
