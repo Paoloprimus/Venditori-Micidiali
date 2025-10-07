@@ -284,25 +284,11 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       // tenta solo se autenticato
       if (!userId) return;
       
-      console.log('🔐 [PROVIDER] Auto-unlock DISABILITATO - non eseguo');
-      // await autoUnlock(undefined, DEFAULT_SCOPES); // 👈 COMMENTATO
+      console.log('🔐 [PROVIDER] Auto-unlock per user:', userId);
+      await autoUnlock(undefined, DEFAULT_SCOPES);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready]);
-
-  // 👇 AGGIUNGI QUESTO EFFECT PER FORZARE ready:true
-  useEffect(() => {
-    // Forza ready:true dopo 3 secondi
-    const timer = setTimeout(() => {
-      if (!ready) {
-        console.log('🚨 FORZANDO ready:true - bypass crittografia');
-        setReady(true);
-        setError(null);
-      }
-    }, 3000);
-    
-    return () => clearTimeout(timer);
-  }, [ready]);
 
   // 👇 AGGIUNGI QUESTO EFFECT PER DEBUG
   useEffect(() => {
