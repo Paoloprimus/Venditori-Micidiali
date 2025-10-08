@@ -89,3 +89,95 @@ export default function Login() {
           refresh_token: sess.session.refresh_token,
         }),
         credentials: "same-origin",
+      });
+
+      // redirect “hard” alla home (fa ripartire l'auto-unlock)
+      window.location.replace("/");
+
+    } catch (err: any) {
+      // Se vedi 401 qui, quasi sempre è per sessione assente + RLS
+      setMsg(err?.message ?? "Errore.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return (
+    <div className="container" style={{ maxWidth: 440, paddingTop: 64 }}>
+      <h1 className="title">{mode === "signin" ? "Accedi" : "Registrati"}</h1>
+      <p className="helper">Versione Beta 1.0 - Per Utenti Tester - Su Invito</p>
+
+      <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        {mode === "signup" && (
+          <>
+            <input
+              name="firstName" id="firstName" autoComplete="given-name"
+              type="text"
+              placeholder="Nome"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+            <input
+              name="lastName" id="lastName" autoComplete="family-name"
+              type="text"
+              placeholder="Cognome"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+          </>
+        )}
+
+        <input
+          name="email" id="email" autoComplete="username"
+          type="email"
+          placeholder="la-tua-email@esempio.it"
+          value={email}
+          onChange={e => setEmail(e.target.value)}
+          required
+          style={{
+            padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+            background: "#0B1220", color: "#C9D1E7"
+          }}
+        />
+        <input
+          name="password" id="password"
+          autoComplete={mode === "signup" ? "new-password" : "current-password"}
+          type="password"
+          placeholder="password (min 6)"
+          value={password}
+          onChange={e => setPassword(e.target.value)}
+          required
+          style={{
+            padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+            background: "#0B1220", color: "#C9D1E7"
+          }}
+        />
+
+        <button className="btn" type="submit" disabled={loading}>
+          {loading ? "Attendere…" : mode === "signin" ? "Accedi" : "Registrati"}
+        </button>
+
+        <button
+          type="button"
+          className="iconbtn"
+          onClick={() => setMode(m => m === "signin" ? "signup" : "signin")}
+          disabled={loading}
+        >
+          {mode === "signin" ? "Passa a Registrazione" : "Hai già un account? Accedi"}
+        </button>
+
+        {msg && <p style={{ color: "#F59E0B" }}>{msg}</p>}
+      </form>
+    </div>
+  );
+}
