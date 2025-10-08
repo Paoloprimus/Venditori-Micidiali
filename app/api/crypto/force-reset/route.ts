@@ -3,12 +3,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
+const VERSION = "mk-reset-v2";
 
-/**
- * Abilita il reset SOLO se la variabile server-side è impostata.
- * Su Vercel imposta:  CRYPTO_DEV_AUTO_RESET=1   (Development/Preview)
- * NON usare NEXT_PUBLIC_ qui: quelle sono client-side.
- */
 function resetEnabled() {
   return process.env.CRYPTO_DEV_AUTO_RESET === "1";
 }
@@ -16,38 +12,67 @@ function resetEnabled() {
 export async function POST(req: NextRequest) {
   try {
     if (!resetEnabled()) {
-      return NextResponse.json({ error: "FORBIDDEN" }, { status: 403 });
+      return NextResponse.json({ error: "FORBIDDEN", version: VERSION }, { status: 403 });
     }
 
     const { userId } = await req.json().catch(() => ({} as any));
     if (!userId) {
-      return NextResponse.json({ error: "userId mancante" }, { status: 400 });
+      return NextResponse.json({ error: "userId mancante", version: VERSION }, { status: 400 });
     }
 
     const supabase = getSupabaseAdmin();
 
-    // Cancella le chiavi dell'utente (adatta il nome tabella se diverso)
-    const delKeys = await supabase.from("encryption_keys").delete().eq("user_id", userId);
+    // 1) Cancella eventuali chiavi per quello user (DEK/BI per gli scope)
+    const delKeys = await supabase
+      .from("encryption_keys")
+      .delete()
+      .eq("user_id", userId)
+      .select("*"); // per ottenere un count reale
+
     if (delKeys.error) {
       return NextResponse.json(
-        { error: "delete_failed", details: delKeys.error.message },
+        { error: "delete_failed", details: delKeys.error.message, version: VERSION },
         { status: 500 }
       );
     }
 
-    // Se hai altre tabelle keyring, aggiungi qui ulteriori delete…
+    // 2) Azzera i campi della Master Key nel profilo (MK + KDF)
+    const upd = await supabase
+      .from("profiles")
+      .update({
+        wrapped_master_key: null,
+        wrapped_master_key_iv: null,
+        kdf_salt: null,
+        kdf_params: null,
+      })
+      .eq("id", userId);
 
-    return NextResponse.json({ ok: true, removed: delKeys.count ?? null });
+    if (upd.error) {
+      return NextResponse.json(
+        { error: "profile_reset_failed", details: upd.error.message, version: VERSION },
+        { status: 500 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      removed: Array.isArray(delKeys.data) ? delKeys.data.length : null,
+      profile_reset: true,
+      version: VERSION,
+    });
   } catch (e: any) {
-    return NextResponse.json({ error: e?.message || "Errore interno" }, { status: 500 });
+    return NextResponse.json({
+      error: e?.message || "Errore interno",
+      version: VERSION,
+    }, { status: 500 });
   }
 }
 
 export async function GET() {
-  // Utile per check rapido da browser
   return NextResponse.json({
     ok: true,
     enabled: resetEnabled(),
     env: process.env.NODE_ENV || "unknown",
+    version: VERSION,
   });
 }
