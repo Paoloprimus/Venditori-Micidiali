@@ -10,7 +10,7 @@ const SCOPE = "table:accounts";
 const TABLE = "accounts";
 
 export default function CryptoTestPage() {
-  const { ready, unlock, crypto: cryptoSvc, error } = useCrypto();
+  const { ready, unlock, crypto: cryptoSvc } = useCrypto();
 
   // form
   const [pw, setPw] = useState("");
@@ -27,7 +27,7 @@ export default function CryptoTestPage() {
     (async () => {
       if (!ready || !cryptoSvc) return;
       try {
-      await cryptoSvc.ensureScope(SCOPE);
+        await cryptoSvc.ensureScope(SCOPE);
         pushLog("Chiavi scope pronte");
       } catch (e: any) {
         pushLog("Errore scope keys: " + (e?.message ?? e));
@@ -37,7 +37,9 @@ export default function CryptoTestPage() {
 
   async function handleUnlock() {
     try {
-      await unlock(pw, [SCOPE]); // sblocca e pre-warm dello scope
+      await unlock(pw); // sblocca
+      // opzionale ma utile: prepara subito lo scope
+      await cryptoSvc?.ensureScope(SCOPE);
       setPw("");
       pushLog("Cifratura sbloccata");
     } catch (e: any) {
@@ -56,7 +58,7 @@ export default function CryptoTestPage() {
         `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
       // 1) Cifra i campi sensibili (convenzione *_enc / *_iv già presente in tabella)
-      const enc = await cryptoSvc.encryptFields(SCOPE, TABLE, id, {
+      const enc = await cryptoSvc.encryptRecord(SCOPE, TABLE, id, {
         name,
         email,
         phone: phone || undefined,
@@ -113,7 +115,7 @@ export default function CryptoTestPage() {
       if (!sel.data) return pushLog("Nessun account trovato per quell'email");
 
       const recordId = sel.data.id ?? "";
-      const dec = await cryptoSvc.decryptFields(SCOPE, TABLE, recordId, sel.data, [
+      const dec = await cryptoSvc.decryptRecord(SCOPE, TABLE, recordId, sel.data, [
         "name",
         "email",
         "phone",
@@ -145,7 +147,6 @@ export default function CryptoTestPage() {
           <button className="bg-blue-600 text-white rounded px-3 py-2" onClick={handleUnlock}>
             Sblocca
           </button>
-          {error && <div className="text-red-600 text-sm">{error}</div>}
         </div>
       )}
 
