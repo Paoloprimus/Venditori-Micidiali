@@ -13,6 +13,12 @@ import React, {
 import { supabase } from "@/lib/supabase/client";
 import { CryptoService } from "@/lib/crypto/CryptoService";
 
+// --- GUARD GLOBALI PER EVITARE AUTO-UNLOCK MULTIPLI IN PARALLELO ---
+const G: any = typeof window !== "undefined" ? (window as any) : (globalThis as any);
+if (G.__crypto_unlocking === undefined) G.__crypto_unlocking = false;
+if (G.__crypto_autounlock_done === undefined) G.__crypto_autounlock_done = false;
+
+
 type ExposedCrypto = CryptoService & {
   autoUnlock?: (pass?: string, scopes?: string[]) => Promise<boolean>;
 };
@@ -221,51 +227,50 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
     [ensureSvc, prewarm]
   );
 
-  const autoUnlock = useCallback(
-    async (passphrase?: string, scopes: string[] = DEFAULT_SCOPES) => {
-      if (unlocking.current) return false;
+const autoUnlock = useCallback(
+  async (passphrase?: string, scopes: string[] = DEFAULT_SCOPES) => {
+    // evita corse tra più provider/effetti
+    if (G.__crypto_autounlock_done || G.__crypto_unlocking) return false;
 
-      // ✅ GATE: tenta solo se autenticato
-      const { data } = await supabase.auth.getUser();
-      const uid = data.user?.id;
-      if (!uid) {
-        // se non autenticato ma c'è una pass orfana salvata, puliscila (siamo probabilmente su /login)
-        try {
-          sessionStorage.removeItem("repping:pph");
-        } catch {}
-        try {
-          localStorage.removeItem("repping:pph");
-        } catch {}
-        return false;
-      }
+    // ✅ tenta solo se autenticato
+    const { data } = await supabase.auth.getUser();
+    const uid = data.user?.id;
+    if (!uid) {
+      try { sessionStorage.removeItem("repping:pph"); } catch {}
+      try { localStorage.removeItem("repping:pph"); } catch {}
+      return false;
+    }
 
-      let pass = (passphrase ?? "").trim();
-      if (!pass && typeof window !== "undefined") {
-        pass =
-          sessionStorage.getItem("repping:pph") ||
-          localStorage.getItem("repping:pph") ||
-          "";
-      }
-      if (!pass) return false;
+    let pass = (passphrase ?? "").trim();
+    if (!pass && typeof window !== "undefined") {
+      pass =
+        sessionStorage.getItem("repping:pph") ||
+        localStorage.getItem("repping:pph") ||
+        "";
+    }
+    if (!pass) return false;
 
-      try {
-        unlocking.current = true;
-        await unlock(pass, scopes);
-        try {
-          sessionStorage.removeItem("repping:pph");
-        } catch {}
-        try {
-          localStorage.removeItem("repping:pph");
-        } catch {}
-        return true;
-      } catch {
-        return false;
-      } finally {
-        unlocking.current = false;
-      }
-    },
-    [unlock]
-  );
+    try {
+      G.__crypto_unlocking = true;
+      await unlock(pass, scopes).catch(async (e: any) => {
+        // se fallisce il prewarm per qualche scope, non bloccare tutto
+        if (/OperationError/i.test(String(e?.message || e))) return false;
+        throw e;
+      });
+      // se siamo arrivati qui, consideriamo l’auto-unlock fatto per questa tab
+      G.__crypto_autounlock_done = true;
+      try { sessionStorage.removeItem("repping:pph"); } catch {}
+      try { localStorage.removeItem("repping:pph"); } catch {}
+      return true;
+    } catch {
+      return false;
+    } finally {
+      G.__crypto_unlocking = false;
+    }
+  },
+  [unlock]
+);
+
 
   const forceReady = useCallback(() => {
     if (CLIENT_FORCE_READY) {
