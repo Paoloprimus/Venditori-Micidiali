@@ -98,7 +98,7 @@ export default function ClientsPage(): JSX.Element {
       try {
         unlockingRef.current = true;
         setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-        await unlock(pass, DEFAULT_SCOPES);
+        await unlock(pass);
         await prewarm(DEFAULT_SCOPES);
         try { sessionStorage.removeItem("repping:pph"); } catch {}
         try { localStorage.removeItem("repping:pph"); } catch {}
