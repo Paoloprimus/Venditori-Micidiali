@@ -65,8 +65,8 @@ let providerMountCount = 0;
 
 export function CryptoProvider({ children }: { children: React.ReactNode }) {
   providerMountCount++;
-  console.log('🔐 [PROVIDER] CryptoProvider montato - count:', providerMountCount, 'timestamp:', Date.now());
-  
+  console.log("🔐 [PROVIDER] CryptoProvider montato - count:", providerMountCount, "timestamp:", Date.now());
+
   const [cryptoSvc, setCryptoSvc] = useState<CryptoService | null>(null);
   const [ready, setReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,8 +78,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
   const triedAuto = useRef(false);
   const unlocking = useRef(false);
 
-  // 👇 AGGIUNTO: Log quando il componente si monta (DOPO le dichiarazioni)
-  console.log('🔐 CryptoProvider montato - authChecked:', authChecked, 'userId:', userId, 'ready:', ready);
+  // 👇 Log quando il componente si monta (DOPO le dichiarazioni)
+  console.log("🔐 CryptoProvider montato - authChecked:", authChecked, "userId:", userId, "ready:", ready);
 
   // ---- AUTH GATE ----
   useEffect(() => {
@@ -99,8 +99,12 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       setAuthChecked(true);
       // se siamo usciti e rimane una pass orfana in storage, rimuovila
       if (!session) {
-        try { sessionStorage.removeItem("repping:pph"); } catch {}
-        try { localStorage.removeItem("repping:pph"); } catch {}
+        try {
+          sessionStorage.removeItem("repping:pph");
+        } catch {}
+        try {
+          localStorage.removeItem("repping:pph");
+        } catch {}
         setReady(false);
       }
     });
@@ -179,8 +183,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
       const svc = ensureSvc();
       try {
-        // 👇 AGGIUNTO: Log prima dell'unlock
-        console.log('🔐 Tentativo unlock per user:', uid);
+        // 👇 Log prima dell'unlock
+        console.log("🔐 Tentativo unlock per user:", uid);
         const ret = await (svc as any).unlockWithPassphrase(passphrase);
         const ok = normalizeOk(ret);
         if (!ok) throw new Error("unlockWithPassphrase did not succeed");
@@ -190,12 +194,10 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
         if (scopes.length) await prewarm(scopes);
         setReady(true);
-        // 👇 AGGIUNTO: Log successo unlock
-        console.log('✅ Unlock riuscito, ready=true');
+        console.log("✅ Unlock riuscito, ready=true");
       } catch (e: any) {
         const msg = String(e?.message || e || "");
-        // 👇 AGGIUNTO: Log errore unlock
-        console.error('❌ Errore unlock:', msg);
+        console.error("❌ Errore unlock:", msg);
         // OperationError → keyring incoerente: prova reset DEV
         if (/OperationError/i.test(msg)) {
           const resetOk = await tryServerResetKeyring();
@@ -228,8 +230,12 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       const uid = data.user?.id;
       if (!uid) {
         // se non autenticato ma c'è una pass orfana salvata, puliscila (siamo probabilmente su /login)
-        try { sessionStorage.removeItem("repping:pph"); } catch {}
-        try { localStorage.removeItem("repping:pph"); } catch {}
+        try {
+          sessionStorage.removeItem("repping:pph");
+        } catch {}
+        try {
+          localStorage.removeItem("repping:pph");
+        } catch {}
         return false;
       }
 
@@ -245,8 +251,12 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       try {
         unlocking.current = true;
         await unlock(pass, scopes);
-        try { sessionStorage.removeItem("repping:pph"); } catch {}
-        try { localStorage.removeItem("repping:pph"); } catch {}
+        try {
+          sessionStorage.removeItem("repping:pph");
+        } catch {}
+        try {
+          localStorage.removeItem("repping:pph");
+        } catch {}
         return true;
       } catch {
         return false;
@@ -273,8 +283,8 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
 
   // Auto-unlock iniziale: SOLO quando abbiamo verificato l'auth
   useEffect(() => {
-    console.log('🔐 [PROVIDER] useEffect auto-unlock - authChecked:', authChecked, 'userId:', userId, 'ready:', ready);
-    
+    console.log("🔐 [PROVIDER] useEffect auto-unlock - authChecked:", authChecked, "userId:", userId, "ready:", ready);
+
     if (!authChecked) return;
     if (triedAuto.current) return;
     triedAuto.current = true;
@@ -283,26 +293,32 @@ export function CryptoProvider({ children }: { children: React.ReactNode }) {
       if (ready) return;
       // tenta solo se autenticato
       if (!userId) return;
-      
-      console.log('🔐 [PROVIDER] Auto-unlock per user:', userId);
+
+      console.log("🔐 [PROVIDER] Auto-unlock per user:", userId);
       await autoUnlock(undefined, DEFAULT_SCOPES);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [authChecked, userId, ready]);
 
-  // 👇 AGGIUNGI QUESTO EFFECT PER DEBUG
+  // 👇 ESPOSIZIONE DEBUG (aggiunta: svc e ensureScope)
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== "undefined") {
       (window as any).debugCrypto = {
+        // sblocco manuale
         unlock: (passphrase: string) => unlock(passphrase),
+        // servizio interno
+        svc: ensureSvc(),
+        // crea DEK per lo scope (se manca)
+        ensureScope: (scope: string) => ensureSvc().getOrCreateScopeKeys(scope),
+        // stati utili
         ready,
         userId,
         authChecked,
-        error
+        error,
       };
-      console.log('🔐 Crypto debug esposto come window.debugCrypto');
+      console.log("🔐 Crypto debug esposto come window.debugCrypto");
     }
-  }, [unlock, ready, userId, authChecked, error]);
+  }, [unlock, ready, userId, authChecked, error, ensureSvc]);
 
   return (
     <CryptoCtx.Provider
