@@ -27,7 +27,7 @@ export default function CryptoTestPage() {
     (async () => {
       if (!ready || !cryptoSvc) return;
       try {
-        await cryptoSvc.getOrCreateScopeKeys(SCOPE);
+      await cryptoSvc.ensureScope(SCOPE);
         pushLog("Chiavi scope pronte");
       } catch (e: any) {
         pushLog("Errore scope keys: " + (e?.message ?? e));
