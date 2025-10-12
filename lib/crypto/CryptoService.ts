@@ -413,17 +413,6 @@ const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
         return out as unknown as T;
       }
 
-  
-    // Ramo B: firma originale (row + fieldNames[])
-    const fields: string[] = fieldNamesMaybe ?? [];
-    for (const field of fields) {
-      const enc = rowOrMap?.[`${field}_enc`];
-      const iv  = rowOrMap?.[`${field}_iv`];
-      if (!enc || !iv) { out[field] = null; continue; }
-      out[field] = await this.decryptJSON(scope, table, field, recordId ?? "", enc, iv);
-    }
-    return out;
-  }
 
   /** 6) Cambio passphrase */
   public async rewrapMasterKey(newPassphrase: string): Promise<void> {
