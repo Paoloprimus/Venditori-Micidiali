@@ -2,7 +2,7 @@
 
 "use client";
 
-import "@/lib/crypto/debug-runtime"; // ✅ ora il file esiste davvero
+// import "@/lib/crypto/debug-runtime"; // 
 import "./globals.css";
 import Providers from "./providers";
 
