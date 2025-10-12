@@ -11,11 +11,13 @@ export default function UnlockButton() {
     if (!pass) return;
     setBusy(true);
     try {
-      await unlock(pass, [
-        "table:accounts","table:contacts","table:products",
-        "table:profiles","table:notes","table:conversations",
-        "table:messages","table:proposals",
-      ]);
+    await unlock(pass);
+    await prewarm([
+      "table:accounts","table:contacts","table:products",
+      "table:profiles","table:notes","table:conversations",
+      "table:messages","table:proposals",
+    ]);
+
       alert("Chiavi sbloccate ✔");
     } finally {
       setBusy(false);
