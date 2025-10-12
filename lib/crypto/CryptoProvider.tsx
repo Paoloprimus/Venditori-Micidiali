@@ -209,69 +209,84 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     return svc;
   }, [userId]); // ricrea se cambia l’utente
 
-  const unlock = useCallback(
-    async (passphrase: string) => {
-      if (!cryptoService) throw new Error("Crypto non inizializzato");
+const unlock = useCallback(
+  async (passphrase: string) => {
+    // 1️⃣ se il service è pronto, usa quello
+    if (cryptoService) {
       await cryptoService.unlockWithPassphrase(passphrase);
       setReady(true);
-    },
-    [cryptoService]
-  );
+      return;
+    }
 
-  const prewarm = useCallback(
-    async (scopes: string[]) => {
-      if (!cryptoService) return;
-      await cryptoService.prewarm(scopes);
-    },
-    [cryptoService]
-  );
-
-  /** Effetto iniziale: rileva utente e tenta auto-unlock se debug helper lo fa */
-  useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
-
+    // 2️⃣ fallback: usa direttamente window.debugCrypto se disponibile
     const dbg = getDebug();
-
-    // Prova a leggere userId dal debug helper o da prop
-    try {
-      const uid =
-        userIdProp ??
-        (dbg?.getCurrentUserId ? dbg.getCurrentUserId() : dbg?.userId) ??
-        null;
-      if (uid && typeof uid === "string") {
-        setUserId(uid);
-      }
-    } catch {
-      // ignora
+    if (dbg?.unlockWithPassphrase) {
+      console.warn("[CryptoProvider] fallback unlock via window.debugCrypto");
+      await dbg.unlockWithPassphrase(passphrase);
+      setReady(true);
+      return;
     }
 
-    // Se il debug helper segnala già “unlocked”, marchia ready
-    try {
-      if (dbg?.isUnlocked?.() === true) {
-        setReady(true);
-      }
-    } catch {
-      // ignora
+    // 3️⃣ se non c’è nulla, errore
+    throw new Error("Crypto non inizializzato");
+  },
+  [cryptoService]
+);
+
+const prewarm = useCallback(
+  async (scopes: string[]) => {
+    if (!cryptoService) return;
+    await cryptoService.prewarm(scopes);
+  },
+  [cryptoService]
+);
+
+/** Effetto iniziale: rileva utente e tenta auto-unlock se debug helper lo fa */
+useEffect(() => {
+  if (mountedRef.current) return;
+  mountedRef.current = true;
+
+  const dbg = getDebug();
+
+  // Prova a leggere userId dal debug helper o da prop
+  try {
+    const uid =
+      userIdProp ??
+      (dbg?.getCurrentUserId ? dbg.getCurrentUserId() : dbg?.userId) ??
+      null;
+    if (uid && typeof uid === "string") {
+      setUserId(uid);
     }
-  }, [userIdProp]);
+  } catch {
+    // ignora
+  }
 
-  const ctxValue = useMemo<CryptoContextType>(
-    () => ({
-      ready,
-      userId,
-      crypto: cryptoService,
-      unlock,
-      prewarm,
-    }),
-    [ready, userId, cryptoService, unlock, prewarm]
-  );
+  // Se il debug helper segnala già “unlocked”, marchia ready
+  try {
+    if (dbg?.isUnlocked?.() === true) {
+      setReady(true);
+    }
+  } catch {
+    // ignora
+  }
+}, [userIdProp]);
 
-  return (
-    <CryptoContext.Provider value={ctxValue}>
-      {children}
-    </CryptoContext.Provider>
-  );
+const ctxValue = useMemo<CryptoContextType>(
+  () => ({
+    ready,
+    userId,
+    crypto: cryptoService,
+    unlock,
+    prewarm,
+  }),
+  [ready, userId, cryptoService, unlock, prewarm]
+);
+
+return (
+  <CryptoContext.Provider value={ctxValue}>
+    {children}
+  </CryptoContext.Provider>
+);
 }
 
 /** Hook comodo */
