@@ -356,45 +356,63 @@ const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
   /** 5) Helpers multipli (campi *_enc / *_iv)
    *  Compat: supporta SIA (row + fieldNames[]) SIA (mappa { field: {enc, iv} })
    */
-  public async encryptFields(scope: string, table: string, recordId: string | null, fields: Record<string, string | null | undefined>) {
-    const out: Record<string, any> = {};
-    for (const [field, val] of Object.entries(fields)) {
-      if (val == null) continue;
-      const { enc_b64, iv_b64 } = await this.encryptJSON(scope, table, field, recordId ?? "", val);
-      out[`${field}_enc`] = enc_b64;
-      out[`${field}_iv`] = iv_b64;
-    }
-    return out;
-  }
 
-  public async decryptFields(
-    scope: string,
-    table: string,
-    recordId: string | null,
-    rowOrMap: any,
-    fieldNamesMaybe?: string[]
-  ) {
-    const out: Record<string, string | null> = {};
+// Dentro la tua classe CryptoService
 
-    // Ramo A: compatibilità con uso "mappa { field: {enc, iv} }"
-    // es. decryptFields("accounts", "accounts", id, { name: {enc,iv}, ... })
-    const looksLikeMap =
-      rowOrMap &&
-      typeof rowOrMap === "object" &&
-      Object.values(rowOrMap).every(
-        (v: any) => v && typeof v === "object" && ("enc" in v) && ("iv" in v)
-      );
-
-    if (looksLikeMap) {
-      for (const field of Object.keys(rowOrMap)) {
-        const enc = rowOrMap[field]?.enc;
-        const iv  = rowOrMap[field]?.iv;
-        if (!enc || !iv) { out[field] = null; continue; }
-        out[field] = await this.decryptJSON(scope, table, field, recordId ?? "", enc, iv);
+    public async encryptFields(
+      scope: string,
+      table: string,
+      recordId: string | null,
+      fields: Record<string, string | null | undefined>
+    ) {
+      const out: Record<string, unknown> = {};
+      const rowId = recordId ?? ""; // se non lo hai ancora, passa stringa vuota (ma meglio passarlo quando possibile)
+    
+      for (const [field, val] of Object.entries(fields)) {
+        if (val == null) continue;
+        const { enc_b64, iv_b64 } = await this.encryptJSON(scope, table, field, rowId, val);
+        out[`${field}_enc`] = enc_b64;
+        out[`${field}_iv`]  = iv_b64;
       }
       return out;
     }
-
+    
+    public async decryptFields<T extends Record<string, unknown> = Record<string, unknown>>(
+      scope: string,
+      table: string,
+      recordId: string | null,
+      rowOrMap: Record<string, unknown>,
+      fieldNamesMaybe?: string[]
+    ) {
+      const out: Record<string, string | null> = {};
+      const row = rowOrMap ?? {};
+      const rowId = recordId ?? "";
+    
+      // Se non passi i nomi, li deduco dai *_enc presenti nella riga
+      const fields = fieldNamesMaybe ?? Object.keys(row)
+        .filter((k) => k.endsWith("_enc"))
+        .map((k) => k.slice(0, -4)); // rimuove "_enc"
+    
+      for (const field of fields) {
+        const enc_b64 = row[`${field}_enc`] as string | undefined;
+        const iv_b64  = row[`${field}_iv`]  as string | undefined;
+    
+        if (!enc_b64 || !iv_b64) {
+          out[field] = null; // campo mancante o non cifrato
+          continue;
+        }
+    
+        try {
+          const plain = await this.decryptJSON(scope, table, field, rowId, enc_b64, iv_b64);
+          out[field] = typeof plain === "string" ? plain : JSON.stringify(plain);
+        } catch {
+          out[field] = null; // errore decifratura → campo nullo
+        }
+      }
+    
+      return out as unknown as T;
+    }
+  
     // Ramo B: firma originale (row + fieldNames[])
     const fields: string[] = fieldNamesMaybe ?? [];
     for (const field of fields) {
