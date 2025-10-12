@@ -1,3 +1,4 @@
+// lib/crypto/CryptoProvider.tsx
 "use client";
 
 import React, {
@@ -14,27 +15,43 @@ import React, {
 /** === Tipi esposti al resto dell’app === */
 
 export type CryptoService = {
+  /** Sblocca l’ambiente con la passphrase utente */
   unlockWithPassphrase: (passphrase: string) => Promise<void>;
+
+  /** Garantisce che esistano chiavi per lo scope (crea se mancano) */
   ensureScope: (scope: string) => Promise<void>;
+
+  /** (Compat) Alcuni moduli chiamano ancora questo nome */
   getOrCreateScopeKeys?: (scope: string) => Promise<void>;
+
+  /** Pre-carica/garantisce più scope insieme; ignora conflitti 409 */
   prewarm: (scopes: string[]) => Promise<void>;
+
+  /** API di comodo usate in /crypto-test */
   encryptFields: (
     scope: string,
     table: string,
     rowId: string,
     fields: Record<string, unknown>
   ) => Promise<Record<string, unknown>>;
+
+  /** Decifra una riga che contiene i campi *_enc / *_iv */
   decryptRow: <T = unknown>(
     scope: string,
     row: Record<string, unknown>
   ) => Promise<T>;
+
+  /** (opzionale) Blind index deterministico per ricerche equality */
+  computeBlindIndex?: (scope: string, plaintext: string) => Promise<string>;
 };
 
 export type CryptoContextType = {
   ready: boolean;
   userId: string | null;
   crypto: CryptoService | null;
+  /** Avvia lo sblocco (alias per crypto.unlockWithPassphrase) */
   unlock: (passphrase: string) => Promise<void>;
+  /** Pre-carica/garantisce più scope */
   prewarm: (scopes: string[]) => Promise<void>;
 };
 
@@ -46,7 +63,7 @@ const CryptoContext = createContext<CryptoContextType>({
   prewarm: async () => {},
 });
 
-/** === Utils === */
+/** === Helper safe-call su window.debugCrypto === */
 
 function getDebug(): any | null {
   if (typeof window === "undefined") return null;
@@ -56,30 +73,25 @@ function getDebug(): any | null {
 }
 
 function swallow409<T = unknown>(e: unknown): never | T {
+  // Alcuni ambienti espongono errori come oggetti con { code, message }
+  // I 409 / unique constraint vanno ignorati in prewarm/ensureScope
   const err = e as any;
   const msg: string | undefined = err?.message ?? err?.error ?? "";
   const code: string | number | undefined = err?.code;
+
   const looksLikeConflict =
     code === 409 ||
     code === "409" ||
+    // Postgres unique constraint
     code === "23505" ||
     (typeof msg === "string" &&
       /duplicate key|unique constraint|409|Conflict/i.test(msg));
+
   if (looksLikeConflict) {
-    // @ts-ignore
+    // @ts-ignore: intentionally ignoring
     return undefined as T;
   }
   throw err;
-}
-
-async function waitForDebug(timeoutMs = 1500, stepMs = 100): Promise<any | null> {
-  const started = Date.now();
-  let dbg = getDebug();
-  while (!dbg && Date.now() - started < timeoutMs) {
-    await new Promise((r) => setTimeout(r, stepMs));
-    dbg = getDebug();
-  }
-  return dbg;
 }
 
 /** === Provider === */
@@ -89,39 +101,7 @@ type Props = { children: ReactNode; userId?: string | null };
 export function CryptoProvider({ children, userId: userIdProp }: Props) {
   const [ready, setReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
-  const [epoch, setEpoch] = useState(0); // forziamo il rebuild quando compare debug
   const mountedRef = useRef(false);
-
-  // Poll leggero: appena compare window.debugCrypto, aggiorna stato
-  useEffect(() => {
-    let timer: any;
-    function kick() {
-      const dbg = getDebug();
-      if (dbg) {
-        // prova a leggere user id e stato unlocked
-        try {
-          const uid =
-            userIdProp ??
-            (dbg?.getCurrentUserId ? dbg.getCurrentUserId() : dbg?.userId) ??
-            null;
-          if (uid && typeof uid === "string") setUserId(uid);
-        } catch {}
-        try {
-          if (dbg?.isUnlocked?.() === true) setReady(true);
-        } catch {}
-        setEpoch((e) => e + 1);
-        return true;
-      }
-      return false;
-    }
-
-    if (!kick()) {
-      timer = setInterval(() => {
-        if (kick()) clearInterval(timer);
-      }, 150);
-    }
-    return () => timer && clearInterval(timer);
-  }, [userIdProp]);
 
   // Costruiamo il service (wrappa window.debugCrypto, ma con typing stabile)
   const cryptoService: CryptoService | null = useMemo(() => {
@@ -145,6 +125,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             swallow409(e);
           }
         }
+        // fallback per vecchie versioni
         if (dbg.getOrCreateScopeKeys) {
           try {
             await dbg.getOrCreateScopeKeys(scope);
@@ -153,6 +134,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             swallow409(e);
           }
         }
+        // Se nessuna delle due esiste
         throw new Error("ensureScope non disponibile");
       },
 
@@ -165,6 +147,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             swallow409(e);
           }
         }
+        // fallback: se non esiste, prova ensureScope
         if (dbg.ensureScope) {
           try {
             await dbg.ensureScope(scope);
@@ -177,6 +160,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
       },
 
       prewarm: async (scopes: string[]) => {
+        // Garantiamo tutti gli scope in parallelo, ingoiando i 409
         await Promise.all(
           (scopes ?? []).map(async (s) => {
             try {
@@ -194,80 +178,41 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
         );
       },
 
-      encryptFields: async (scope, table, rowId, fields) => {
+      encryptFields: async (
+        scope: string,
+        table: string,
+        rowId: string,
+        fields: Record<string, unknown>
+      ) => {
         if (!dbg.encryptFields) {
           throw new Error("encryptFields non disponibile");
         }
         return await dbg.encryptFields(scope, table, rowId, fields);
       },
 
-      decryptRow: async <T = unknown>(scope, row) => {
+      decryptRow: async <T = unknown>(
+        scope: string,
+        row: Record<string, unknown>
+      ): Promise<T> => {
         if (!dbg.decryptRow) {
           throw new Error("decryptRow non disponibile");
         }
         return await dbg.decryptRow(scope, row);
       },
+
+      computeBlindIndex: dbg.computeBlindIndex
+        ? async (scope: string, plaintext: string) =>
+            await dbg.computeBlindIndex(scope, plaintext)
+        : undefined,
     };
 
     return svc;
-  }, [userId, epoch]); // rebuild quando cambia utente o compare debug
+  }, [userId]); // ricrea se cambia l’utente
 
   const unlock = useCallback(
     async (passphrase: string) => {
-      // Se il service non c’è ancora, attendi un attimo che compaia
-      let svc = cryptoService;
-      if (!svc) {
-        const dbg = await waitForDebug(1500);
-        if (!dbg) {
-          throw new Error("Crypto non pronto: runtime non caricato");
-        }
-        // forza un rebuild immediato
-        setEpoch((e) => e + 1);
-        svc = {
-          unlockWithPassphrase: async (pp: string) => dbg.unlockWithPassphrase(pp),
-          ensureScope: async (scope: string) => {
-            try {
-              if (dbg.ensureScope) return await dbg.ensureScope(scope);
-              if (dbg.getOrCreateScopeKeys) return await dbg.getOrCreateScopeKeys(scope);
-              throw new Error("ensureScope non disponibile");
-            } catch (e) {
-              swallow409(e);
-            }
-          },
-          getOrCreateScopeKeys: async (scope: string) => {
-            try {
-              if (dbg.getOrCreateScopeKeys) return await dbg.getOrCreateScopeKeys(scope);
-              if (dbg.ensureScope) return await dbg.ensureScope(scope);
-              throw new Error("getOrCreateScopeKeys non disponibile");
-            } catch (e) {
-              swallow409(e);
-            }
-          },
-          prewarm: async (scopes: string[]) => {
-            await Promise.all(
-              (scopes ?? []).map(async (s) => {
-                try {
-                  if (dbg.ensureScope) return await dbg.ensureScope(s);
-                  if (dbg.getOrCreateScopeKeys) return await dbg.getOrCreateScopeKeys(s);
-                  throw new Error("Nessuna API per creare scope keys");
-                } catch (e) {
-                  swallow409(e);
-                }
-              })
-            );
-          },
-          encryptFields: async (scope, table, rowId, fields) => {
-            if (!dbg.encryptFields) throw new Error("encryptFields non disponibile");
-            return await dbg.encryptFields(scope, table, rowId, fields);
-          },
-          decryptRow: async <T = unknown>(scope, row) => {
-            if (!dbg.decryptRow) throw new Error("decryptRow non disponibile");
-            return await dbg.decryptRow(scope, row);
-          },
-        };
-      }
-
-      await svc.unlockWithPassphrase(passphrase);
+      if (!cryptoService) throw new Error("Crypto non inizializzato");
+      await cryptoService.unlockWithPassphrase(passphrase);
       setReady(true);
     },
     [cryptoService]
@@ -275,51 +220,58 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
   const prewarm = useCallback(
     async (scopes: string[]) => {
-      if (!cryptoService) {
-        const dbg = await waitForDebug(1500);
-        if (!dbg) return;
-        setEpoch((e) => e + 1);
-        // chiama direttamente il dbg per non perdere la call
-        await Promise.all(
-          (scopes ?? []).map(async (s) => {
-            try {
-              if (dbg.ensureScope) return await dbg.ensureScope(s);
-              if (dbg.getOrCreateScopeKeys) return await dbg.getOrCreateScopeKeys(s);
-            } catch (e) {
-              swallow409(e);
-            }
-          })
-        );
-        return;
-      }
+      if (!cryptoService) return;
       await cryptoService.prewarm(scopes);
     },
     [cryptoService]
   );
 
-  // Prima mount: prova a leggere uid/unlocked una volta
+  /** Effetto iniziale: rileva utente e tenta auto-unlock se debug helper lo fa */
   useEffect(() => {
     if (mountedRef.current) return;
     mountedRef.current = true;
+
     const dbg = getDebug();
+
+    // Prova a leggere userId dal debug helper o da prop
     try {
       const uid =
         userIdProp ??
         (dbg?.getCurrentUserId ? dbg.getCurrentUserId() : dbg?.userId) ??
         null;
-      if (uid && typeof uid === "string") setUserId(uid);
-    } catch {}
+      if (uid && typeof uid === "string") {
+        setUserId(uid);
+      }
+    } catch {
+      // ignora
+    }
+
+    // Se il debug helper segnala già “unlocked”, marchia ready
     try {
-      if (dbg?.isUnlocked?.() === true) setReady(true);
-    } catch {}
+      if (dbg?.isUnlocked?.() === true) {
+        setReady(true);
+      }
+    } catch {
+      // ignora
+    }
   }, [userIdProp]);
 
   const ctxValue = useMemo<CryptoContextType>(
-    () => ({ ready, userId, crypto: cryptoService, unlock, prewarm }),
+    () => ({
+      ready,
+      userId,
+      crypto: cryptoService,
+      unlock,
+      prewarm,
+    }),
     [ready, userId, cryptoService, unlock, prewarm]
   );
 
-  return <CryptoContext.Provider value={ctxValue}>{children}</CryptoContext.Provider>;
+  return (
+    <CryptoContext.Provider value={ctxValue}>
+      {children}
+    </CryptoContext.Provider>
+  );
 }
 
 /** Hook comodo */
