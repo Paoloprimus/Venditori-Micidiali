@@ -25,8 +25,8 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
     if (!pass) return false;
     setUnlocking(true);
     try {
-      await unlock(pass, DEFAULT_SCOPES);
-      await prewarm(DEFAULT_SCOPES);
+      await unlock(pass);
+      await prewarm(DEFAULT_SCOPES);      
       // pulizia pass in memoria persistente
       try { sessionStorage.removeItem("repping:pph"); } catch {}
       try { localStorage.removeItem("repping:pph"); } catch {}
