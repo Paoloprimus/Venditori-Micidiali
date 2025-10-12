@@ -10,7 +10,8 @@ const SCOPE = "table:accounts";
 const TABLE = "accounts";
 
 export default function CryptoTestPage() {
-  const { ready, unlock, crypto: cryptoSvc } = useCrypto();
+  // NB: niente "error" qui; il context non lo espone
+  const { ready, unlock, prewarm, crypto: cryptoSvc } = useCrypto();
 
   // form
   const [pw, setPw] = useState("");
@@ -37,9 +38,8 @@ export default function CryptoTestPage() {
 
   async function handleUnlock() {
     try {
-      await unlock(pw); // sblocca
-      // opzionale ma utile: prepara subito lo scope
-      await cryptoSvc?.ensureScope(SCOPE);
+      await unlock(pw);           // ⬅️ una sola arg
+      await prewarm([SCOPE]);     // ⬅️ poi pre-warm dello scope
       setPw("");
       pushLog("Cifratura sbloccata");
     } catch (e: any) {
@@ -58,7 +58,7 @@ export default function CryptoTestPage() {
         `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 
       // 1) Cifra i campi sensibili (convenzione *_enc / *_iv già presente in tabella)
-      const enc = await cryptoSvc.encryptRecord(SCOPE, TABLE, id, {
+      const enc = await cryptoSvc.encryptFields(SCOPE, TABLE, id, {
         name,
         email,
         phone: phone || undefined,
@@ -66,11 +66,11 @@ export default function CryptoTestPage() {
       });
 
       // 2) Blind index per email (per ricerca equality)
-      const email_bi = await cryptoSvc.computeBlindIndex(SCOPE, email);
+      const email_bi = await (cryptoSvc as any).computeBlindIndex?.(SCOPE, email);
 
       // 3) Costruisci la riga da inserire (colonne della tua tabella)
       const row: any = {
-        id, // opzionale: hai già default gen_random_uuid(); se vuoi, puoi togliere questa riga
+        id,
         // cifrati
         name_enc: enc.name_enc,
         name_iv: enc.name_iv,
@@ -79,8 +79,8 @@ export default function CryptoTestPage() {
         // opzionali se forniti
         ...(enc.phone_enc ? { phone_enc: enc.phone_enc, phone_iv: enc.phone_iv } : {}),
         ...(enc.vat_number_enc ? { vat_number_enc: enc.vat_number_enc, vat_number_iv: enc.vat_number_iv } : {}),
-        // blind index
-        email_bi,
+        // blind index se disponibile
+        ...(email_bi ? { email_bi } : {}),
         // i trigger pensano a user_id/owner_id
       };
 
@@ -103,7 +103,10 @@ export default function CryptoTestPage() {
     if (!email) return pushLog("Inserisci l'email da cercare");
 
     try {
-      const probe = await cryptoSvc.computeBlindIndex(SCOPE, email);
+      const computeBI = (cryptoSvc as any).computeBlindIndex?.bind(cryptoSvc);
+      if (!computeBI) return pushLog("computeBlindIndex non disponibile");
+
+      const probe = await computeBI(SCOPE, email);
       const sel = await supabase
         .from(TABLE)
         .select("*")
@@ -114,13 +117,12 @@ export default function CryptoTestPage() {
       if (sel.error) throw sel.error;
       if (!sel.data) return pushLog("Nessun account trovato per quell'email");
 
-      const recordId = sel.data.id ?? "";
-      const dec = await cryptoSvc.decryptRecord(SCOPE, TABLE, recordId, sel.data, [
-        "name",
-        "email",
-        "phone",
-        "vat_number",
-      ]);
+      const dec = await cryptoSvc.decryptRow<{
+        name?: string;
+        email?: string;
+        phone?: string;
+        vat_number?: string;
+      }>(SCOPE, sel.data);
 
       pushLog(
         `Trovato: name=${dec.name ?? "—"} | email=${dec.email ?? "—"} | phone=${dec.phone ?? "—"} | vat=${dec.vat_number ?? "—"}`
