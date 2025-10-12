@@ -40,14 +40,14 @@ export type CryptoService = {
   ) => Promise<T>;
 
   /** Nuove API di alto livello */
-  encryptRecord?: (
+  encryptRecord: (
     scope: string,
     table: string,
     rowId: string,
     fields: Record<string, any>
   ) => Promise<Record<string, any>>;
 
-  decryptRecord?: (
+  decryptRecord: (
     scope: string,
     table: string,
     rowId: string,
@@ -55,7 +55,7 @@ export type CryptoService = {
     fields: string[]
   ) => Promise<Record<string, any>>;
 
-  computeBlindIndex?: (scope: string, value: string) => Promise<string>;
+  computeBlindIndex: (scope: string, value: string) => Promise<string>;
 };
 
 export type CryptoContextType = {
