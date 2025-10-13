@@ -6,7 +6,26 @@ import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
 // Tipi
-// ... (uguale a prima)
+type RawAccount = {
+id: string;
+created_at: string;
+name_enc: any; name_iv: any;
+email_enc: any; email_iv: any;
+phone_enc: any; phone_iv: any;
+vat_number_enc: any; vat_number_iv: any;
+notes_enc: any; notes_iv: any;
+};
+
+
+type PlainAccount = {
+id: string;
+created_at: string;
+name: string;
+email: string;
+phone: string;
+vat_number: string;
+notes: string;
+};
 
 const PAGE_SIZE = 25;
 type SortKey = "name" | "email" | "phone" | "vat_number" | "created_at";
