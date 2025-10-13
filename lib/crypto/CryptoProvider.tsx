@@ -80,10 +80,11 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   const [ready, setReady] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
   const mountedRef = useRef(false);
+  const [cryptoService, setCryptoService] = useState<CryptoService | null>(null); // ✅ PATCH
 
-  const cryptoService: CryptoService | null = useMemo(() => {
+  useEffect(() => {
     const dbg = getDebug();
-    if (!dbg) return null;
+    if (!dbg) return;
 
     const svc: CryptoService = {
       unlockWithPassphrase: async (passphrase: string) => {
@@ -179,8 +180,8 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
         : undefined,
     };
 
-    return svc;
-  }, [userId, getDebug()]);
+    setCryptoService(svc); // ✅ PATCH
+  }, [userId]); // 🔁 Reinizializza se cambia user
 
   const unlock = useCallback(
     async (passphrase: string) => {
