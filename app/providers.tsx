@@ -2,14 +2,13 @@
 "use client";
 import React from "react";
 import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
-import CryptoShell from "@/components/CryptoShell"; // ⬅️ AGGIUNTO: inizializza window.debugCrypto
+import CryptoShell from "@/components/CryptoShell"; // ⬅️ aggiunto
 
 export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <CryptoProvider>
-      {/* Inizializza window.debugCrypto e carica i parametri profilo */}
-      <CryptoShell />
-      {children}
+      {/* CryptoShell richiede children ⇒ lo avvolgo attorno ai children */}
+      <CryptoShell>{children}</CryptoShell>
     </CryptoProvider>
   );
 }
