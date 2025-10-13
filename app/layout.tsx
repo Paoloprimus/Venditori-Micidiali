@@ -1,8 +1,7 @@
 // app/layout.tsx
 import "./globals.css";
-import { ReactNode } from "react";
-import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
-import CryptoShell from "@/components/CryptoShell";
+import type { ReactNode } from "react";
+import Providers from "./providers";
 
 export const metadata = {
   title: "Venditori Micidiali",
@@ -13,22 +12,9 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="it">
       <body>
-        {/* ✅ Tutto ciò che è client va qui dentro */}
-        <ClientProviders>
-          {children}
-        </ClientProviders>
+        {/* Monta i provider client (Crypto incluso) dentro <body> */}
+        <Providers>{children}</Providers>
       </body>
     </html>
-  );
-}
-
-// ✅ wrapper client separato
-"use client";
-function ClientProviders({ children }: { children: ReactNode }) {
-  return (
-    <CryptoProvider>
-      <CryptoShell />
-      {children}
-    </CryptoProvider>
   );
 }
