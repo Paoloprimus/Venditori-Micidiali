@@ -1,21 +1,34 @@
-// app/layout.tsx (estratto rilevante)
-
-"use client"; 
-
-import "@/app/globals.css";
+// app/layout.tsx
+import "./globals.css";
+import { ReactNode } from "react";
 import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
-import CryptoShell from "@/components/CryptoShell";  
+import CryptoShell from "@/components/CryptoShell";
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export const metadata = {
+  title: "Venditori Micidiali",
+  description: "App gestione clienti con cifratura",
+};
+
+export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="it">
       <body>
-        {/* Unica istanza globale del provider, qui */}
-        <CryptoProvider>
-          <CryptoShell />   {/* 
+        {/* ✅ Tutto ciò che è client va qui dentro */}
+        <ClientProviders>
           {children}
-        </CryptoProvider>
+        </ClientProviders>
       </body>
     </html>
+  );
+}
+
+// ✅ wrapper client separato
+"use client";
+function ClientProviders({ children }: { children: ReactNode }) {
+  return (
+    <CryptoProvider>
+      <CryptoShell />
+      {children}
+    </CryptoProvider>
   );
 }
