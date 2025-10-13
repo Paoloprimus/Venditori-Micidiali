@@ -210,128 +210,104 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     }, [userId, getDebug()]); // ricrea anche quando debugCrypto diventa disponibile
 
   const unlock = useCallback(
-    async (passphrase: string) => {
-      // 1) prova via servizio tipizzato se già pronto
-      if (cryptoService) {
-        await cryptoService.unlockWithPassphrase(passphrase);
-        setReady(true);
-        return;
-      }
+  async (passphrase: string) => {
+    // usa il service se c’è
+    if (cryptoService) {
+      await cryptoService.unlockWithPassphrase(passphrase);
+      setReady(true);
+      return;
+    }
 
-      // 2) fallback: aspetta che window.debugCrypto sia disponibile e chiamalo direttamente
-      let dbg = getDebug();
-      if (!dbg) {
-        const start = Date.now();
-        // attende fino a ~5s che il debug helper compaia
-        while (!dbg && Date.now() - start < 5000) {
-          await new Promise((r) => setTimeout(r, 50));
-          dbg = getDebug();
-        }
-      }
-      if (!dbg?.unlockWithPassphrase) {
-        throw new Error("Crypto non inizializzato");
-      }
+    // fallback robusto su window.debugCrypto (se il service non è ancora inizializzato)
+    const dbg = getDebug();
+    if (dbg?.unlockWithPassphrase) {
       await dbg.unlockWithPassphrase(passphrase);
       setReady(true);
-    },
-    [cryptoService]
-  );
+      return;
+    }
 
-  const prewarm = useCallback(
-    async (scopes: string[]) => {
-      // 1) se il servizio è pronto, usa quello
-      if (cryptoService) {
-        await cryptoService.prewarm(scopes);
-        return;
-      }
+    throw new Error("Crypto non inizializzato");
+  },
+  [cryptoService]
+);
 
-      // 2) fallback su window.debugCrypto con swallow dei 409
-      let dbg = getDebug();
-      if (!dbg) {
-        const start = Date.now();
-        while (!dbg && Date.now() - start < 5000) {
-          await new Promise((r) => setTimeout(r, 50));
-          dbg = getDebug();
-        }
-      }
-      if (!dbg) return;
+const prewarm = useCallback(
+  async (scopes: string[]) => {
+    if (cryptoService) {
+      await cryptoService.prewarm(scopes);
+      return;
+    }
 
-      await Promise.all(
-        (scopes ?? []).map(async (s) => {
-          try {
-            if (dbg.ensureScope) {
-              await dbg.ensureScope(s);
-            } else if (dbg.getOrCreateScopeKeys) {
-              await dbg.getOrCreateScopeKeys(s);
-            }
-          } catch (e) {
-            // ignora conflitti/unique constraint
-            // @ts-ignore
-            swallow409(e);
+    // fallback diretto su window.debugCrypto
+    const dbg = getDebug();
+    if (!dbg) return;
+
+    await Promise.all(
+      (scopes ?? []).map(async (s) => {
+        try {
+          if (dbg.ensureScope) {
+            await dbg.ensureScope(s);
+          } else if (dbg.getOrCreateScopeKeys) {
+            await dbg.getOrCreateScopeKeys(s);
+          } else {
+            // nessuna API disponibile: ignoro
           }
-        })
-      );
-    },
-    [cryptoService]
-  );
+        } catch (e) {
+          // ingoia i conflitti 409/unique
+          swallow409(e);
+        }
+      })
+    );
+  },
+  [cryptoService]
+);
 
-  /** Effetto iniziale: rileva utente e tenta auto-unlock se il debug helper è già sbloccato */
-  useEffect(() => {
-    if (mountedRef.current) return;
-    mountedRef.current = true;
+/** Effetto iniziale: rileva utente e tenta auto-unlock se debug helper lo fa */
+useEffect(() => {
+  if (mountedRef.current) return;
+  mountedRef.current = true;
 
-    const applyFromDbg = () => {
-      const dbg = getDebug();
-      if (!dbg) return false;
+  const dbg = getDebug();
 
-      try {
-        const uid =
-          userIdProp ??
-          (dbg?.getCurrentUserId ? dbg.getCurrentUserId() : dbg?.userId) ??
-          null;
-        if (uid && typeof uid === "string") setUserId(uid);
-      } catch {
-        /* ignore */
-      }
+  // Prova a leggere userId dal debug helper o da prop
+  try {
+    const uid =
+      userIdProp ??
+      (dbg?.getCurrentUserId ? dbg.getCurrentUserId() : dbg?.userId) ??
+      null;
+    if (uid && typeof uid === "string") {
+      setUserId(uid);
+    }
+  } catch {
+    // ignora
+  }
 
-      try {
-        if (dbg?.isUnlocked?.() === true) setReady(true);
-      } catch {
-        /* ignore */
-      }
-      return true;
-    };
+  // Se il debug helper segnala già “unlocked”, marchia ready
+  try {
+    if (dbg?.isUnlocked?.() === true) {
+      setReady(true);
+    }
+  } catch {
+    // ignora
+  }
+}, [userIdProp]);
 
-    // prova subito
-    if (applyFromDbg()) return;
+const ctxValue = useMemo<CryptoContextType>(
+  () => ({
+    ready,
+    userId,
+    crypto: cryptoService,
+    unlock,
+    prewarm,
+  }),
+  [ready, userId, cryptoService, unlock, prewarm]
+);
 
-    // piccolo polling breve: aspetta che window.debugCrypto arrivi
-    const start = Date.now();
-    const t = setInterval(() => {
-      if (applyFromDbg() || Date.now() - start > 3000) {
-        clearInterval(t);
-      }
-    }, 100);
-
-    return () => clearInterval(t);
-  }, [userIdProp]);
-
-  const ctxValue = useMemo<CryptoContextType>(
-    () => ({
-      ready,
-      userId,
-      crypto: cryptoService,
-      unlock,
-      prewarm,
-    }),
-    [ready, userId, cryptoService, unlock, prewarm]
-  );
-
-  return (
-    <CryptoContext.Provider value={ctxValue}>
-      {children}
-    </CryptoContext.Provider>
-  );
+return (
+  <CryptoContext.Provider value={ctxValue}>
+    {children}
+  </CryptoContext.Provider>
+);
 }
 
 /** Hook comodo */
