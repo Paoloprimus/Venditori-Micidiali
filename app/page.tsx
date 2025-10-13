@@ -7,7 +7,6 @@ import CryptoShell from "../components/CryptoShell";
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-
 function deriveNames(email?: string | null, fullName?: string | null) {
   const safe = (s?: string | null) => (s || "").trim();
   const fn = safe(fullName);
