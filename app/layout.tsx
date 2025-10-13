@@ -1,19 +1,15 @@
-// app/layout.tsx (root layout)
-
-"use client";
-
-// import "@/lib/crypto/debug-runtime"; // 
-import "./globals.css";
-import Providers from "./providers";
-
-
-
+// app/layout.tsx (estratto rilevante)
+import "@/app/globals.css";
+import { CryptoProvider } from "@/lib/crypto/CryptoProvider";
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
       <body>
-        <Providers>{children}</Providers>
+        {/* Unica istanza globale del provider, qui */}
+        <CryptoProvider>
+          {children}
+        </CryptoProvider>
       </body>
     </html>
   );
