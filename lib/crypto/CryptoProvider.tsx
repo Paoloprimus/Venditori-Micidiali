@@ -12,9 +12,8 @@ import React, {
   type ReactNode,
 } from "react";
 
-// ✅ PATCH: importo l'implementazione reale della classe CryptoService (client-side)
-import { CryptoService as CryptoSvcImpl } from "@/lib/crypto/CryptoService";
-import { supabase } from "@/lib/supabase/client";
+import { CryptoService as CryptoSvcImpl } from "@/lib/crypto/CryptoService"; // ✅ AGGIUNTO per percorso B
+import { supabase } from "@/lib/supabase/client"; // ✅ AGGIUNTO per percorso B
 
 /** === Tipi esposti al resto dell’app === */
 
@@ -71,6 +70,7 @@ function swallow409<T = unknown>(e: unknown): never | T {
       /duplicate key|unique constraint|409|Conflict/i.test(msg));
 
   if (looksLikeConflict) {
+    // @ts-ignore
     return undefined as T;
   }
   throw err;
@@ -85,7 +85,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   const [userId, setUserId] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
-  // ✅ PATCH: “percorso B” se window.debugCrypto non esiste
+  // ✅ Percorso B: istanza reale se debugCrypto non esiste
   const [altCryptoService, setAltCryptoService] = useState<CryptoService | null>(null);
 
   const cryptoService: CryptoService | null = useMemo(() => {
@@ -191,7 +191,6 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
   const unlock = useCallback(
     async (passphrase: string) => {
-      // ✅ PATCH: usa percorso A (debug) o B (classe reale)
       if (cryptoService) {
         await cryptoService.unlockWithPassphrase(passphrase);
         setReady(true);
@@ -215,14 +214,34 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
   const prewarm = useCallback(
     async (scopes: string[]) => {
-      if (cryptoService) {
+      if (cryptoService?.prewarm) {
         await cryptoService.prewarm(scopes);
         return;
       }
-      if (altCryptoService) {
+      if (altCryptoService?.prewarm) {
         await altCryptoService.prewarm(scopes);
         return;
       }
+      // ✅ Polyfill prewarm se manca: usa ensureScope / getOrCreateScopeKeys
+      const svc = cryptoService ?? altCryptoService;
+      if (svc && (!("prewarm" in svc) || !svc.prewarm)) {
+        await Promise.all(
+          (scopes ?? []).map(async (s) => {
+            try {
+              if (svc.ensureScope) {
+                await svc.ensureScope(s);
+              } else if (svc.getOrCreateScopeKeys) {
+                await svc.getOrCreateScopeKeys(s);
+              }
+            } catch (e) {
+              swallow409(e);
+            }
+          })
+        );
+        return;
+      }
+
+      // Fallback diretto su debug (vecchia strada)
       const dbg = getDebug();
       if (!dbg) return;
       await Promise.all(
@@ -265,10 +284,28 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
       }
     } catch {}
 
-    // ✅ PATCH: se window.debugCrypto NON esiste, preparo il percorso B
+    // ✅ Se non esiste debug, prepara percorso B con classe reale
     try {
       if (!dbg) {
         const impl = new (CryptoSvcImpl as any)(supabase) as CryptoService;
+        // Polyfill prewarm anche qui, se non presente
+        if (!("prewarm" in impl) || !impl.prewarm) {
+          (impl as any).prewarm = async (scopes: string[]) => {
+            await Promise.all(
+              (scopes ?? []).map(async (s) => {
+                try {
+                  if ((impl as any).ensureScope) {
+                    await (impl as any).ensureScope(s);
+                  } else if ((impl as any).getOrCreateScopeKeys) {
+                    await (impl as any).getOrCreateScopeKeys(s);
+                  }
+                } catch (e) {
+                  swallow409(e);
+                }
+              })
+            );
+          };
+        }
         setAltCryptoService(impl);
       }
     } catch {}
@@ -282,8 +319,8 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
       const wait = async () => {
         const dbg = getDebug();
-        // ✅ Sblocca quando c'è uno dei due percorsi disponibili
-        if (dbg?.unlockWithPassphrase || altCryptoService) return true;
+        if (dbg?.unlockWithPassphrase) return true;
+        if (altCryptoService) return true;
         return false;
       };
 
@@ -317,8 +354,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     () => ({
       ready,
       userId,
-      // ✅ PATCH: esponi qualunque service sia disponibile
-      crypto: cryptoService ?? altCryptoService,
+      crypto: cryptoService ?? altCryptoService, // ✅ esponi uno dei due
       unlock,
       prewarm,
     }),
