@@ -283,6 +283,96 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     } catch {}
   }, [userIdProp]);
 
+  // 🔁 PATCH AGGIUNTIVA: aggancia debugCrypto anche se arriva in ritardo
+useEffect(() => {
+  // se è già presente, non fare nulla
+  if (cryptoService) return;
+
+  let stop = false;
+  const tick = async () => {
+    if (stop) return;
+    const dbg = getDebug();
+    if (!dbg) return; // riprova al prossimo tick
+
+    try {
+      const svc: CryptoService = {
+        unlockWithPassphrase: async (passphrase: string) => {
+          if (!dbg.unlockWithPassphrase) throw new Error("unlockWithPassphrase non disponibile");
+          await dbg.unlockWithPassphrase(passphrase);
+        },
+        ensureScope: async (scope: string) => {
+          if (dbg.ensureScope) {
+            try { await dbg.ensureScope(scope); return; } catch (e) { swallow409(e); }
+          }
+          if (dbg.getOrCreateScopeKeys) {
+            try { await dbg.getOrCreateScopeKeys(scope); return; } catch (e) { swallow409(e); }
+          }
+          throw new Error("ensureScope non disponibile");
+        },
+        getOrCreateScopeKeys: async (scope: string) => {
+          if (dbg.getOrCreateScopeKeys) {
+            try { await dbg.getOrCreateScopeKeys(scope); return; } catch (e) { swallow409(e); }
+          }
+          if (dbg.ensureScope) {
+            try { await dbg.ensureScope(scope); return; } catch (e) { swallow409(e); }
+          }
+          throw new Error("getOrCreateScopeKeys non disponibile");
+        },
+        prewarm: async (scopes: string[]) => {
+          await Promise.all((scopes ?? []).map(async (s) => {
+            try {
+              if (dbg.ensureScope) await dbg.ensureScope(s);
+              else if (dbg.getOrCreateScopeKeys) await dbg.getOrCreateScopeKeys(s);
+              else throw new Error("Nessuna API per creare scope keys");
+            } catch (e) { swallow409(e); }
+          }));
+        },
+        encryptFields: async (scope, table, rowId, fields) => {
+          if (!dbg.encryptFields) throw new Error("encryptFields non disponibile");
+          return await dbg.encryptFields(scope, table, rowId, fields);
+        },
+        decryptRow: async (scope, row) => {
+          if (!dbg.decryptRow) throw new Error("decryptRow non disponibile");
+          return await dbg.decryptRow(scope, row);
+        },
+        computeBlindIndex: dbg.computeBlindIndex
+          ? async (scope: string, plaintext: string) => await dbg.computeBlindIndex(scope, plaintext)
+          : undefined,
+      };
+
+      // @ts-ignore: aggiungo lo stato senza rimuovere nulla del tuo codice
+      (setCryptoService ?? (() => {}))(svc);
+
+      // se hai già una passphrase salvata, prova subito l’autounlock
+      const pass =
+        sessionStorage.getItem("repping:pph") ??
+        localStorage.getItem("repping:pph");
+      if (pass && dbg.unlockWithPassphrase) {
+        try {
+          await dbg.unlockWithPassphrase(pass);
+          setReady(true);
+        } catch {}
+      }
+    } finally {
+      // fine: interrompi polling
+      stop = true;
+    }
+  };
+
+  // piccolo polling finché debugCrypto non compare
+  const iv = setInterval(tick, 100);
+  // tenta subito al primo giro
+  tick();
+
+  return () => {
+    stop = true;
+    clearInterval(iv);
+  };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [cryptoService]);
+
+  
+  
   const ctxValue = useMemo<CryptoContextType>(
     () => ({
       ready,
