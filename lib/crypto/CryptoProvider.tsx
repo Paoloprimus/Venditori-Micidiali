@@ -207,7 +207,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     };
 
     return svc;
-  }, [userId]); // ricrea se cambia l’utente
+    }, [userId, getDebug()]); // ricrea anche quando debugCrypto diventa disponibile
 
   const unlock = useCallback(
     async (passphrase: string) => {
