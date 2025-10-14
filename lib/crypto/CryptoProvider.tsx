@@ -40,15 +40,17 @@ export type CryptoService = {
    * Ritorna un object { nomeCampo: valoreChiaro, ... } oppure un array
    * compatibile con alcune impl.
    */
+   /**
+   * Decripta partendo da una riga grezza con *_enc/_iv.
+   * `fieldNames` opzionale: se omesso, vengono dedotti da *_enc.
+   */
   decryptFields?: (
     scope: string,
     table: string,
-    rowId: string,
-    specs:
-      | Array<{ name: string; enc: any; iv: any }>
-      | Record<string, { enc: any; iv: any }>,
-    opts?: any
-  ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
+    recordId: string,
+    rowOrMap: Record<string, unknown>,
+    fieldNames?: string[]
+  ) => Promise<Record<string, unknown>>;
 
   computeBlindIndex?: (scope: string, plaintext: string) => Promise<string>;
 };
