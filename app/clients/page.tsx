@@ -5,6 +5,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
+// helper: prendi sempre la decryptFields “viva” da window.debugCrypto
+function getDbg(): any | null {
+  if (typeof window === "undefined") return null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (window as any).debugCrypto ?? null;
+}
+
+
 // Tipi
 type RawAccount = {
   id: string;
@@ -128,13 +136,14 @@ export default function ClientsPage(): JSX.Element {
     const hasDecryptRow = typeof (crypto as any)?.decryptRow === "function";
     const scope = "table:accounts";
 
-    const decryptFields = (crypto as any).decryptFields as (
-      scope: string,
-      table: string,
-      id: string,
-      specs: Array<{ name: string; enc: any; iv: any }>,
-      opts?: any
-    ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
+const decryptFields = (getDbg()?.decryptFields) as unknown as (
+  scope: string,
+  table: string,
+  id: string,
+  specs: Array<{ name: string; enc: any; iv: any }>,
+  opts?: any
+) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
+
 
     const plain: PlainAccount[] = [];
     for (const r of (data as RawAccount[])) {
