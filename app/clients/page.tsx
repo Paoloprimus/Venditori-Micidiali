@@ -113,8 +113,8 @@ export default function ClientsPage(): JSX.Element {
         let dec: any;
 
         if (hasDecryptRow) {
-          // Percorso robusto (classe reale o helper allineato)
-          dec = await (crypto as any).decryptRow<Partial<PlainAccount>>(scope, r as any);
+          // 🔧 Fix TS: niente type args su any; castiamo il risultato
+          dec = await (crypto as any).decryptRow(scope, r as any) as Partial<PlainAccount>;
         } else {
           // Percorso legacy del tuo debug helper: usa scope corretto
           dec = await decryptFields(scope, "accounts", r.id, {
