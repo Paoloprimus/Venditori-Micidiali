@@ -142,13 +142,14 @@ export default function ClientsPage(): JSX.Element {
     const hasDecryptRow = typeof (crypto as any)?.decryptRow === "function";
     const scope = "table:accounts";
 
-const decryptFields = (getDbg()?.decryptFields) as unknown as (
+const decryptFields = (crypto as any).decryptFields as (
   scope: string,
   table: string,
   id: string,
   specs: Array<{ name: string; enc: any; iv: any }>,
   opts?: any
 ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
+
 
 
     const plain: PlainAccount[] = [];
