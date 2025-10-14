@@ -227,6 +227,22 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
         return await dbg.decryptRow(scope, row);
       },
 
+
+      decryptFields: dbg.decryptFields
+  ? async (
+      scope: string,
+      table: string,
+      recordId: string,
+      rowOrMap: Record<string, unknown>,
+      fieldNames?: string[]
+    ): Promise<Record<string, unknown>> => {
+      // pass-through 1:1 verso il debug helper
+      return await dbg.decryptFields(scope, table, recordId, rowOrMap, fieldNames);
+    }
+  : undefined,
+
+
+      
       computeBlindIndex: dbg.computeBlindIndex
         ? async (scope: string, plaintext: string) =>
             await dbg.computeBlindIndex(scope, plaintext)
