@@ -1,13 +1,19 @@
 // lib/crypto/debug-runtime.ts
 // Espone un helper globale per debug e integrazione CryptoProvider
+// ⛔️ ATTENZIONE: attivalo SOLO se vuoi il mock finto (non decifra AES-GCM vero).
+// Per attivarlo: NEXT_PUBLIC_ENABLE_DEBUG_CRYPTO=1
 
-if (typeof window !== "undefined") {
+const ENABLE_DEBUG =
+  typeof process !== "undefined" &&
+  (process as any).env?.NEXT_PUBLIC_ENABLE_DEBUG_CRYPTO === "1";
+
+if (ENABLE_DEBUG && typeof window !== "undefined") {
   const w = window as any;
 
   // Evita di ridefinire se già esiste
   if (!w.debugCrypto) {
     w.debugCrypto = {
-      isUnlocked: () => false,
+      isUnlocked: () => !!w._cryptoUnlocked,
       unlockWithPassphrase: async (pass: string) => {
         console.log("🔐 [DEBUG] unlockWithPassphrase chiamato con:", pass);
         // Simula sblocco immediato
@@ -23,7 +29,7 @@ if (typeof window !== "undefined") {
         fields: Record<string, unknown>
       ) => {
         console.log("🔐 [DEBUG] encryptFields su", table, ":", fields);
-        // Simula cifratura fittizia (aggiunge "_enc")
+        // Simula cifratura fittizia (aggiunge "enc(...)")
         const result: Record<string, unknown> = {};
         for (const [k, v] of Object.entries(fields)) {
           result[`${k}_enc`] = v ? `enc(${v})` : null;
@@ -39,7 +45,7 @@ if (typeof window !== "undefined") {
             const base = k.replace(/_enc$/, "");
             result[base] =
               typeof v === "string" && v.startsWith("enc(")
-                ? v.slice(4, -1)
+                ? v.slice(4, -1) // ← questo funziona SOLO con il mock "enc(...)"
                 : v;
           }
         }
@@ -53,6 +59,15 @@ if (typeof window !== "undefined") {
       userId: null,
     };
 
-    console.log("🔐 Crypto debug esposto come window.debugCrypto");
+    console.log("🔐 Crypto debug MOCK esposto come window.debugCrypto (ENABLE_DEBUG=1)");
   }
+} else {
+  // Modalità reale: non esporre il mock
+  if (typeof window !== "undefined") {
+    const w = window as any;
+    if (w.debugCrypto && w.debugCrypto.__isMock) {
+      try { delete w.debugCrypto; } catch {}
+    }
+  }
+  // Nota: non logghiamo nulla per non sporcare la console in produzione.
 }
