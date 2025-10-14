@@ -74,20 +74,26 @@ export default function ClientsPage(): JSX.Element {
 
     if (!hasPass) return;
 
-    (async () => {
-      try {
-        unlockingRef.current = true;
-        setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-        await unlock(pass);
-        await prewarm(DEFAULT_SCOPES);
-        try { sessionStorage.removeItem("repping:pph"); } catch {}
-        try { localStorage.removeItem("repping:pph"); } catch {}
-      } catch (e) {
-        console.error("[/clients] unlock failed:", e);
-      } finally {
-        unlockingRef.current = false;
-      }
-    })();
+(async () => {
+  try {
+    unlockingRef.current = true;
+    setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
+    await unlock(pass);
+    await prewarm(DEFAULT_SCOPES);
+    try { sessionStorage.removeItem("repping:pph"); } catch {}
+    try { localStorage.removeItem("repping:pph"); } catch {}
+  } catch (e: any) {
+    const msg = String(e?.message || e || "");
+    // Evita di loggare OperationError "falso positivo"
+    if (!/OperationError/i.test(msg)) {
+      console.error("[/clients] unlock failed:", e);
+    }
+  } finally {
+    unlockingRef.current = false;
+  }
+})();
+
+    
   }, [authChecked, ready, unlock, prewarm]);
 
   useEffect(() => {
@@ -149,48 +155,22 @@ const decryptFields = (getDbg()?.decryptFields) as unknown as (
     for (const r of (data as RawAccount[])) {
       try {
         
-      // --- INIZIO nuovo contenuto del try { ... } ---
+// --- INIZIO nuovo contenuto del try { ... } ---
 let decObj: Record<string, unknown> = {};
+const dbg = getDbg();
 
-if (hasDecryptRow) {
-  // Percorso robusto
-  const dec = await (crypto as any).decryptRow(scope, r as any);
-  decObj = (dec ?? {}) as Record<string, unknown>;
-} else {
-  // Adapter con retry: prima ARRAY-spec, se fallisce riprova con OBJECT-spec
-  let decRaw: any;
-  try {
-    const specsArr = [
-      { name: "name",       enc: r.name_enc,       iv: r.name_iv },
-      { name: "email",      enc: r.email_enc,      iv: r.email_iv },
-      { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
-      { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
-      { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
-    ];
-    decRaw = await decryptFields("table:accounts", "accounts", r.id, specsArr, {});
-  } catch (e: any) {
-    // fallback per impl. legacy che si aspetta un OBJECT-spec
-    console.warn("[/clients] decryptFields array-spec failed, retry object-spec:", e?.message || e);
-    const specsObj = {
-      name:       { enc: r.name_enc,       iv: r.name_iv },
-      email:      { enc: r.email_enc,      iv: r.email_iv },
-      phone:      { enc: r.phone_enc,      iv: r.phone_iv },
-      vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
-      notes:      { enc: r.notes_enc,      iv: r.notes_iv },
-    };
-    decRaw = await (crypto as any).decryptFields("table:accounts", "accounts", r.id, specsObj, {});
-  }
+// scegliamo decryptRow dal service o, in fallback, da window.debugCrypto
+const decRowFn =
+  (crypto as any)?.decryptRow ||
+  (dbg && typeof dbg.decryptRow === "function" ? dbg.decryptRow.bind(dbg) : null);
 
-  // Normalizza output a object { name: value, ... }
-  decObj = Array.isArray(decRaw)
-    ? decRaw.reduce((acc: Record<string, unknown>, item: any) => {
-        if (item && typeof item === "object" && "name" in item) {
-          acc[item.name] = item.value ?? "";
-        }
-        return acc;
-      }, {})
-    : ((decRaw ?? {}) as Record<string, unknown>);
+if (!decRowFn) {
+  throw new Error("decryptRow non disponibile");
 }
+
+// Passiamo la riga così com’è: contiene *_enc / *_iv necessari
+const dec = await decRowFn(scope, r as any);
+decObj = (dec ?? {}) as Record<string, unknown>;
 
 plain.push({
   id: r.id,
