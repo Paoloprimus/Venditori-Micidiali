@@ -7,24 +7,23 @@ import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
 // Tipi
 type RawAccount = {
-id: string;
-created_at: string;
-name_enc: any; name_iv: any;
-email_enc: any; email_iv: any;
-phone_enc: any; phone_iv: any;
-vat_number_enc: any; vat_number_iv: any;
-notes_enc: any; notes_iv: any;
+  id: string;
+  created_at: string;
+  name_enc: any; name_iv: any;
+  email_enc: any; email_iv: any;
+  phone_enc: any; phone_iv: any;
+  vat_number_enc: any; vat_number_iv: any;
+  notes_enc: any; notes_iv: any;
 };
 
-
 type PlainAccount = {
-id: string;
-created_at: string;
-name: string;
-email: string;
-phone: string;
-vat_number: string;
-notes: string;
+  id: string;
+  created_at: string;
+  name: string;
+  email: string;
+  phone: string;
+  vat_number: string;
+  notes: string;
 };
 
 const PAGE_SIZE = 25;
@@ -52,38 +51,37 @@ export default function ClientsPage(): JSX.Element {
   const [diag, setDiag] = useState({ auth: "", ready: false, passInStorage: false, unlockAttempts: 0, loaded: 0 });
   const unlockingRef = useRef(false);
 
-useEffect(() => {
-  if (!authChecked) return;       // aspetta check auth
-  if (ready) return;              // già sbloccato
-  if (unlockingRef.current) return;
+  useEffect(() => {
+    if (!authChecked) return;       // aspetta check auth
+    if (ready) return;              // già sbloccato
+    if (unlockingRef.current) return;
 
-  const pass =
-    typeof window !== "undefined"
-      ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
-      : "";
+    const pass =
+      typeof window !== "undefined"
+        ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
+        : "";
 
-  const hasPass = !!pass;
-  setDiag((d) => ({ ...d, passInStorage: hasPass }));
+    const hasPass = !!pass;
+    setDiag((d) => ({ ...d, passInStorage: hasPass }));
 
-  if (!hasPass) return;
+    if (!hasPass) return;
 
-  (async () => {
-    try {
-      unlockingRef.current = true;
-      setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-      await unlock(pass);
-      await prewarm(DEFAULT_SCOPES);
-      try { sessionStorage.removeItem("repping:pph"); } catch {}
-      try { localStorage.removeItem("repping:pph"); } catch {}
-    } catch (e) {
-      console.error("[/clients] unlock failed:", e);
-    } finally {
-      unlockingRef.current = false;
-    }
-  })();
-}, [authChecked, ready, unlock, prewarm]);
+    (async () => {
+      try {
+        unlockingRef.current = true;
+        setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
+        await unlock(pass);
+        await prewarm(DEFAULT_SCOPES);
+        try { sessionStorage.removeItem("repping:pph"); } catch {}
+        try { localStorage.removeItem("repping:pph"); } catch {}
+      } catch (e) {
+        console.error("[/clients] unlock failed:", e);
+      } finally {
+        unlockingRef.current = false;
+      }
+    })();
+  }, [authChecked, ready, unlock, prewarm]);
 
-  
   useEffect(() => {
     let alive = true;
     (async () => {
@@ -127,79 +125,69 @@ useEffect(() => {
     }
 
     // === PATCH NON DISTRUTTIVA ===
-    // Se c'è decryptRow, usalo. Altrimenti usa il tuo decryptFields ma con scope corretto "table:accounts".
     const hasDecryptRow = typeof (crypto as any)?.decryptRow === "function";
     const scope = "table:accounts";
 
-const decryptFields = (crypto as any).decryptFields as (
-  scope: string,
-  table: string,
-  id: string,
-  specs: Array<{ name: string; enc: any; iv: any }>,
-  opts?: any
-) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
-
+    const decryptFields = (crypto as any).decryptFields as (
+      scope: string,
+      table: string,
+      id: string,
+      specs: Array<{ name: string; enc: any; iv: any }>,
+      opts?: any
+    ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
 
     const plain: PlainAccount[] = [];
     for (const r of (data as RawAccount[])) {
       try {
-      // ——— SOSTITUISCI TUTTO IL BLOCCO CHE HAI QUOTATO CON QUESTO ———
-let decObj: Record<string, unknown> = {};
+        let decObj: Record<string, unknown> = {};
 
-if (hasDecryptRow) {
-  // Percorso robusto: passa l’intera riga (contiene *_enc / *_iv)
-  const dec = await (crypto as any).decryptRow(scope, r as any);
-  decObj = (dec ?? {}) as Record<string, unknown>;
-} else {
-  // Legacy helper: vuole un ARRAY di specifiche, non un object
-  const decRaw = await decryptFields(
-    "table:accounts",           // ✅ scope corretto
-    "accounts",
-    r.id,
-    [
-      { name: "name",       enc: r.name_enc,       iv: r.name_iv },
-      { name: "email",      enc: r.email_enc,      iv: r.email_iv },
-      { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
-      { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
-      { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
-    ],
-    {}
-  );
+        if (hasDecryptRow) {
+          // Percorso robusto: passa l'intera riga (contiene *_enc / *_iv)
+          const dec = await (crypto as any).decryptRow(scope, r as any);
+          decObj = (dec ?? {}) as Record<string, unknown>;
+        } else {
+          // Legacy helper: vuole un ARRAY di specifiche, non un object
+          const decRaw = await decryptFields(
+            "table:accounts",           // ✅ scope corretto
+            "accounts",
+            r.id,
+            [
+              { name: "name",       enc: r.name_enc,       iv: r.name_iv },
+              { name: "email",      enc: r.email_enc,      iv: r.email_iv },
+              { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
+              { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
+              { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
+            ],
+            {}
+          );
 
-  // Normalizza: alcune impl. ritornano array [{name,value}], altre object
-  decObj = Array.isArray(decRaw)
-    ? decRaw.reduce((acc: Record<string, unknown>, item: any) => {
-        if (item && typeof item === "object" && "name" in item) {
-          acc[item.name] = item.value ?? "";
+          // Normalizza: alcune impl. ritornano array [{name,value}], altre object
+          decObj = Array.isArray(decRaw)
+            ? decRaw.reduce((acc: Record<string, unknown>, item: any) => {
+                if (item && typeof item === "object" && "name" in item) {
+                  acc[item.name] = item.value ?? "";
+                }
+                return acc;
+              }, {})
+            : ((decRaw ?? {}) as Record<string, unknown>);
         }
-        return acc;
-      }, {})
-    : ((decRaw ?? {}) as Record<string, unknown>);
-}
 
-plain.push({
-  id: r.id,
-  created_at: r.created_at,
-  name:       String(decObj?.name ?? ""),
-  email:      String(decObj?.email ?? ""),
-  phone:      String(decObj?.phone ?? ""),
-  vat_number: String(decObj?.vat_number ?? ""),
-  notes:      String(decObj?.notes ?? ""),
-});
-
-     } catch (e) {
+        plain.push({
+          id: r.id,
+          created_at: r.created_at,
+          name:       String(decObj?.name ?? ""),
+          email:      String(decObj?.email ?? ""),
+          phone:      String(decObj?.phone ?? ""),
+          vat_number: String(decObj?.vat_number ?? ""),
+          notes:      String(decObj?.notes ?? ""),
+        });
+      } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
         plain.push({
           id: r.id, created_at: r.created_at, name: "", email: "", phone: "", vat_number: "", notes: "",
         });
       }
-    } // <-- CHIUDE IL for
-
-    setRows(plain);
-    setLoading(false);
-    setDiag((d) => ({ ...d, loaded: plain.length }));
-  } // <-- questa graffa chiude loadPage (già c’è nel tuo file)      
-
+    }
 
     setRows(plain);
     setLoading(false);
@@ -240,7 +228,7 @@ plain.push({
       <div className="p-6">
         <div className="mb-2 font-semibold">Sessione non attiva</div>
         <p className="text-sm text-gray-600">
-          Effettua di nuovo l’accesso per vedere i tuoi clienti.
+          Effettua di nuovo l'accesso per vedere i tuoi clienti.
         </p>
         <button className="px-3 py-2 rounded border mt-3" onClick={() => window.location.href = "/login"}>
           Vai al login
