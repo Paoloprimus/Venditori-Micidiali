@@ -187,8 +187,18 @@ plain.push({
   notes:      String(decObj?.notes ?? ""),
 });
 
-        
-        
+     } catch (e) {
+        console.warn("[/clients] decrypt error for", r.id, e);
+        plain.push({
+          id: r.id, created_at: r.created_at, name: "", email: "", phone: "", vat_number: "", notes: "",
+        });
+      }
+    } // <-- CHIUDE IL for
+
+    setRows(plain);
+    setLoading(false);
+    setDiag((d) => ({ ...d, loaded: plain.length }));
+  } // <-- questa graffa chiude loadPage (già c’è nel tuo file)      
 
 
     setRows(plain);
