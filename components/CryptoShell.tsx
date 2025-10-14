@@ -36,30 +36,21 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
     }
   }
 
-  // 🔧 PATCH: fix runtime di debugCrypto.decryptFields buggato (non rimuove nulla)
+   // 🔧 PATCH: fix runtime di debugCrypto.decryptFields buggato (versione con fallback a decryptRow)
   useEffect(() => {
     if (typeof window === "undefined") return;
     const win: any = window as any;
     const dbg: any = win.debugCrypto;
-    if (!dbg || dbg.__df_patch_v3) return;
-
-    // scegli un metodo di decrypt “basso livello” se esiste
-    const pick = (...names: string[]) =>
-      names.map((n) => [n, dbg?.[n]] as const).find(([, f]) => typeof f === "function")?.[1];
-
-    const lowLevel =
-      pick("decryptOne") ||
-      pick("decryptField") ||
-      pick("decryptValue") ||
-      pick("decryptRaw") ||
-      pick("decrypt"); // uno dei nomi tipici
-
-    if (!lowLevel) {
-      console.warn("[crypto] nessun low-level decrypt trovato; lascio decryptFields invariato");
-      return;
-    }
+    if (!dbg || dbg.__df_patch_row || typeof dbg === "undefined") return;
 
     const orig = typeof dbg.decryptFields === "function" ? dbg.decryptFields.bind(dbg) : null;
+    const hasDecryptRow = typeof dbg.decryptRow === "function";
+
+    // log diagnostico una sola volta
+    try {
+      const keys = Object.keys(dbg || {});
+      console.log("[crypto] debugCrypto keys:", keys);
+    } catch {}
 
     dbg.decryptFields = async function patchedDecryptFields(
       scope: string,
@@ -68,46 +59,59 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
       specs: any,
       opts?: any
     ) {
-      // normalizza: accetta sia array che object { name: {enc,iv}, ... }
-      const list = Array.isArray(specs)
+      // Normalizza: accetta array [{name,enc,iv}] o object { name: {enc,iv}, ... }
+      const list: Array<{ name: string; enc: any; iv: any }> = Array.isArray(specs)
         ? specs
-        : Object.keys(specs || {})
-            .map((k) => ({ name: k, enc: specs[k]?.enc, iv: specs[k]?.iv }))
-            .filter((s) => s.enc && s.iv);
+        : Object.keys(specs || {}).map((k) => ({ name: k, enc: specs[k]?.enc, iv: specs[k]?.iv }));
 
-      const out: Record<string, string> = {};
-      for (const s of list) {
-        let val: any;
-        try {
-          // firma completa (scope, table, id, enc, iv, opts)
-          val = await lowLevel(scope, table, id, s.enc, s.iv, opts);
-        } catch {
-          try {
-            // fallback firma breve (enc, iv)
-            val = await lowLevel(s.enc, s.iv);
-          } catch (e2) {
-            // ultimo tentativo: usa l'originale se disponibile
-            if (orig) {
-              const res = await orig(scope, table, id, [s], opts);
-              if (Array.isArray(res)) {
-                const found = res.find((it: any) => it?.name === s.name);
-                val = found?.value;
-              } else if (res && typeof res === "object") {
-                val = (res as any)[s.name];
-              }
-            } else {
-              throw e2;
+      // Se abbiamo decryptRow, costruiamo una riga sintetica e usiamo quello
+      if (hasDecryptRow) {
+        const syntheticRow: Record<string, any> = {};
+        for (const s of list) {
+          if (!s || !s.name) continue;
+          syntheticRow[`${s.name}_enc`] = s.enc;
+          syntheticRow[`${s.name}_iv`] = s.iv;
+        }
+        const dec = await dbg.decryptRow(scope, syntheticRow);
+        const out: Record<string, string> = {};
+        for (const s of list) {
+          const v = (dec as any)?.[s.name];
+          out[s.name] = typeof v === "string" ? v : String(v ?? "");
+        }
+        return out;
+      }
+
+      // Altrimenti prova l'originale (se c'è): passiamo sempre array
+      if (orig) {
+        const res = await orig(
+          scope,
+          table,
+          id,
+          list.map((s) => ({ name: s.name, enc: s.enc, iv: s.iv })),
+          opts
+        );
+
+        // Normalizza: può restituire object {name:..} o array [{name,value}]
+        if (Array.isArray(res)) {
+          const out: Record<string, string> = {};
+          for (const item of res) {
+            if (item && typeof item === "object" && "name" in item) {
+              out[(item as any).name] = String((item as any).value ?? "");
             }
           }
+          return out;
         }
-        out[s.name] = typeof val === "string" ? val : String(val ?? "");
+        return res as Record<string, string>;
       }
-      return out;
+
+      // Nessuna strada disponibile
+      throw new Error("decryptFields non disponibile (né decryptRow né impl. originale)");
     };
 
-    dbg.__df_patch_v3 = true;
-    console.log("[crypto] decryptFields patch applicata");
+    dbg.__df_patch_row = true;
+    console.log("[crypto] decryptFields patch (via decryptRow) applicata");
   }, []);
+
 
   // API globale di emergenza (debug): window.reppingUnlock("pass")
   useEffect(() => {
