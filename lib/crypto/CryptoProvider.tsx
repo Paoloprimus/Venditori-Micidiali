@@ -229,77 +229,54 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
         return await dbg.decryptRow(scope, row);
       },
 
-
-      decryptFields: dbg.decryptFields
-  ? async (
-      scope: string,
-      table: string,
-      recordId: string,
-      rowOrMap: Record<string, unknown>,
-      fieldNames?: string[]
-    ): Promise<Record<string, unknown>> => {
-      // pass-through 1:1 verso il debug helper
-      return await dbg.decryptFields(scope, table, recordId, rowOrMap, fieldNames);
-    }
-  : undefined,
-
-
-      
       computeBlindIndex: dbg.computeBlindIndex
         ? async (scope: string, plaintext: string) =>
             await dbg.computeBlindIndex(scope, plaintext)
         : undefined,
+
+
+decryptFields?: (
+  scope: string,
+  table: string,
+  rowId: string,
+  specsOrRow:
+    | Array<{ name: string; enc: any; iv: any }>
+    | Record<string, { enc: any; iv: any }>
+    | Record<string, unknown>,
+  extra?: any
+) => Promise<Record<string, unknown>>;
+
+        
+        const row = rowOrMap ?? {};
+        const fields =
+          fieldNames && fieldNames.length
+            ? fieldNames
+            : Object.keys(row)
+                .filter((k) => k.endsWith("_enc"))
+                .map((k) => k.slice(0, -4));
+
+        // 1) Se il debug helper espone decryptFields con la stessa firma → pass-through
+        if (dbg && typeof dbg.decryptFields === "function") {
+          return await dbg.decryptFields(scope, table, recordId, row, fields);
+        }
+
+        // 2) Altrimenti se espone decryptRow → costruisco la riga sintetica e decifro
+        if (dbg && typeof dbg.decryptRow === "function") {
+          const synthetic: Record<string, unknown> = {};
+          for (const f of fields) {
+            synthetic[`${f}_enc`] = row[`${f}_enc`];
+            synthetic[`${f}_iv`]  = row[`${f}_iv`];
+          }
+          const dec = await dbg.decryptRow(scope, synthetic);
+          return (dec ?? {}) as Record<string, unknown>;
+        }
+
+        // 3) Nessuna API sul debug: qui il context esporrà l’impl alternativa (altCryptoService),
+        //    che ha già una decryptFields con questa stessa firma.
+        throw new Error("decryptFields non disponibile");
+      },
+
     };
-
-      // ---- SHIM decryptFields: usa decryptRow se c'è, altrimenti inoltra alla decryptFields nativa ----
-  (svc as any).decryptFields = async function decryptFieldsShim(
-    scope: string,
-    table: string,
-    rowId: string,
-    specs:
-      | Array<{ name: string; enc: any; iv: any }>
-      | Record<string, { enc: any; iv: any }>,
-    opts?: any
-  ): Promise<Record<string, unknown>> {
-    // normalizza specs -> array [{ name, enc, iv }]
-    const list: Array<{ name: string; enc: any; iv: any }> = Array.isArray(specs)
-      ? specs
-      : Object.keys(specs || {}).map((k) => ({
-          name: k,
-          enc: (specs as any)[k]?.enc,
-          iv: (specs as any)[k]?.iv,
-        }));
-
-    // 1) preferisci decryptRow del debug helper se presente
-    if (typeof dbg.decryptRow === "function") {
-      const synthetic: Record<string, any> = {};
-      for (const s of list) {
-        if (!s || !s.name) continue;
-        synthetic[`${s.name}_enc`] = s.enc;
-        synthetic[`${s.name}_iv`] = s.iv;
-      }
-      const dec = await dbg.decryptRow(scope, synthetic);
-      const out: Record<string, unknown> = {};
-      for (const s of list) out[s.name] = (dec as any)?.[s.name] ?? "";
-      return out;
-    }
-
-    // 2) fallback: se esiste decryptFields nativa, inoltra (array-spec)
-    if (typeof dbg.decryptFields === "function") {
-      const res = await dbg.decryptFields(scope, table, rowId, list, opts);
-      if (Array.isArray(res)) {
-        return res.reduce((acc: Record<string, unknown>, it: any) => {
-          if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
-          return acc;
-        }, {});
-      }
-      return (res ?? {}) as Record<string, unknown>;
-    }
-
-    // 3) nessuna API disponibile
-    throw new Error("decryptFields non disponibile");
-  };
-
     
     return svc;
   }, [userId, getDebug()]);
@@ -421,57 +398,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             );
           };
         }
-
-      // Shim decryptFields anche sull'impl alternativa (usa quello che è disponibile)
-  if (!(impl as any).decryptFields) {
-    (impl as any).decryptFields = async function decryptFieldsShimAlt(
-      scope: string,
-      table: string,
-      rowId: string,
-      specs:
-        | Array<{ name: string; enc: any; iv: any }>
-        | Record<string, { enc: any; iv: any }>,
-      opts?: any
-    ): Promise<Record<string, unknown>> {
-      const list: Array<{ name: string; enc: any; iv: any }> = Array.isArray(specs)
-        ? specs
-        : Object.keys(specs || {}).map((k) => ({
-            name: k,
-            enc: (specs as any)[k]?.enc,
-            iv: (specs as any)[k]?.iv,
-          }));
-
-      // preferisci decryptRow sull'impl se esiste
-      if (typeof (impl as any).decryptRow === "function") {
-        const synthetic: Record<string, any> = {};
-        for (const s of list) {
-          if (!s || !s.name) continue;
-          synthetic[`${s.name}_enc`] = s.enc;
-          synthetic[`${s.name}_iv`] = s.iv;
-        }
-        const dec = await (impl as any).decryptRow(scope, synthetic);
-        const out: Record<string, unknown> = {};
-        for (const s of list) out[s.name] = (dec as any)?.[s.name] ?? "";
-        return out;
-      }
-
-      // fallback: se l'impl ha una decryptFields nativa
-      if (typeof (impl as any).decryptFields === "function") {
-        const res = await (impl as any).decryptFields(scope, table, rowId, list, opts);
-        if (Array.isArray(res)) {
-          return res.reduce((acc: Record<string, unknown>, it: any) => {
-            if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
-            return acc;
-          }, {});
-        }
-        return (res ?? {}) as Record<string, unknown>;
-      }
-
-      throw new Error("decryptFields non disponibile (impl alternativa)");
-    };
-  }
-
-        
+     
         setAltCryptoService(impl);
       }
     } catch {}
