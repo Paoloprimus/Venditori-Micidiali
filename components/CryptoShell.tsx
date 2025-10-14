@@ -36,6 +36,79 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
     }
   }
 
+  // 🔧 PATCH: fix runtime di debugCrypto.decryptFields buggato (non rimuove nulla)
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const win: any = window as any;
+    const dbg: any = win.debugCrypto;
+    if (!dbg || dbg.__df_patch_v3) return;
+
+    // scegli un metodo di decrypt “basso livello” se esiste
+    const pick = (...names: string[]) =>
+      names.map((n) => [n, dbg?.[n]] as const).find(([, f]) => typeof f === "function")?.[1];
+
+    const lowLevel =
+      pick("decryptOne") ||
+      pick("decryptField") ||
+      pick("decryptValue") ||
+      pick("decryptRaw") ||
+      pick("decrypt"); // uno dei nomi tipici
+
+    if (!lowLevel) {
+      console.warn("[crypto] nessun low-level decrypt trovato; lascio decryptFields invariato");
+      return;
+    }
+
+    const orig = typeof dbg.decryptFields === "function" ? dbg.decryptFields.bind(dbg) : null;
+
+    dbg.decryptFields = async function patchedDecryptFields(
+      scope: string,
+      table: string,
+      id: string,
+      specs: any,
+      opts?: any
+    ) {
+      // normalizza: accetta sia array che object { name: {enc,iv}, ... }
+      const list = Array.isArray(specs)
+        ? specs
+        : Object.keys(specs || {})
+            .map((k) => ({ name: k, enc: specs[k]?.enc, iv: specs[k]?.iv }))
+            .filter((s) => s.enc && s.iv);
+
+      const out: Record<string, string> = {};
+      for (const s of list) {
+        let val: any;
+        try {
+          // firma completa (scope, table, id, enc, iv, opts)
+          val = await lowLevel(scope, table, id, s.enc, s.iv, opts);
+        } catch {
+          try {
+            // fallback firma breve (enc, iv)
+            val = await lowLevel(s.enc, s.iv);
+          } catch (e2) {
+            // ultimo tentativo: usa l'originale se disponibile
+            if (orig) {
+              const res = await orig(scope, table, id, [s], opts);
+              if (Array.isArray(res)) {
+                const found = res.find((it: any) => it?.name === s.name);
+                val = found?.value;
+              } else if (res && typeof res === "object") {
+                val = (res as any)[s.name];
+              }
+            } else {
+              throw e2;
+            }
+          }
+        }
+        out[s.name] = typeof val === "string" ? val : String(val ?? "");
+      }
+      return out;
+    };
+
+    dbg.__df_patch_v3 = true;
+    console.log("[crypto] decryptFields patch applicata");
+  }, []);
+
   // API globale di emergenza (debug): window.reppingUnlock("pass")
   useEffect(() => {
     if (typeof window === "undefined") return;
