@@ -234,19 +234,13 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             await dbg.computeBlindIndex(scope, plaintext)
         : undefined,
 
-
-decryptFields?: (
-  scope: string,
-  table: string,
-  rowId: string,
-  specsOrRow:
-    | Array<{ name: string; enc: any; iv: any }>
-    | Record<string, { enc: any; iv: any }>
-    | Record<string, unknown>,
-  extra?: any
-) => Promise<Record<string, unknown>>;
-
-        
+      decryptFields: async (
+        scope: string,
+        table: string,
+        recordId: string,
+        rowOrMap: Record<string, unknown>,
+        fieldNames?: string[]
+      ): Promise<Record<string, unknown>> => {
         const row = rowOrMap ?? {};
         const fields =
           fieldNames && fieldNames.length
@@ -277,6 +271,7 @@ decryptFields?: (
       },
 
     };
+
     
     return svc;
   }, [userId, getDebug()]);
