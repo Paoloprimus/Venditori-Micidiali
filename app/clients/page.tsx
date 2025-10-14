@@ -71,27 +71,6 @@ export default function ClientsPage(): JSX.Element {
   }, []);
 
   useEffect(() => {
-    if (!authChecked || ready || unlockingRef.current) return;
-    const pass = typeof window !== "undefined" ? sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "" : "";
-    if (!pass) return;
-    setDiag((d) => ({ ...d, passInStorage: true }));
-    (async () => {
-      try {
-        unlockingRef.current = true;
-        setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-        await unlock(pass);
-        await prewarm(DEFAULT_SCOPES);
-        sessionStorage.removeItem("repping:pph");
-        localStorage.removeItem("repping:pph");
-      } catch (e) {
-        console.error("[/clients] unlock failed:", e);
-      } finally {
-        unlockingRef.current = false;
-      }
-    })();
-  }, [authChecked, ready, unlock, prewarm]);
-
-  useEffect(() => {
     if (!authChecked || !userId || !ready || !crypto) return;
     loadPage(page);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -115,6 +94,11 @@ export default function ClientsPage(): JSX.Element {
       return;
     }
 
+    // === PATCH NON DISTRUTTIVA ===
+    // Se c'è decryptRow, usalo. Altrimenti usa il tuo decryptFields ma con scope corretto "table:accounts".
+    const hasDecryptRow = typeof (crypto as any)?.decryptRow === "function";
+    const scope = "table:accounts";
+
     const decryptFields = (crypto as any).decryptFields as (
       schema: string,
       table: string,
@@ -126,21 +110,30 @@ export default function ClientsPage(): JSX.Element {
     const plain: PlainAccount[] = [];
     for (const r of (data as RawAccount[])) {
       try {
-        const dec = await decryptFields("accounts", "accounts", r.id, {
-          name: { enc: r.name_enc, iv: r.name_iv },
-          email: { enc: r.email_enc, iv: r.email_iv },
-          phone: { enc: r.phone_enc, iv: r.phone_iv },
-          vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
-          notes: { enc: r.notes_enc, iv: r.notes_iv },
-        });
+        let dec: any;
+
+        if (hasDecryptRow) {
+          // Percorso robusto (classe reale o helper allineato)
+          dec = await (crypto as any).decryptRow<Partial<PlainAccount>>(scope, r as any);
+        } else {
+          // Percorso legacy del tuo debug helper: usa scope corretto
+          dec = await decryptFields(scope, "accounts", r.id, {
+            name: { enc: r.name_enc, iv: r.name_iv },
+            email: { enc: r.email_enc, iv: r.email_iv },
+            phone: { enc: r.phone_enc, iv: r.phone_iv },
+            vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
+            notes: { enc: r.notes_enc, iv: r.notes_iv },
+          }, {});
+        }
+
         plain.push({
           id: r.id,
           created_at: r.created_at,
-          name: String(dec.name ?? ""),
-          email: String(dec.email ?? ""),
-          phone: String(dec.phone ?? ""),
-          vat_number: String(dec.vat_number ?? ""),
-          notes: String(dec.notes ?? ""),
+          name: String(dec?.name ?? ""),
+          email: String(dec?.email ?? ""),
+          phone: String(dec?.phone ?? ""),
+          vat_number: String(dec?.vat_number ?? ""),
+          notes: String(dec?.notes ?? ""),
         });
       } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
