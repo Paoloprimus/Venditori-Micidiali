@@ -53,9 +53,38 @@ const CryptoContext = createContext<CryptoContextType>({
 
 function getDebug(): any | null {
   if (typeof window === "undefined") return null;
-  const anyWin = window as any;
-  return anyWin.debugCrypto ?? null;
+  // 1) se già presente, usa quello
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const w: any = window as any;
+  if (w.debugCrypto) return w.debugCrypto;
+
+  // 2) autodiscovery: cerca in window un oggetto con metodi noti
+  const looksLikeCrypto = (obj: any) =>
+    obj && typeof obj === "object" && (
+      typeof obj.unlockWithPassphrase === "function" ||
+      typeof obj.decryptFields === "function" ||
+      typeof obj.decryptRow === "function" ||
+      typeof obj.ensureScope === "function" ||
+      typeof obj.getOrCreateScopeKeys === "function"
+    );
+
+  try {
+    for (const k in w) {
+      // evita getter strani dei browser
+      let v: any;
+      try { v = w[k]; } catch { continue; }
+      if (looksLikeCrypto(v)) {
+        w.debugCrypto = v;        // <-- normalizziamo il nome
+        return w.debugCrypto;
+      }
+    }
+  } catch {
+    // ignora
+  }
+
+  return null;
 }
+
 
 function swallow409<T = unknown>(e: unknown): never | T {
   const err = e as any;
