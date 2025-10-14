@@ -139,48 +139,62 @@ export default function ClientsPage(): JSX.Element {
     const plain: PlainAccount[] = [];
     for (const r of (data as RawAccount[])) {
       try {
-        let decObj: Record<string, unknown> = {};
+        
+      // --- INIZIO nuovo contenuto del try { ... } ---
+let decObj: Record<string, unknown> = {};
 
-        if (hasDecryptRow) {
-          // Percorso robusto: passa l'intera riga (contiene *_enc / *_iv)
-          const dec = await (crypto as any).decryptRow(scope, r as any);
-          decObj = (dec ?? {}) as Record<string, unknown>;
-        } else {
-          // Legacy helper: vuole un ARRAY di specifiche, non un object
-          const decRaw = await decryptFields(
-            "table:accounts",           // ✅ scope corretto
-            "accounts",
-            r.id,
-            [
-              { name: "name",       enc: r.name_enc,       iv: r.name_iv },
-              { name: "email",      enc: r.email_enc,      iv: r.email_iv },
-              { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
-              { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
-              { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
-            ],
-            {}
-          );
+if (hasDecryptRow) {
+  // Percorso robusto
+  const dec = await (crypto as any).decryptRow(scope, r as any);
+  decObj = (dec ?? {}) as Record<string, unknown>;
+} else {
+  // Adapter con retry: prima ARRAY-spec, se fallisce riprova con OBJECT-spec
+  let decRaw: any;
+  try {
+    const specsArr = [
+      { name: "name",       enc: r.name_enc,       iv: r.name_iv },
+      { name: "email",      enc: r.email_enc,      iv: r.email_iv },
+      { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
+      { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
+      { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
+    ];
+    decRaw = await decryptFields("table:accounts", "accounts", r.id, specsArr, {});
+  } catch (e: any) {
+    // fallback per impl. legacy che si aspetta un OBJECT-spec
+    console.warn("[/clients] decryptFields array-spec failed, retry object-spec:", e?.message || e);
+    const specsObj = {
+      name:       { enc: r.name_enc,       iv: r.name_iv },
+      email:      { enc: r.email_enc,      iv: r.email_iv },
+      phone:      { enc: r.phone_enc,      iv: r.phone_iv },
+      vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
+      notes:      { enc: r.notes_enc,      iv: r.notes_iv },
+    };
+    decRaw = await (crypto as any).decryptFields("table:accounts", "accounts", r.id, specsObj, {});
+  }
 
-          // Normalizza: alcune impl. ritornano array [{name,value}], altre object
-          decObj = Array.isArray(decRaw)
-            ? decRaw.reduce((acc: Record<string, unknown>, item: any) => {
-                if (item && typeof item === "object" && "name" in item) {
-                  acc[item.name] = item.value ?? "";
-                }
-                return acc;
-              }, {})
-            : ((decRaw ?? {}) as Record<string, unknown>);
+  // Normalizza output a object { name: value, ... }
+  decObj = Array.isArray(decRaw)
+    ? decRaw.reduce((acc: Record<string, unknown>, item: any) => {
+        if (item && typeof item === "object" && "name" in item) {
+          acc[item.name] = item.value ?? "";
         }
+        return acc;
+      }, {})
+    : ((decRaw ?? {}) as Record<string, unknown>);
+}
 
-        plain.push({
-          id: r.id,
-          created_at: r.created_at,
-          name:       String(decObj?.name ?? ""),
-          email:      String(decObj?.email ?? ""),
-          phone:      String(decObj?.phone ?? ""),
-          vat_number: String(decObj?.vat_number ?? ""),
-          notes:      String(decObj?.notes ?? ""),
-        });
+plain.push({
+  id: r.id,
+  created_at: r.created_at,
+  name:       String(decObj?.name ?? ""),
+  email:      String(decObj?.email ?? ""),
+  phone:      String(decObj?.phone ?? ""),
+  vat_number: String(decObj?.vat_number ?? ""),
+  notes:      String(decObj?.notes ?? ""),
+});
+// --- FINE nuovo contenuto del try { ... } ---
+   
+
       } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
         plain.push({
