@@ -131,47 +131,65 @@ useEffect(() => {
     const hasDecryptRow = typeof (crypto as any)?.decryptRow === "function";
     const scope = "table:accounts";
 
-    const decryptFields = (crypto as any).decryptFields as (
-      schema: string,
-      table: string,
-      id: string,
-      fields: Record<string, { enc: any; iv: any }>,
-      opts?: any
-    ) => Promise<Record<string, unknown>>;
+const decryptFields = (crypto as any).decryptFields as (
+  scope: string,
+  table: string,
+  id: string,
+  specs: Array<{ name: string; enc: any; iv: any }>,
+  opts?: any
+) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
+
 
     const plain: PlainAccount[] = [];
     for (const r of (data as RawAccount[])) {
       try {
-        let dec: any;
+      // ——— SOSTITUISCI TUTTO IL BLOCCO CHE HAI QUOTATO CON QUESTO ———
+let decObj: Record<string, unknown> = {};
 
-        if (hasDecryptRow) {
-          // 🔧 Fix TS: niente type args su any; castiamo il risultato
-          dec = await (crypto as any).decryptRow(scope, r as any) as Partial<PlainAccount>;
-        } else {
-          // Percorso legacy del tuo debug helper: usa scope corretto
-          dec = await decryptFields(scope, "accounts", r.id, {
-            name: { enc: r.name_enc, iv: r.name_iv },
-            email: { enc: r.email_enc, iv: r.email_iv },
-            phone: { enc: r.phone_enc, iv: r.phone_iv },
-            vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
-            notes: { enc: r.notes_enc, iv: r.notes_iv },
-          }, {});
+if (hasDecryptRow) {
+  // Percorso robusto: passa l’intera riga (contiene *_enc / *_iv)
+  const dec = await (crypto as any).decryptRow(scope, r as any);
+  decObj = (dec ?? {}) as Record<string, unknown>;
+} else {
+  // Legacy helper: vuole un ARRAY di specifiche, non un object
+  const decRaw = await decryptFields(
+    "table:accounts",           // ✅ scope corretto
+    "accounts",
+    r.id,
+    [
+      { name: "name",       enc: r.name_enc,       iv: r.name_iv },
+      { name: "email",      enc: r.email_enc,      iv: r.email_iv },
+      { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
+      { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
+      { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
+    ],
+    {}
+  );
+
+  // Normalizza: alcune impl. ritornano array [{name,value}], altre object
+  decObj = Array.isArray(decRaw)
+    ? decRaw.reduce((acc: Record<string, unknown>, item: any) => {
+        if (item && typeof item === "object" && "name" in item) {
+          acc[item.name] = item.value ?? "";
         }
+        return acc;
+      }, {})
+    : ((decRaw ?? {}) as Record<string, unknown>);
+}
 
-        plain.push({
-          id: r.id,
-          created_at: r.created_at,
-          name: String(dec?.name ?? ""),
-          email: String(dec?.email ?? ""),
-          phone: String(dec?.phone ?? ""),
-          vat_number: String(dec?.vat_number ?? ""),
-          notes: String(dec?.notes ?? ""),
-        });
-      } catch (e) {
-        console.warn("[/clients] decrypt error for", r.id, e);
-        plain.push({ id: r.id, created_at: r.created_at, name: "", email: "", phone: "", vat_number: "", notes: "" });
-      }
-    }
+plain.push({
+  id: r.id,
+  created_at: r.created_at,
+  name:       String(decObj?.name ?? ""),
+  email:      String(decObj?.email ?? ""),
+  phone:      String(decObj?.phone ?? ""),
+  vat_number: String(decObj?.vat_number ?? ""),
+  notes:      String(decObj?.notes ?? ""),
+});
+
+        
+        
+
 
     setRows(plain);
     setLoading(false);
