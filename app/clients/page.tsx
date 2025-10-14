@@ -156,21 +156,73 @@ const decryptFields = (getDbg()?.decryptFields) as unknown as (
       try {
         
 // --- INIZIO nuovo contenuto del try { ... } ---
-let decObj: Record<string, unknown> = {};
-const dbg = getDbg();
+// helper per normalizzare l'output (può essere object o array [{name,value}])
+const toObj = (x: any): Record<string, unknown> => {
+  if (Array.isArray(x)) {
+    return x.reduce((acc: Record<string, unknown>, it: any) => {
+      if (it && typeof it === "object" && "name" in it) {
+        acc[it.name] = it.value ?? "";
+      }
+      return acc;
+    }, {});
+  }
+  return (x ?? {}) as Record<string, unknown>;
+};
 
-// scegliamo decryptRow dal service o, in fallback, da window.debugCrypto
-const decRowFn =
-  (crypto as any)?.decryptRow ||
-  (dbg && typeof dbg.decryptRow === "function" ? dbg.decryptRow.bind(dbg) : null);
+const scope = "table:accounts";
+const dbg = (typeof window !== "undefined" ? (window as any).debugCrypto : null) as any;
 
-if (!decRowFn) {
-  throw new Error("decryptRow non disponibile");
+let decObj: Record<string, unknown> | null = null;
+
+// VARIANTE A: usare direttamente la decryptFields del debug con la RIGA intera (firma a 5 argomenti)
+if (!decObj && dbg && typeof dbg.decryptFields === "function") {
+  try {
+    const res = await dbg.decryptFields(scope, "accounts", r.id, r, {});
+    decObj = toObj(res);
+  } catch (_) {}
 }
 
-// Passiamo la riga così com’è: contiene *_enc / *_iv necessari
-const dec = await decRowFn(scope, r as any);
-decObj = (dec ?? {}) as Record<string, unknown>;
+// VARIANTE B: alcune impl. hanno firma breve (scope, row)
+if (!decObj && dbg && typeof dbg.decryptFields === "function") {
+  try {
+    const res = await dbg.decryptFields(scope, r);
+    decObj = toObj(res);
+  } catch (_) {}
+}
+
+// VARIANTE C: fallback su crypto.decryptFields con ARRAY-spec
+if (!decObj && typeof (crypto as any)?.decryptFields === "function") {
+  try {
+    const specsArr = [
+      { name: "name",       enc: r.name_enc,       iv: r.name_iv },
+      { name: "email",      enc: r.email_enc,      iv: r.email_iv },
+      { name: "phone",      enc: r.phone_enc,      iv: r.phone_iv },
+      { name: "vat_number", enc: r.vat_number_enc, iv: r.vat_number_iv },
+      { name: "notes",      enc: r.notes_enc,      iv: r.notes_iv },
+    ];
+    const res = await (crypto as any).decryptFields(scope, "accounts", r.id, specsArr, {});
+    decObj = toObj(res);
+  } catch (_) {}
+}
+
+// VARIANTE D: ultimo tentativo, object-spec
+if (!decObj && typeof (crypto as any)?.decryptFields === "function") {
+  try {
+    const specsObj = {
+      name:       { enc: r.name_enc,       iv: r.name_iv },
+      email:      { enc: r.email_enc,      iv: r.email_iv },
+      phone:      { enc: r.phone_enc,      iv: r.phone_iv },
+      vat_number: { enc: r.vat_number_enc, iv: r.vat_number_iv },
+      notes:      { enc: r.notes_enc,      iv: r.notes_iv },
+    };
+    const res = await (crypto as any).decryptFields(scope, "accounts", r.id, specsObj, {});
+    decObj = toObj(res);
+  } catch (_) {}
+}
+
+if (!decObj) {
+  throw new Error("Nessuna API di decrypt disponibile");
+}
 
 plain.push({
   id: r.id,
@@ -182,6 +234,7 @@ plain.push({
   notes:      String(decObj?.notes ?? ""),
 });
 // --- FINE nuovo contenuto del try { ... } ---
+
    
 
       } catch (e) {
