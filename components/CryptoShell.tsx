@@ -18,7 +18,7 @@ const DEV_AUTO_RESET =
   (process as any).env?.NEXT_PUBLIC_CRYPTO_DEV_AUTO_RESET === "1";
 
 export default function CryptoShell({ children }: { children: React.ReactNode }) {
-  const { ready, unlock, prewarm } = useCrypto();
+  const { ready, unlock, prewarm, crypto } = useCrypto();
   const [unlocking, setUnlocking] = useState(false);
 
   async function doUnlock(pass: string) {
@@ -36,6 +36,20 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
     }
   }
 
+// Espone in window un helper per decifrare una riga "accounts" dalla console
+useEffect(() => {
+  if (typeof window === "undefined" || !crypto) return;
+  (window as any).cryptoSvc = crypto; // utile se vuoi ispezionare le API
+  (window as any).cxDecrypt = async (row: any, scope = "table:accounts") => {
+    const fields = ["name", "email", "phone", "vat_number", "notes"];
+    const dec = await (crypto as any).decryptFields(scope, "accounts", row.id, row, fields);
+    console.log("DEC:", dec);
+    return dec;
+  };
+}, [crypto]);
+
+
+  
    // 🔧 PATCH: fix runtime di debugCrypto.decryptFields buggato (versione con fallback a decryptRow)
   useEffect(() => {
     if (typeof window === "undefined") return;
