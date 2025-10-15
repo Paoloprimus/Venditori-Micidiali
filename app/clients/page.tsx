@@ -150,46 +150,43 @@ const decryptFields = (crypto as any).decryptFields as (
   opts?: any
 ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
 
-const plain: PlainAccount[] = [];
-for (const r of (data as RawAccount[])) {
-  try {
-    const scope = "table:accounts";
+const scope = "table:accounts";
 
-    // ✅ usa l’API reale: riga grezza + lista campi da decifrare
-    if (typeof (crypto as any)?.decryptFields !== "function") {
-      throw new Error("decryptFields non disponibile sul servizio crypto");
-    }
-
-    const dec = await (crypto as any).decryptFields(
-      scope,          // scope
-      "accounts",     // table
-      r.id,           // recordId (usato nell'AAD)
-      r,              // riga grezza con *_enc / *_iv
-      ["name", "email", "phone", "vat_number", "notes"] // campi da decifrare
-    );
-
-    plain.push({
-      id: r.id,
-      created_at: r.created_at,
-      name:       String((dec as any)?.name ?? ""),
-      email:      String((dec as any)?.email ?? ""),
-      phone:      String((dec as any)?.phone ?? ""),
-      vat_number: String((dec as any)?.vat_number ?? ""),
-      notes:      String((dec as any)?.notes ?? ""),
-    });
-  } catch (e) {
-    console.warn("[/clients] decrypt error for", r.id, e);
-    plain.push({
-      id: r.id,
-      created_at: r.created_at,
-      name: "",
-      email: "",
-      phone: "",
-      vat_number: "",
-      notes: "",
-    });
-  }
+// ✅ usa l’API reale: riga grezza + lista campi da decifrare
+if (typeof (crypto as any)?.decryptFields !== "function") {
+  throw new Error("decryptFields non disponibile sul servizio crypto");
 }
+
+// normalizzatore: accetta object o array [{name,value}]
+const toObj = (x: any): Record<string, unknown> =>
+  Array.isArray(x)
+    ? x.reduce((acc: Record<string, unknown>, it: any) => {
+        if (it && typeof it === "object" && "name" in it) {
+          acc[it.name] = it.value ?? "";
+        }
+        return acc;
+      }, {})
+    : ((x ?? {}) as Record<string, unknown>);
+
+const decAny = await (crypto as any).decryptFields(
+  scope,          // scope
+  "accounts",     // table
+  r.id,           // recordId (usato nell'AAD)
+  r,              // riga grezza con *_enc / *_iv
+  ["name", "email", "phone", "vat_number", "notes"] // campi da decifrare
+);
+const dec = toObj(decAny);
+
+plain.push({
+  id: r.id,
+  created_at: r.created_at,
+  name:       String(dec.name ?? ""),
+  email:      String(dec.email ?? ""),
+  phone:      String(dec.phone ?? ""),
+  vat_number: String(dec.vat_number ?? ""),
+  notes:      String(dec.notes ?? ""),
+});
+
 
     setRows(plain);
     setLoading(false);
