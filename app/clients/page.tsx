@@ -150,6 +150,10 @@ const decryptFields = (crypto as any).decryptFields as (
   opts?: any
 ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
 
+    const plain: PlainAccount[] = [];
+for (const r of (data as RawAccount[])) {
+  try {
+
 const DEC_SCOPE = "table:accounts";
 
 // ✅ usa l’API reale: riga grezza + lista campi da decifrare
