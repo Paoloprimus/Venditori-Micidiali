@@ -150,7 +150,7 @@ const decryptFields = (crypto as any).decryptFields as (
   opts?: any
 ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
 
-const scope = "table:accounts";
+const DEC_SCOPE = "table:accounts";
 
 // ✅ usa l’API reale: riga grezza + lista campi da decifrare
 if (typeof (crypto as any)?.decryptFields !== "function") {
@@ -169,7 +169,7 @@ const toObj = (x: any): Record<string, unknown> =>
     : ((x ?? {}) as Record<string, unknown>);
 
 const decAny = await (crypto as any).decryptFields(
-  scope,          // scope
+  DEC_SCOPE,              // scope
   "accounts",     // table
   r.id,           // recordId (usato nell'AAD)
   r,              // riga grezza con *_enc / *_iv
