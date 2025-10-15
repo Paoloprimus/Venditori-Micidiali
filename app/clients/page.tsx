@@ -150,48 +150,58 @@ const decryptFields = (crypto as any).decryptFields as (
   opts?: any
 ) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
 
-    const plain: PlainAccount[] = [];
+const plain: PlainAccount[] = [];
 for (const r of (data as RawAccount[])) {
   try {
+    const DEC_SCOPE = "table:accounts";
 
-const DEC_SCOPE = "table:accounts";
+    // ✅ usa l’API reale: riga grezza + lista campi da decifrare
+    if (typeof (crypto as any)?.decryptFields !== "function") {
+      throw new Error("decryptFields non disponibile sul servizio crypto");
+    }
 
-// ✅ usa l’API reale: riga grezza + lista campi da decifrare
-if (typeof (crypto as any)?.decryptFields !== "function") {
-  throw new Error("decryptFields non disponibile sul servizio crypto");
+    // normalizzatore: accetta object o array [{name,value}]
+    const toObj = (x: any): Record<string, unknown> =>
+      Array.isArray(x)
+        ? x.reduce((acc: Record<string, unknown>, it: any) => {
+            if (it && typeof it === "object" && "name" in it) {
+              acc[it.name] = it.value ?? "";
+            }
+            return acc;
+          }, {})
+        : ((x ?? {}) as Record<string, unknown>);
+
+    const decAny = await (crypto as any).decryptFields(
+      DEC_SCOPE,                 // scope
+      "accounts",                // table
+      r.id,                      // recordId (usato nell'AAD)
+      r,                         // riga grezza con *_enc / *_iv
+      ["name", "email", "phone", "vat_number", "notes"] // campi da decifrare
+    );
+    const dec = toObj(decAny);
+
+    plain.push({
+      id: r.id,
+      created_at: r.created_at,
+      name:       String(dec.name ?? ""),
+      email:      String(dec.email ?? ""),
+      phone:      String(dec.phone ?? ""),
+      vat_number: String(dec.vat_number ?? ""),
+      notes:      String(dec.notes ?? ""),
+    });
+  } catch (e) {
+    console.warn("[/clients] decrypt error for", r.id, e);
+    plain.push({
+      id: r.id,
+      created_at: r.created_at,
+      name: "",
+      email: "",
+      phone: "",
+      vat_number: "",
+      notes: "",
+    });
+  }
 }
-
-// normalizzatore: accetta object o array [{name,value}]
-const toObj = (x: any): Record<string, unknown> =>
-  Array.isArray(x)
-    ? x.reduce((acc: Record<string, unknown>, it: any) => {
-        if (it && typeof it === "object" && "name" in it) {
-          acc[it.name] = it.value ?? "";
-        }
-        return acc;
-      }, {})
-    : ((x ?? {}) as Record<string, unknown>);
-
-const decAny = await (crypto as any).decryptFields(
-  DEC_SCOPE,              // scope
-  "accounts",     // table
-  r.id,           // recordId (usato nell'AAD)
-  r,              // riga grezza con *_enc / *_iv
-  ["name", "email", "phone", "vat_number", "notes"] // campi da decifrare
-);
-const dec = toObj(decAny);
-
-plain.push({
-  id: r.id,
-  created_at: r.created_at,
-  name:       String(dec.name ?? ""),
-  email:      String(dec.email ?? ""),
-  phone:      String(dec.phone ?? ""),
-  vat_number: String(dec.vat_number ?? ""),
-  notes:      String(dec.notes ?? ""),
-});
-
-
     setRows(plain);
     setLoading(false);
     setDiag((d) => ({ ...d, loaded: plain.length }));
