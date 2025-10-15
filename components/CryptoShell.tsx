@@ -121,6 +121,17 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+// Expose supabase client for console debugging (non-distruttivo)
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  try {
+    (window as any).sb = supabase;
+    // console.log("🔧 window.sb esposto"); // opzionale
+  } catch {}
+}, []);
+
+
+  
   // Auto-unlock: prende la passphrase dal login (session/localStorage) e prova.
   // Ritenta automaticamente qualche volta (es. dopo redirect).
   useEffect(() => {
