@@ -393,7 +393,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             );
           };
         }
-     
+
         setAltCryptoService(impl);
       }
     } catch {}
@@ -438,6 +438,21 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     } catch {}
   }, [userIdProp, altCryptoService]);
 
+  // 🔎 DEBUG: esponi l'istanza crypto corrente su window per test in console
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const chosen = cryptoService ?? altCryptoService ?? null;
+    (window as any).cryptoSvc = chosen;           // <— bridge per la console
+    if (chosen) {
+      try {
+        const keys = Object.keys(chosen).filter(k => typeof (chosen as any)[k] === "function");
+        console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
+      } catch {}
+    } else {
+      console.warn("🔐 window.cryptoSvc non disponibile (ancora null)");
+    }
+  }, [cryptoService, altCryptoService]);
+
   const ctxValue = useMemo<CryptoContextType>(
     () => ({
       ready,
@@ -455,23 +470,6 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     </CryptoContext.Provider>
   );
 }
-
-// 🔎 DEBUG: esponi l'istanza crypto corrente su window per test in console
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  const chosen = cryptoService ?? altCryptoService ?? null;
-  (window as any).cryptoSvc = chosen;           // <— bridge per la console
-  if (chosen) {
-    try {
-      const keys = Object.keys(chosen).filter(k => typeof (chosen as any)[k] === "function");
-      console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
-    } catch {}
-  } else {
-    console.warn("🔐 window.cryptoSvc non disponibile (ancora null)");
-  }
-}, [cryptoService, altCryptoService]);
-
-
 
 export function useCrypto(): CryptoContextType {
   return useContext(CryptoContext);
