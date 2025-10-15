@@ -114,11 +114,40 @@ export default function ClientsPage(): JSX.Element {
     return () => { alive = false; };
   }, []);
 
-  useEffect(() => {
-    if (!authChecked || !userId || !ready || !crypto) return;
-    loadPage(page);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [authChecked, userId, ready, crypto, page]);
+// 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm
+useEffect(() => {
+  if (!authChecked) return;       // aspetta check auth
+  if (ready) return;              // già sbloccato
+  if (unlockingRef.current) return;
+
+  const pass =
+    typeof window !== "undefined"
+      ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
+      : "";
+
+  const hasPass = !!pass;
+  setDiag((d) => ({ ...d, passInStorage: hasPass }));
+
+  if (!hasPass) return;
+
+  (async () => {
+    try {
+      unlockingRef.current = true;
+      setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
+
+      await unlock(pass);
+      await prewarm(DEFAULT_SCOPES);
+
+      try { sessionStorage.removeItem("repping:pph"); } catch {}
+      try { localStorage.removeItem("repping:pph"); } catch {}
+    } catch (e) {
+      console.error("[/clients] unlock failed:", e);
+    } finally {
+      unlockingRef.current = false;
+    }
+  })();
+}, [authChecked, ready, unlock, prewarm]);
+
 
   async function loadPage(p: number): Promise<void> {
     if (!crypto || !userId) return;
