@@ -335,13 +335,38 @@ const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
     const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad);
     return { enc_b64: toBase64(ciphertext), iv_b64: toBase64(nonce) };
   }
-  public async decryptJSON(scope: string, table: string, field: string, recordId: string, enc_b64: string, iv_b64: string) {
-    if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
-    const { DEK } = this.scopeCache[scope];
-    const aad = asBytes(`${table}|${field}|${recordId}`);
-    const plaintext = await aesGcmDecrypt(DEK, fromBase64Safe(iv_b64), fromBase64Safe(enc_b64), aad);
-    return JSON.parse(new TextDecoder().decode(plaintext));
+public async decryptJSON(
+  scope: string,
+  table: string,
+  field: string,
+  recordId: string,
+  enc_b64: string,
+  iv_b64: string
+) {
+  // 🔧 DEV-compat: se l’“encrypted” è in realtà testo "enc(...)" (anche se arrivato in HEX/BASE64),
+  // estrai e ritorna subito, senza richiedere chiavi o AES-GCM.
+  try {
+    const encBytes = fromBase64Safe(enc_b64);             // accetta sia base64 che \xHEX
+    const asStr = new TextDecoder().decode(encBytes);     // prova a leggerlo come stringa
+    if (asStr.startsWith("enc(") && asStr.endsWith(")")) {
+      return asStr.slice(4, -1);                          // contenuto tra le parentesi
+    }
+  } catch {
+    // ignora: se fallisce, prosegui con il percorso normale AES-GCM
   }
+
+  // 🔐 percorso normale AES-GCM
+  if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+  const { DEK } = this.scopeCache[scope];
+  const aad = asBytes(`${table}|${field}|${recordId}`);
+  const plaintext = await aesGcmDecrypt(
+    DEK,
+    fromBase64Safe(iv_b64),
+    fromBase64Safe(enc_b64),
+    aad
+  );
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
 
   /** 4) Blind Index (uguaglianza) */
   public async computeBlindIndex(scope: string, value: string): Promise<string> {
