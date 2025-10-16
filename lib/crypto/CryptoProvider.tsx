@@ -71,7 +71,7 @@ const CryptoContext = createContext<CryptoContextType>({
   prewarm: async () => {},
 });
 
-function getDebug(): any | null {
+/* function getDebug(): any | null {
   if (typeof window === "undefined") return null;
   // 1) se già presente, usa quello
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -104,7 +104,7 @@ function getDebug(): any | null {
 
   return null;
 }
-
+*/
 
 function swallow409<T = unknown>(e: unknown): never | T {
   const err = e as any;
@@ -137,7 +137,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   // ✅ Percorso B: istanza reale se debugCrypto non esiste
   const [altCryptoService, setAltCryptoService] = useState<CryptoService | null>(null);
 
-  const cryptoService: CryptoService | null = useMemo(() => {
+   const cryptoService: CryptoService | null = useMemo(() => {
     const dbg = getDebug();
     if (!dbg) return null;
 
