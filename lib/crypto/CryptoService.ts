@@ -317,10 +317,16 @@ export class CryptoService {
 const mkHash = await crypto.subtle.digest('SHA-256', this.MK!);
 const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
     
-    const { error: insErr } = await this.sb
-      .from("encryption_keys")
-      .insert({ user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint });
-    if (insErr) throw insErr;
+const { error: insErr } = await this.sb
+  .from("encryption_keys")
+  .upsert(
+    { user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint },
+    { onConflict: "user_id,scope", ignoreDuplicates: true }
+  );
+
+// accetta i “duplicati” come OK: niente eccezione nei casi di conflitto
+if (insErr && insErr.code !== "23505" && insErr.code !== "409") throw insErr;
+
 
     this.scopeCache[scope] = { DEK, BI };
   }
