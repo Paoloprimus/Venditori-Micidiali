@@ -136,7 +136,7 @@ useEffect(() => {
       .select(`id, created_at, name_enc, name_iv, email_enc, email_iv, phone_enc, phone_iv, vat_number_enc, vat_number_iv, notes_enc, notes_iv`)
       .order("created_at", { ascending: false })
       .range(from, to);
-console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
+console.debug("[/clients] fetched rows:", (data as any[] | null)?.length ?? 0);
 
     if (error) {
       console.error("[/clients] load error:", error);
