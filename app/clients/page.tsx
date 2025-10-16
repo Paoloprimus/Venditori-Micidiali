@@ -136,6 +136,7 @@ useEffect(() => {
       .select(`id, created_at, name_enc, name_iv, email_enc, email_iv, phone_enc, phone_iv, vat_number_enc, vat_number_iv, notes_enc, notes_iv`)
       .order("created_at", { ascending: false })
       .range(from, to);
+console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
 
     if (error) {
       console.error("[/clients] load error:", error);
@@ -184,6 +185,7 @@ for (const r of (data as RawAccount[])) {
       ["name", "email", "phone", "vat_number", "notes"] // campi da decifrare
     );
     const dec = toObj(decAny);
+console.debug("[/clients] DEC", r.id, dec);
 
     plain.push({
       id: r.id,
@@ -207,6 +209,8 @@ for (const r of (data as RawAccount[])) {
     });
   }
 }
+    console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
+
     setRows(plain);
     setLoading(false);
     setDiag((d) => ({ ...d, loaded: plain.length }));
