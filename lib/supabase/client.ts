@@ -22,12 +22,12 @@ export function getSupabaseBrowser(): SupabaseClient {
     },
   });
 
-  // 👇 AGGIUNGI QUESTA LINEA TEMPORANEA
-  console.log('🔐 Supabase client creato con URL:', supabaseUrl);
-  
-  // 👇 ESPORTA SU WINDOW PER DEBUG
-  if (typeof window !== 'undefined') {
-    (window as any).debugSupabase = _supabase;
+  // 👇 log utile per verificare inizializzazione
+  console.log("🔐 Supabase client creato con URL:", supabaseUrl);
+
+  // 👇 ESPORTA su window per debug da console (da rimuovere in produzione)
+  if (typeof window !== "undefined") {
+    (window as any).sb = _supabase;
   }
 
   return _supabase;
