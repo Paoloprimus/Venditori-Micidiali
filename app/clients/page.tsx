@@ -90,23 +90,31 @@ useEffect(() => {
     return () => { alive = false; };
   }, []);
 
-/* // 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm
+// 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm (con mini-retry)
 useEffect(() => {
   if (!authChecked) return;       // aspetta check auth
   if (ready) return;              // già sbloccato
   if (unlockingRef.current) return;
 
-  const pass =
+  const readPass = () =>
     typeof window !== "undefined"
-      ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
+      ? (sessionStorage.getItem("repping:pph") ||
+         localStorage.getItem("repping:pph") || "")
       : "";
 
-  const hasPass = !!pass;
-  setDiag((d) => ({ ...d, passInStorage: hasPass }));
-
-  if (!hasPass) return;
-
   (async () => {
+    // mini-retry: fino a 5 tentativi ogni 200ms (≈1s totale) per evitare gare di timing
+    let pass = readPass();
+    let tries = 0;
+    while (!pass && tries < 5) {
+      await new Promise(r => setTimeout(r, 200));
+      pass = readPass();
+      tries++;
+    }
+
+    setDiag((d) => ({ ...d, passInStorage: !!pass }));
+    if (!pass) return;
+
     try {
       unlockingRef.current = true;
       setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
@@ -114,16 +122,21 @@ useEffect(() => {
       await unlock(pass);
       await prewarm(DEFAULT_SCOPES);
 
-      try { sessionStorage.removeItem("repping:pph"); } catch {}
-      try { localStorage.removeItem("repping:pph"); } catch {}
-    } catch (e) {
-      console.error("[/clients] unlock failed:", e);
+      // cleanup ritardato: evitiamo di cancellare la pass troppo presto
+      try { setTimeout(() => sessionStorage.removeItem("repping:pph"), 10000); } catch {}
+      try { setTimeout(() => localStorage.removeItem("repping:pph"), 10000); } catch {}
+    } catch (e: any) {
+      const msg = String(e?.message || e || "");
+      // non spammiamo OperationError "falso positivo"
+      if (!/OperationError/i.test(msg)) {
+        console.error("[/clients] unlock failed:", e);
+      }
     } finally {
       unlockingRef.current = false;
     }
   })();
 }, [authChecked, ready, unlock, prewarm]);
-*/
+
 
   async function loadPage(p: number): Promise<void> {
     if (!crypto || !userId) return;
