@@ -57,7 +57,7 @@ function tryFromHexMaybePrefixed(s: string): Uint8Array | null {
   for (let i = 0; i < u8.length; i++) u8[i] = parseInt(hex.substr(i * 2, 2), 16);
   return u8;
 }
-function fromBase64Safe(input: string): Uint8Array {
+/* function fromBase64Safe(input: string): Uint8Array {
   if (!input) return new Uint8Array();
   // alcuni record legacy possono essere stati salvati come hex
   const b64 = input.trim();
@@ -66,7 +66,38 @@ function fromBase64Safe(input: string): Uint8Array {
   if (!u8) u8 = tryFromHexMaybePrefixed(b64);
   if (!u8) throw new Error("Dato cifrato non è base64/hex valido");
   return u8;
+} */
+
+function fromBase64Safe(input: string): Uint8Array {
+  if (!input) return new Uint8Array();
+  const s = input.trim();
+
+  // 1) se è una base64 "pulita" (non \x / 0x) prova direttamente
+  if (!s.startsWith("\\x") && !s.startsWith("0x") && isBase64Like(s)) {
+    const u = tryFromBase64(s);
+    if (u) return u;
+  }
+
+  // 2) prova HEX (\x.... o 0x....)
+  const hexBytes = tryFromHexMaybePrefixed(s);
+  if (hexBytes) {
+    // Caso speciale: l'HEX rappresenta testo ASCII che è Base64 (doppio layer)
+    try {
+      const ascii = new TextDecoder().decode(hexBytes); // es. "XYBN...=="
+      if (isBase64Like(ascii)) {
+        const inner = tryFromBase64(ascii);
+        if (inner) return inner; // ✅ bytes veri del ciphertext / iv
+      }
+    } catch {
+      // ignora e ricadi sul ritorno "hexBytes"
+    }
+    // Altrimenti torna i byte da HEX (comportamento legacy).
+    return hexBytes;
+  }
+
+  throw new Error("Dato cifrato non è base64/hex valido");
 }
+
 
 /** ---------- Buffer helpers (fix AAD & bytes) ---------- */
 function asBytes(x: unknown): Uint8Array {
