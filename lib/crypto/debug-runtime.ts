@@ -1,4 +1,4 @@
-// lib/crypto/debug-runtime.ts
+/* // lib/crypto/debug-runtime.ts
 // Espone un helper globale per debug e integrazione CryptoProvider
 // ⛔️ ATTENZIONE: attivalo SOLO se vuoi il mock finto (non decifra AES-GCM vero).
 // Per attivarlo: NEXT_PUBLIC_ENABLE_DEBUG_CRYPTO=1
@@ -71,3 +71,4 @@ if (ENABLE_DEBUG && typeof window !== "undefined") {
   }
   // Nota: non logghiamo nulla per non sporcare la console in produzione.
 }
+*/
