@@ -59,42 +59,18 @@ export default function ClientsPage(): JSX.Element {
   const [diag, setDiag] = useState({ auth: "", ready: false, passInStorage: false, unlockAttempts: 0, loaded: 0 });
   const unlockingRef = useRef(false);
 
-  useEffect(() => {
-    if (!authChecked) return;       // aspetta check auth
-    if (ready) return;              // già sbloccato
-    if (unlockingRef.current) return;
+  // 🔐 (disattivato) Auto-unlock locale in /clients: lasciamo che ci pensi il CryptoProvider
+useEffect(() => {
+  if (!authChecked) return;
 
-    const pass =
-      typeof window !== "undefined"
-        ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
-        : "";
+  const pass =
+    typeof window !== "undefined"
+      ? (sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph") || "")
+      : "";
 
-    const hasPass = !!pass;
-    setDiag((d) => ({ ...d, passInStorage: hasPass }));
-
-    if (!hasPass) return;
-
-(async () => {
-  try {
-    unlockingRef.current = true;
-    setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-    await unlock(pass);
-    await prewarm(DEFAULT_SCOPES);
-    try { sessionStorage.removeItem("repping:pph"); } catch {}
-    try { localStorage.removeItem("repping:pph"); } catch {}
-  } catch (e: any) {
-    const msg = String(e?.message || e || "");
-    // Evita di loggare OperationError "falso positivo"
-    if (!/OperationError/i.test(msg)) {
-      console.error("[/clients] unlock failed:", e);
-    }
-  } finally {
-    unlockingRef.current = false;
-  }
-})();
-
-    
-  }, [authChecked, ready, unlock, prewarm]);
+  setDiag((d) => ({ ...d, passInStorage: !!pass }));
+  // Non facciamo nulla qui. Niente unlock/prewarm: evita doppie aperture e OperationError.
+}, [authChecked]);
 
   useEffect(() => {
     let alive = true;
@@ -114,7 +90,7 @@ export default function ClientsPage(): JSX.Element {
     return () => { alive = false; };
   }, []);
 
-// 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm
+/* // 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm
 useEffect(() => {
   if (!authChecked) return;       // aspetta check auth
   if (ready) return;              // già sbloccato
@@ -147,7 +123,7 @@ useEffect(() => {
     }
   })();
 }, [authChecked, ready, unlock, prewarm]);
-
+*/
 
   async function loadPage(p: number): Promise<void> {
     if (!crypto || !userId) return;
