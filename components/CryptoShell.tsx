@@ -28,8 +28,12 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
       await unlock(pass);
       await prewarm(DEFAULT_SCOPES);      
       // pulizia pass in memoria persistente
-      try { sessionStorage.removeItem("repping:pph"); } catch {}
-      try { localStorage.removeItem("repping:pph"); } catch {}
+
+      // pulizia pass in memoria persistente — RIMANDATA di 10s
+try { setTimeout(() => sessionStorage.removeItem("repping:pph"), 10000); } catch {}
+try { setTimeout(() => localStorage.removeItem("repping:pph"), 10000); } catch {}
+
+      
       return true;
     } finally {
       setUnlocking(false);
