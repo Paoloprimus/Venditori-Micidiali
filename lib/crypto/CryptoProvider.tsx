@@ -210,20 +210,44 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   }, [unlock, prewarm, userIdProp]);
 
   // 🔎 DEBUG: esponi l'istanza crypto reale su window per test in console
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    (window as any).cryptoSvc = cryptoService;
-    try {
-      const keys = Object.keys(cryptoService).filter(
-        (k) => typeof (cryptoService as any)[k] === "function"
-      );
-      // eslint-disable-next-line no-console
-      console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
-    } catch {
-      // ignore
-    }
-  }, [cryptoService]);
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  (window as any).cryptoSvc = cryptoService;
+  try {
+    const keys = Array.from(
+      new Set([
+        ...Object.keys(cryptoService),
+        ...Object.getOwnPropertyNames(Object.getPrototypeOf(cryptoService)),
+      ])
+    ).filter((k) => typeof (cryptoService as any)[k] === "function");
+    console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
+  } catch {
+    // ignore
+  }
+}, [cryptoService]);
 
+  // 🧰 Gancio esplicito per sbloccare/prewarmare dal browser (senza toccare /clients)
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  (window as any).reppingUnlock = async (pass: string) => {
+    await unlock(pass);
+    await prewarm([
+      "table:accounts",
+      "table:contacts",
+      "table:products",
+      "table:profiles",
+      "table:notes",
+      "table:conversations",
+      "table:messages",
+      "table:proposals",
+    ]);
+  };
+  return () => {
+    try { delete (window as any).reppingUnlock; } catch {}
+  };
+}, [unlock, prewarm]);
+
+  
   const ctxValue = useMemo<CryptoContextType>(
     () => ({
       ready,
