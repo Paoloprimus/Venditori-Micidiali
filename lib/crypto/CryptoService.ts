@@ -70,33 +70,37 @@ function tryFromHexMaybePrefixed(s: string): Uint8Array | null {
 
 function fromBase64Safe(input: string): Uint8Array {
   if (!input) return new Uint8Array();
-  const s = input.trim();
 
-  // 1) se è una base64 "pulita" (non \x / 0x) prova direttamente
-  if (!s.startsWith("\\x") && !s.startsWith("0x") && isBase64Like(s)) {
-    const u = tryFromBase64(s);
-    if (u) return u;
+  // 1) base64 "pulito"
+  const b64 = input.trim();
+  if (/^[A-Za-z0-9+/=]+$/.test(b64)) {
+    // base64 diretto
+    return tryFromBase64(b64) ?? new Uint8Array();
   }
 
-  // 2) prova HEX (\x.... o 0x....)
-  const hexBytes = tryFromHexMaybePrefixed(s);
-  if (hexBytes) {
-    // Caso speciale: l'HEX rappresenta testo ASCII che è Base64 (doppio layer)
-    try {
-      const ascii = new TextDecoder().decode(hexBytes); // es. "XYBN...=="
-      if (isBase64Like(ascii)) {
-        const inner = tryFromBase64(ascii);
-        if (inner) return inner; // ✅ bytes veri del ciphertext / iv
-      }
-    } catch {
-      // ignora e ricadi sul ritorno "hexBytes"
-    }
-    // Altrimenti torna i byte da HEX (comportamento legacy).
-    return hexBytes;
+  // 2) fallback: \xHEX o 0xHEX
+  const hex = tryFromHexMaybePrefixed(b64);
+  if (!hex) throw new Error("Dato cifrato non è base64/hex valido");
+
+  // ATTENZIONE: molti record sono HEX dell'ASCII di una stringa base64.
+  // Se 'hex' è tutto ASCII stampabile e "sembra" base64, decodiamolo ancora.
+  let ascii = "";
+  let allAscii = true;
+  for (let i = 0; i < hex.length; i++) {
+    const c = hex[i];
+    if (c < 0x20 || c > 0x7E) { allAscii = false; break; }
+    ascii += String.fromCharCode(c);
   }
 
-  throw new Error("Dato cifrato non è base64/hex valido");
+  if (allAscii && /^[A-Za-z0-9+/=]+$/.test(ascii)) {
+    const b = tryFromBase64(ascii);
+    if (b) return b; // HEX -> ASCII (base64) -> BYTES
+  }
+
+  // altrimenti trattiamo l'HEX come bytes "veri"
+  return hex;
 }
+
 
 
 /** ---------- Buffer helpers (fix AAD & bytes) ---------- */
