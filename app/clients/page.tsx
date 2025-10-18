@@ -151,62 +151,39 @@ useEffect(() => {
     const from = p * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const { data, error } = await supabase
-      .from("accounts")
-      .select(`
-        id, created_at,
-        -- campi in chiaro (se presenti)
-        name, email, phone, vat_number, notes,
-        -- campi cifrati (vecchio schema)
-        name_enc, name_iv,
-        email_enc, email_iv,
-        phone_enc, phone_iv,
-        vat_number_enc, vat_number_iv,
-        notes_enc, notes_iv
-      `)
-      .order("created_at", { ascending: false })
-      .range(from, to);
+const { data, error } = await supabase
+  .from("accounts")
+  .select(
+    // NIENTE commenti qui dentro
+    "id,created_at," +
+    "name,email,phone,vat_number,notes," +                    // plain (se presenti)
+    "name_enc,name_iv," +
+    "email_enc,email_iv," +
+    "phone_enc,phone_iv," +
+    "vat_number_enc,vat_number_iv," +
+    "notes_enc,notes_iv"                                      // encrypted (schema vecchio)
+  )
+  .order("created_at", { ascending: false })
+  .range(from, to);
 
+if (error) {
+  console.error("[/clients] load error:", error);
+  setLoading(false);
+  return;
+}
 
-    
-    // quando diventiamo pronti (anche se ready del provider è rimasto false) → carica pagina 0
-useEffect(() => {
-  if (authChecked && userId && crypto && actuallyReady) {
-    loadPage(0);
-  }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-}, [authChecked, userId, crypto, actuallyReady]);
-
-
-    
-console.debug("[/clients] fetched rows:", (data as any[] | null)?.length ?? 0);
-
-    if (error) {
-      console.error("[/clients] load error:", error);
-      setLoading(false);
-      return;
-    }
-
-    // === PATCH NON DISTRUTTIVA ===
-    const hasDecryptRow = typeof (crypto as any)?.decryptRow === "function";
-    const scope = "table:accounts";
-
-const decryptFields = (crypto as any).decryptFields as (
-  scope: string,
-  table: string,
-  id: string,
-  specs: Array<{ name: string; enc: any; iv: any }>,
-  opts?: any
-) => Promise<Record<string, unknown> | Array<{ name: string; value: unknown }>>;
+// tipizziamo con una variabile intermedia per evitare l'errore del ParserError
+const rowsAny = (data ?? []) as any[];
 
 const plain: PlainAccount[] = [];
-for (const r of (data as RawAccount[])) {
+for (const r0 of rowsAny) {
+  const r = r0 as RawAccount;
   try {
-    // se NON ci sono i campi cifrati, usa direttamente i plain
     const hasEncrypted =
       r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc;
 
     if (!hasEncrypted) {
+      // fallback ai campi plain
       plain.push({
         id: r.id,
         created_at: r.created_at,
@@ -219,10 +196,10 @@ for (const r of (data as RawAccount[])) {
       continue;
     }
 
-    // altrimenti decritta come già facevi
     if (typeof (crypto as any)?.decryptFields !== "function") {
       throw new Error("decryptFields non disponibile sul servizio crypto");
     }
+
     const toObj = (x: any): Record<string, unknown> =>
       Array.isArray(x)
         ? x.reduce((acc: Record<string, unknown>, it: any) => {
@@ -232,10 +209,10 @@ for (const r of (data as RawAccount[])) {
         : ((x ?? {}) as Record<string, unknown>);
 
     const decAny = await (crypto as any).decryptFields(
-      "table:accounts",        // scope
-      "accounts",              // table
-      r.id,                    // recordId
-      r,                       // riga grezza con *_enc / *_iv
+      "table:accounts",
+      "accounts",
+      r.id,
+      r,
       ["name", "email", "phone", "vat_number", "notes"]
     );
     const dec = toObj(decAny);
@@ -252,11 +229,13 @@ for (const r of (data as RawAccount[])) {
   } catch (e) {
     console.warn("[/clients] decrypt error for", r.id, e);
     plain.push({
-      id: r.id, created_at: r.created_at,
+      id: r.id,
+      created_at: r.created_at,
       name: "", email: "", phone: "", vat_number: "", notes: "",
     });
   }
 }
+
 
     console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
 
