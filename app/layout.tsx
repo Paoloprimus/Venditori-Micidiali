@@ -13,6 +13,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
     <html lang="it">
       <body>
         {/* Monta i provider client (Crypto incluso) dentro <body> */}
+        <ClientErrorListener />
         <Providers>{children}</Providers>
       </body>
     </html>
