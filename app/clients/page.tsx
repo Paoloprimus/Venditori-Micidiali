@@ -49,6 +49,27 @@ const DEFAULT_SCOPES = [
 
 export default function ClientsPage(): JSX.Element {
   const { crypto, ready, unlock, prewarm } = useCrypto();
+
+// 🔧 Forza-ready di emergenza (si può togliere appena il provider sincronizza da solo)
+const [forceReady, setForceReady] = useState(false);
+useEffect(() => {
+  const i = setInterval(() => {
+    // se da console metti window.__forceClientsReady = true, qui diventa ready
+    if (typeof window !== "undefined" && (window as any).__forceClientsReady === true) {
+      setForceReady(true);
+    }
+    // fallback: se esiste window.cryptoSvc ed è sbloccato, consideralo pronto
+    if (!forceReady && typeof window !== "undefined" && (window as any).cryptoSvc?.isUnlocked?.()) {
+      setForceReady(true);
+    }
+  }, 250);
+  return () => clearInterval(i);
+}, [forceReady]);
+
+// usa il forzatore oltre ai check normali
+const actuallyReady = forceReady || ready || !!(crypto as any)?.isUnlocked?.();
+
+  
   // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
   const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
 
