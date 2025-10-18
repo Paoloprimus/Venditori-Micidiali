@@ -1,15 +1,13 @@
-"use client";
 
+"use client";
 import React from "react";
 
-export default function ClientErrorListener(): JSX.Element | null {
+export default function ClientErrorListener(): React.ReactNode {
   React.useEffect(() => {
     const onErr = (ev: ErrorEvent) => {
-      // eslint-disable-next-line no-console
       console.error("[global error]", ev.message, ev.error || "", ev.filename, ev.lineno, ev.colno);
     };
     const onRej = (ev: PromiseRejectionEvent) => {
-      // eslint-disable-next-line no-console
       console.error("[unhandledrejection]", ev.reason);
     };
     window.addEventListener("error", onErr);
@@ -20,5 +18,5 @@ export default function ClientErrorListener(): JSX.Element | null {
     };
   }, []);
 
-  return null; // ✅ ora è accettato
+  return null; // ora è valido perché ReactNode include null
 }
