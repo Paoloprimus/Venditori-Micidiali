@@ -158,15 +158,16 @@ useEffect(() => {
 
 const { data, error } = await supabase
   .from("accounts")
-  .select(
-    "id,created_at," +
-    "name,email,phone,vat_number,notes," +     // ⬅️ plain
-    "name_enc,name_iv," +
-    "email_enc,email_iv," +
-    "phone_enc,phone_iv," +
-    "vat_number_enc,vat_number_iv," +
-    "notes_enc,notes_iv"                       // ⬅️ encrypted
-  )
+.select(
+  "id,created_at," +
+  "name," + // unico plain che esiste oggi
+  "name_enc,name_iv," +
+  "email_enc,email_iv," +
+  "phone_enc,phone_iv," +
+  "vat_number_enc,vat_number_iv," +
+  "notes_enc,notes_iv"
+)
+
   .order("created_at", { ascending: false })
   .range(from, to);
 
@@ -237,11 +238,6 @@ for (const r0 of rowsAny) {
     });
   }
 }
-
-setRows(plain);
-setDiag((d) => ({ ...d, loaded: plain.length }));
-
-
 
     console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
 
