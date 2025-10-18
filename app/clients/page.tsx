@@ -17,12 +17,16 @@ function getDbg(): any | null {
 type RawAccount = {
   id: string;
   created_at: string;
-  name_enc: any; name_iv: any;
-  email_enc: any; email_iv: any;
-  phone_enc: any; phone_iv: any;
-  vat_number_enc: any; vat_number_iv: any;
-  notes_enc: any; notes_iv: any;
+  // plain (nuovo schema)
+  name?: string; email?: string; phone?: string; vat_number?: string; notes?: string;
+  // encrypted (vecchio schema)
+  name_enc?: any; name_iv?: any;
+  email_enc?: any; email_iv?: any;
+  phone_enc?: any; phone_iv?: any;
+  vat_number_enc?: any; vat_number_iv?: any;
+  notes_enc?: any; notes_iv?: any;
 };
+
 
 type PlainAccount = {
   id: string;
@@ -45,6 +49,9 @@ const DEFAULT_SCOPES = [
 
 export default function ClientsPage(): JSX.Element {
   const { crypto, ready, unlock, prewarm } = useCrypto();
+  // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
+  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
+
   const [rows, setRows] = useState<PlainAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [page, setPage] = useState<number>(0);
@@ -146,9 +153,20 @@ useEffect(() => {
 
     const { data, error } = await supabase
       .from("accounts")
-      .select(`id, created_at, name_enc, name_iv, email_enc, email_iv, phone_enc, phone_iv, vat_number_enc, vat_number_iv, notes_enc, notes_iv`)
+      .select(`
+        id, created_at,
+        -- campi in chiaro (se presenti)
+        name, email, phone, vat_number, notes,
+        -- campi cifrati (vecchio schema)
+        name_enc, name_iv,
+        email_enc, email_iv,
+        phone_enc, phone_iv,
+        vat_number_enc, vat_number_iv,
+        notes_enc, notes_iv
+      `)
       .order("created_at", { ascending: false })
       .range(from, to);
+
 console.debug("[/clients] fetched rows:", (data as any[] | null)?.length ?? 0);
 
     if (error) {
@@ -172,33 +190,43 @@ const decryptFields = (crypto as any).decryptFields as (
 const plain: PlainAccount[] = [];
 for (const r of (data as RawAccount[])) {
   try {
-    const DEC_SCOPE = "table:accounts";
+    // se NON ci sono i campi cifrati, usa direttamente i plain
+    const hasEncrypted =
+      r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc;
 
-    // ✅ usa l’API reale: riga grezza + lista campi da decifrare
+    if (!hasEncrypted) {
+      plain.push({
+        id: r.id,
+        created_at: r.created_at,
+        name: String((r as any).name ?? ""),
+        email: String((r as any).email ?? ""),
+        phone: String((r as any).phone ?? ""),
+        vat_number: String((r as any).vat_number ?? ""),
+        notes: String((r as any).notes ?? ""),
+      });
+      continue;
+    }
+
+    // altrimenti decritta come già facevi
     if (typeof (crypto as any)?.decryptFields !== "function") {
       throw new Error("decryptFields non disponibile sul servizio crypto");
     }
-
-    // normalizzatore: accetta object o array [{name,value}]
     const toObj = (x: any): Record<string, unknown> =>
       Array.isArray(x)
         ? x.reduce((acc: Record<string, unknown>, it: any) => {
-            if (it && typeof it === "object" && "name" in it) {
-              acc[it.name] = it.value ?? "";
-            }
+            if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
             return acc;
           }, {})
         : ((x ?? {}) as Record<string, unknown>);
 
     const decAny = await (crypto as any).decryptFields(
-      DEC_SCOPE,                 // scope
-      "accounts",                // table
-      r.id,                      // recordId (usato nell'AAD)
-      r,                         // riga grezza con *_enc / *_iv
-      ["name", "email", "phone", "vat_number", "notes"] // campi da decifrare
+      "table:accounts",        // scope
+      "accounts",              // table
+      r.id,                    // recordId
+      r,                       // riga grezza con *_enc / *_iv
+      ["name", "email", "phone", "vat_number", "notes"]
     );
     const dec = toObj(decAny);
-console.debug("[/clients] DEC", r.id, dec);
 
     plain.push({
       id: r.id,
@@ -212,16 +240,12 @@ console.debug("[/clients] DEC", r.id, dec);
   } catch (e) {
     console.warn("[/clients] decrypt error for", r.id, e);
     plain.push({
-      id: r.id,
-      created_at: r.created_at,
-      name: "",
-      email: "",
-      phone: "",
-      vat_number: "",
-      notes: "",
+      id: r.id, created_at: r.created_at,
+      name: "", email: "", phone: "", vat_number: "", notes: "",
     });
   }
 }
+
     console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
 
     setRows(plain);
@@ -272,7 +296,7 @@ console.debug("[/clients] DEC", r.id, dec);
     );
   }
 
-  if (!ready || !crypto) {
+  if (!actuallyReady || !crypto) {
     return (
       <div className="p-6 text-gray-600">
         🔐 Decrittazione in corso…
@@ -335,13 +359,13 @@ console.debug("[/clients] DEC", r.id, dec);
       <div className="flex items-center justify-between">
         <button
           className="px-3 py-2 rounded border"
-          disabled={page === 0 || loading || !ready}
+          disabled={page === 0 || loading || !actuallyReady}
           onClick={() => setPage((p) => Math.max(0, p - 1))}
         >◀︎ Precedenti</button>
         <div className="text-sm text-gray-600">Pagina {page + 1}</div>
         <button
           className="px-3 py-2 rounded border"
-          disabled={loading || !ready || rows.length < PAGE_SIZE}
+          disabled={loading || !actuallyReady || rows.length < PAGE_SIZE}
           onClick={() => setPage((p) => p + 1)}
         >Successivi ▶︎</button>
       </div>
