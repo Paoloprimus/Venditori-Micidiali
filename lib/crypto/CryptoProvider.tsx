@@ -48,6 +48,10 @@ export type CryptoService = {
   computeBlindIndex?: (scope: string, plaintext: string) => Promise<string>;
 };
 
+  // opzionale: se l'impl la espone, la usiamo per sapere se il servizio è sbloccato
+  isUnlocked?: () => boolean;
+
+
 export type CryptoContextType = {
   ready: boolean;
   userId: string | null;
@@ -101,6 +105,27 @@ type Props = { children: ReactNode; userId?: string | null };
 
 export function CryptoProvider({ children, userId: userIdProp }: Props) {
   const [ready, setReady] = useState(false);
+
+  // 🩵 Se il servizio è già sbloccato (anche da fuori), forza ready=true
+useEffect(() => {
+  let t: any = null;
+  const tick = () => {
+    try {
+      const unlocked = (cryptoService as any)?.isUnlocked?.();
+      if (unlocked && !ready) {
+        console.log("[CryptoProvider] Detected unlocked service → setReady(true)");
+        setReady(true);
+      }
+    } catch { /* ignore */ }
+  };
+  // primo check immediato + piccolo polling per 3s (copre race di mount)
+  tick();
+  t = setInterval(tick, 300);
+  const timeout = setTimeout(() => { try { clearInterval(t); } catch {} }, 3000);
+  return () => { try { clearInterval(t); clearTimeout(timeout); } catch {} };
+}, [cryptoService, ready]);
+
+  
   const [userId, setUserId] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
