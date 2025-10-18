@@ -105,31 +105,10 @@ type Props = { children: ReactNode; userId?: string | null };
 
 export function CryptoProvider({ children, userId: userIdProp }: Props) {
   const [ready, setReady] = useState(false);
-
-  // 🩵 Se il servizio è già sbloccato (anche da fuori), forza ready=true
-useEffect(() => {
-  let t: any = null;
-  const tick = () => {
-    try {
-      const unlocked = (cryptoService as any)?.isUnlocked?.();
-      if (unlocked && !ready) {
-        console.log("[CryptoProvider] Detected unlocked service → setReady(true)");
-        setReady(true);
-      }
-    } catch { /* ignore */ }
-  };
-  // primo check immediato + piccolo polling per 3s (copre race di mount)
-  tick();
-  t = setInterval(tick, 300);
-  const timeout = setTimeout(() => { try { clearInterval(t); } catch {} }, 3000);
-  return () => { try { clearInterval(t); clearTimeout(timeout); } catch {} };
-}, [cryptoService, ready]);
-
-  
   const [userId, setUserId] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
-  // Istanza REALE unica e stabile
+  // Istanza REALE unica e stabile (DEVE stare prima dell'effetto che la usa)
   const cryptoService: CryptoService = useMemo(() => {
     const impl = new (CryptoSvcImpl as any)(supabase) as CryptoService;
 
@@ -157,6 +136,30 @@ useEffect(() => {
     return impl;
   }, []);
 
+  // 🩵 Se il servizio è già sbloccato (anche da fuori), forza ready=true
+  useEffect(() => {
+    let interval: any = null;
+    let guard = false;
+
+    const tick = () => {
+      try {
+        if (guard) return;
+        const unlocked = (cryptoService as any)?.isUnlocked?.();
+        if (unlocked && !ready) {
+          guard = true;
+          console.log("[CryptoProvider] Detected unlocked service → setReady(true)");
+          setReady(true);
+        }
+      } catch { /* ignore */ }
+    };
+
+    tick(); // primo check immediato
+    interval = setInterval(tick, 300);
+    const stopper = setTimeout(() => { try { clearInterval(interval); } catch {} }, 3000);
+
+    return () => { try { clearInterval(interval); clearTimeout(stopper); } catch {} };
+  }, [cryptoService, ready]);
+
   // unlock reale
   const unlock = useCallback(
     async (passphrase: string) => {
@@ -173,6 +176,7 @@ useEffect(() => {
     },
     [cryptoService]
   );
+
 
   // bootstrap userId e auto-unlock
   useEffect(() => {
