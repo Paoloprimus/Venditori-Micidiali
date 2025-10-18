@@ -71,8 +71,6 @@ const actuallyReady = forceReady || ready || !!(crypto as any)?.isUnlocked?.();
 
   
   // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
-  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
-
   const [rows, setRows] = useState<PlainAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [page, setPage] = useState<number>(0);
