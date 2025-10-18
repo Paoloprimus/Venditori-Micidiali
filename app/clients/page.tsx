@@ -249,6 +249,20 @@ for (const r0 of rowsAny) {
     setDiag((d) => ({ ...d, loaded: plain.length }));
   }
 
+// carica la pagina 0 appena la cifratura è sbloccata e c'è l'utente
+useEffect(() => {
+  if (!actuallyReady || !crypto || !userId) return;
+  loadPage(0);
+  setPage(0);
+}, [actuallyReady, crypto, userId]);
+
+// pagina successiva/precedente
+useEffect(() => {
+  if (!actuallyReady || !crypto || !userId) return;
+  loadPage(page);
+}, [page, actuallyReady, crypto, userId]);
+
+  
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
     let arr = [...rows];
@@ -315,6 +329,9 @@ if (!actuallyReady || !crypto) {
               "table:accounts","table:contacts","table:products","table:profiles",
               "table:notes","table:conversations","table:messages","table:proposals",
             ]);
+            await loadPage(0);           // ← aggiungi questa riga
+            setPage(0);                  // opzionale, ma comodo
+            setPass("");
             setPass("");
           } catch (e) {
             console.error("[/clients] unlock failed:", e);
@@ -372,7 +389,7 @@ if (!actuallyReady || !crypto) {
                 <td className="px-3 py-2">{r.notes || "—"}</td>
               </tr>
             ))}
-            {!loading && ready && view.length === 0 && (
+            {!loading && actuallyReady && view.length === 0 && (
               <tr>
                 <td className="px-3 py-8 text-center text-gray-500" colSpan={6}>Nessun cliente trovato.</td>
               </tr>
