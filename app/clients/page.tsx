@@ -167,6 +167,18 @@ useEffect(() => {
       .order("created_at", { ascending: false })
       .range(from, to);
 
+
+    
+    // quando diventiamo pronti (anche se ready del provider è rimasto false) → carica pagina 0
+useEffect(() => {
+  if (authChecked && userId && crypto && actuallyReady) {
+    loadPage(0);
+  }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, [authChecked, userId, crypto, actuallyReady]);
+
+
+    
 console.debug("[/clients] fetched rows:", (data as any[] | null)?.length ?? 0);
 
     if (error) {
