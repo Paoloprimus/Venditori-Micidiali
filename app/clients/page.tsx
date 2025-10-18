@@ -53,24 +53,7 @@ const DEFAULT_SCOPES = [
 export default function ClientsPage(): JSX.Element {
   const { crypto, ready, unlock, prewarm } = useCrypto();
 
-// 🔧 Forza-ready di emergenza (si può togliere appena il provider sincronizza da solo)
-const [forceReady, setForceReady] = useState(false);
-useEffect(() => {
-  const i = setInterval(() => {
-    // se da console metti window.__forceClientsReady = true, qui diventa ready
-    if (typeof window !== "undefined" && (window as any).__forceClientsReady === true) {
-      setForceReady(true);
-    }
-    // fallback: se esiste window.cryptoSvc ed è sbloccato, consideralo pronto
-    if (!forceReady && typeof window !== "undefined" && (window as any).cryptoSvc?.isUnlocked?.()) {
-      setForceReady(true);
-    }
-  }, 250);
-  return () => clearInterval(i);
-}, [forceReady]);
-
-// usa il forzatore oltre ai check normali
-const actuallyReady = forceReady || ready || !!(crypto as any)?.isUnlocked?.();
+const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
 
   
   // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
@@ -310,16 +293,46 @@ setDiag((d) => ({ ...d, loaded: plain.length }));
     );
   }
 
-  if (!actuallyReady || !crypto) {
-    return (
-      <div className="p-6 text-gray-600">
-        🔐 Decrittazione in corso…
-        <div className="text-xs mt-2">
-          auth:{diag.auth} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage)} · attempts:{diag.unlockAttempts} · loaded:{diag.loaded}
-        </div>
+if (!actuallyReady || !crypto) {
+  const [pass, setPass] = useState("");
+  return (
+    <div className="p-6 max-w-md space-y-3">
+      <h2 className="text-lg font-semibold">🔐 Sblocca i dati cifrati</h2>
+      <p className="text-sm text-gray-600">
+        Inserisci la tua passphrase per sbloccare la cifratura client-side (valida per questa sessione).
+      </p>
+      <input
+        type="password"
+        className="border rounded p-2 w-full"
+        placeholder="Passphrase"
+        value={pass}
+        onChange={(e) => setPass(e.target.value)}
+      />
+      <button
+        className="px-3 py-2 rounded border"
+        onClick={async () => {
+          try {
+            await unlock(pass);
+            await prewarm([
+              "table:accounts","table:contacts","table:products","table:profiles",
+              "table:notes","table:conversations","table:messages","table:proposals",
+            ]);
+            setPass("");
+          } catch (e) {
+            console.error("[/clients] unlock failed:", e);
+            alert("Passphrase non valida o sblocco fallito.");
+          }
+        }}
+      >
+        Sblocca
+      </button>
+      <div className="text-xs text-gray-500">
+        auth:{diag.auth} · ready:{String(ready)} · loaded:{diag.loaded}
       </div>
-    );
-  }
+    </div>
+  );
+}
+
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-4">
