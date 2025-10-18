@@ -71,6 +71,9 @@ const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
   const [diag, setDiag] = useState({ auth: "", ready: false, passInStorage: false, unlockAttempts: 0, loaded: 0 });
   const unlockingRef = useRef(false);
 
+  const [pass, setPass] = useState("");
+
+
   // 🔐 (disattivato) Auto-unlock locale in /clients: lasciamo che ci pensi il CryptoProvider
 useEffect(() => {
   if (!authChecked) return;
@@ -290,7 +293,6 @@ for (const r0 of rowsAny) {
   }
 
 if (!actuallyReady || !crypto) {
-  const [pass, setPass] = useState("");
   return (
     <div className="p-6 max-w-md space-y-3">
       <h2 className="text-lg font-semibold">🔐 Sblocca i dati cifrati</h2>
