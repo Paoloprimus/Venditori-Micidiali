@@ -1,5 +1,4 @@
 "use client";
-
 import React from "react";
 
 export default function ClientsError({
@@ -8,9 +7,9 @@ export default function ClientsError({
 }: {
   error: Error & { digest?: string };
   reset: () => void;
-}) {
-  // logga sempre in console in prod
+}): React.ReactNode {
   React.useEffect(() => {
+    // log in prod
     // eslint-disable-next-line no-console
     console.error("[/clients] Client error boundary:", error);
   }, [error]);
@@ -27,10 +26,7 @@ export default function ClientsError({
           {error.stack}
         </details>
       ) : null}
-      <button
-        className="px-3 py-2 rounded border"
-        onClick={() => reset()} // retry safe di Next.js
-      >
+      <button className="px-3 py-2 rounded border" onClick={() => reset()}>
         Riprova
       </button>
     </div>
