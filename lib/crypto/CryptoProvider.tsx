@@ -46,11 +46,10 @@ export type CryptoService = {
   ) => Promise<Record<string, unknown>>;
 
   computeBlindIndex?: (scope: string, plaintext: string) => Promise<string>;
-};
 
   // opzionale: se l'impl la espone, la usiamo per sapere se il servizio è sbloccato
   isUnlocked?: () => boolean;
-
+};
 
 export type CryptoContextType = {
   ready: boolean;
