@@ -17,15 +17,18 @@ function getDbg(): any | null {
 type RawAccount = {
   id: string;
   created_at: string;
-  // plain (nuovo schema)
+
+  // plain (opzionali)
   name?: string; email?: string; phone?: string; vat_number?: string; notes?: string;
-  // encrypted (vecchio schema)
+
+  // encrypted (opzionali)
   name_enc?: any; name_iv?: any;
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
   notes_enc?: any; notes_iv?: any;
 };
+
 
 
 type PlainAccount = {
@@ -173,17 +176,17 @@ useEffect(() => {
 const { data, error } = await supabase
   .from("accounts")
   .select(
-    // NIENTE commenti qui dentro
     "id,created_at," +
-    "name,email,phone,vat_number,notes," +                    // plain (se presenti)
+    "name,email,phone,vat_number,notes," +     // ⬅️ plain
     "name_enc,name_iv," +
     "email_enc,email_iv," +
     "phone_enc,phone_iv," +
     "vat_number_enc,vat_number_iv," +
-    "notes_enc,notes_iv"                                      // encrypted (schema vecchio)
+    "notes_enc,notes_iv"                       // ⬅️ encrypted
   )
   .order("created_at", { ascending: false })
   .range(from, to);
+
 
 if (error) {
   console.error("[/clients] load error:", error);
@@ -193,32 +196,32 @@ if (error) {
 
 // tipizziamo con una variabile intermedia per evitare l'errore del ParserError
 const rowsAny = (data ?? []) as any[];
-
 const plain: PlainAccount[] = [];
+
 for (const r0 of rowsAny) {
   const r = r0 as RawAccount;
   try {
     const hasEncrypted =
-      r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc;
+      !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc);
 
     if (!hasEncrypted) {
-      // fallback ai campi plain
+      // ➜ record “plain”: usa direttamente i campi in chiaro
       plain.push({
         id: r.id,
         created_at: r.created_at,
-        name: String((r as any).name ?? ""),
-        email: String((r as any).email ?? ""),
-        phone: String((r as any).phone ?? ""),
-        vat_number: String((r as any).vat_number ?? ""),
-        notes: String((r as any).notes ?? ""),
+        name: String(r.name ?? ""),
+        email: String(r.email ?? ""),
+        phone: String(r.phone ?? ""),
+        vat_number: String(r.vat_number ?? ""),
+        notes: String(r.notes ?? ""),
       });
       continue;
     }
 
+    // ➜ record cifrato: decripta come già fai
     if (typeof (crypto as any)?.decryptFields !== "function") {
       throw new Error("decryptFields non disponibile sul servizio crypto");
     }
-
     const toObj = (x: any): Record<string, unknown> =>
       Array.isArray(x)
         ? x.reduce((acc: Record<string, unknown>, it: any) => {
@@ -228,10 +231,7 @@ for (const r0 of rowsAny) {
         : ((x ?? {}) as Record<string, unknown>);
 
     const decAny = await (crypto as any).decryptFields(
-      "table:accounts",
-      "accounts",
-      r.id,
-      r,
+      "table:accounts", "accounts", r.id, r,
       ["name", "email", "phone", "vat_number", "notes"]
     );
     const dec = toObj(decAny);
@@ -254,6 +254,10 @@ for (const r0 of rowsAny) {
     });
   }
 }
+
+setRows(plain);
+setDiag((d) => ({ ...d, loaded: plain.length }));
+
 
 
     console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
