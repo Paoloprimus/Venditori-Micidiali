@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export default function ClientErrorListener(): JSX.Element {
+export default function ClientErrorListener(): JSX.Element | null {
   React.useEffect(() => {
     const onErr = (ev: ErrorEvent) => {
       // eslint-disable-next-line no-console
@@ -19,5 +19,6 @@ export default function ClientErrorListener(): JSX.Element {
       window.removeEventListener("unhandledrejection", onRej);
     };
   }, []);
-  return null;
+
+  return null; // ✅ ora è accettato
 }
