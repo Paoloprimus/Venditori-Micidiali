@@ -13,7 +13,7 @@
 // (name_enc/name_iv/email_enc/email_iv + eventuale plain name) 
 // 
 
-import { supabase } from "@/app/lib/supabase/client";
+import { supabase } from "../../lib/supabase/client";
 
 // Tipizzazione "soft" per l'oggetto crypto: evitiamo di vincolarci al file reale.
 // Deve esporre: decryptFields(scope, table, recordId, rowOrMap, fieldNames?)
