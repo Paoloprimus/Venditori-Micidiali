@@ -280,6 +280,6 @@ function needCrypto(): PlannerResult {
 
 function formatList(items: string[]): string {
   if (items.length <= 2) return items.join(" e ");
-  const *rest = items.slice(0, -1).join(", ");
+  const rest = items.slice(0, -1).join(", ");
   return `${rest} e ${items[items.length - 1]}`;
 }
