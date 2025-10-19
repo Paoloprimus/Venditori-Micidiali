@@ -1,10 +1,14 @@
 "use client";
 
+
+"use client";
+
 import { useState } from "react";
 import { useConversation } from "../context/ConversationContext";
 import { runChatTurn } from "./planner";
-// ⬇️ IMPORT: se il tuo hook è in un percorso diverso, aggiorna questa riga
-import { useCrypto } from "../lib/crypto/useCrypto";
+
+// ⬇️ togliamo il vero useCrypto per ora
+// import { useCrypto } from "../lib/crypto/useCrypto";
 
 
 
@@ -13,6 +17,12 @@ type ChatMsg = { role: "user" | "bot"; text: string };
 
 export default function ChatTestPage() {
   const { state, expired, setScope, remember, reset } = useConversation();
+  // simuliamo il hook di cifratura per non rompere nulla
+const ready = true;
+const crypto = {
+  decryptFields: async (_scope: string, _table: string, _id: string, row: any) => row,
+};
+
   const { ready, crypto } = useCrypto();
 
   const [log, setLog] = useState<ChatMsg[]>([]);
