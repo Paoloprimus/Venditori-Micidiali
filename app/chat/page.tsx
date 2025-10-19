@@ -1,29 +1,19 @@
 "use client";
 
-
-"use client";
-
 import { useState } from "react";
 import { useConversation } from "../context/ConversationContext";
 import { runChatTurn } from "./planner";
-
-// ⬇️ togliamo il vero useCrypto per ora
-// import { useCrypto } from "../lib/crypto/useCrypto";
-
-
-
 
 type ChatMsg = { role: "user" | "bot"; text: string };
 
 export default function ChatTestPage() {
   const { state, expired, setScope, remember, reset } = useConversation();
-  // simuliamo il hook di cifratura per non rompere nulla
-const ready = true;
-const crypto = {
-  decryptFields: async (_scope: string, _table: string, _id: string, row: any) => row,
-};
 
-  const { ready, crypto } = useCrypto();
+  // 👇 FINTA cifratura per la pagina di prova: niente import, niente hook
+  const ready = true;
+  const crypto = {
+    decryptFields: async (_scope: string, _table: string, _id: string, row: any) => row,
+  };
 
   const [log, setLog] = useState<ChatMsg[]>([]);
   const [input, setInput] = useState("");
@@ -36,9 +26,8 @@ const crypto = {
     setInput("");
 
     try {
-      const res = await runChatTurn(text, { state, expired, setScope, remember, reset }, ready ? crypto : null);
+      const res = await runChatTurn(text, { state, expired, setScope, remember, reset }, crypto);
       setLog((l) => [...l, { role: "bot", text: res.text }]);
-      // Debug utile in console
       // eslint-disable-next-line no-console
       console.debug("[planner result]", res);
     } catch (e: any) {
@@ -58,12 +47,10 @@ const crypto = {
       <div className="space-y-3">
         <h1 className="text-xl font-semibold">Chat di prova (motore semantico)</h1>
 
-        {/* Stato cifratura */}
-        <div className={`text-sm ${ready ? "text-green-700" : "text-orange-700"}`}>
-          Cifratura: <b>{ready ? "sbloccata" : "non pronta"}</b>
+        <div className="text-sm text-green-700">
+          Cifratura: <b>{ready ? "simulata (OK per test)" : "non pronta"}</b>
         </div>
 
-        {/* Log messaggi */}
         <div className="border rounded-lg h-[420px] overflow-auto bg-white p-3">
           {log.length === 0 && (
             <div className="text-gray-500 text-sm">
@@ -83,7 +70,6 @@ const crypto = {
           ))}
         </div>
 
-        {/* Input */}
         <div className="flex gap-2">
           <input
             className="flex-1 border rounded-lg px-3 py-2"
@@ -101,7 +87,6 @@ const crypto = {
       {/* --- COLONNA DEBUG --- */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold">Debug contesto</h2>
-
         <div className="flex flex-wrap gap-2">
           <span className="text-sm px-2 py-1 rounded border bg-white">
             scope: <b>{state.scope}</b>
@@ -112,33 +97,20 @@ const crypto = {
           <span className="text-sm px-2 py-1 rounded border bg-white">
             ultimo_intent: <b>{state.ultimo_intent ?? "—"}</b>
           </span>
-          <button
-            className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50"
-            onClick={() => setScope("clients")}
-          >
+          <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => setScope("clients")}>
             scope → clients
           </button>
-          <button
-            className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50"
-            onClick={() => setScope("prodotti")}
-          >
+          <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => setScope("prodotti")}>
             scope → prodotti
           </button>
-          <button
-            className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50"
-            onClick={() => setScope("global")}
-          >
+          <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => setScope("global")}>
             scope → global
           </button>
-          <button
-            className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50"
-            onClick={() => reset()}
-          >
+          <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => reset()}>
             /reset (azzera contesto)
           </button>
         </div>
 
-        {/* Stato completo (solo lettura) */}
         <pre className="text-xs border rounded bg-gray-50 p-3 overflow-auto max-h-[260px]">
 {JSON.stringify(
   {
@@ -153,21 +125,6 @@ const crypto = {
   2
 )}
         </pre>
-
-        {/* Istruzioni rapide */}
-        <div className="text-sm text-gray-700">
-          <p className="mb-1 font-medium">Istruzioni:</p>
-          <ul className="list-disc ml-5 space-y-1">
-            <li>
-              Se la cifratura non è pronta, sblocca l&apos;accesso (login / unlock) e riprova: le funzioni usano i dati
-              reali di Supabase con decifratura client-side.
-            </li>
-            <li>
-              Esempio percorso: <code>/chat</code> — questa pagina non modifica l&apos;UI esistente e la puoi eliminare
-              in ogni momento.
-            </li>
-          </ul>
-        </div>
       </div>
     </div>
   );
