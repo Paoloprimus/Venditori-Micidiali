@@ -4,7 +4,10 @@ import { useState } from "react";
 import { useConversation } from "../context/ConversationContext";
 import { runChatTurn } from "./planner";
 // ⬇️ IMPORT: se il tuo hook è in un percorso diverso, aggiorna questa riga
-import { useCrypto } from "../lib/crypto/useCrypto";
+// import { useCrypto } from "../lib/crypto/useCrypto";
+const ready = false as const;
+const crypto = null;
+
 
 
 type ChatMsg = { role: "user" | "bot"; text: string };
