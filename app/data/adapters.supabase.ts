@@ -15,6 +15,27 @@
 
 import { supabase } from "../../lib/supabase/client";
 
+// Tipi delle righe che selezioniamo (minimi e tolleranti)
+type AccountRow = {
+  id: string;
+  name?: string | null;
+  name_enc?: string | null;
+  name_iv?: string | null;
+  email?: string | null;
+  email_enc?: string | null;
+  email_iv?: string | null;
+  created_at?: string | null;
+};
+
+type ProductRow = {
+  id: string;
+  name?: string | null;
+  name_enc?: string | null;
+  name_iv?: string | null;
+  available?: boolean | null;
+};
+
+
 // Tipizzazione "soft" per l'oggetto crypto: evitiamo di vincolarci al file reale.
 // Deve esporre: decryptFields(scope, table, recordId, rowOrMap, fieldNames?)
 type CryptoLike = {
@@ -47,39 +68,34 @@ export async function countClients(): Promise<number> {
  * lista nomi clienti decifrati (o plain se presente).
  * @param crypto istanza da useCrypto().crypto
  */
+
 export async function listClientNames(crypto: CryptoLike): Promise<string[]> {
   assertCrypto(crypto);
 
-  // SELECT "compatibile" (colonne effettive come da handoff)
   const { data, error } = await supabase
     .from("accounts")
-    .select(
-      "id," +
-      "name," +              // plain compat (alcuni record storici)
-      "name_enc,name_iv"     // cifrato standard
-    )
+    .select("id,name,name_enc,name_iv,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  if (!data) return [];
+  const rows = (data ?? []) as AccountRow[];
 
   const names: string[] = [];
-  for (const row of data) {
-    // 1) se c'è plain name, usa quello
+  for (const row of rows) {
     if (row.name) {
       names.push(row.name);
       continue;
     }
-    // 2) altrimenti prova a decifrare name_enc
     try {
       const dec = await crypto.decryptFields("table:accounts", "accounts", row.id, row, ["name"]);
       if (dec?.name) names.push(dec.name);
     } catch {
-      // se fallisce la decifratura, salta silenziosamente questo record
+      // ignora record non decifrabili
     }
   }
   return names;
 }
+
 
 /**
  * lista email clienti decifrate (o plain se presente).
@@ -90,18 +106,14 @@ export async function listClientEmails(crypto: CryptoLike): Promise<string[]> {
 
   const { data, error } = await supabase
     .from("accounts")
-    .select(
-      "id," +
-      "email," +             // plain compat se esiste
-      "email_enc,email_iv"   // cifrato standard
-    )
+    .select("id,email,email_enc,email_iv,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
-  if (!data) return [];
+  const rows = (data ?? []) as AccountRow[];
 
   const emails: string[] = [];
-  for (const row of data) {
+  for (const row of rows) {
     if (row.email) {
       emails.push(row.email);
       continue;
@@ -115,6 +127,7 @@ export async function listClientEmails(crypto: CryptoLike): Promise<string[]> {
   }
   return emails;
 }
+
 
 // ───────────────────────────────────────────────────────────────
 // PRODOTTI (best effort)
