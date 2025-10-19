@@ -21,6 +21,7 @@ export default function Login() {
   // util: salva pass in storage per auto-unlock
   function savePassphrase(pass: string) {
     try {
+      // ✅ password salvata temporaneamente per sblocco automatico
       sessionStorage.setItem("repping:pph", pass);
       // In DEV potresti voler persistere tra tab/riaperture:
       // localStorage.setItem("repping:pph", pass);
@@ -67,14 +68,15 @@ export default function Login() {
 
       } else {
         // Accesso
+        // ✅ Salva la password PRIMA del login, così il provider la trova subito
+        savePassphrase(password);
+
         const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
 
         // verifica sessione
         const { data: sessCheck } = await supabase.auth.getSession();
         if (!sessCheck.session) throw new Error("Accesso non riuscito: sessione assente");
-        // salva passphrase per auto-unlock
-        savePassphrase(password);
       }
 
       // ⬇️ allinea i cookie lato server (scrive i cookie sb-*)
@@ -91,12 +93,14 @@ export default function Login() {
         credentials: "same-origin",
       });
 
-      // redirect “hard” alla home (fa ripartire l'auto-unlock)
+      // ✅ redirect “hard” alla home (avvia auto-unlock e cleanup passphrase)
       window.location.replace("/");
 
     } catch (err: any) {
       // Se vedi 401 qui, quasi sempre è per sessione assente + RLS
       setMsg(err?.message ?? "Errore.");
+      // ✅ fallback di sicurezza: rimuovi la pass se errore
+      try { sessionStorage.removeItem("repping:pph"); } catch {}
     } finally {
       setLoading(false);
     }
