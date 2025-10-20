@@ -93,9 +93,11 @@ function isHelp(t: string) {
 
 function isCount(t: string) {
   return (
-    /^(quanti|numero|conta)\b/.test(t) && /(client[oi]|prodott[oi]|ordin[oi])\b/.test(t)
-  ) || /(tot|qta|qtà)\b/.test(t);
+    /(quanti|numero|conta|tot|qt[àa]|quante)\b/.test(t) &&
+    /(client[oi]|prodott[oi]|ordin[oi]|fornitor[ei]|negozi)\b/.test(t)
+  );
 }
+
 
 function isListNames(t: string) {
   return /(come si chiamano|i nomi|lista nomi|dammi i nomi)\b/.test(t) ||
