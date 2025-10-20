@@ -92,8 +92,9 @@ function isHelp(t: string) {
 }
 
 function isCount(t: string) {
+  // niente accenti: normalizziamo prima, quindi "qtà" diventa "qta"
   return (
-    /(quanti|numero|conta|tot|qt[àa]|quante)\b/.test(t) &&
+    /(quanti|numero|conta|tot|qta|quante)\b/.test(t) &&
     /(client[oi]|prodott[oi]|ordin[oi]|fornitor[ei]|negozi)\b/.test(t)
   );
 }
