@@ -73,14 +73,36 @@ export async function runChatTurn(
   crypto: CryptoLike | null // necessario per leggere nomi/email/prodotti cifrati
 ): Promise<PlannerResult> {
   const { state, expired } = conv;
-  const { intent, entities, topicHint } = parseUtterance(userText);
 
-  console.log("🧠 parseUtterance input:", userText);
-  console.log("🧠 intent:", intent, "topicHint:", topicHint);
+  // Analisi NLU
+  const parsed = parseUtterance(userText);
+  let { intent, entities, topicHint } = parsed;
+
+  // 🔧 HOTFIX: se il parser non riconosce (intent "unknown"), forziamo i casi più comuni
+  // Evita problemi di regex con accenti/maiuscole e sblocca subito la demo a 3 turni.
+  if (intent === "unknown") {
+    const low = userText.trim().toLowerCase();
+    if (/\bquanti\b/.test(low) && /\bclient/.test(low)) {
+      intent = "count";
+      topicHint = topicHint ?? "clients";
+    } else if (/(come si chiamano|\bnomi\b)/.test(low)) {
+      intent = "list_names";
+      topicHint = topicHint ?? state.scope !== "global" ? state.scope : "clients";
+    } else if (/\b(e )?(le )?email(s)?\b\??$/.test(low) || /\bmail\b/.test(low)) {
+      intent = "list_emails";
+      topicHint = topicHint ?? "clients";
+    } else if (/\bmancanti\b/.test(low) && /\bprodott/.test(low)) {
+      intent = "list_missing_products";
+      topicHint = topicHint ?? "prodotti";
+    }
+  }
+
+  // Debug (facoltativo)
+  // console.log("🧠 parseUtterance input:", userText);
+  // console.log("🧠 intent:", intent, "topicHint:", topicHint);
 
   // 1) Se il contesto è scaduto, chiedi di re-inquadrare
   if (expired && intent !== "reset") {
-    // Non resettiamo automaticamente: chiediamo all'utente lo scope
     return {
       text: "Il contesto è scaduto. Vuoi ripartire da **clienti**, **prodotti** o **ordini**? (puoi anche scrivere /reset)",
       appliedScope: state.scope,
@@ -150,7 +172,6 @@ export async function runChatTurn(
           usedContext: conv.state,
         };
       }
-      // altri scope "count" potremo aggiungerli più avanti
       return {
         text: "Vuoi il conteggio di **clienti**, **prodotti** o **ordini**?",
         appliedScope: scopeToUse,
@@ -241,7 +262,6 @@ export async function runChatTurn(
 
     case "unknown":
     default: {
-      // fallback: usa lo scope corrente per dare un suggerimento concreto
       if (state.scope === "clients") {
         return {
           text: 'Non ho capito. Esempi: "Quanti clienti ho?", "Come si chiamano?", "E le email?".',
