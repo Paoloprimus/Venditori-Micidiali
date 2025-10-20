@@ -92,12 +92,9 @@ function isHelp(t: string) {
 }
 
 function isCount(t: string) {
-  // niente accenti: normalizziamo prima, quindi "qtà" diventa "qta"
-  return (
-    /(quanti|numero|conta|tot|qta|quante)\b/.test(t) &&
-    /(client[oi]|prodott[oi]|ordin[oi]|fornitor[ei]|negozi)\b/.test(t)
-  );
+  return t.includes("client");
 }
+
 
 
 function isListNames(t: string) {
