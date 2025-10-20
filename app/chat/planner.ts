@@ -75,6 +75,9 @@ export async function runChatTurn(
   const { state, expired } = conv;
   const { intent, entities, topicHint } = parseUtterance(userText);
 
+  console.log("🧠 parseUtterance input:", userText);
+  console.log("🧠 intent:", intent, "topicHint:", topicHint);
+
   // 1) Se il contesto è scaduto, chiedi di re-inquadrare
   if (expired && intent !== "reset") {
     // Non resettiamo automaticamente: chiediamo all'utente lo scope
