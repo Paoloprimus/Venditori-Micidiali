@@ -25,7 +25,9 @@ export function parseUtterance(input: string): {
   entities: Entities;
   topicHint: TopicHint;
 } {
+    console.log("📥 parseUtterance() raw input:", input);
   const raw = normalize(input);
+    console.log("📥 after normalize:", raw);
 
   // --- Regole di topic (per suggerire lo scope) ---
   const talksClients  = /(client[oi]|clientela|negozi|bar|pasticcerie)\b/.test(raw);
