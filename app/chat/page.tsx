@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { useConversation } from "../context/ConversationContext";
 import { runChatTurn } from "./planner";
+import { toPlannerScope } from "@/lib/nlu/scope"; // ⬅️ adapter locale→planner
 
 type ChatMsg = { role: "user" | "bot"; text: string };
 
 export default function ChatTestPage() {
-  const { state, expired, setScope, remember, reset } = useConversation();
+  // ⬇️ includo anche setTopic per gestire il pulsante "global" senza forzare scope invalidi
+  const { state, expired, setScope, remember, reset, setTopic } = useConversation();
 
   // 👇 FINTA cifratura per la pagina di prova: niente import, niente hook
   const ready = true;
@@ -26,7 +28,29 @@ export default function ChatTestPage() {
     setInput("");
 
     try {
-      const res = await runChatTurn(text, { state, expired, setScope, remember, reset }, crypto);
+      // ⬇️ mappa lo scope locale ("prodotti","ordini","vendite") in quello atteso dal planner ("products","orders","sales")
+      const plannerState = {
+        ...state,
+        scope: toPlannerScope(state.scope as any),
+      };
+
+      // ⬇️ adapter di setScope inverso: se il planner ci imposta "products", noi riportiamo "prodotti", ecc.
+      const plannerCtx = {
+        state: plannerState,
+        expired,
+        setScope: (s: any) => {
+          const back =
+            s === "products" ? "prodotti" :
+            s === "orders"   ? "ordini"   :
+            s === "sales"    ? "vendite"  :
+            "clients";
+          setScope(back as any);
+        },
+        remember,
+        reset,
+      } as any;
+
+      const res = await runChatTurn(text, plannerCtx, crypto);
       setLog((l) => [...l, { role: "bot", text: res.text }]);
       // eslint-disable-next-line no-console
       console.debug("[planner result]", res);
@@ -103,7 +127,8 @@ export default function ChatTestPage() {
           <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => setScope("prodotti")}>
             scope → prodotti
           </button>
-          <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => setScope("global")}>
+          {/* ⬇️ "global": non imposta uno scope invalido, ma azzera il topic attivo */}
+          <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => setTopic(null)}>
             scope → global
           </button>
           <button className="text-sm px-2 py-1 rounded border bg-white hover:bg-gray-50" onClick={() => reset()}>
