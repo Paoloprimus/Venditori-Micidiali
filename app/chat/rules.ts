@@ -94,8 +94,13 @@ function isHelp(t: string) {
 }
 
 function isCount(t: string) {
-  return t.includes("client");
+  const low = t.toLowerCase();
+  return (
+    /(quanti|numero|conta|tot|qta|quante)\b/.test(low) &&
+    /(client[oi]|prodott[oi]|ordin[oi]|fornitor[ei]|negozi)\b/.test(low)
+  );
 }
+
 
 
 
