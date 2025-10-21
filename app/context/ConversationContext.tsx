@@ -2,10 +2,10 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 // ✅ Scope allineato ai tuoi documenti/planner (niente "products")
-export type Scope = "clients" | "prodotti" | "ordini" | "vendite";
+export type LocalScope = "clients" | "prodotti" | "ordini" | "vendite";
 
 export type ConversationState = {
-  scope: Scope;                        // non-null
+  scope: LocalScope;                        // non-null
   topic_attivo: Scope | null;          // alias storico, può restare null
   ultimo_intent: string | null;
   entita_correnti: Record<string, string | number | boolean | null>;
