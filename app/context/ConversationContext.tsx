@@ -1,8 +1,8 @@
-"use client"; 
+"use client";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-// Scope sempre definito (no null) per compatibilità con runChatTurn
-type Scope = "clients" | "products" | "orders" | "sales";
+// ✅ Scope allineato ai tuoi documenti/planner (niente "products")
+export type Scope = "clients" | "prodotti" | "ordini" | "vendite";
 
 export type ConversationState = {
   scope: Scope;                        // non-null
@@ -19,7 +19,7 @@ type ConversationContextValue = {
   state: ConversationState;
   expired: boolean;
   setScope: (s: Scope) => void;
-  setTopic: (t: Scope | null) => void; // lasciamo la possibilità di null qui
+  setTopic: (t: Scope | null) => void; // può essere null per "nessun topic attivo"
   setIntent: (intent: string | null) => void;
   setEntita: (patch: Partial<ConversationState["entita_correnti"]>) => void;
   setRisultato: (v: unknown) => void;
@@ -27,7 +27,7 @@ type ConversationContextValue = {
   reset: () => void;
 };
 
-const DEFAULT_SCOPE: Scope = "clients"; // fallback sicuro
+const DEFAULT_SCOPE: Scope = "clients";
 const DEFAULT_STATE: ConversationState = {
   scope: DEFAULT_SCOPE,
   topic_attivo: null,
@@ -53,12 +53,17 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<ConversationState>;
         const ts = parsed.updated_at ?? parsed.lastUpdateTs ?? Date.now();
-        // Se il vecchio salvataggio aveva scope nullo/assente, usa il DEFAULT_SCOPE
-        const scope = (parsed.scope as Scope) ?? DEFAULT_SCOPE;
+        // Se il vecchio salvataggio aveva scope assente o valori legacy, normalizza:
+        let nextScope = (parsed.scope as Scope) ?? DEFAULT_SCOPE;
+        // 🔁 normalizza eventuali valori inglesi legacy
+        if ((parsed as any)?.scope === "products") nextScope = "prodotti";
+        if ((parsed as any)?.scope === "orders") nextScope = "ordini";
+        if ((parsed as any)?.scope === "sales") nextScope = "vendite";
+
         setState((prev) => ({
           ...prev,
           ...parsed,
-          scope,
+          scope: nextScope,
           updated_at: ts,
           lastUpdateTs: ts,
         } as ConversationState));
@@ -83,77 +88,82 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
 
   const now = () => Date.now();
 
-  const api = useMemo<ConversationContextValue>(() => {
-    return {
-      state,
-      expired,
-      setScope: (s) =>
-        setState((st) => {
-          const ts = now();
-          return {
-            ...st,
-            scope: s,
-            // opzionale: mantieni topic allineato quando scegli esplicitamente lo scope
-            topic_attivo: s,
-            updated_at: ts,
-            lastUpdateTs: ts,
-          };
-        }),
-      setTopic: (t) =>
-        setState((st) => {
-          const ts = now();
-          // se t è null, NON tocchiamo scope (resta quello attuale non-null)
-          if (t === null) {
-            return { ...st, topic_attivo: null, updated_at: ts, lastUpdateTs: ts };
+  const api: ConversationContextValue = {
+    state,
+    expired,
+    setScope: (s) =>
+      setState((st) => {
+        const ts = now();
+        return {
+          ...st,
+          scope: s,
+          topic_attivo: s, // mantieni allineati alias quando decidi esplicitamente lo scope
+          updated_at: ts,
+          lastUpdateTs: ts,
+        };
+      }),
+    setTopic: (t) =>
+      setState((st) => {
+        const ts = now();
+        if (t === null) {
+          return { ...st, topic_attivo: null, updated_at: ts, lastUpdateTs: ts };
+        }
+        return {
+          ...st,
+          topic_attivo: t,
+          scope: t, // allinea anche lo scope
+          updated_at: ts,
+          lastUpdateTs: ts,
+        };
+      }),
+    setIntent: (intent) =>
+      setState((st) => {
+        const ts = now();
+        return { ...st, ultimo_intent: intent, updated_at: ts, lastUpdateTs: ts };
+      }),
+    setEntita: (patch) =>
+      setState((st) => {
+        const ts = now();
+        return {
+          ...st,
+          entita_correnti: { ...st.entita_correnti, ...patch },
+          updated_at: ts,
+          lastUpdateTs: ts,
+        };
+      }),
+    setRisultato: (v) =>
+      setState((st) => {
+        const ts = now();
+        return { ...st, ultimo_risultato: v, updated_at: ts, lastUpdateTs: ts };
+      }),
+    remember: (patch) =>
+      setState((st) => {
+        const ts = now();
+        let nextScope = st.scope;
+        if (patch.scope) {
+          // normalizza eventuali stringhe legacy
+          const p = patch.scope as string;
+          if (p === "products") nextScope = "prodotti";
+          else if (p === "orders") nextScope = "ordini";
+          else if (p === "sales") nextScope = "vendite";
+          else if (p === "clients" || p === "prodotti" || p === "ordini" || p === "vendite") {
+            nextScope = p as Scope;
           }
-          return {
-            ...st,
-            topic_attivo: t,
-            scope: t, // se imposti un topic, allinea anche lo scope
-            updated_at: ts,
-            lastUpdateTs: ts,
-          };
-        }),
-      setIntent: (intent) =>
-        setState((st) => {
-          const ts = now();
-          return { ...st, ultimo_intent: intent, updated_at: ts, lastUpdateTs: ts };
-        }),
-      setEntita: (patch) =>
-        setState((st) => {
-          const ts = now();
-          return {
-            ...st,
-            entita_correnti: { ...st.entita_correnti, ...patch },
-            updated_at: ts,
-            lastUpdateTs: ts,
-          };
-        }),
-      setRisultato: (v) =>
-        setState((st) => {
-          const ts = now();
-          return { ...st, ultimo_risultato: v, updated_at: ts, lastUpdateTs: ts };
-        }),
-      remember: (patch) =>
-        setState((st) => {
-          const ts = now();
-          // proteggi sempre scope: se patch.scope è mancante o null, mantieni quello esistente
-          const nextScope = (patch.scope as Scope) ?? st.scope ?? DEFAULT_SCOPE;
-          return {
-            ...st,
-            ...patch,
-            scope: nextScope,
-            updated_at: ts,
-            lastUpdateTs: ts,
-          };
-        }),
-      reset: () =>
-        setState(() => {
-          const ts = now();
-          return { ...DEFAULT_STATE, updated_at: ts, lastUpdateTs: ts };
-        }),
-    };
-  }, [state, expired]);
+        }
+        return {
+          ...st,
+          ...patch,
+          scope: nextScope,
+          updated_at: ts,
+          lastUpdateTs: ts,
+        };
+      }),
+    reset: () =>
+      setState(() => {
+        const ts = now();
+        return { ...DEFAULT_STATE, updated_at: ts, lastUpdateTs: ts };
+      }),
+  };
 
   return <ConversationContext.Provider value={api}>{children}</ConversationContext.Provider>;
 }
