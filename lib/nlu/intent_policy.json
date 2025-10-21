@@ -1,0 +1,27 @@
+{
+  "version": "1.0-draft",
+  "last_updated": "2025-10-21",
+  "confidence_thresholds": {
+    "accept": 0.75,
+    "clarify": 0.45
+  },
+  "pii_redaction": {
+    "active": true,
+    "rules": {
+      "names": "<NOME>",
+      "emails": "<EMAIL>",
+      "numbers": "<NUM>",
+      "codes": "<CODE>"
+    }
+  },
+  "intents": [
+    { "key": "count_clients", "examples": ["Quanti clienti ho?", "Numero clienti?"], "template": "Hai {N} clienti." },
+    { "key": "list_client_names", "examples": ["Come si chiamano?", "Elenco clienti"], "template": "I tuoi clienti sono: {NOMI}." },
+    { "key": "list_client_emails", "examples": ["E le email?", "Contatti email"], "template": "Le email dei tuoi clienti sono: {EMAILS}." },
+    { "key": "list_missing_products", "examples": ["Quali prodotti mancano?"], "template": "I prodotti mancanti sono: {PRODOTTI}." },
+    { "key": "list_orders_recent", "examples": ["Ultimi ordini"], "template": "Gli ultimi ordini sono: {ORDINI}." },
+    { "key": "summary_sales", "examples": ["Riassunto vendite"], "template": "Hai venduto {VALORE_TOTALE} in {PERIODO}." },
+    { "key": "greet", "examples": ["Ciao", "Buongiorno"], "template": "Ciao! Come posso aiutarti oggi?" },
+    { "key": "help", "examples": ["Aiutami", "Come funziona?"], "template": "Puoi chiedermi di contare i clienti, mostrare nomi, email o prodotti mancanti." }
+  ]
+}
