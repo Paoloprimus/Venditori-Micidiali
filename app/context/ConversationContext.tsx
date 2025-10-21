@@ -1,27 +1,25 @@
 "use client";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-type Scope = "clients" | "products" | "orders" | "sales" | null;
+// Scope sempre definito (no null) per compatibilità con runChatTurn
+type Scope = "clients" | "products" | "orders" | "sales";
 
 export type ConversationState = {
-  // NB: topic_attivo resta per compatibilità, ma usiamo "scope" come nome preferito
-  scope: Scope;
-  topic_attivo: Scope;                // alias storico
+  scope: Scope;                        // non-null
+  topic_attivo: Scope | null;          // alias storico, può restare null
   ultimo_intent: string | null;
   entita_correnti: Record<string, string | number | boolean | null>;
-  ultimo_risultato: unknown;          // es. numero, lista nomi/email, ecc.
+  ultimo_risultato: unknown;
 
-  // Timestamp di aggiornamento (richiesto da runChatTurn → ConversationContextState)
-  updated_at: number | null;          // <— nuovo campo richiesto
-  // Alias interno per TTL; tenuto in sync con updated_at
-  lastUpdateTs: number | null;
+  updated_at: number | null;           // richiesto dal planner
+  lastUpdateTs: number | null;         // alias interno per TTL
 };
 
 type ConversationContextValue = {
   state: ConversationState;
   expired: boolean;
   setScope: (s: Scope) => void;
-  setTopic: (t: Scope) => void; // compatibilità
+  setTopic: (t: Scope | null) => void; // lasciamo la possibilità di null qui
   setIntent: (intent: string | null) => void;
   setEntita: (patch: Partial<ConversationState["entita_correnti"]>) => void;
   setRisultato: (v: unknown) => void;
@@ -29,8 +27,9 @@ type ConversationContextValue = {
   reset: () => void;
 };
 
+const DEFAULT_SCOPE: Scope = "clients"; // fallback sicuro
 const DEFAULT_STATE: ConversationState = {
-  scope: null,
+  scope: DEFAULT_SCOPE,
   topic_attivo: null,
   ultimo_intent: null,
   entita_correnti: {},
@@ -52,15 +51,17 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
     try {
       const raw = sessionStorage.getItem(KEY);
       if (raw) {
-        const parsed = JSON.parse(raw) as ConversationState;
-        // se manca updated_at in vecchie versioni, inizializzalo ora
+        const parsed = JSON.parse(raw) as Partial<ConversationState>;
         const ts = parsed.updated_at ?? parsed.lastUpdateTs ?? Date.now();
+        // Se il vecchio salvataggio aveva scope nullo/assente, usa il DEFAULT_SCOPE
+        const scope = (parsed.scope as Scope) ?? DEFAULT_SCOPE;
         setState((prev) => ({
           ...prev,
           ...parsed,
+          scope,
           updated_at: ts,
           lastUpdateTs: ts,
-        }));
+        } as ConversationState));
       }
     } catch {
       // ignore
@@ -92,7 +93,8 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
           return {
             ...st,
             scope: s,
-            topic_attivo: s, // tieni allineati alias
+            // opzionale: mantieni topic allineato quando scegli esplicitamente lo scope
+            topic_attivo: s,
             updated_at: ts,
             lastUpdateTs: ts,
           };
@@ -100,10 +102,14 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
       setTopic: (t) =>
         setState((st) => {
           const ts = now();
+          // se t è null, NON tocchiamo scope (resta quello attuale non-null)
+          if (t === null) {
+            return { ...st, topic_attivo: null, updated_at: ts, lastUpdateTs: ts };
+          }
           return {
             ...st,
             topic_attivo: t,
-            scope: t,
+            scope: t, // se imposti un topic, allinea anche lo scope
             updated_at: ts,
             lastUpdateTs: ts,
           };
@@ -131,7 +137,15 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
       remember: (patch) =>
         setState((st) => {
           const ts = now();
-          return { ...st, ...patch, updated_at: ts, lastUpdateTs: ts };
+          // proteggi sempre scope: se patch.scope è mancante o null, mantieni quello esistente
+          const nextScope = (patch.scope as Scope) ?? st.scope ?? DEFAULT_SCOPE;
+          return {
+            ...st,
+            ...patch,
+            scope: nextScope,
+            updated_at: ts,
+            lastUpdateTs: ts,
+          };
         }),
       reset: () =>
         setState(() => {
