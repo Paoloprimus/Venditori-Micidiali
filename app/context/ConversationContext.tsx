@@ -1,4 +1,4 @@
-"use client";
+"use client"; 
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
 // Scope sempre definito (no null) per compatibilità con runChatTurn
