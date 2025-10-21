@@ -1,26 +1,17 @@
 // app/layout.tsx
 import "./globals.css";
-import type { ReactNode } from "react";
-import Providers from "./providers";
 import ClientErrorListener from "./ClientErrorListener";
-import { ConversationProvider } from "./context/ConversationContext";
+import { ConversationProvider } from "./context/ConversationContext"; // ⬅️ NUOVO import
 
-
-export const metadata = {
-  title: "Venditori Micidiali",
-  description: "App gestione clienti con cifratura",
-};
-
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
       <body>
-        {/* Monta i provider client (Crypto incluso) dentro <body> */}
         <ClientErrorListener />
         <ConversationProvider>
-        {children}
+          {/* Se hai altri Providers, tienili qui dentro oppure qui attorno, come preferisci */}
+          {children}
         </ConversationProvider>
-
       </body>
     </html>
   );
