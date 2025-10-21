@@ -5,23 +5,27 @@ type Scope = "clients" | "products" | "orders" | "sales" | null;
 
 export type ConversationState = {
   // NB: topic_attivo resta per compatibilità, ma usiamo "scope" come nome preferito
-  scope: Scope;                 // <— nuovo
-  topic_attivo: Scope;          // alias storico
+  scope: Scope;
+  topic_attivo: Scope;                // alias storico
   ultimo_intent: string | null;
   entita_correnti: Record<string, string | number | boolean | null>;
-  ultimo_risultato: unknown;    // es. numero, lista nomi/email, ecc.
-  lastUpdateTs: number | null;  // per TTL
+  ultimo_risultato: unknown;          // es. numero, lista nomi/email, ecc.
+
+  // Timestamp di aggiornamento (richiesto da runChatTurn → ConversationContextState)
+  updated_at: number | null;          // <— nuovo campo richiesto
+  // Alias interno per TTL; tenuto in sync con updated_at
+  lastUpdateTs: number | null;
 };
 
 type ConversationContextValue = {
   state: ConversationState;
-  expired: boolean;                           // <— nuovo: stato scadenza
-  setScope: (s: Scope) => void;               // <— nuovo: alias ergonomico
-  setTopic: (t: Scope) => void;               // compatibilità
+  expired: boolean;
+  setScope: (s: Scope) => void;
+  setTopic: (t: Scope) => void; // compatibilità
   setIntent: (intent: string | null) => void;
   setEntita: (patch: Partial<ConversationState["entita_correnti"]>) => void;
   setRisultato: (v: unknown) => void;
-  remember: (patch: Partial<ConversationState>) => void; // <— nuovo: helper ergonomico
+  remember: (patch: Partial<ConversationState>) => void;
   reset: () => void;
 };
 
@@ -31,31 +35,39 @@ const DEFAULT_STATE: ConversationState = {
   ultimo_intent: null,
   entita_correnti: {},
   ultimo_risultato: null,
+  updated_at: null,
   lastUpdateTs: null,
 };
 
 const KEY = "repping:convctx";
-const TTL_MS = 2 * 60 * 1000; // 2 minuti: cambia liberamente
+const TTL_MS = 2 * 60 * 1000; // 2 minuti
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
 
 export function ConversationProvider({ children }: { children: React.ReactNode }) {
   const [state, setState] = useState<ConversationState>(DEFAULT_STATE);
 
-  // load da sessionStorage
+  // Load da sessionStorage
   useEffect(() => {
     try {
       const raw = sessionStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw) as ConversationState;
-        setState((prev) => ({ ...prev, ...parsed }));
+        // se manca updated_at in vecchie versioni, inizializzalo ora
+        const ts = parsed.updated_at ?? parsed.lastUpdateTs ?? Date.now();
+        setState((prev) => ({
+          ...prev,
+          ...parsed,
+          updated_at: ts,
+          lastUpdateTs: ts,
+        }));
       }
     } catch {
       // ignore
     }
   }, []);
 
-  // persistenza live
+  // Persistenza live
   useEffect(() => {
     try {
       sessionStorage.setItem(KEY, JSON.stringify(state));
@@ -63,44 +75,69 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
   }, [state]);
 
   const expired = useMemo(() => {
-    if (!state.lastUpdateTs) return false;
-    return Date.now() - state.lastUpdateTs > TTL_MS;
-  }, [state.lastUpdateTs]);
+    const ts = state.updated_at ?? state.lastUpdateTs;
+    if (!ts) return false;
+    return Date.now() - ts > TTL_MS;
+  }, [state.updated_at, state.lastUpdateTs]);
 
-  const touch = () =>
-    setState((s) => ({ ...s, lastUpdateTs: Date.now() }));
+  const now = () => Date.now();
 
   const api = useMemo<ConversationContextValue>(() => {
     return {
       state,
       expired,
       setScope: (s) =>
-        setState((st) => ({
-          ...st,
-          scope: s,
-          topic_attivo: s, // tieni allineati alias
-          lastUpdateTs: Date.now(),
-        })),
+        setState((st) => {
+          const ts = now();
+          return {
+            ...st,
+            scope: s,
+            topic_attivo: s, // tieni allineati alias
+            updated_at: ts,
+            lastUpdateTs: ts,
+          };
+        }),
       setTopic: (t) =>
-        setState((st) => ({
-          ...st,
-          topic_attivo: t,
-          scope: t,
-          lastUpdateTs: Date.now(),
-        })),
+        setState((st) => {
+          const ts = now();
+          return {
+            ...st,
+            topic_attivo: t,
+            scope: t,
+            updated_at: ts,
+            lastUpdateTs: ts,
+          };
+        }),
       setIntent: (intent) =>
-        setState((st) => ({ ...st, ultimo_intent: intent, lastUpdateTs: Date.now() })),
+        setState((st) => {
+          const ts = now();
+          return { ...st, ultimo_intent: intent, updated_at: ts, lastUpdateTs: ts };
+        }),
       setEntita: (patch) =>
-        setState((st) => ({
-          ...st,
-          entita_correnti: { ...st.entita_correnti, ...patch },
-          lastUpdateTs: Date.now(),
-        })),
+        setState((st) => {
+          const ts = now();
+          return {
+            ...st,
+            entita_correnti: { ...st.entita_correnti, ...patch },
+            updated_at: ts,
+            lastUpdateTs: ts,
+          };
+        }),
       setRisultato: (v) =>
-        setState((st) => ({ ...st, ultimo_risultato: v, lastUpdateTs: Date.now() })),
+        setState((st) => {
+          const ts = now();
+          return { ...st, ultimo_risultato: v, updated_at: ts, lastUpdateTs: ts };
+        }),
       remember: (patch) =>
-        setState((st) => ({ ...st, ...patch, lastUpdateTs: Date.now() })),
-      reset: () => setState({ ...DEFAULT_STATE, lastUpdateTs: Date.now() }),
+        setState((st) => {
+          const ts = now();
+          return { ...st, ...patch, updated_at: ts, lastUpdateTs: ts };
+        }),
+      reset: () =>
+        setState(() => {
+          const ts = now();
+          return { ...DEFAULT_STATE, updated_at: ts, lastUpdateTs: ts };
+        }),
     };
   }, [state, expired]);
 
