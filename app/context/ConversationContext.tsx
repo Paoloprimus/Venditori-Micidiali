@@ -123,25 +123,38 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
         const ts = now();
         return { ...st, ultimo_intent: intent, updated_at: ts, lastUpdateTs: ts };
       }),
+
+    // ✅ merge "patch" senza undefined nei valori
     setEntita: (patch) =>
       setState((st) => {
         const ts = now();
+        const merged: Record<string, string | number | boolean | null> = {
+          ...st.entita_correnti,
+        };
+        for (const [k, v] of Object.entries(patch)) {
+          if (v === undefined) continue; // scarta undefined per rispettare il tipo
+          merged[k] = v as string | number | boolean | null;
+        }
         return {
           ...st,
-          entita_correnti: { ...st.entita_correnti, ...patch },
+          entita_correnti: merged,
           updated_at: ts,
           lastUpdateTs: ts,
         };
       }),
+
     setRisultato: (v) =>
       setState((st) => {
         const ts = now();
         return { ...st, ultimo_risultato: v, updated_at: ts, lastUpdateTs: ts };
       }),
+
+    // ✅ remember con normalizzazione scope e merge sicuro di entita_correnti (senza undefined)
     remember: (patch) =>
       setState((st) => {
         const ts = now();
-        // proteggi/norma sempre lo scope se presente nella patch
+
+        // normalizza eventuale scope in patch
         let nextScope = st.scope;
         if (patch.scope) {
           const p = patch.scope as string;
@@ -152,14 +165,35 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
             nextScope = p as LocalScope;
           }
         }
+
+        // merge sicuro per entita_correnti se presente nella patch
+        let mergedEntita = st.entita_correnti;
+        if (patch.entita_correnti) {
+          const tmp: Record<string, string | number | boolean | null> = { ...st.entita_correnti };
+          for (const [k, v] of Object.entries(patch.entita_correnti)) {
+            if (v === undefined) continue;
+            tmp[k] = v as string | number | boolean | null;
+          }
+          mergedEntita = tmp;
+        }
+
+        // costruiamo il nuovo stato senza copiare direttamente entita_correnti (per evitare undefined)
+        const {
+          entita_correnti: _ignoredEntita,
+          scope: _ignoredScope,
+          ...restPatch
+        } = patch;
+
         return {
           ...st,
-          ...patch,
+          ...restPatch,
           scope: nextScope,
+          entita_correnti: mergedEntita,
           updated_at: ts,
           lastUpdateTs: ts,
         };
       }),
+
     reset: () =>
       setState(() => {
         const ts = now();
