@@ -189,12 +189,14 @@ function fallbackUnknown(state: ConversationContextState): PlannerResult {
 
 // ───────────────────────── Planner turn ─────────────────────────
 
-export async function runChatTurn(
+export async function runChatTurn_v2(
   userText: string,
   conv: ConversationApi,
   crypto: CryptoLike | null
 ): Promise<PlannerResult> {
+
   const { state, expired } = conv;
+console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope });
 
   // 0) Context TTL scaduto → chiedi re-inquadramento
   if (expired) {
