@@ -394,11 +394,6 @@ const res = await runPlanner(
     console.error("[planner text fallback → model]", e);
   }
 
-  // Fallback: invia al modello generico (come prima)
-  await conv.send(txt);
-  conv.setInput("");
-
-
             return;
           }
 
