@@ -339,8 +339,65 @@ const res = await runPlanner(
 }
 
 // Fallback: invia al modello generico (come prima)
-await conv.send(txt);
-conv.setInput("");
+  // 🔀 PRIMA del modello generico: prova il planner (client → DB reale)
+  try {
+    const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
+
+    const res = await runPlanner(
+      txt,
+      {
+        state: {
+          ...convCtx.state,
+          scope:
+            convCtx.state.scope === "prodotti" ? "products" :
+            convCtx.state.scope === "ordini"   ? "orders"   :
+            convCtx.state.scope === "vendite"  ? "sales"    :
+            convCtx.state.scope, // "clients" o "global"
+          topic_attivo:
+            convCtx.state.topic_attivo === "prodotti" ? "products" :
+            convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+            convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+            convCtx.state.topic_attivo,
+        } as any,
+        expired: convCtx.expired,
+        setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
+        remember: convCtx.remember,
+        reset: convCtx.reset,
+      } as any,
+      crypto as any
+    );
+
+    if (res?.text) {
+      appendUserLocal(txt);
+      appendAssistantLocal(`[planner] ${res.text}`);
+      console.error("[planner_v2:text_hit]", res);
+
+      // persisti come fai nello standard flow
+      const convId = conv.currentConv?.id;
+      if (convId) {
+        await fetch("/api/messages/append", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
+        });
+        const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+        const j = await r.json();
+        conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+        setLocalUser([]);
+        setLocalAssistant([]);
+      }
+
+      conv.setInput("");
+      return; // ⬅️ STOP: non chiamare il modello generico
+    }
+  } catch (e) {
+    console.error("[planner text fallback → model]", e);
+  }
+
+  // Fallback: invia al modello generico (come prima)
+  await conv.send(txt);
+  conv.setInput("");
+
 
             return;
           }
