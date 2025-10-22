@@ -207,6 +207,11 @@ export async function runChatTurn(
     };
   }
 
+// 1) NLU ibrida
+const cls = await classifyIntent(userText);
+let intent: string | null = cls.intent;
+let shouldClarify = !!cls.needsClarification;
+
 // --- gestione fine follow-up e chiarimenti ---
 const inferred = inferFromContext(userText, state);
 
@@ -216,7 +221,6 @@ if (!intent && inferred) {
 }
 
 // Se il modello è incerto (needsClarification) ma il contesto lo chiarisce → procedi
-let shouldClarify = needsClarification;
 if (shouldClarify && inferred) {
   intent = inferred;
   shouldClarify = false;
@@ -229,9 +233,12 @@ if (!intent) {
 
 // Se serve ancora chiarire (nessuna inferenza utile) → domanda corta
 if (shouldClarify) {
-  const clar = (policy as any).speech?.clarify_prompt_short ? "Nomi o email?" : "Vuoi i nomi o le email?";
+  const clar = (policy as any).speech?.clarify_prompt_short
+    ? "Nomi o email?"
+    : "Vuoi i nomi o le email?";
   return { text: clar, appliedScope: state.scope, intent, usedContext: state };
 }
+
 
   
   // 2) Allinea lo scope se l'intent lo suggerisce
