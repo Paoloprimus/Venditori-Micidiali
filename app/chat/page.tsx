@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useConversation } from "../context/ConversationContext";
-import { runChatTurn } from "./planner";
+import { runChatTurn_v2 as runChatTurn } from "./planner";
 import { toPlannerScope } from "@/lib/nlu/scope"; // adapter locale→planner
 
 type ChatMsg = { role: "user" | "bot"; text: string };
