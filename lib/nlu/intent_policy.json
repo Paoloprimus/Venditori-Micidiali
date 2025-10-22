@@ -1,9 +1,9 @@
 {
   "version": "1.0-draft",
-  "last_updated": "2025-10-21",
+  "last_updated": "2025-10-22",
   "confidence_thresholds": {
     "accept": 0.75,
-    "clarify": 0.45
+    "clarify": 0.55
   },
   "pii_redaction": {
     "active": true,
@@ -13,6 +13,11 @@
       "numbers": "<NUM>",
       "codes": "<CODE>"
     }
+  },
+  "speech": {
+    "clarify_prompt_short": true,
+    "followup_shortcircuit": true,
+    "fillers_enabled": true
   },
   "intents": [
     { "key": "count_clients", "examples": ["Quanti clienti ho?", "Numero clienti?"], "template": "Hai {N} clienti." },
@@ -25,3 +30,5 @@
     { "key": "help", "examples": ["Aiutami", "Come funziona?"], "template": "Puoi chiedermi di contare i clienti, mostrare nomi, email o prodotti mancanti." }
   ]
 }
+
+
