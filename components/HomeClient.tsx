@@ -269,14 +269,43 @@ try {
     decryptFields: async (_scope: string, _table: string, _id: string, row: any) => row,
   };
 
-  const res = await runPlanner(txt, {
-    state: convCtx.state,
+const res = await runPlanner(
+  txt,
+  {
+    // ⬅️ adattiamo lo scope IT → EN per il planner
+    state: {
+      ...convCtx.state,
+      scope:
+        convCtx.state.scope === "prodotti" ? "products" :
+        convCtx.state.scope === "ordini"   ? "orders"   :
+        convCtx.state.scope === "vendite"  ? "sales"    :
+        convCtx.state.scope, // "clients" o "global"
+      // opzionale ma utile: allinea anche topic_attivo se lo usi
+      topic_attivo:
+        convCtx.state.topic_attivo === "prodotti" ? "products" :
+        convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+        convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+        convCtx.state.topic_attivo,
+    } as any, // evita l'errore TS sul tipo del planner
+
     expired: convCtx.expired,
-    setScope: convCtx.setScope,
+
+    // ⬅️ adattatore inverso EN → IT per lo scope che il planner potrebbe impostare
+    setScope: (s: any) =>
+      convCtx.setScope(
+        s === "products" ? "prodotti" :
+        s === "orders"   ? "ordini"   :
+        s === "sales"    ? "vendite"  :
+        s // "clients" o "global"
+      ),
+
     remember: convCtx.remember,
     reset: convCtx.reset,
-  }, crypto as any);
+  } as any, // cast totale, così TS non si lamenta
+  crypto as any
+);
 
+  
   if (res?.text) {
     // Mostra la domanda e la risposta del planner in locale
     appendUserLocal(txt);
