@@ -1,25 +1,25 @@
 "use client";
 import React, { createContext, useContext, useEffect, useMemo, useState } from "react";
 
-// ✅ Scope allineato ai tuoi documenti/planner (niente "products")
+// ✅ Vocabolario locale (italiano) per lo scope della conversazione
 export type LocalScope = "clients" | "prodotti" | "ordini" | "vendite";
 
 export type ConversationState = {
-  scope: LocalScope;                        // non-null
-  topic_attivo: Scope | null;          // alias storico, può restare null
+  scope: LocalScope;                     // non-null
+  topic_attivo: LocalScope | null;       // alias storico, può restare null
   ultimo_intent: string | null;
   entita_correnti: Record<string, string | number | boolean | null>;
   ultimo_risultato: unknown;
 
-  updated_at: number | null;           // richiesto dal planner
-  lastUpdateTs: number | null;         // alias interno per TTL
+  updated_at: number | null;             // richiesto dal planner
+  lastUpdateTs: number | null;           // alias interno per TTL
 };
 
 type ConversationContextValue = {
   state: ConversationState;
   expired: boolean;
-  setScope: (s: Scope) => void;
-  setTopic: (t: Scope | null) => void; // può essere null per "nessun topic attivo"
+  setScope: (s: LocalScope) => void;
+  setTopic: (t: LocalScope | null) => void; // può essere null per "nessun topic attivo"
   setIntent: (intent: string | null) => void;
   setEntita: (patch: Partial<ConversationState["entita_correnti"]>) => void;
   setRisultato: (v: unknown) => void;
@@ -27,7 +27,7 @@ type ConversationContextValue = {
   reset: () => void;
 };
 
-const DEFAULT_SCOPE: Scope = "clients";
+const DEFAULT_SCOPE: LocalScope = "clients";
 const DEFAULT_STATE: ConversationState = {
   scope: DEFAULT_SCOPE,
   topic_attivo: null,
@@ -53,12 +53,14 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
       if (raw) {
         const parsed = JSON.parse(raw) as Partial<ConversationState>;
         const ts = parsed.updated_at ?? parsed.lastUpdateTs ?? Date.now();
-        // Se il vecchio salvataggio aveva scope assente o valori legacy, normalizza:
-        let nextScope = (parsed.scope as Scope) ?? DEFAULT_SCOPE;
-        // 🔁 normalizza eventuali valori inglesi legacy
-        if ((parsed as any)?.scope === "products") nextScope = "prodotti";
-        if ((parsed as any)?.scope === "orders") nextScope = "ordini";
-        if ((parsed as any)?.scope === "sales") nextScope = "vendite";
+
+        // 🔁 Normalizza eventuali valori inglesi legacy
+        let nextScope: LocalScope =
+          (parsed.scope as LocalScope) ?? DEFAULT_SCOPE;
+        const legacy = (parsed as any)?.scope;
+        if (legacy === "products") nextScope = "prodotti";
+        if (legacy === "orders") nextScope = "ordini";
+        if (legacy === "sales") nextScope = "vendite";
 
         setState((prev) => ({
           ...prev,
@@ -66,7 +68,7 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
           scope: nextScope,
           updated_at: ts,
           lastUpdateTs: ts,
-        } as ConversationState));
+        }) as ConversationState);
       }
     } catch {
       // ignore
@@ -97,7 +99,7 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
         return {
           ...st,
           scope: s,
-          topic_attivo: s, // mantieni allineati alias quando decidi esplicitamente lo scope
+          topic_attivo: s, // allinea alias quando scegli esplicitamente lo scope
           updated_at: ts,
           lastUpdateTs: ts,
         };
@@ -139,15 +141,15 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
     remember: (patch) =>
       setState((st) => {
         const ts = now();
+        // proteggi/norma sempre lo scope se presente nella patch
         let nextScope = st.scope;
         if (patch.scope) {
-          // normalizza eventuali stringhe legacy
           const p = patch.scope as string;
           if (p === "products") nextScope = "prodotti";
           else if (p === "orders") nextScope = "ordini";
           else if (p === "sales") nextScope = "vendite";
           else if (p === "clients" || p === "prodotti" || p === "ordini" || p === "vendite") {
-            nextScope = p as Scope;
+            nextScope = p as LocalScope;
           }
         }
         return {
