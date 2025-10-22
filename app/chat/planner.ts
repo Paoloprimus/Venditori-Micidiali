@@ -209,25 +209,51 @@ export async function runChatTurn(
 
 // 1) NLU ibrida
 const cls = await classifyIntent(userText);
+
+// LOG #1 — esito del classificatore + contesto corrente
+console.debug("[planner:cls]", {
+  input: userText,
+  intent: cls.intent,
+  needsClarification: cls.needsClarification,
+  scope: state.scope,
+  last_intent: state.ultimo_intent,
+  topic: state.topic_attivo,
+});
+
 let intent: string | null = cls.intent;
 let shouldClarify = !!cls.needsClarification;
 
 // --- gestione fine follow-up e chiarimenti ---
 const inferred = inferFromContext(userText, state);
 
-// Se il modello non ha capito ma il contesto è chiaro → usa inferenza
-if (!intent && inferred) {
-  intent = inferred;
-}
-
-// Se il modello è incerto (needsClarification) ma il contesto lo chiarisce → procedi
-if (shouldClarify && inferred) {
-  intent = inferred;
+// HARD OVERRIDE per follow-up comuni quando siamo su "clients"
+const t = userText.toLowerCase().trim();
+if (
+  (state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
+  (/\b(nomi|come si chiamano)\b/.test(t) || /^come si chiamano\??$/.test(t) || /^i nomi\??$/.test(t))
+) {
+  intent = "list_client_names";
   shouldClarify = false;
+} else if (
+  (state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
+  (/\b(email|e[-\s]?mail|mail)\b/.test(t) || /^\s*e (le )?email(s)?\??\s*$/.test(t))
+) {
+  intent = "list_client_emails";
+  shouldClarify = false;
+} else {
+  // Se il modello non ha capito, ma il contesto è chiaro → usa inferenza
+  if (!intent && inferred) intent = inferred;
+
+  // Se il modello è incerto ma l'inferenza lo chiarisce → procedi
+  if (shouldClarify && inferred) {
+    intent = inferred;
+    shouldClarify = false;
+  }
 }
 
 // Se ancora nulla → fallback
 if (!intent) {
+  console.debug("[planner:decide]", { action: "fallback_unknown" });
   return fallbackUnknown(state);
 }
 
@@ -236,8 +262,15 @@ if (shouldClarify) {
   const clar = (policy as any).speech?.clarify_prompt_short
     ? "Nomi o email?"
     : "Vuoi i nomi o le email?";
+
+  // LOG #2 — stiamo scegliendo il chiarimento
+  console.debug("[planner:clarify]", { inferred, intent_before_clarify: cls.intent, scope: state.scope });
   return { text: clar, appliedScope: state.scope, intent, usedContext: state };
 }
+
+// LOG #3 — intent finale deciso dopo override/inferenza
+console.debug("[planner:final_intent]", { intent, scope: state.scope });
+
 
 
   
