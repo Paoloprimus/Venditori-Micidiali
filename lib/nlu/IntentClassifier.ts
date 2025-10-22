@@ -1,20 +1,21 @@
+// lib/nlu/IntentClassifier.ts
 import policyData from "./intent_policy.json";
 import type { IntentPolicy, ClassificationResult } from "./types";
 import { redactPII } from "./pii";
+import { preprocessUtterance } from "./utterance_preproc"; // ⬅️ nuovo
 
 const policy = policyData as IntentPolicy;
 
-/**
- * Classifica la frase dell'utente determinando l'intento.
- * - Nessun dato reale o sensibile viene inviato.
- * - L'LLM non genera testo, solo classifica.
- */
 export async function classifyIntent(
   utterance: string
 ): Promise<ClassificationResult> {
-  const cleaned = policy.pii_redaction.active ? redactPII(utterance) : utterance;
+  // 1) normalizza parlato
+  const pre = preprocessUtterance(utterance);
 
-  // ESEMPIO: chiamata locale o remota al classificatore (placeholder)
+  // 2) redazione PII
+  const cleaned = policy.pii_redaction.active ? redactPII(pre) : pre;
+
+  // 3) chiamata al modello (placeholder attuale)
   const { intent, confidence } = await fakeLLMClassifier(cleaned);
 
   const { accept, clarify } = policy.confidence_thresholds;
@@ -24,6 +25,7 @@ export async function classifyIntent(
     needsClarification: confidence < accept && confidence >= clarify,
   };
 }
+
 
 /**
  * Mock temporaneo del classificatore LLM.
