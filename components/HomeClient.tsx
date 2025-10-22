@@ -209,194 +209,61 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     return [...patchedBubbles, ...localsUser, ...localsAssistant];
   }, [patchedBubbles, localUser, localAssistant]);
 
-  // invio da Composer (uso testuale) — NIENTE popup; domanda e risposta come in una chat normale
-  async function submitFromComposer() {
-    if (voice.isRecording) { await voice.stopMic(); }
-    const txt = conv.input.trim();
-    if (!txt) return;
+// invio da Composer (uso testuale) — NIENTE popup; domanda e risposta come in una chat normale
+async function submitFromComposer() {
+  if (voice.isRecording) { await voice.stopMic(); }
+  const txt = conv.input.trim();
+  if (!txt) return;
 
-    // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
-    if (pendingIntent) {
-      if (YES.test(txt)) {
-        await handleIntent(pendingIntent);
-        setPendingIntent(null);
-        conv.setInput("");
-        return;
-      }
-      if (NO.test(txt)) {
-        speakIfEnabled("Ok, annullato.");
-        setPendingIntent(null);
-        conv.setInput("");
-        return;
-      }
-    } else {
-      // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
-      try {
-        // 1) normalizza
-        const norm = await postJSON(`/api/standard/normalize`, { text: txt });
-        const normalized: string = norm?.normalized || txt;
-
-        // 2) shortlist topK
-        const sl = await postJSON(`/api/standard/shortlist`, { q: normalized, topK: 5 });
-        const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
-
-        // 3) top-1 → se esiste, esegui direttamente
-        const top = items[0];
-        if (top && top.intent_key) {
-          const intentKey = top.intent_key;
-
-          // 4) estrai {prodotto} con fallback all’ultimo valido per “e quanti …”
-          let prodotto = extractProductTerm(unaccentLower(normalized));
-          if (!prodotto || /\s/.test(prodotto)) {
-            if (lastProduct) prodotto = lastProduct;
-          }
-
-          // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
-          appendUserLocal(txt);
-
-          // 5) execute
-          const execJson = await postJSON(`/api/standard/execute`, {
-            intent_key: intentKey,
-            slots: { prodotto }
-          });
-
-          // Se non gestito → fallback al modello (abbiamo già scritto la domanda locale)
-          if (!execJson?.ok) {
-// 🔀 PRIMA di mandare al modello generico: prova il planner (client → DB reale)
-try {
-  // crypto minimale: identità (se hai un hook crypto reale, usalo qui al posto di questo)
-  const crypto = {
-    decryptFields: async (_scope: string, _table: string, _id: string, row: any) => row,
-  };
-
-const res = await runPlanner(
-  txt,
-  {
-    // ⬅️ adattiamo lo scope IT → EN per il planner
-    state: {
-      ...convCtx.state,
-      scope:
-        convCtx.state.scope === "prodotti" ? "products" :
-        convCtx.state.scope === "ordini"   ? "orders"   :
-        convCtx.state.scope === "vendite"  ? "sales"    :
-        convCtx.state.scope, // "clients" o "global"
-      // opzionale ma utile: allinea anche topic_attivo se lo usi
-      topic_attivo:
-        convCtx.state.topic_attivo === "prodotti" ? "products" :
-        convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-        convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-        convCtx.state.topic_attivo,
-    } as any, // evita l'errore TS sul tipo del planner
-
-    expired: convCtx.expired,
-
-    // ⬅️ adattatore inverso EN → IT per lo scope che il planner potrebbe impostare
-    setScope: (s: any) =>
-      convCtx.setScope(
-        s === "products" ? "prodotti" :
-        s === "orders"   ? "ordini"   :
-        s === "sales"    ? "vendite"  :
-        s // "clients" o "global"
-      ),
-
-    remember: convCtx.remember,
-    reset: convCtx.reset,
-  } as any, // cast totale, così TS non si lamenta
-  crypto as any
-);
-
-  
-  if (res?.text) {
-    // Mostra la domanda e la risposta del planner in locale
-    appendUserLocal(txt);
-    appendAssistantLocal(res.text);
-
-    // Persisti su thread corrente (come fai per lo standard flow)
-    const convId = conv.currentConv?.id;
-    if (convId) {
-      await fetch("/api/messages/append", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          conversationId: convId,
-          userText: txt,
-          assistantText: res.text,
-        }),
-      });
-      const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-      const j = await r.json();
-      conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-      setLocalUser([]);
-      setLocalAssistant([]);
-    }
-
-    conv.setInput("");
-    return; // ⬅️ STOP: non chiamare il modello generico
-  }
-} catch (e) {
-  // se il planner non gestisce il caso, cadiamo nel modello generico
-  console.error("[planner fallback → model]", e);
-}
-
-// Fallback: invia al modello generico (come prima)
-  // 🔀 PRIMA del modello generico: prova il planner (client → DB reale)
-  try {
-    const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
-
-    const res = await runPlanner(
-      txt,
-      {
-        state: {
-          ...convCtx.state,
-          scope:
-            convCtx.state.scope === "prodotti" ? "products" :
-            convCtx.state.scope === "ordini"   ? "orders"   :
-            convCtx.state.scope === "vendite"  ? "sales"    :
-            convCtx.state.scope, // "clients" o "global"
-          topic_attivo:
-            convCtx.state.topic_attivo === "prodotti" ? "products" :
-            convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-            convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-            convCtx.state.topic_attivo,
-        } as any,
-        expired: convCtx.expired,
-        setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
-        remember: convCtx.remember,
-        reset: convCtx.reset,
-      } as any,
-      crypto as any
-    );
-
-    if (res?.text) {
-      appendUserLocal(txt);
-      appendAssistantLocal(`[planner] ${res.text}`);
-      console.error("[planner_v2:text_hit]", res);
-
-      // persisti come fai nello standard flow
-      const convId = conv.currentConv?.id;
-      if (convId) {
-        await fetch("/api/messages/append", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
-        });
-        const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-        const j = await r.json();
-        conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-        setLocalUser([]);
-        setLocalAssistant([]);
-      }
-
+  // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
+  if (pendingIntent) {
+    if (YES.test(txt)) {
+      await handleIntent(pendingIntent);
+      setPendingIntent(null);
       conv.setInput("");
-      return; // ⬅️ STOP: non chiamare il modello generico
+      return;
     }
-  } catch (e) {
-    console.error("[planner text fallback → model]", e);
-  }
+    if (NO.test(txt)) {
+      speakIfEnabled("Ok, annullato.");
+      setPendingIntent(null);
+      conv.setInput("");
+      return;
+    }
+  } else {
+    // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
+    try {
+      // 1) normalizza
+      const norm = await postJSON(`/api/standard/normalize`, { text: txt });
+      const normalized: string = norm?.normalized || txt;
 
-            return;
-          }
+      // 2) shortlist topK
+      const sl = await postJSON(`/api/standard/shortlist`, { q: normalized, topK: 5 });
+      const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
 
+      // 3) top-1 → se esiste, esegui direttamente
+      const top = items[0];
+      if (top && top.intent_key) {
+        const intentKey = top.intent_key;
+
+        // 4) estrai {prodotto} con fallback all’ultimo valido per “e quanti …”
+        let prodotto = extractProductTerm(unaccentLower(normalized));
+        if (!prodotto || /\s/.test(prodotto)) {
+          if (lastProduct) prodotto = lastProduct;
+        }
+
+        // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
+        appendUserLocal(txt);
+
+        // 5) execute
+        const execJson = await postJSON(`/api/standard/execute`, {
+          intent_key: intentKey,
+          slots: { prodotto }
+        });
+
+        // Se non gestito → prosegui (non inviare nulla qui; passeremo al planner sotto)
+        if (!execJson?.ok) {
+          console.error("[standard→planner] exec non gestito, passo al planner");
+        } else {
           // 6) compila template risposta (con fallback prezzo/sconto se 0)
           const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
           if (intentKey === "prod_prezzo_sconti") {
@@ -444,80 +311,88 @@ const res = await runPlanner(
           }
 
           conv.setInput("");
-          return; // NON chiamare conv.send() qui: evitiamo la seconda risposta del modello
+          return; // NON chiamare planner/model qui: esecuzione standard OK
         }
-      } catch (e) {
-        console.error("[standard flow error]", e);
-        // in caso di errore → fallback
       }
-
-      // Nessun intent standard riconosciuto → PRIMA prova il planner
-      try {
-        const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
-        const res = await runPlanner(
-          txt,
-          {
-            state: {
-              ...convCtx.state,
-              scope:
-                convCtx.state.scope === "prodotti" ? "products" :
-                convCtx.state.scope === "ordini"   ? "orders"   :
-                convCtx.state.scope === "vendite"  ? "sales"    :
-                convCtx.state.scope,
-              topic_attivo:
-                convCtx.state.topic_attivo === "prodotti" ? "products" :
-                convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-                convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-                convCtx.state.topic_attivo,
-            } as any,
-            expired: convCtx.expired,
-            setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
-            remember: convCtx.remember,
-            reset: convCtx.reset,
-          } as any,
-          crypto as any
-        );
-
-        if (res?.text) {
-          appendUserLocal(txt);
-          appendAssistantLocal(`[planner] ${res.text}`);
-          console.error("[planner_v2:text_hit]", res);
-
-          const convId = conv.currentConv?.id;
-          if (convId) {
-            await fetch("/api/messages/append", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
-            });
-            const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-            const j = await r.json();
-            conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-            setLocalUser([]);
-            setLocalAssistant([]);
-          }
-
-          conv.setInput("");
-          return; // ⬅️ STOP: il planner ha risposto, non chiamare il modello generico
-        }
-      } catch (e) {
-        console.error("[planner text fallback → model]", e);
-      }
-
-      // Se il planner non ha gestito → legacy voice-intents (come prima)
-      const intent = matchIntent(txt);
-      if (intent.type !== "NONE") {
-        askConfirm(intent);
-        conv.setInput("");
-        return;
-      }
-
+    } catch (e) {
+      console.error("[standard flow error]", e);
+      // in caso di errore → prosegui al planner
     }
 
-    // Fallback: invia al modello generico (mostra domanda/risposta gestite dal tuo hook)
-    await conv.send(txt);
-    conv.setInput("");
+    // ---------- PLANNER: un solo tentativo qui ----------
+    try {
+      console.error("[planner:composer] about to call planner", txt);
+
+      // crypto minimale: identità (sostituisci con il tuo hook reale se vuoi decifrare davvero)
+      const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
+
+      const res = await runPlanner(
+        txt,
+        {
+          state: {
+            ...convCtx.state,
+            scope:
+              convCtx.state.scope === "prodotti" ? "products" :
+              convCtx.state.scope === "ordini"   ? "orders"   :
+              convCtx.state.scope === "vendite"  ? "sales"    :
+              convCtx.state.scope, // "clients" o "global"
+            topic_attivo:
+              convCtx.state.topic_attivo === "prodotti" ? "products" :
+              convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+              convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+              convCtx.state.topic_attivo,
+          } as any,
+          expired: convCtx.expired,
+          setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
+          remember: convCtx.remember,
+          reset: convCtx.reset,
+        } as any,
+        crypto as any
+      );
+
+      if (res?.text) {
+        appendUserLocal(txt);
+        appendAssistantLocal(`[planner] ${res.text}`);
+        console.error("[planner_v2:text_hit]", res);
+
+        // persisti come fai nello standard flow
+        const convId = conv.currentConv?.id;
+        if (convId) {
+          await fetch("/api/messages/append", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
+          });
+          const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+          const j = await r.json();
+          conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+          setLocalUser([]);
+          setLocalAssistant([]);
+        }
+
+        conv.setInput("");
+        return; // ⬅️ STOP: il planner ha risposto, non chiamare il modello generico
+      }
+    } catch (e) {
+      console.error("[planner text fallback → model]", e);
+    }
+
+    // ---------- Legacy voice-intents (solo se proprio serve) ----------
+    const intent = matchIntent(txt);
+    if (intent.type !== "NONE") {
+      askConfirm(intent);
+      conv.setInput("");
+      return;
+    }
   }
+
+  // ---------- Fallback finale: modello generico ----------
+  console.error("[fallback:model] no standard intent, no planner match");
+  await conv.send(txt);
+  conv.setInput("");
+  return;
+}
+
 
   return (
     <>
