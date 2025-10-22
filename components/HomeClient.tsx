@@ -8,6 +8,9 @@ import TopBar from "./home/TopBar";
 import Thread from "./home/Thread";
 import Composer from "./home/Composer";
 
+import { runChatTurn_v2 as runPlanner } from "../app/chat/planner";
+import { useConversation } from "../app/context/ConversationContext";
+
 import { useConversations } from "../hooks/useConversations";
 import { useTTS } from "../hooks/useTTS";
 import { useVoice } from "../hooks/useVoice";
@@ -89,6 +92,7 @@ const LOCAL_TEMPLATES: Record<string, { response: string }> = {
 };
 
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
+  const convCtx = useConversation();
   const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
 
   // ---- TTS
@@ -258,8 +262,57 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
           // Se non gestito → fallback al modello (abbiamo già scritto la domanda locale)
           if (!execJson?.ok) {
-            await conv.send(txt);
-            conv.setInput("");
+// 🔀 PRIMA di mandare al modello generico: prova il planner (client → DB reale)
+try {
+  // crypto minimale: identità (se hai un hook crypto reale, usalo qui al posto di questo)
+  const crypto = {
+    decryptFields: async (_scope: string, _table: string, _id: string, row: any) => row,
+  };
+
+  const res = await runPlanner(txt, {
+    state: convCtx.state,
+    expired: convCtx.expired,
+    setScope: convCtx.setScope,
+    remember: convCtx.remember,
+    reset: convCtx.reset,
+  }, crypto as any);
+
+  if (res?.text) {
+    // Mostra la domanda e la risposta del planner in locale
+    appendUserLocal(txt);
+    appendAssistantLocal(res.text);
+
+    // Persisti su thread corrente (come fai per lo standard flow)
+    const convId = conv.currentConv?.id;
+    if (convId) {
+      await fetch("/api/messages/append", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          conversationId: convId,
+          userText: txt,
+          assistantText: res.text,
+        }),
+      });
+      const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+      const j = await r.json();
+      conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+      setLocalUser([]);
+      setLocalAssistant([]);
+    }
+
+    conv.setInput("");
+    return; // ⬅️ STOP: non chiamare il modello generico
+  }
+} catch (e) {
+  // se il planner non gestisce il caso, cadiamo nel modello generico
+  console.error("[planner fallback → model]", e);
+}
+
+// Fallback: invia al modello generico (come prima)
+await conv.send(txt);
+conv.setInput("");
+
             return;
           }
 
