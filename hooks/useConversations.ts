@@ -5,6 +5,10 @@ import { listConversations, createConversation as apiCreate, type Conv } from ".
 import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
 import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
 
+// 🔗 AGGIUNTA: planner + contesto conversazione
+import { runChatTurn_v2 as runPlanner } from "@/app/chat/planner";
+import { useConversation } from "@/app/context/ConversationContext";
+
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
 
 type Options = {
@@ -27,6 +31,9 @@ export function useConversations(opts: Options = {}) {
   const threadRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);   // ✅ sentinel in fondo al thread
   const firstPaintRef = useRef(true);            // evita animazione al primo render
+
+  // 🔗 AGGIUNTA: contesto conversazione (serve al planner)
+  const convCtx = useConversation();
 
   // ---- Utils
   function autoTitleRome() {
@@ -108,10 +115,8 @@ export function useConversations(opts: Options = {}) {
   }
 
   /**
-   * send
-   * - Aggiunge il messaggio utente.
-   * - Manda al backend e aggiunge la reply.
-   * - SOLO DOPO il primo scambio chiede usage per-conv (ora l'API ha conteggi).
+   * send (ROUTER)
+   * Ordine: ottimistica user-bubble → prova PLANNER → altrimenti modello generico.
    */
   async function send(content: string) {
     setServerError(null);
@@ -119,8 +124,76 @@ export function useConversations(opts: Options = {}) {
     if (!txt) return;
 
     const conv = await ensureConversation();
+
+    // 1) bubble utente (ottimistica)
     setBubbles((b) => [...b, { role: "user", content: txt }]);
 
+    // 2) TENTA IL PLANNER PRIMA DI CHIAMARE IL MODELLO GENERICO
+    try {
+      // mappa scope IT→EN per il planner
+      const mappedState = {
+        ...convCtx.state,
+        scope:
+          convCtx.state.scope === "prodotti" ? "products" :
+          convCtx.state.scope === "ordini"   ? "orders"   :
+          convCtx.state.scope === "vendite"  ? "sales"    :
+          convCtx.state.scope, // "clients" o "global"
+        topic_attivo:
+          convCtx.state.topic_attivo === "prodotti" ? "products" :
+          convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+          convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+          convCtx.state.topic_attivo,
+      } as any;
+
+      // crypto minima: identità (sostituisci con hook reale se servisse decifrare)
+      const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
+
+      const res = await runPlanner(
+        txt,
+        {
+          state: mappedState,
+          expired: convCtx.expired,
+          setScope: (s:any)=>convCtx.setScope(
+            s === "products" ? "prodotti" :
+            s === "orders"   ? "ordini"   :
+            s === "sales"    ? "vendite"  :
+            s
+          ),
+          remember: convCtx.remember,
+          reset: convCtx.reset,
+        } as any,
+        crypto as any
+      );
+
+      if (res?.text) {
+        // 2.a risposta del planner → bubble assistant + persistenza leggera
+        setBubbles((b) => [...b, { role: "assistant", content: res.text }]);
+        onAssistantReply?.(res.text);
+
+        // persisti via API append (come fai altrove)
+        try {
+          await fetch("/api/messages/append", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              conversationId: conv.id,
+              userText: txt,
+              assistantText: res.text,
+            }),
+          });
+        } catch {
+          // best-effort: non bloccare la UX
+        }
+
+        await refreshUsage(conv.id); // ora scoped
+        return; // ⬅️ STOP: non chiamare il modello generico
+      }
+    } catch (e) {
+      console.error("[planner in hook → fallback]", e);
+      // proseguiamo col modello generico
+    }
+
+    // 3) Modello generico (comportamento originale)
     try {
       const replyText = await sendMessage({ content: txt, conversationId: conv.id, terse: false });
       setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
@@ -216,7 +289,7 @@ export function useConversations(opts: Options = {}) {
     createConversation,
     loadMessages,
     refreshUsage,
-    send,
+    send,               // ⬅️ ora è router: Planner → Model
     handleSelectConv,
   };
 }
