@@ -34,6 +34,11 @@ type Props = {
 };
 
 export default function Composer({ value, onChange, onSend, disabled, taRef, voice }: Props) {
+
+  useEffect(() => {
+    console.error("[TRACE] Composer mounted");
+  }, []);
+  
   const localRef = useRef<HTMLTextAreaElement | null>(null);
   const ref = taRef ?? localRef;
 
@@ -49,16 +54,27 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
       // Enter semplice → invia
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
-        if (!disabled && value.trim()) onSend();
+        if (!disabled && value.trim()) {
+          console.error("[TRACE] Composer keydown Enter → onSend");
+          onSend?.();
+        } else {
+          console.error("[TRACE] Composer keydown Enter BLOCKED", { disabled, hasText: !!value.trim() });
+        }
         return;
       }
 
       // Cmd/Ctrl+Enter → invia (per chi è abituato)
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
-        if (!disabled && value.trim()) onSend();
+        if (!disabled && value.trim()) {
+          console.error("[TRACE] Composer Ctrl/Cmd+Enter → onSend");
+          onSend?.();
+        } else {
+          console.error("[TRACE] Composer Ctrl/Cmd+Enter BLOCKED", { disabled, hasText: !!value.trim() });
+        }
       }
     };
+
 
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
@@ -160,9 +176,21 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
         </div>
 
         <div className="right">
-          <button className="btn" onClick={onSend} disabled={!value.trim() || !!disabled}>
-            Invia
-          </button>
+<button
+  className="btn"
+  onClick={() => {
+    if (!value.trim() || !!disabled) {
+      console.error("[TRACE] Composer click BLOCKED", { disabled, hasText: !!value.trim() });
+      return;
+    }
+    console.error("[TRACE] Composer click → onSend");
+    onSend?.();
+  }}
+  disabled={!value.trim() || !!disabled}
+>
+  Invia
+</button>
+
         </div>
       </div>
 
