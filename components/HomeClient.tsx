@@ -211,6 +211,8 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
 // invio da Composer (uso testuale) — NIENTE popup; domanda e risposta come in una chat normale
 async function submitFromComposer() {
+  console.error("[HC] submitFromComposer HIT", conv.input);
+
   if (voice.isRecording) { await voice.stopMic(); }
   const txt = conv.input.trim();
   if (!txt) return;
@@ -393,88 +395,6 @@ async function submitFromComposer() {
   return;
 }
 
-// ▼▼ incolla questa funzione DENTRO HomeClient, prima del return()
-async function submitFromComposer() {
-  // LOG per verificare che ci passi davvero
-  console.error("[HC] submitFromComposer HIT", conv.input);
-
-  // stop eventuale registrazione vocale
-  if (voice.isRecording) { try { await voice.stopMic(); } catch {} }
-
-  const txt = (conv.input || "").trim();
-  if (!txt) return;
-
-  // 1) Prova il PLANNER (client → DB reale)
-  try {
-    // crypto “identità” per non bloccare (sostituisci con hook reale se serve decifrare)
-    const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
-
-    // mappa scope IT → EN per il planner
-    const mappedState = {
-      ...convCtx.state,
-      scope:
-        convCtx.state.scope === "prodotti" ? "products" :
-        convCtx.state.scope === "ordini"   ? "orders"   :
-        convCtx.state.scope === "vendite"  ? "sales"    :
-        convCtx.state.scope, // "clients" o "global"
-      topic_attivo:
-        convCtx.state.topic_attivo === "prodotti" ? "products" :
-        convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-        convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-        convCtx.state.topic_attivo,
-    } as any;
-
-    const res = await runPlanner(
-      txt,
-      {
-        state: mappedState,
-        expired: convCtx.expired,
-        setScope: (s:any)=>convCtx.setScope(
-          s === "products" ? "prodotti" :
-          s === "orders"   ? "ordini"   :
-          s === "sales"    ? "vendite"  :
-          s // "clients" o "global"
-        ),
-        remember: convCtx.remember,
-        reset: convCtx.reset,
-      } as any,
-      crypto as any
-    );
-
-    if (res?.text) {
-      // mostra domanda+risposta localmente
-      appendUserLocal(txt);
-      appendAssistantLocal(`[planner] ${res.text}`);
-      console.error("[planner_v2:text_hit]", res);
-
-      // persisti nel thread corrente (come già fai nello standard flow)
-      const convId = conv.currentConv?.id;
-      if (convId) {
-        await fetch("/api/messages/append", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
-        });
-        const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-        const j = await r.json();
-        conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-        setLocalUser([]);
-        setLocalAssistant([]);
-      }
-
-      conv.setInput("");
-      return; // ⬅️ STOP: non chiamare il modello generico
-    }
-  } catch (e) {
-    console.error("[HC] planner error", e);
-  }
-
-  // 2) Fallback: modello generico (se il planner non ha gestito)
-  console.error("[fallback:model] no planner match → conv.send");
-  await conv.send(txt);
-  conv.setInput("");
-}
-
   return (
     <>
       {/* TopBar */}
@@ -531,9 +451,6 @@ async function submitFromComposer() {
     Invia (planner)
   </button>
 </div>
-
-
-      
 
       <div style={{ position: "relative", zIndex: 2001 }}>
         <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
