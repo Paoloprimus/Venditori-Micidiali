@@ -105,6 +105,18 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   const conv = useConversations({
     onAssistantReply: (text) => { setLastAssistantText(text); },
   });
+
+// TRIPWIRE #1: intercetta qualsiasi invio al modello generico
+if (!(window as any).__TRACE_WRAP_SEND) {
+  (window as any).__TRACE_WRAP_SEND = true;
+  const origSend = conv.send;
+  conv.send = async (...args: any[]) => {
+    console.error("[TRACE] conv.send HIT from HomeClient", { args });
+    return await origSend(...args);
+  };
+}
+
+  
   useEffect(() => { conv.ensureConversation(); /* once */  }, []); // eslint-disable-line
 
   // ---- Stato conferma intent (legacy voce) — lasciato invariato
@@ -407,7 +419,11 @@ async function submitFromComposer() {
           onLogout={logout}
         />
       </div>
-      <div style={{ height: 56 }} />
+
+      <div style={{position:"fixed",top:56,right:10,zIndex:2002,fontSize:12,opacity:0.8,background:"#222",color:"#fff",padding:"2px 6px",borderRadius:6}}>
+      HOMECLIENT LIVE
+      </div>
+
 
       {/* ❌ Nessuna barra di conferma richiesta sotto la TopBar */}
 
