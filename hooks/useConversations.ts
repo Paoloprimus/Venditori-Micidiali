@@ -5,10 +5,6 @@ import { listConversations, createConversation as apiCreate, type Conv } from ".
 import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
 import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
 
-// 🔗 AGGIUNTA: planner + contesto conversazione
-import { runChatTurn_v2 as runPlanner } from "@/app/chat/planner";
-import { useConversation } from "@/app/context/ConversationContext";
-
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
 
 type Options = {
@@ -29,11 +25,8 @@ export function useConversations(opts: Options = {}) {
   // ---- Refs UI
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);   // ✅ sentinel in fondo al thread
-  const firstPaintRef = useRef(true);            // evita animazione al primo render
-
-  // 🔗 AGGIUNTA: contesto conversazione (serve al planner)
-  const convCtx = useConversation();
+  const endRef = useRef<HTMLDivElement>(null);
+  const firstPaintRef = useRef(true);
 
   // ---- Utils
   function autoTitleRome() {
@@ -57,18 +50,13 @@ export function useConversations(opts: Options = {}) {
   }
 
   // ---- API wrappers
-  /**
-   * refreshUsage
-   * - Se bubbles è vuoto, chiedi l'usage GLOBALE (evita 400).
-   * - Se c'è traffico, prova lo scoped per-conversazione.
-   */
   async function refreshUsage(convId?: string) {
     try {
       const hasTraffic = bubbles.length > 0;
       const u = await getCurrentChatUsage(hasTraffic ? convId : undefined);
       setUsage(u);
     } catch {
-      // usage è best-effort: non sporcare la console
+      // usage è best-effort
     }
   }
 
@@ -77,12 +65,6 @@ export function useConversations(opts: Options = {}) {
     setBubbles(items);
   }
 
-  /**
-   * ensureConversation
-   * - Trova la conversazione di oggi (match esatto o include).
-   * - Se non esiste, la crea.
-   * - Dopo selezione/creazione: usage GLOBALE finché non c'è traffico.
-   */
   async function ensureConversation(): Promise<Conv> {
     if (currentConv?.id) return currentConv;
     const autoTitle = autoTitleRome();
@@ -93,7 +75,7 @@ export function useConversations(opts: Options = {}) {
       if (today) {
         setCurrentConv(today);
         await loadMessages(today.id);
-        await refreshUsage(today.id); // globale se vuota, scoped se già ha messaggi
+        await refreshUsage(today.id);
         return today;
       }
     } catch {
@@ -103,7 +85,7 @@ export function useConversations(opts: Options = {}) {
     const created = await apiCreate(autoTitle);
     setCurrentConv(created);
     setBubbles([]);
-    await refreshUsage(created.id); // globale (nessun traffico ancora)
+    await refreshUsage(created.id);
     return created;
   }
 
@@ -111,107 +93,45 @@ export function useConversations(opts: Options = {}) {
     const created = await apiCreate(title.trim());
     setCurrentConv(created);
     setBubbles([]);
-    await refreshUsage(created.id); // globale
+    await refreshUsage(created.id);
   }
 
   /**
-   * send (ROUTER)
-   * Ordine: ottimistica user-bubble → prova PLANNER → altrimenti modello generico.
+   * send - SOLO modello generico
+   * Il planner è gestito da submitFromComposer in HomeClient
    */
   async function send(content: string) {
+    console.error("[useConversations.send] HIT - chiamata al modello generico", content);
+    
     setServerError(null);
     const txt = content.trim();
     if (!txt) return;
 
     const conv = await ensureConversation();
 
-    // 1) bubble utente (ottimistica)
+    // Bubble utente ottimistica
     setBubbles((b) => [...b, { role: "user", content: txt }]);
 
-    // 2) TENTA IL PLANNER PRIMA DI CHIAMARE IL MODELLO GENERICO
     try {
-      // mappa scope IT→EN per il planner
-      const mappedState = {
-        ...convCtx.state,
-        scope:
-          convCtx.state.scope === "prodotti" ? "products" :
-          convCtx.state.scope === "ordini"   ? "orders"   :
-          convCtx.state.scope === "vendite"  ? "sales"    :
-          convCtx.state.scope, // "clients" o "global"
-        topic_attivo:
-          convCtx.state.topic_attivo === "prodotti" ? "products" :
-          convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-          convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-          convCtx.state.topic_attivo,
-      } as any;
-
-      // crypto minima: identità (sostituisci con hook reale se servisse decifrare)
-      const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
-
-      const res = await runPlanner(
-        txt,
-        {
-          state: mappedState,
-          expired: convCtx.expired,
-          setScope: (s:any)=>convCtx.setScope(
-            s === "products" ? "prodotti" :
-            s === "orders"   ? "ordini"   :
-            s === "sales"    ? "vendite"  :
-            s
-          ),
-          remember: convCtx.remember,
-          reset: convCtx.reset,
-        } as any,
-        crypto as any
-      );
-
-      if (res?.text) {
-        // 2.a risposta del planner → bubble assistant + persistenza leggera
-        setBubbles((b) => [...b, { role: "assistant", content: res.text }]);
-        onAssistantReply?.(res.text);
-
-        // persisti via API append (come fai altrove)
-        try {
-          await fetch("/api/messages/append", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              conversationId: conv.id,
-              userText: txt,
-              assistantText: res.text,
-            }),
-          });
-        } catch {
-          // best-effort: non bloccare la UX
-        }
-
-        await refreshUsage(conv.id); // ora scoped
-        return; // ⬅️ STOP: non chiamare il modello generico
-      }
-    } catch (e) {
-      console.error("[planner in hook → fallback]", e);
-      // proseguiamo col modello generico
-    }
-
-    // 3) Modello generico (comportamento originale)
-    try {
-      const replyText = await sendMessage({ content: txt, conversationId: conv.id, terse: false });
+      const replyText = await sendMessage({ 
+        content: txt, 
+        conversationId: conv.id, 
+        terse: false 
+      });
+      
       setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
       onAssistantReply?.(replyText);
-      await refreshUsage(conv.id); // ORA sì: per-conv (hasTraffic = true)
+      await refreshUsage(conv.id);
+      
     } catch (e: any) {
-      // 429: quota/rate limit → messaggio chiaro
+      // Gestione errori 429
       if (e?.status === 429) {
         const retry = Number(e?.details?.retryAfter) || 0;
-        const hint =
-          retry > 0
-            ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
-            : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
+        const hint = retry > 0
+          ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
+          : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
         setServerError(hint);
-        setBubbles((b) => [
-          ...b,
-          { role: "assistant", content: "⚠️ " + hint },
-        ]);
+        setBubbles((b) => [...b, { role: "assistant", content: "⚠️ " + hint }]);
         return;
       }
 
@@ -221,7 +141,7 @@ export function useConversations(opts: Options = {}) {
         { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
       ]);
     }
-  } // ← chiusura send()
+  }
 
   // ---- Bootstrap
   useEffect(() => {
@@ -233,7 +153,7 @@ export function useConversations(opts: Options = {}) {
         if (today) {
           setCurrentConv(today);
           await loadMessages(today.id);
-          await refreshUsage(today.id); // globale se vuota, scoped se già ha messaggi
+          await refreshUsage(today.id);
         }
       } catch {
         // silenzio
@@ -249,7 +169,7 @@ export function useConversations(opts: Options = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ---- Autoscroll SEMPRE all'ultimo messaggio
+  // ---- Autoscroll
   useEffect(() => {
     const sentinel = endRef.current;
     if (!sentinel) return;
@@ -260,36 +180,44 @@ export function useConversations(opts: Options = {}) {
         sentinel.scrollIntoView({ behavior, block: "end" });
       } catch {
         if (threadRef.current) {
-          (threadRef.current as HTMLDivElement).scrollTop = (threadRef.current as HTMLDivElement).scrollHeight;
+          threadRef.current.scrollTop = threadRef.current.scrollHeight;
         }
       }
     });
   }, [bubbles]);
 
-  // ---- Selezione conversazione (drawer)
+  // ---- Selezione conversazione
   async function handleSelectConv(c: Conv) {
     setCurrentConv({ id: c.id, title: c.title });
     await loadMessages(c.id);
-    await refreshUsage(c.id); // globale se vuota, scoped se ha messaggi
+    await refreshUsage(c.id);
   }
 
   return {
     // stato
-    bubbles, setBubbles,
-    input, setInput,
-    usage, serverError, modelBadge,
-    currentConv, setCurrentConv,
+    bubbles,
+    setBubbles,
+    input,
+    setInput,
+    usage,
+    serverError,
+    modelBadge,
+    currentConv,
+    setCurrentConv,
 
     // refs/util
-    taRef, threadRef, endRef,   // ✅ esportiamo anche endRef
-    autoResize, autoTitleRome,
+    taRef,
+    threadRef,
+    endRef,
+    autoResize,
+    autoTitleRome,
 
     // azioni
     ensureConversation,
     createConversation,
     loadMessages,
     refreshUsage,
-    send,               // ⬅️ ora è router: Planner → Model
+    send, // ⬅️ ora chiama SOLO il modello generico
     handleSelectConv,
   };
 }
