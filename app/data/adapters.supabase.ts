@@ -6,7 +6,7 @@
 // NOTE IMPORTANTI:
 // - Legge da `accounts` (clienti) come da handoff pack.
 // - Usa fallback: se alcuni record storici hanno `name` in chiaro, li usa così com'è.
-// - Per le email idem: prova a decifrare `email_enc`, ma se c'è `email` plain la usa.
+// - Per le email: solo cifrate (email_enc/email_iv), non esiste colonna email plain.
 // - Le funzioni accettano `crypto` come argomento (passalo da useCrypto()).
 //
 // RIFERIMENTI: handoff 19/10 su cifratura e SELECT compatibile. 
@@ -21,7 +21,6 @@ type AccountRow = {
   name?: string | null;
   name_enc?: string | null;
   name_iv?: string | null;
-  email?: string | null;
   email_enc?: string | null;
   email_iv?: string | null;
   created_at?: string | null;
@@ -68,7 +67,6 @@ export async function countClients(): Promise<number> {
  * lista nomi clienti decifrati (o plain se presente).
  * @param crypto istanza da useCrypto().crypto
  */
-
 export async function listClientNames(crypto: CryptoLike): Promise<string[]> {
   assertCrypto(crypto);
 
@@ -98,7 +96,8 @@ export async function listClientNames(crypto: CryptoLike): Promise<string[]> {
 
 
 /**
- * lista email clienti decifrate (o plain se presente).
+ * lista email clienti decifrate.
+ * NOTA: la colonna email plain NON esiste, solo email_enc/email_iv.
  * @param crypto istanza da useCrypto().crypto
  */
 export async function listClientEmails(crypto: CryptoLike): Promise<string[]> {
@@ -106,7 +105,7 @@ export async function listClientEmails(crypto: CryptoLike): Promise<string[]> {
 
   const { data, error } = await supabase
     .from("accounts")
-    .select("id,email,email_enc,email_iv,created_at")
+    .select("id,email_enc,email_iv,created_at")
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -114,10 +113,6 @@ export async function listClientEmails(crypto: CryptoLike): Promise<string[]> {
 
   const emails: string[] = [];
   for (const row of rows) {
-    if (row.email) {
-      emails.push(row.email);
-      continue;
-    }
     try {
       const dec = await crypto.decryptFields("table:accounts", "accounts", row.id, row, ["email"]);
       if (dec?.email) emails.push(dec.email);
