@@ -209,6 +209,59 @@ console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope });
     };
   }
 
+// --- FAST-PATH: follow-up "Come si chiamano?" / "nomi" → lista nomi clienti ---
+{
+  const low = userText.trim().toLowerCase();
+  if (/(come si chiamano|\bnomi\b)/i.test(low)) {
+    // Scegli/forza lo scope a clients
+    let scopeToUse: Scope = state.scope === "global" ? ("clients" as Scope) : (state.scope as Scope);
+    if (scopeToUse !== "clients") {
+      try { conv.setScope("clients" as Scope); } catch {}
+      scopeToUse = "clients" as Scope;
+    }
+
+    // Serve crypto per leggere i campi eventualmente cifrati
+    if (!crypto) {
+      return {
+        text: "Devo sbloccare la cifratura locale per leggere i nomi. Accedi/ri-sblocca e riprova.",
+        appliedScope: scopeToUse,
+        intent: "list_client_names",
+        usedContext: state,
+      };
+    }
+
+    try {
+      const names = await listClientNames(crypto); // string[]
+      const text = (names && names.length)
+        ? (names.length <= 2 ? names.join(" e ") : `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`) + "."
+        : "Non ho trovato clienti.";
+
+      conv.remember({
+        topic_attivo: "clients",
+        ultimo_intent: "list_client_names",
+        entita_correnti: { clientIds: [] },
+        ultimo_risultato: names,
+      });
+
+      return {
+        text,
+        appliedScope: scopeToUse,
+        intent: "list_client_names",
+        usedContext: conv.state,
+      };
+    } catch (e) {
+      return {
+        text: "Errore nel recupero dei nomi clienti.",
+        appliedScope: scopeToUse,
+        intent: "list_client_names",
+        usedContext: state,
+      };
+    }
+  }
+}
+// --- FINE FAST-PATH ---
+
+  
 // 1) NLU ibrida
 const cls = await classifyIntent(userText);
 
