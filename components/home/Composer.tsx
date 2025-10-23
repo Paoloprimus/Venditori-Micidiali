@@ -52,16 +52,14 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
       if (e.key === "Enter" && e.shiftKey) return;
 
       // Enter semplice → invia
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        if (!disabled && value.trim()) {
-          console.error("[TRACE] Composer keydown Enter → onSend");
-          onSend?.();
-        } else {
-          console.error("[TRACE] Composer keydown Enter BLOCKED", { disabled, hasText: !!value.trim() });
-        }
-        return;
-      }
+if (e.key === "Enter" && !e.shiftKey) {
+  e.preventDefault();
+  if (!disabled && value.trim()) {
+    console.error("[TRACE] Composer keydown Enter → onSend");
+    onSend?.(); // chiama sempre in modo sicuro
+  }
+  return;
+}
 
       // Cmd/Ctrl+Enter → invia (per chi è abituato)
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
