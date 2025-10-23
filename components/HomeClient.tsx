@@ -109,12 +109,13 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 // TRIPWIRE #1: intercetta qualsiasi invio al modello generico
 if (!(window as any).__TRACE_WRAP_SEND) {
   (window as any).__TRACE_WRAP_SEND = true;
-  const origSend = conv.send;
-  conv.send = async (...args: any[]) => {
-    console.error("[TRACE] conv.send HIT from HomeClient", { args });
-    return await origSend(...args);
-  };
+  const origSend = conv.send as unknown as (text: string) => Promise<any>;
+  conv.send = (async (text: string) => {
+    console.error("[TRACE] conv.send HIT from HomeClient", { text });
+    return await origSend(text);
+  }) as any;
 }
+
 
   
   useEffect(() => { conv.ensureConversation(); /* once */  }, []); // eslint-disable-line
