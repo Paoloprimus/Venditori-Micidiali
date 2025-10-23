@@ -1,24 +1,16 @@
+// components/home/Composer.tsx
 "use client";
 import React, { useRef, useEffect } from "react";
 
 type Voice = {
-  // Stato registrazione/trascrizione
   isRecording: boolean;
   isTranscribing: boolean;
   error?: string | null;
-
-  // Mic (push-to-talk): 1° tap avvia, 2° tap ferma
   onClick: () => void;
-
-  // Dialogo continuo (toggle ON/OFF)
-  voiceMode: boolean;           // true = Dialogo ON
+  voiceMode: boolean;
   onToggleDialog: () => void;
-
-  // Speaker (voce in uscita)
   speakerEnabled: boolean;
   onToggleSpeaker: () => void;
-
-  // TTS stato/azioni
   ttsSpeaking?: boolean;
   canRepeat: boolean;
   onRepeat: () => void;
@@ -34,55 +26,49 @@ type Props = {
 };
 
 export default function Composer({ value, onChange, onSend, disabled, taRef, voice }: Props) {
-
   useEffect(() => {
-    console.error("[TRACE] Composer mounted");
+    console.error("✅ [Composer] Component mounted");
   }, []);
-  
+
   const localRef = useRef<HTMLTextAreaElement | null>(null);
   const ref = taRef ?? localRef;
 
-  // Invio con Enter (Shift+Enter = a capo)
+  // Invio con Enter
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const handler = (e: KeyboardEvent) => {
-      // Shift+Enter → nuova riga
       if (e.key === "Enter" && e.shiftKey) return;
 
-      // Enter semplice → invia
-if (e.key === "Enter" && !e.shiftKey) {
-  e.preventDefault();
-  if (!disabled && value.trim()) {
-    console.error("[TRACE] Composer keydown Enter → onSend");
-    onSend?.(); // chiama sempre in modo sicuro
-  }
-  return;
-}
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (!disabled && value.trim()) {
+          console.error("✅ [Composer] Enter key → calling onSend");
+          onSend?.();
+        } else {
+          console.error("⚠️ [Composer] Enter key BLOCKED", { disabled, hasText: !!value.trim() });
+        }
+        return;
+      }
 
-      // Cmd/Ctrl+Enter → invia (per chi è abituato)
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
         if (!disabled && value.trim()) {
-          console.error("[TRACE] Composer Ctrl/Cmd+Enter → onSend");
+          console.error("✅ [Composer] Ctrl/Cmd+Enter → calling onSend");
           onSend?.();
         } else {
-          console.error("[TRACE] Composer Ctrl/Cmd+Enter BLOCKED", { disabled, hasText: !!value.trim() });
+          console.error("⚠️ [Composer] Ctrl/Cmd+Enter BLOCKED", { disabled, hasText: !!value.trim() });
         }
       }
     };
-
 
     el.addEventListener("keydown", handler);
     return () => el.removeEventListener("keydown", handler);
   }, [ref, value, disabled, onSend]);
 
-  // Disabilitazioni di cortesia
   const micDisabled = !!disabled || !!voice.ttsSpeaking || voice.isTranscribing;
   const dialogDisabled = !!disabled || !!voice.ttsSpeaking;
-
-  // In Dialogo ON mostriamo SOLO il bottone "Dialogo ON"
   const showOnlyDialogButton = voice.voiceMode === true;
 
   return (
@@ -100,70 +86,60 @@ if (e.key === "Enter" && !e.shiftKey) {
       <div className="actions">
         <div className="left">
           {showOnlyDialogButton ? (
-            // === Modalità 3) DIALOGO ===
-            // Solo il bottone "Dialogo ON" (click → torna OFF e ricompaiono gli altri due in default)
             <button
               type="button"
-              className="iconbtn"
+              className="btn"
               onClick={voice.onToggleDialog}
-              aria-pressed={true}
-              title="Disattiva dialogo vocale"
+              disabled={dialogDisabled}
+              style={{ background: "#10B981" }}
             >
-              Dialogo On
+              Dialogo ON
             </button>
           ) : (
-            // === Modalità 1) TESTO e 2) VOCE (PTT) ===
             <>
-              {/* 🎙️ Mic (push-to-talk): 1° tap avvia, 2° tap ferma */}
               <button
                 type="button"
                 className="iconbtn"
-                aria-pressed={voice.isRecording}
-                aria-label={
-                  voice.isRecording
-                    ? "Registrazione in corso"
-                    : voice.isTranscribing
-                    ? "Trascrizione in corso"
-                    : "Voce"
-                }
                 onClick={voice.onClick}
                 disabled={micDisabled}
-                title={voice.ttsSpeaking ? "Attendi: sta parlando l'assistente" : "Microfono (push-to-talk)"}
+                title={voice.isRecording ? "Ferma registrazione" : "Attiva microfono"}
+                style={{
+                  background: voice.isRecording ? "#EF4444" : "white",
+                  color: voice.isRecording ? "white" : "#64748B",
+                }}
               >
-                {voice.isRecording ? "registrazione" : voice.isTranscribing ? "trascrivo…" : "Voce"}
+                🎤
               </button>
 
-              {/* 🔈 Speaker on/off (voce in uscita) */}
-              <button
-                type="button"
-                className="iconbtn"
-                aria-pressed={voice.speakerEnabled}
-                onClick={voice.onToggleSpeaker}
-                disabled={!!disabled}
-                title="Lettura vocale delle risposte"
-              >
-                {voice.speakerEnabled ? "🔈 On" : "🔈 Off"}
-              </button>
-
-              {/* 🗣️ Dialogo vocale continuo */}
               <button
                 type="button"
                 className="iconbtn"
                 onClick={voice.onToggleDialog}
                 disabled={dialogDisabled}
-                title="Attiva dialogo vocale"
-                aria-pressed={false}
+                title="Avvia dialogo continuo"
               >
-                Dialogo Off
+                💬
               </button>
 
-              {/* 🔁 Ripeti (se disponibile) */}
+              <button
+                type="button"
+                className="iconbtn"
+                onClick={voice.onToggleSpeaker}
+                title={voice.speakerEnabled ? "Disattiva voce" : "Attiva voce"}
+                style={{
+                  background: voice.speakerEnabled ? "#3B82F6" : "white",
+                  color: voice.speakerEnabled ? "white" : "#64748B",
+                }}
+              >
+                🔊
+              </button>
+
               {voice.canRepeat && (
                 <button
                   type="button"
                   className="iconbtn"
                   onClick={voice.onRepeat}
-                  disabled={!!disabled}
+                  disabled={!voice.canRepeat || !!disabled}
                   title="Rileggi l'ultima risposta"
                 >
                   Ripeti
@@ -174,25 +150,32 @@ if (e.key === "Enter" && !e.shiftKey) {
         </div>
 
         <div className="right">
-<button
-  className="btn"
-  onClick={() => {
-    if (!value.trim() || !!disabled) {
-      console.error("[TRACE] Composer click BLOCKED", { disabled, hasText: !!value.trim() });
-      return;
-    }
-    console.error("[TRACE] Composer click → onSend");
-    onSend?.();
-  }}
-  disabled={!value.trim() || !!disabled}
->
-  Invia
-</button>
-
+          <button
+            type="button"
+            className="btn"
+            onClick={() => {
+              console.error("🔵 [Composer] Button clicked!");
+              
+              if (!value.trim()) {
+                console.error("⚠️ [Composer] BLOCKED: input is empty");
+                return;
+              }
+              
+              if (disabled) {
+                console.error("⚠️ [Composer] BLOCKED: component is disabled");
+                return;
+              }
+              
+              console.error("✅ [Composer] Calling onSend with text:", value.trim());
+              onSend?.();
+            }}
+            disabled={!value.trim() || !!disabled}
+          >
+            Invia
+          </button>
         </div>
       </div>
 
-      {/* ✅ Solo errori (niente "trascrizione in corso…") */}
       {voice.error && (
         <div className="voice-status" role="status" aria-live="polite">
           {voice.error}
