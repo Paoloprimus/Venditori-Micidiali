@@ -39,7 +39,7 @@ const DEFAULT_STATE: ConversationState = {
 };
 
 const KEY = "repping:convctx";
-const TTL_MS = 2 * 60 * 1000; // 2 minuti
+const TTL_MS = 30 * 60 * 1000; // 2 minuti
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
 
