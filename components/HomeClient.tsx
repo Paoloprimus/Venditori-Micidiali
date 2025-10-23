@@ -442,6 +442,18 @@ async function submitFromComposer() {
         </div>
       </div>
 
+<div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+  <button
+    onClick={submitFromComposer}
+    style={{ padding: "8px 12px", border: "1px solid var(--ring)", borderRadius: 8 }}
+  >
+    Invia (planner)
+  </button>
+</div>
+
+
+      
+
       <div style={{ position: "relative", zIndex: 2001 }}>
         <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
         <RightDrawer open={topOpen} onClose={closeTop} />
