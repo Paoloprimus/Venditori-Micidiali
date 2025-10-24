@@ -14,13 +14,8 @@ import {
   listClientNames,
   listClientEmails,
   listMissingProducts,
+  type ClientNamesResult,
 } from "../data/adapters";
-
-// 🆕 Tipo per il risultato di listClientNames
-type ClientNamesResult = {
-  names: string[];
-  withoutName: number;
-};
 
 // Tipi (soft) per compatibilità col tuo contesto/page.tsx
 type Scope =
@@ -233,17 +228,13 @@ export async function runChatTurn_v2(
 ): Promise<PlannerResult> {
 
   const { state, expired } = conv;
-  console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope, stack: conv.state.scope_stack });
+  console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope, stack: conv.state.scope_stack, expired });
 
-  // 0) Context TTL scaduto
+  // 0) Context TTL scaduto → resetta silenziosamente e prosegui
   if (expired) {
-    return {
-      text:
-        "Il contesto è scaduto. Vuoi ripartire da **clienti**, **prodotti** o **ordini**? (puoi anche scrivere /reset)",
-      appliedScope: state.scope,
-      intent: "expired",
-      usedContext: state,
-    };
+    console.error("[planner] Contesto scaduto, resetto e continuo...");
+    conv.reset();
+    // Non bloccare, continua a processare la domanda normalmente
   }
 
   // 1) NLU ibrida
@@ -349,7 +340,7 @@ export async function runChatTurn_v2(
     case "list_client_names": {
       if (!crypto) return needCrypto();
       
-      const result = await listClientNames(crypto) as ClientNamesResult; // { names: string[], withoutName: number }
+      const result = await listClientNames(crypto);
       const { names, withoutName } = result;
       
       if (!names || names.length === 0) {
