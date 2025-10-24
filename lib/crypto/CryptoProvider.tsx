@@ -15,7 +15,7 @@ import React, {
 import { CryptoService as CryptoSvcImpl } from "@/lib/crypto/CryptoService";
 import { supabase } from "@/lib/supabase/client";
 
-/** === Tipi esposti al resto dell’app === */
+/** === Tipi esposti al resto dell'app === */
 
 export type CryptoService = {
   unlockWithPassphrase: (passphrase: string) => Promise<void>;
@@ -136,34 +136,40 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     return impl;
   }, []);
 
-  // 🩵 Se il servizio è già sbloccato (anche da fuori), forza ready=true
+  // 🩵 Polling continuo: controlla se il servizio è sbloccato e aggiorna ready
+  // ✅ FIX: rimosso il timeout di 3 secondi, ora continua a controllare per sempre
   useEffect(() => {
     let interval: any = null;
-    let guard = false;
 
     const tick = () => {
       try {
-        if (guard) return;
         const unlocked = (cryptoService as any)?.isUnlocked?.();
         if (unlocked && !ready) {
-          guard = true;
-          console.log("[CryptoProvider] Detected unlocked service → setReady(true)");
+          console.log("[CryptoProvider] ✅ Detected unlocked service → setReady(true)");
           setReady(true);
+        } else if (!unlocked && ready) {
+          console.log("[CryptoProvider] ⚠️ Service locked → setReady(false)");
+          setReady(false);
         }
       } catch { /* ignore */ }
     };
 
     tick(); // primo check immediato
-    interval = setInterval(tick, 300);
-    const stopper = setTimeout(() => { try { clearInterval(interval); } catch {} }, 3000);
+    interval = setInterval(tick, 300); // polling ogni 300ms
 
-    return () => { try { clearInterval(interval); clearTimeout(stopper); } catch {} };
+    return () => { 
+      try { 
+        clearInterval(interval); 
+      } catch {} 
+    };
   }, [cryptoService, ready]);
 
   // unlock reale
   const unlock = useCallback(
     async (passphrase: string) => {
+      console.log("[CryptoProvider] unlock() chiamato");
       await cryptoService.unlockWithPassphrase(passphrase);
+      console.log("[CryptoProvider] unlockWithPassphrase completato, setReady(true)");
       setReady(true);
     },
     [cryptoService]
@@ -172,7 +178,9 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   // prewarm reale
   const prewarm = useCallback(
     async (scopes: string[]) => {
+      console.log("[CryptoProvider] prewarm() chiamato per", scopes.length, "scopes");
       await cryptoService.prewarm(scopes);
+      console.log("[CryptoProvider] prewarm completato");
     },
     [cryptoService]
   );
@@ -201,7 +209,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
         if (!cancelled) setUserId(uid);
 
-        // Auto-unlock: se la pass è in storage, sblocca e prew arma
+        // Auto-unlock: se la pass è in storage, sblocca e prewarm
         const pass =
           typeof window !== "undefined"
             ? sessionStorage.getItem("repping:pph") ||
@@ -211,6 +219,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
         if (pass) {
           try {
+            console.log("[CryptoProvider] Auto-unlock con pass da storage");
             await unlock(pass);
             await prewarm(DEFAULT_SCOPES);
             try {
@@ -239,42 +248,42 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   }, [unlock, prewarm, userIdProp]);
 
   // 🔎 DEBUG: esponi l'istanza crypto reale su window per test in console
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  (window as any).cryptoSvc = cryptoService;
-  try {
-    const keys = Array.from(
-      new Set([
-        ...Object.keys(cryptoService),
-        ...Object.getOwnPropertyNames(Object.getPrototypeOf(cryptoService)),
-      ])
-    ).filter((k) => typeof (cryptoService as any)[k] === "function");
-    console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
-  } catch {
-    // ignore
-  }
-}, [cryptoService]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as any).cryptoSvc = cryptoService;
+    try {
+      const keys = Array.from(
+        new Set([
+          ...Object.keys(cryptoService),
+          ...Object.getOwnPropertyNames(Object.getPrototypeOf(cryptoService)),
+        ])
+      ).filter((k) => typeof (cryptoService as any)[k] === "function");
+      console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
+    } catch {
+      // ignore
+    }
+  }, [cryptoService]);
 
   // 🧰 Gancio esplicito per sbloccare/prewarmare dal browser (senza toccare /clients)
-useEffect(() => {
-  if (typeof window === "undefined") return;
-  (window as any).reppingUnlock = async (pass: string) => {
-    await unlock(pass);
-    await prewarm([
-      "table:accounts",
-      "table:contacts",
-      "table:products",
-      "table:profiles",
-      "table:notes",
-      "table:conversations",
-      "table:messages",
-      "table:proposals",
-    ]);
-  };
-  return () => {
-    try { delete (window as any).reppingUnlock; } catch {}
-  };
-}, [unlock, prewarm]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    (window as any).reppingUnlock = async (pass: string) => {
+      await unlock(pass);
+      await prewarm([
+        "table:accounts",
+        "table:contacts",
+        "table:products",
+        "table:profiles",
+        "table:notes",
+        "table:conversations",
+        "table:messages",
+        "table:proposals",
+      ]);
+    };
+    return () => {
+      try { delete (window as any).reppingUnlock; } catch {}
+    };
+  }, [unlock, prewarm]);
 
   
   const ctxValue = useMemo<CryptoContextType>(
