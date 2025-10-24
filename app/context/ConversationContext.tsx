@@ -13,6 +13,7 @@ export type ConversationState = {
 
   updated_at: number | null;             // richiesto dal planner
   lastUpdateTs: number | null;           // alias interno per TTL
+  scope_stack?: LocalScope[];            // 🆕 stack degli ultimi 3 scope visitati
 };
 
 type ConversationContextValue = {
@@ -39,7 +40,7 @@ const DEFAULT_STATE: ConversationState = {
 };
 
 const KEY = "repping:convctx";
-const TTL_MS = 30 * 60 * 1000; // 2 minuti
+const TTL_MS = 30 * 60 * 1000; // ✅ 30 minuti (aumentato da 2)
 
 const ConversationContext = createContext<ConversationContextValue | null>(null);
 
