@@ -1,17 +1,19 @@
 // app/layout.tsx
 import "./globals.css";
 import ClientErrorListener from "./ClientErrorListener";
-import { ConversationProvider } from "./context/ConversationContext"; // ⬅️ NUOVO import
+import { ConversationProvider } from "./context/ConversationContext";
+import Providers from "./providers"; // ⬅️ AGGIUNTO: wrapper con CryptoProvider
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
       <body>
         <ClientErrorListener />
-        <ConversationProvider>
-          {/* Se hai altri Providers, tienili qui dentro oppure qui attorno, come preferisci */}
-          {children}
-        </ConversationProvider>
+        <Providers>
+          <ConversationProvider>
+            {children}
+          </ConversationProvider>
+        </Providers>
       </body>
     </html>
   );
