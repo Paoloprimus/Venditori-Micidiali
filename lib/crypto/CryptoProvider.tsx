@@ -138,18 +138,20 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
   // 🩵 Polling continuo: controlla se il servizio è sbloccato e aggiorna ready
   // ✅ FIX: rimosso il timeout di 3 secondi, ora continua a controllare per sempre
+  // ✅ FIX 2: rimuovo il controllo inverso che resettava a false (causava il bug)
   useEffect(() => {
     let interval: any = null;
 
     const tick = () => {
       try {
-        const unlocked = (cryptoService as any)?.isUnlocked?.();
-        if (unlocked && !ready) {
-          console.log("[CryptoProvider] ✅ Detected unlocked service → setReady(true)");
-          setReady(true);
-        } else if (!unlocked && ready) {
-          console.log("[CryptoProvider] ⚠️ Service locked → setReady(false)");
-          setReady(false);
+        // Solo se isUnlocked esiste E restituisce true, impostiamo ready=true
+        const isUnlockedFn = (cryptoService as any)?.isUnlocked;
+        if (typeof isUnlockedFn === 'function') {
+          const unlocked = isUnlockedFn();
+          if (unlocked && !ready) {
+            console.log("[CryptoProvider] ✅ Detected unlocked service → setReady(true)");
+            setReady(true);
+          }
         }
       } catch { /* ignore */ }
     };
