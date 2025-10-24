@@ -1,11 +1,11 @@
 // app/chat/planner.ts
 //
-// Planner/Resolver deterministico per Repping (versione NLU ibrida + follow-up resolver).
+// Planner/Resolver deterministico per Repping (versione NLU ibrida + follow-up resolver + multi-scope).
 // - Usa classifyIntent() + policy (intent chiusi e template).
 // - Riutilizza gli adapter REALI (Supabase) per i dati.
 // - Aggiorna il ConversationContext (memoria breve).
 // - Risposte generate via template della policy.
-// - NOVITÀ: follow-up resolver → se l'NLU è incerta, usa contesto + parole chiave per evitare chiarimenti inutili.
+// - NOVITÀ v2: multi-scope con stack → ricorda gli ultimi 3 scope per tornare indietro
 
 import { classifyIntent } from "@/lib/nlu/IntentClassifier";
 import policy from "@/lib/nlu/intent_policy.json";
@@ -33,6 +33,7 @@ type ConversationContextState = {
   entita_correnti: Record<string, any> | null;
   ultimo_risultato: any | null;
   updated_at: number | null;
+  scope_stack?: Scope[]; // 🆕 stack degli ultimi scope visitati
 };
 
 type ConversationApi = {
@@ -80,7 +81,7 @@ function scopeForIntent(intent: string): Scope | null {
     case "count_clients":
     case "list_client_names":
     case "list_client_emails":
-      return "clients"; // inglese → la page mapperà in locale
+      return "clients";
     case "list_missing_products":
       return "products";
     case "list_orders_recent":
@@ -109,13 +110,42 @@ function needCrypto(): PlannerResult {
   };
 }
 
+// 🆕 Gestione scope stack
+function updateScopeStack(state: ConversationContextState, newScope: Scope): Scope[] {
+  const stack = state.scope_stack || [];
+  const filtered = stack.filter(s => s !== newScope); // rimuovi duplicati
+  return [newScope, ...filtered].slice(0, 3); // mantieni max 3
+}
+
+function inferScopeFromStack(userText: string, state: ConversationContextState): Scope | null {
+  const stack = state.scope_stack || [];
+  if (stack.length === 0) return null;
+
+  const t = userText.toLowerCase().trim();
+  
+  // Parole chiave per clienti
+  if (/\b(client|nome|email|contatt)/i.test(t)) {
+    return stack.find(s => s === "clients") || null;
+  }
+  
+  // Parole chiave per prodotti
+  if (/\b(prodott|mancant|catalog)/i.test(t)) {
+    const prodScope = stack.find(s => s === "products" || s === "prodotti");
+    return prodScope || null;
+  }
+  
+  // Parole chiave per ordini
+  if (/\b(ordin|vendut|recent)/i.test(t)) {
+    const ordScope = stack.find(s => s === "orders" || s === "ordini");
+    return ordScope || null;
+  }
+  
+  return null;
+}
+
 /**
  * Follow-up resolver:
  * Se l'NLU è incerta o null, prova a inferire l'intent dal contesto + parole chiave.
- * Esempi coperti:
- *  - scope clients + “come si chiamano?” / “nomi” → list_client_names
- *  - scope clients + “email” / “mail” → list_client_emails
- *  - scope prodotti + “mancanti” → list_missing_products
  */
 function inferFromContext(userText: string, state: ConversationContextState): string | null {
   const t = userText.toLowerCase().trim();
@@ -129,36 +159,37 @@ function inferFromContext(userText: string, state: ConversationContextState): st
 
   const saysMissing = /\bmancanti?\b/.test(t) && /\bprodott/i.test(t);
 
-  // Se siamo nel dominio clients (o ultimo intent era clients-related), scegli nomi/email
+  // 🆕 Usa scope_stack per determinare il dominio
+  const scopeStack = state.scope_stack || [];
   const inClients =
     state.scope === "clients" ||
     state.topic_attivo === "clients" ||
     state.ultimo_intent === "count_clients" ||
     state.ultimo_intent === "list_client_names" ||
-    state.ultimo_intent === "list_client_emails";
+    state.ultimo_intent === "list_client_emails" ||
+    scopeStack.includes("clients");
 
   if (inClients) {
     if (saysNames) return "list_client_names";
     if (saysEmails) return "list_client_emails";
   }
 
-  // Se siamo in prodotti, e l'utente cita mancanti
   const inProducts =
     state.scope === "products" ||
     state.scope === "prodotti" ||
     state.topic_attivo === "prodotti" ||
-    state.ultimo_intent === "list_missing_products";
+    state.ultimo_intent === "list_missing_products" ||
+    scopeStack.includes("products") ||
+    scopeStack.includes("prodotti");
 
   if (inProducts && saysMissing) return "list_missing_products";
 
-  // fallback: frasi ellittiche “e le email?” anche senza parola “clienti”
+  // fallback: frasi ellittiche
   if (/^\s*e (le )?email(s)?\??\s*$/.test(t)) return "list_client_emails";
   if (/^\s*i nomi\??\s*$/.test(t)) return "list_client_names";
 
   return null;
 }
-
-// ------------------------ Fallback ------------------------
 
 function fallbackUnknown(state: ConversationContextState): PlannerResult {
   if (state.scope === "clients") {
@@ -196,9 +227,9 @@ export async function runChatTurn_v2(
 ): Promise<PlannerResult> {
 
   const { state, expired } = conv;
-console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope });
+  console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope, stack: conv.state.scope_stack });
 
-  // 0) Context TTL scaduto → chiedi re-inquadramento
+  // 0) Context TTL scaduto
   if (expired) {
     return {
       text:
@@ -209,138 +240,83 @@ console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope });
     };
   }
 
-// --- FAST-PATH: follow-up "Come si chiamano?" / "nomi" → lista nomi clienti ---
-{
-  const low = userText.trim().toLowerCase();
-  if (/(come si chiamano|\bnomi\b)/i.test(low)) {
-    // Scegli/forza lo scope a clients
-    let scopeToUse: Scope = state.scope === "global" ? ("clients" as Scope) : (state.scope as Scope);
-    if (scopeToUse !== "clients") {
-      try { conv.setScope("clients" as Scope); } catch {}
-      scopeToUse = "clients" as Scope;
-    }
+  // 1) NLU ibrida
+  const cls = await classifyIntent(userText);
 
-    // Serve crypto per leggere i campi eventualmente cifrati
-    if (!crypto) {
-      return {
-        text: "Devo sbloccare la cifratura locale per leggere i nomi. Accedi/ri-sblocca e riprova.",
-        appliedScope: scopeToUse,
-        intent: "list_client_names",
-        usedContext: state,
-      };
-    }
+  console.debug("[planner:cls]", {
+    input: userText,
+    intent: cls.intent,
+    needsClarification: cls.needsClarification,
+    scope: state.scope,
+    last_intent: state.ultimo_intent,
+    topic: state.topic_attivo,
+    stack: state.scope_stack,
+  });
 
-    try {
-      const names = await listClientNames(crypto); // string[]
-      const text = (names && names.length)
-        ? (names.length <= 2 ? names.join(" e ") : `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}`) + "."
-        : "Non ho trovato clienti.";
+  let intent: string | null = cls.intent;
+  let shouldClarify = !!cls.needsClarification;
 
-      conv.remember({
-        topic_attivo: "clients",
-        ultimo_intent: "list_client_names",
-        entita_correnti: { clientIds: [] },
-        ultimo_risultato: names,
-      });
-
-      return {
-        text,
-        appliedScope: scopeToUse,
-        intent: "list_client_names",
-        usedContext: conv.state,
-      };
-    } catch (e) {
-      return {
-        text: "Errore nel recupero dei nomi clienti.",
-        appliedScope: scopeToUse,
-        intent: "list_client_names",
-        usedContext: state,
-      };
-    }
-  }
-}
-// --- FINE FAST-PATH ---
-
+  const inferred = inferFromContext(userText, state);
   
-// 1) NLU ibrida
-const cls = await classifyIntent(userText);
+  // 🆕 Se non c'è intent chiaro, prova a inferire dallo scope stack
+  const inferredScope = inferScopeFromStack(userText, state);
+  if (inferredScope && !intent) {
+    // Aggiorna temporaneamente lo scope per l'inferenza
+    const tempState = { ...state, scope: inferredScope };
+    intent = inferFromContext(userText, tempState);
+  }
 
-// LOG #1 — esito del classificatore + contesto corrente
-console.debug("[planner:cls]", {
-  input: userText,
-  intent: cls.intent,
-  needsClarification: cls.needsClarification,
-  scope: state.scope,
-  last_intent: state.ultimo_intent,
-  topic: state.topic_attivo,
-});
-
-let intent: string | null = cls.intent;
-let shouldClarify = !!cls.needsClarification;
-
-// --- gestione fine follow-up e chiarimenti ---
-const inferred = inferFromContext(userText, state);
-
-// HARD OVERRIDE per follow-up comuni quando siamo su "clients"
-const t = userText.toLowerCase().trim();
-if (
-  (state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
-  (/\b(nomi|come si chiamano)\b/.test(t) || /^come si chiamano\??$/.test(t) || /^i nomi\??$/.test(t))
-) {
-  intent = "list_client_names";
-  shouldClarify = false;
-} else if (
-  (state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
-  (/\b(email|e[-\s]?mail|mail)\b/.test(t) || /^\s*e (le )?email(s)?\??\s*$/.test(t))
-) {
-  intent = "list_client_emails";
-  shouldClarify = false;
-} else {
-  // Se il modello non ha capito, ma il contesto è chiaro → usa inferenza
-  if (!intent && inferred) intent = inferred;
-
-  // Se il modello è incerto ma l'inferenza lo chiarisce → procedi
-  if (shouldClarify && inferred) {
-    intent = inferred;
+  // HARD OVERRIDE per follow-up comuni
+  const t = userText.toLowerCase().trim();
+  const scopeStack = state.scope_stack || [];
+  
+  // 🆕 Cerca "clients" nello stack, non solo nello scope corrente
+  if (
+    (scopeStack.includes("clients") || state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
+    (/\b(nomi|come si chiamano)\b/.test(t) || /^come si chiamano\??$/.test(t) || /^i nomi\??$/.test(t))
+  ) {
+    intent = "list_client_names";
     shouldClarify = false;
+  } else if (
+    (scopeStack.includes("clients") || state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
+    (/\b(email|e[-\s]?mail|mail)\b/.test(t) || /^\s*e (le )?email(s)?\??\s*$/.test(t))
+  ) {
+    intent = "list_client_emails";
+    shouldClarify = false;
+  } else {
+    if (!intent && inferred) intent = inferred;
+    if (shouldClarify && inferred) {
+      intent = inferred;
+      shouldClarify = false;
+    }
   }
-}
 
-// Se ancora nulla → fallback
-if (!intent) {
-  console.debug("[planner:decide]", { action: "fallback_unknown" });
-  return fallbackUnknown(state);
-}
-
-// Se serve ancora chiarire (nessuna inferenza utile) → domanda corta
-if (shouldClarify) {
-  const clar = (policy as any).speech?.clarify_prompt_short
-    ? "Nomi o email?"
-    : "Vuoi i nomi o le email?";
-
-  // LOG #2 — stiamo scegliendo il chiarimento
-  console.debug("[planner:clarify]", { inferred, intent_before_clarify: cls.intent, scope: state.scope });
-  return { text: clar, appliedScope: state.scope, intent, usedContext: state };
-}
-
-// LOG #3 — intent finale deciso dopo override/inferenza
-console.debug("[planner:final_intent]", { intent, scope: state.scope });
-
-
-
-  
-  // 2) Allinea lo scope se l'intent lo suggerisce
-  const suggestedScope = scopeForIntent(intent);
-  if (suggestedScope && suggestedScope !== state.scope) {
-    conv.setScope(suggestedScope); // la page mapperà in locale
+  if (!intent) {
+    console.debug("[planner:decide]", { action: "fallback_unknown" });
+    return fallbackUnknown(state);
   }
-  const scopeToUse: Scope = suggestedScope ?? state.scope;
+
+  if (shouldClarify) {
+    const clar = (policy as any).speech?.clarify_prompt_short
+      ? "Nomi o email?"
+      : "Vuoi i nomi o le email?";
+    return {
+      text: clar,
+      appliedScope: state.scope,
+      intent: "clarify",
+      usedContext: state,
+    };
+  }
+
+  // 2) Determina scope target
+  let scopeToUse: Scope = scopeForIntent(intent) ?? state.scope;
+  if (state.scope === "global") scopeToUse = scopeForIntent(intent) ?? "clients";
 
   // 3) Router deterministico sugli intent chiusi
   switch (intent) {
     // ——— CLIENTS ———
     case "count_clients": {
-      const n = await countClients(); // non richiede crypto
+      const n = await countClients();
       if (!n || n < 0) {
         return {
           text: textNoData(intent),
@@ -350,39 +326,74 @@ console.debug("[planner:final_intent]", { intent, scope: state.scope });
         };
       }
       const text = applyTemplate(getTemplate(intent), { N: String(n) });
+      
+      // 🆕 Aggiorna scope stack
+      const newStack = updateScopeStack(state, scopeToUse);
+      
       conv.remember({
         topic_attivo: "clients",
         ultimo_intent: intent,
         entita_correnti: {},
         ultimo_risultato: { N: n },
+        scope_stack: newStack,
       });
       return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
     }
 
     case "list_client_names": {
       if (!crypto) return needCrypto();
-      const names = await listClientNames(crypto); // string[]
+      
+      const result = await listClientNames(crypto); // { names: string[], withoutName: number }
+      const { names, withoutName } = result;
+      
       if (!names || names.length === 0) {
+        const text = withoutName > 0 
+          ? `Hai ${withoutName} ${withoutName === 1 ? 'cliente' : 'clienti'} senza nome.`
+          : textNoData(intent);
+        
+        const newStack = updateScopeStack(state, scopeToUse);
+        
+        conv.remember({
+          topic_attivo: "clients",
+          ultimo_intent: intent,
+          entita_correnti: { clientIds: [] },
+          ultimo_risultato: { names: [], withoutName },
+          scope_stack: newStack,
+        });
+        
         return {
-          text: textNoData(intent),
+          text,
           appliedScope: scopeToUse,
           intent,
-          usedContext: state,
+          usedContext: conv.state,
         };
       }
-      const text = applyTemplate(getTemplate(intent), { NOMI: names.join(", ") });
+      
+      // 🆕 Formatta risposta con info clienti senza nome
+      let text = names.length <= 2 
+        ? names.join(" e ") + "."
+        : `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}.`;
+      
+      if (withoutName > 0) {
+        text += ` (${withoutName} ${withoutName === 1 ? 'cliente' : 'clienti'} senza nome)`;
+      }
+      
+      const newStack = updateScopeStack(state, scopeToUse);
+      
       conv.remember({
         topic_attivo: "clients",
         ultimo_intent: intent,
         entita_correnti: { clientIds: [] },
-        ultimo_risultato: names,
+        ultimo_risultato: { names, withoutName },
+        scope_stack: newStack,
       });
+      
       return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
     }
 
     case "list_client_emails": {
       if (!crypto) return needCrypto();
-      const emails = await listClientEmails(crypto); // string[]
+      const emails = await listClientEmails(crypto);
       if (!emails || emails.length === 0) {
         return {
           text: textNoData(intent),
@@ -392,11 +403,15 @@ console.debug("[planner:final_intent]", { intent, scope: state.scope });
         };
       }
       const text = applyTemplate(getTemplate(intent), { EMAILS: emails.join(", ") });
+      
+      const newStack = updateScopeStack(state, scopeToUse);
+      
       conv.remember({
         topic_attivo: "clients",
         ultimo_intent: intent,
         entita_correnti: { clientIds: [] },
         ultimo_risultato: emails,
+        scope_stack: newStack,
       });
       return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
     }
@@ -404,7 +419,7 @@ console.debug("[planner:final_intent]", { intent, scope: state.scope });
     // ——— PRODUCTS ———
     case "list_missing_products": {
       if (!crypto) return needCrypto();
-      const missing = await listMissingProducts(crypto); // string[]
+      const missing = await listMissingProducts(crypto);
       if (!missing || missing.length === 0) {
         return {
           text: textNoData(intent),
@@ -414,46 +429,59 @@ console.debug("[planner:final_intent]", { intent, scope: state.scope });
         };
       }
       const text = applyTemplate(getTemplate(intent), { PRODOTTI: missing.join(", ") });
+      
+      const newStack = updateScopeStack(state, scopeToUse);
+      
       conv.remember({
         topic_attivo: "prodotti",
         ultimo_intent: intent,
         entita_correnti: {},
         ultimo_risultato: missing,
+        scope_stack: newStack,
       });
       return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
     }
 
-    // ——— non ancora implementati lato dati (placeholder “onesti”) ———
+    // ——— non ancora implementati ———
     case "list_orders_recent": {
       return {
         text: "Gli **ordini recenti** non sono ancora disponibili in questo ambiente.",
-        appliedScope: scopeToUse || "orders",
+        appliedScope: scopeToUse,
         intent,
         usedContext: state,
       };
     }
+
     case "summary_sales": {
       return {
-        text: "Il **riassunto vendite** non è ancora disponibile in questo ambiente.",
-        appliedScope: scopeToUse || "sales",
+        text: "Le **statistiche di vendita** non sono ancora disponibili in questo ambiente.",
+        appliedScope: scopeToUse,
         intent,
         usedContext: state,
       };
     }
 
-    // ——— utility ———
     case "greet": {
-      const tpl = getTemplate("greet") || "Ciao! Come posso aiutarti oggi?";
-      return { text: tpl, appliedScope: state.scope, intent, usedContext: state };
-    }
-    case "help": {
-      const tpl =
-        getTemplate("help") ||
-        "Puoi chiedermi di contare i clienti, mostrare nomi, email o prodotti mancanti.";
-      return { text: tpl, appliedScope: state.scope, intent, usedContext: state };
+      return {
+        text: "Ciao! Posso aiutarti con informazioni su clienti, prodotti o ordini.",
+        appliedScope: state.scope,
+        intent,
+        usedContext: state,
+      };
     }
 
-    default:
+    case "help": {
+      return {
+        text: "Puoi chiedermi di: contare i clienti, mostrare nomi ed email, verificare prodotti mancanti.",
+        appliedScope: state.scope,
+        intent,
+        usedContext: state,
+      };
+    }
+
+    default: {
+      console.debug("[planner:unknown_intent]", intent);
       return fallbackUnknown(state);
+    }
   }
 }
