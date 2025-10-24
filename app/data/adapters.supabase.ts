@@ -34,6 +34,12 @@ type ProductRow = {
   available?: boolean | null;
 };
 
+// 🆕 Tipo esportato per il risultato di listClientNames
+export type ClientNamesResult = {
+  names: string[];
+  withoutName: number;
+};
+
 
 // Tipizzazione "soft" per l'oggetto crypto: evitiamo di vincolarci al file reale.
 // Deve esporre: decryptFields(scope, table, recordId, rowOrMap, fieldNames?)
@@ -66,8 +72,9 @@ export async function countClients(): Promise<number> {
 /**
  * lista nomi clienti decifrati (o plain se presente).
  * @param crypto istanza da useCrypto().crypto
+ * @returns oggetto con nomi e conteggio clienti senza nome
  */
-export async function listClientNames(crypto: CryptoLike): Promise<string[]> {
+export async function listClientNames(crypto: CryptoLike): Promise<ClientNamesResult> {
   assertCrypto(crypto);
 
   const { data, error } = await supabase
@@ -79,6 +86,8 @@ export async function listClientNames(crypto: CryptoLike): Promise<string[]> {
   const rows = (data ?? []) as AccountRow[];
 
   const names: string[] = [];
+  let withoutName = 0;
+
   for (const row of rows) {
     if (row.name) {
       names.push(row.name);
@@ -86,12 +95,17 @@ export async function listClientNames(crypto: CryptoLike): Promise<string[]> {
     }
     try {
       const dec = await crypto.decryptFields("table:accounts", "accounts", row.id, row, ["name"]);
-      if (dec?.name) names.push(dec.name);
+      if (dec?.name) {
+        names.push(dec.name);
+      } else {
+        withoutName++;
+      }
     } catch {
-      // ignora record non decifrabili
+      // record non decifrabile o senza nome
+      withoutName++;
     }
   }
-  return names;
+  return { names, withoutName };
 }
 
 
