@@ -16,6 +16,12 @@ import {
   listMissingProducts,
 } from "../data/adapters";
 
+// 🆕 Tipo per il risultato di listClientNames
+type ClientNamesResult = {
+  names: string[];
+  withoutName: number;
+};
+
 // Tipi (soft) per compatibilità col tuo contesto/page.tsx
 type Scope =
   | "global"
@@ -343,7 +349,7 @@ export async function runChatTurn_v2(
     case "list_client_names": {
       if (!crypto) return needCrypto();
       
-      const result = await listClientNames(crypto); // { names: string[], withoutName: number }
+      const result = await listClientNames(crypto) as ClientNamesResult; // { names: string[], withoutName: number }
       const { names, withoutName } = result;
       
       if (!names || names.length === 0) {
