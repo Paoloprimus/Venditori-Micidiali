@@ -2,7 +2,6 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServer } from "../lib/supabase/server";
 import HomeClient from "../components/HomeClient";
-import CryptoShell from "../components/CryptoShell";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -50,10 +49,6 @@ export default async function Page() {
 
   const userName = [first_name, last_name].filter(Boolean).join(" ").trim();
 
-  // 3) Render: avvolgiamo il contenuto nel guscio client con Provider + bottone
-  return (
-    <CryptoShell>
-      <HomeClient email={user?.email ?? ""} userName={userName} />
-    </CryptoShell>
-  );
+  // ✅ MODIFICATO: rimosso CryptoShell (ora è nel layout root)
+  return <HomeClient email={user?.email ?? ""} userName={userName} />;
 }
