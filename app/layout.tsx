@@ -2,7 +2,7 @@
 import "./globals.css";
 import ClientErrorListener from "./ClientErrorListener";
 import { ConversationProvider } from "./context/ConversationContext";
-import Providers from "./providers"; // ⬅️ AGGIUNTO: wrapper con CryptoProvider
+import Providers from "./providers"; // ✅ NUOVO: importa i providers con crypto
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
