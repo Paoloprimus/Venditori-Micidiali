@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCrypto } from '@/lib/crypto/CryptoProvider';
 
 type CustomFields = {
   fascia?: 'A' | 'B' | 'C';
@@ -24,7 +25,7 @@ function splitList(v?: string) {
     .filter(Boolean);
 }
 
-// Heuristica semplice per “estrarre” dai testi in italiano
+// Heuristica semplice per "estrarre" dai testi in italiano
 function extractFromText(text: string) {
   const t = text.replace(/\r/g, '');
   const get = (re: RegExp) => {
@@ -74,8 +75,10 @@ function extractFromText(text: string) {
 
 export default function QuickAddClientPage() {
   const [step, setStep] = useState<1 | 2>(1);
-
   const router = useRouter();
+
+  // ✅ AGGIUNTO: useCrypto per cifrare i dati
+  const { crypto, ready } = useCrypto();
 
   // STEP 1: input libero
   const [freeText, setFreeText] = useState('');
@@ -101,7 +104,7 @@ export default function QuickAddClientPage() {
   // --- Dettatura ---
   const [listening, setListening] = useState(false);
   const recognitionRef = useRef<any | null>(null);
-  const finalChunkRef = useRef<string>(''); // accumula i risultati finali
+  const finalChunkRef = useRef<string>('');
 
   function startDictation() {
     if (typeof window === 'undefined') {
@@ -135,7 +138,6 @@ export default function QuickAddClientPage() {
           interim += transcript;
         }
       }
-      // aggiornamento funzionale: nessun riferimento diretto a freeText
       setFreeText(prev =>
         (`${prev} ${finalChunkRef.current} ${interim}`).replace(/\s+/g, ' ').trim()
       );
@@ -186,45 +188,111 @@ export default function QuickAddClientPage() {
     setStep(2);
   }
 
+  // ✅ MODIFICATO: cifra i dati prima dell'invio
   async function onConfirmSave() {
+    if (!ready || !crypto) {
+      setErrorMsg('La cifratura non è ancora pronta. Riprova tra poco.');
+      return;
+    }
+
     setSaving(true);
     setErrorMsg(null);
     setResultMsg(null);
 
-    const body = {
-      name: name.trim(),
-      custom: {
-        fascia: (fascia || undefined) as 'A'|'B'|'C'|undefined,
-        pagamento: pagamento || undefined,
-        prodotti_interesse: splitList(prodotti),
-        ultimi_volumi: volumi || undefined,
-        ultimo_esito: esito || undefined,
-        tabu: splitList(tabu),
-        interessi: splitList(interessi),
-        note: note || undefined,
-      },
-      contacts: contactName.trim()
-        ? [{ full_name: contactName.trim(), email: contactEmail.trim() || undefined, phone: contactPhone.trim() || undefined }]
-        : [],
-    };
-
-    if (!body.name) {
+    const clientName = name.trim();
+    if (!clientName) {
       setSaving(false);
       setErrorMsg('Il nome cliente è obbligatorio.');
       return;
     }
 
     try {
+      // ✅ 1) Genera un ID temporaneo per l'account
+      const tempId = globalThis.crypto?.randomUUID?.() ?? `temp-${Date.now()}`;
+
+      // ✅ 2) Cifra il nome del cliente
+      const nameEncrypted = await crypto.encryptFields(
+        'table:accounts',
+        'accounts',
+        tempId,
+        { name: clientName }
+      );
+
+      // ✅ 3) Calcola il blind index per il nome (per ricerca duplicati)
+      const name_bi = await (crypto as any).computeBlindIndex?.('table:accounts', clientName);
+
+      // ✅ 4) Prepara il body con i campi cifrati
+      const body: any = {
+        name_enc: nameEncrypted.name_enc,
+        name_iv: nameEncrypted.name_iv,
+        name_bi,
+        custom: {
+          fascia: (fascia || undefined) as 'A'|'B'|'C'|undefined,
+          pagamento: pagamento || undefined,
+          prodotti_interesse: splitList(prodotti),
+          ultimi_volumi: volumi || undefined,
+          ultimo_esito: esito || undefined,
+          tabu: splitList(tabu),
+          interessi: splitList(interessi),
+          note: note || undefined,
+        },
+      };
+
+      // ✅ 5) Se c'è un contatto, cifra anche email e phone
+      if (contactName.trim()) {
+        const contactId = globalThis.crypto?.randomUUID?.() ?? `temp-contact-${Date.now()}`;
+        
+        const contactFields: any = {
+          full_name: contactName.trim()
+        };
+
+        // Cifra email se presente
+        if (contactEmail.trim()) {
+          const emailEnc = await crypto.encryptFields(
+            'table:contacts',
+            'contacts',
+            contactId,
+            { email: contactEmail.trim() }
+          );
+          contactFields.email_enc = emailEnc.email_enc;
+          contactFields.email_iv = emailEnc.email_iv;
+        }
+
+        // Cifra phone se presente
+        if (contactPhone.trim()) {
+          const phoneEnc = await crypto.encryptFields(
+            'table:contacts',
+            'contacts',
+            contactId,
+            { phone: contactPhone.trim() }
+          );
+          contactFields.phone_enc = phoneEnc.phone_enc;
+          contactFields.phone_iv = phoneEnc.phone_iv;
+        }
+
+        body.contacts = [contactFields];
+      }
+
+      // ✅ 6) Invia i dati CIFRATI all'API
       const res = await fetch('/api/clients/upsert', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+      
       const data = await res.json();
+      
       if (!res.ok) {
         setErrorMsg(`Errore: ${data?.error ?? res.status}${data?.details ? ` — ${data.details}` : ''}`);
       } else {
-        setResultMsg(`Cliente salvato. ID: ${data.accountId}`);
+        setResultMsg(`✅ Cliente salvato con cifratura! ID: ${data.accountId}`);
+        // Reset form dopo successo
+        setTimeout(() => {
+          setName('');
+          setFreeText('');
+          setStep(1);
+          setResultMsg(null);
+        }, 2000);
       }
     } catch (e: any) {
       setErrorMsg(e?.message ?? String(e));
@@ -233,11 +301,26 @@ export default function QuickAddClientPage() {
     }
   }
 
+  // ✅ AGGIUNTO: Mostra warning se crypto non è pronto
+  if (!ready || !crypto) {
+    return (
+      <div style={{ maxWidth: 820, margin: '40px auto', padding: 24 }}>
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Cliente rapido</h1>
+        <div style={{ padding: 20, background: '#FEF3C7', borderRadius: 8, border: '1px solid #F59E0B' }}>
+          <p style={{ color: '#92400E', marginBottom: 8 }}>⚠️ Sistema di cifratura in inizializzazione...</p>
+          <p style={{ color: '#78350F', fontSize: 14 }}>
+            Attendi qualche secondo. Se il problema persiste, torna alla home e sblocca la cifratura con la tua passphrase.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={{ maxWidth: 820, margin: '40px auto', padding: 24 }}>
-      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Cliente rapido</h1>
+      <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Cliente rapido 🔐</h1>
       <p style={{ color: '#6b7280', marginBottom: 20 }}>
-        Scrivi in linguaggio naturale i dati del cliente e conferma dal riepilogo.
+        Scrivi in linguaggio naturale i dati del cliente e conferma dal riepilogo. I dati sensibili verranno cifrati automaticamente.
       </p>
 
       {/* Tabs */}
@@ -265,7 +348,7 @@ export default function QuickAddClientPage() {
             </button>
 
             <small style={{ color: '#6b7280' }}>
-              Suggerimento: “Aggiungi cliente: Rossi SRL; fascia B; pagamento 60 giorni…”
+              Suggerimento: "Aggiungi cliente: Rossi SRL; fascia B; pagamento 60 giorni…"
             </small>
           </div>
 
@@ -381,7 +464,7 @@ export default function QuickAddClientPage() {
             </button>
             <button onClick={onConfirmSave} disabled={saving}
               style={{ padding: '10px 16px', borderRadius: 10, border: 'none', background: '#111827', color: 'white', fontWeight: 600 }}>
-              {saving ? 'Salvataggio…' : 'Conferma e salva'}
+              {saving ? 'Salvataggio…' : '🔐 Conferma e salva (cifrato)'}
             </button>
             {resultMsg && <span style={{ color: '#065f46' }}>{resultMsg}</span>}
             {errorMsg && <span style={{ color: '#b91c1c' }}>{errorMsg}</span>}
