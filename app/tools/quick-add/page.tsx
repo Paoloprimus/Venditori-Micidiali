@@ -77,8 +77,8 @@ export default function QuickAddClientPage() {
   const [step, setStep] = useState<1 | 2>(1);
   const router = useRouter();
 
-  // ✅ AGGIUNTO: useCrypto per cifrare i dati
-  const { crypto, ready } = useCrypto();
+  // ✅ AGGIUNTO: useCrypto per cifrare i dati + unlock/prewarm
+  const { crypto, ready, unlock, prewarm } = useCrypto();
 
   // STEP 1: input libero
   const [freeText, setFreeText] = useState('');
@@ -301,16 +301,86 @@ export default function QuickAddClientPage() {
     }
   }
 
-  // ✅ AGGIUNTO: Mostra warning se crypto non è pronto
+  // ✅ MODIFICATO: Form di unlock invece di semplice warning
+  const [unlockPass, setUnlockPass] = useState('');
+  const [unlocking, setUnlocking] = useState(false);
+  const [unlockError, setUnlockError] = useState('');
+
+  async function handleUnlock() {
+    if (!unlockPass.trim()) {
+      setUnlockError('Inserisci la passphrase');
+      return;
+    }
+    
+    setUnlocking(true);
+    setUnlockError('');
+    
+    try {
+      await unlock(unlockPass);
+      await prewarm(['table:accounts', 'table:contacts']);
+      setUnlockPass('');
+    } catch (e: any) {
+      setUnlockError(e?.message || 'Passphrase non valida');
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
   if (!ready || !crypto) {
     return (
       <div style={{ maxWidth: 820, margin: '40px auto', padding: 24 }}>
-        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Cliente rapido</h1>
-        <div style={{ padding: 20, background: '#FEF3C7', borderRadius: 8, border: '1px solid #F59E0B' }}>
-          <p style={{ color: '#92400E', marginBottom: 8 }}>⚠️ Sistema di cifratura in inizializzazione...</p>
-          <p style={{ color: '#78350F', fontSize: 14 }}>
-            Attendi qualche secondo. Se il problema persiste, torna alla home e sblocca la cifratura con la tua passphrase.
+        <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Cliente rapido 🔐</h1>
+        
+        <div style={{ padding: 20, background: '#FEF3C7', borderRadius: 8, border: '1px solid #F59E0B', marginBottom: 16 }}>
+          <p style={{ color: '#92400E', marginBottom: 8, fontWeight: 600 }}>🔒 Sblocca la cifratura per continuare</p>
+          <p style={{ color: '#78350F', fontSize: 14, marginBottom: 16 }}>
+            I dati dei clienti sono cifrati. Inserisci la tua passphrase per sbloccare il sistema.
           </p>
+
+          <div style={{ display: 'flex', gap: 8, alignItems: 'flex-start' }}>
+            <div style={{ flex: 1 }}>
+              <input
+                type="password"
+                placeholder="Inserisci la passphrase"
+                value={unlockPass}
+                onChange={(e) => setUnlockPass(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+                disabled={unlocking}
+                style={{ 
+                  width: '100%', 
+                  padding: 10, 
+                  borderRadius: 8, 
+                  border: '1px solid #d1d5db',
+                  fontSize: 14
+                }}
+              />
+              {unlockError && (
+                <p style={{ color: '#DC2626', fontSize: 12, marginTop: 4 }}>
+                  {unlockError}
+                </p>
+              )}
+            </div>
+            <button
+              onClick={handleUnlock}
+              disabled={unlocking}
+              style={{ 
+                padding: '10px 16px', 
+                borderRadius: 8, 
+                border: 'none', 
+                background: unlocking ? '#9CA3AF' : '#111827', 
+                color: 'white', 
+                fontWeight: 600,
+                cursor: unlocking ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {unlocking ? 'Sblocco...' : 'Sblocca'}
+            </button>
+          </div>
+        </div>
+
+        <div style={{ fontSize: 13, color: '#6B7280' }}>
+          💡 <strong>Suggerimento:</strong> La passphrase è quella che hai impostato durante la registrazione. 
+          Se hai fatto login di recente, prova a ricaricare la pagina.
         </div>
       </div>
     );
