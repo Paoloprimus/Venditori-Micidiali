@@ -371,19 +371,35 @@ export default function QuickAddClientPage() {
     }
 
     // Attendi che crypto sia pronto
-    if (!crypto.isReady) {
+    if (!crypto || !ready) {
       setErrorMsg('Crittografia non ancora pronta. Attendi...');
       setSaving(false);
       return;
     }
 
     try {
-      // Critta il nome cliente
-      const nameEnc = await crypto.encrypt(form.nomeCliente.trim());
-      const nameBlind = await crypto.blindIndex(form.nomeCliente.trim());
+      const scope = 'table:accounts';
+      
+      // Critta il nome cliente usando encryptFields
+      const nameEncrypted = await crypto.encryptFields(
+        scope,
+        'accounts',
+        '', // nessun ID ancora, è un nuovo record
+        { name: form.nomeCliente.trim() }
+      );
 
-      // Cripta il nome contatto
-      const contactNameEnc = await crypto.encrypt(form.nomeContatto.trim());
+      // Calcola blind index per il nome
+      const nameBlind = crypto.computeBlindIndex 
+        ? await crypto.computeBlindIndex(scope, form.nomeCliente.trim())
+        : '';
+
+      // Critta il nome contatto
+      const contactNameEncrypted = await crypto.encryptFields(
+        scope,
+        'contacts',
+        '',
+        { full_name: form.nomeContatto.trim() }
+      );
 
       // Prepara i dati custom
       const customData = {
@@ -396,8 +412,8 @@ export default function QuickAddClientPage() {
 
       // Prepara il contatto
       const contact = {
-        full_name_enc: contactNameEnc.ciphertext,
-        full_name_iv: contactNameEnc.iv,
+        full_name_enc: contactNameEncrypted.full_name_enc,
+        full_name_iv: contactNameEncrypted.full_name_iv,
         email: form.email.trim() || undefined,
         phone: form.telefono.trim(),
       };
@@ -407,8 +423,8 @@ export default function QuickAddClientPage() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name_enc: nameEnc.ciphertext,
-          name_iv: nameEnc.iv,
+          name_enc: nameEncrypted.name_enc,
+          name_iv: nameEncrypted.name_iv,
           name_blind: nameBlind,
           custom: customData,
           contacts: [contact],
