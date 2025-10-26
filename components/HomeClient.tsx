@@ -421,6 +421,10 @@ async function submitFromComposer() {
       {/* Contenuto */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
         <div className="container" onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction}>
+
+            {/* 👇 SPACER per TopBar */}
+            <div style={{ height: 70 }} />
+          
           <Thread
             bubbles={mergedBubbles}
             serverError={conv.serverError}
