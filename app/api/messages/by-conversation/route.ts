@@ -21,9 +21,10 @@ export async function GET(req: Request) {
     .from("conversations").select("id").eq("id", conversationId).eq("user_id", u.user.id).maybeSingle();
   if (convErr || !conv) return NextResponse.json({ error: "INVALID_CONVERSATION" }, { status: 400 });
 
+  // ✅ Seleziona TUTTI i campi (content + campi cifrati)
   const { data, error } = await supabase
     .from("messages")
-    .select("id, role, body_enc, body_iv, body_tag, content, created_at")
+    .select("id, role, content, body_enc, body_iv, body_tag, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
     .order("id", { ascending: true })
@@ -31,28 +32,36 @@ export async function GET(req: Request) {
 
   if (error) return NextResponse.json({ error: "DB_LIST_MSG", details: error.message }, { status: 500 });
 
-  // 🔓 DECIFRA tutti i messaggi
-  const items = (data || []).map((row) => {
-    let content = "[Vuoto]";
-    
-    // Prova a decifrare se cifrato
-    if (row.body_enc && row.body_iv && row.body_tag) {
+  // ✅ Decifra i messaggi cifrati
+  const items = (data ?? []).map(msg => {
+    // Se il messaggio è cifrato, prova a decifrarlo
+    if (msg.body_enc && msg.body_iv && msg.body_tag) {
       try {
-        content = decryptText(row.body_enc, row.body_iv, row.body_tag);
-      } catch {
-        content = "[Errore decifratura]";
+        const decrypted = decryptText(msg.body_enc, msg.body_iv, msg.body_tag);
+        return {
+          id: msg.id,
+          role: msg.role,
+          content: decrypted,
+          created_at: msg.created_at
+        };
+      } catch (err) {
+        // Se la decifratura fallisce, mostra un messaggio di errore
+        console.error(`[by-conversation] Errore decifratura msg ${msg.id}:`, err);
+        return {
+          id: msg.id,
+          role: msg.role,
+          content: "[Errore decifratura]",
+          created_at: msg.created_at
+        };
       }
     }
-    // Fallback su campo vecchio in chiaro (retrocompatibilità)
-    else if (row.content) {
-      content = row.content;
-    }
-
+    
+    // Altrimenti usa il content in chiaro (compatibilità con messaggi vecchi)
     return {
-      id: row.id,
-      role: row.role,
-      content,
-      created_at: row.created_at,
+      id: msg.id,
+      role: msg.role,
+      content: msg.content || "",
+      created_at: msg.created_at
     };
   });
 
