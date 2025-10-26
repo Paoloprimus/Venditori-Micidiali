@@ -64,7 +64,6 @@ function normalizeCustom(input?: CustomFields) {
   if (tabu) out.tabu = tabu;
   const interessi = asArray(input.interessi);
   if (interessi) out.interessi = interessi;
-  if (input.note) out.note = String(input.note);
   
   return out;
 }
