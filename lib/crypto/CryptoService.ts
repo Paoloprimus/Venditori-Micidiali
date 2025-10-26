@@ -212,6 +212,9 @@ export class CryptoService {
     this.accountId = accountId;
   }
 
+  public isUnlocked(): boolean {
+  return this.MK !== null;
+}
   private async getUserId(): Promise<string> {
     const { data, error } = await this.sb.auth.getUser();
     if (error || !data.user) throw new Error("Utente non autenticato");
