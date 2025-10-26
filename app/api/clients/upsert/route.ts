@@ -22,7 +22,7 @@ type UpsertClientBody = {
   // Nome cliente crittografato
   name_enc?: string;
   name_iv?: string;
-  name_blind?: string;
+  name_bi?: string;
   // Campi custom
   custom?: CustomFields;
   // Contatti con campi crittografati
@@ -83,7 +83,7 @@ export async function POST(req: Request) {
     const body = (await req.json()) as UpsertClientBody;
     
     // Verifica che abbiamo i campi crittografati
-    if (!body.name_enc || !body.name_iv || !body.name_blind) {
+    if (!body.name_enc || !body.name_iv || !body.name_bi) {
       return NextResponse.json({ error: "encrypted_name_required" }, { status: 400 });
     }
 
@@ -94,7 +94,7 @@ export async function POST(req: Request) {
       .from("accounts")
       .select("id, custom")
       .eq("user_id", userId)
-      .eq("name_blind", body.name_blind)
+      .eq("name_bi", body.name_bi)
       .limit(1);
 
     if (findErr) {
@@ -129,7 +129,7 @@ export async function POST(req: Request) {
           user_id: userId,
           name_enc: body.name_enc,
           name_iv: body.name_iv,
-          name_blind: body.name_blind,
+          name_bi: body.name_bi,
           custom: incomingCustom ?? {},
         })
         .select("id")
