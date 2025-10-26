@@ -20,6 +20,27 @@ function getServerKey(): Buffer {
 }
 
 /**
+ * Converte una stringa (hex con \x o base64) in Buffer
+ * Gestisce il formato che PostgreSQL restituisce per i campi bytea
+ */
+function stringToBuffer(str: string): Buffer {
+  if (!str) return Buffer.alloc(0);
+  
+  // Formato PostgreSQL hex: \x4a5b6c...
+  if (str.startsWith("\\x")) {
+    return Buffer.from(str.slice(2), "hex");
+  }
+  
+  // Formato hex alternativo: 0x4a5b6c...
+  if (str.startsWith("0x")) {
+    return Buffer.from(str.slice(2), "hex");
+  }
+  
+  // Altrimenti assumiamo Base64
+  return Buffer.from(str, "base64");
+}
+
+/**
  * Cifra una stringa con AES-256-GCM
  * @returns {ciphertext, iv, tag} in base64
  */
@@ -43,19 +64,21 @@ export function encryptText(plaintext: string): { ciphertext: string; iv: string
 
 /**
  * Decifra una stringa cifrata con AES-256-GCM
+ * Gestisce automaticamente formato hex (\x...) o base64
  */
 export function decryptText(ciphertext: string, iv: string, tag: string): string {
   const key = getServerKey();
   
-  const decipher = createDecipheriv(
-    "aes-256-gcm",
-    key,
-    Buffer.from(iv, "base64")
-  );
+  // Converti da hex (\x...) o base64 a Buffer
+  const ciphertextBuf = stringToBuffer(ciphertext);
+  const ivBuf = stringToBuffer(iv);
+  const tagBuf = stringToBuffer(tag);
   
-  decipher.setAuthTag(Buffer.from(tag, "base64"));
+  const decipher = createDecipheriv("aes-256-gcm", key, ivBuf);
+  decipher.setAuthTag(tagBuf);
   
-  let decrypted = decipher.update(ciphertext, "base64", "utf8");
+  // Passa il Buffer direttamente (non serve specificare encoding)
+  let decrypted = decipher.update(ciphertextBuf, undefined, "utf8");
   decrypted += decipher.final("utf8");
   
   return decrypted;
