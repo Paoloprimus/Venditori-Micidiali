@@ -93,8 +93,17 @@ export default function Login() {
         credentials: "same-origin",
       });
 
-      // ✅ redirect “hard” alla home (avvia auto-unlock e cleanup passphrase)
-      window.location.replace("/");
+      // ✅ Sblocca manualmente la cifratura prima del redirect
+if (typeof window !== 'undefined' && (window as any).reppingUnlock) {
+  try {
+    await (window as any).reppingUnlock(password);
+  } catch (e) {
+    console.error('[Login] Unlock fallito:', e);
+  }
+}
+
+// redirect "hard" alla home
+window.location.replace("/");
 
     } catch (err: any) {
       // Se vedi 401 qui, quasi sempre è per sessione assente + RLS
