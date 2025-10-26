@@ -3,6 +3,12 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 
 // --- Tipi utili (documentativi)
 type CustomFields = {
+  vat_number?: string;        // P.IVA
+  city?: string;              // Città
+  address?: string;           // Via e numero civico
+  tipo_locale?: string;       // Tipo locale HoReCa
+  notes?: string;             // Note generali
+  // Campi legacy/futuri (stand-by)
   fascia?: "A" | "B" | "C";
   pagamento?: string;
   prodotti_interesse?: string[] | string;
@@ -10,13 +16,22 @@ type CustomFields = {
   ultimo_esito?: string;
   tabu?: string[] | string;
   interessi?: string[] | string;
-  note?: string;
 };
 
 type UpsertClientBody = {
-  name: string;
+  // Nome cliente crittografato
+  name_enc?: string;
+  name_iv?: string;
+  name_blind?: string;
+  // Campi custom
   custom?: CustomFields;
-  contacts?: Array<{ full_name: string; email?: string; phone?: string }>;
+  // Contatti con campi crittografati
+  contacts?: Array<{
+    full_name_enc: string;
+    full_name_iv: string;
+    email?: string;
+    phone?: string;
+  }>;
 };
 
 // --- Helpers
@@ -30,6 +45,15 @@ function asArray(v: unknown): string[] | undefined {
 function normalizeCustom(input?: CustomFields) {
   if (!input) return undefined;
   const out: Record<string, unknown> = {};
+  
+  // Nuovi campi HoReCa
+  if (input.vat_number) out.vat_number = String(input.vat_number);
+  if (input.city) out.city = String(input.city);
+  if (input.address) out.address = String(input.address);
+  if (input.tipo_locale) out.tipo_locale = String(input.tipo_locale);
+  if (input.notes) out.notes = String(input.notes);
+  
+  // Campi legacy (stand-by)
   if (input.fascia) out.fascia = input.fascia;
   if (input.pagamento) out.pagamento = String(input.pagamento);
   const pi = asArray(input.prodotti_interesse);
@@ -41,6 +65,7 @@ function normalizeCustom(input?: CustomFields) {
   const interessi = asArray(input.interessi);
   if (interessi) out.interessi = interessi;
   if (input.note) out.note = String(input.note);
+  
   return out;
 }
 
@@ -48,7 +73,7 @@ export async function POST(req: Request) {
   try {
     const supabase = await createSupabaseServer();
 
-    // 1) Auth sicura (evita warning “getSession() può essere insicuro”)
+    // 1) Auth sicura
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
       return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -57,18 +82,20 @@ export async function POST(req: Request) {
 
     // 2) Input + validazioni minime
     const body = (await req.json()) as UpsertClientBody;
-    const name = (body?.name || "").trim();
-    if (!name) {
-      return NextResponse.json({ error: "name_required" }, { status: 400 });
+    
+    // Verifica che abbiamo i campi crittografati
+    if (!body.name_enc || !body.name_iv || !body.name_blind) {
+      return NextResponse.json({ error: "encrypted_name_required" }, { status: 400 });
     }
+
     const incomingCustom = normalizeCustom(body.custom);
 
-    // 3) Cerca account esistente per (user_id + name) — case-insensitive
+    // 3) Cerca account esistente usando il blind index
     const { data: existingList, error: findErr } = await supabase
       .from("accounts")
       .select("id, custom")
       .eq("user_id", userId)
-      .ilike("name", name)
+      .eq("name_blind", body.name_blind)
       .limit(1);
 
     if (findErr) {
@@ -84,9 +111,9 @@ export async function POST(req: Request) {
 
       const { data: updated, error: upErr } = await supabase
         .from("accounts")
-        .update({ custom: mergedCustom })     // niente updated_at forzato
+        .update({ custom: mergedCustom })
         .eq("id", existing.id)
-        .eq("user_id", userId)                // coerente con RLS
+        .eq("user_id", userId)
         .select("id")
         .single();
 
@@ -94,15 +121,16 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "update_failed", details: upErr.message }, { status: 500 });
       }
 
-      // niente "!" — assegno in modo sicuro
       accountId = (updated && (updated as { id: string }).id) || existing.id;
     } else {
-      // 4B) INSERT
+      // 4B) INSERT con campi crittografati
       const { data: inserted, error: insErr } = await supabase
         .from("accounts")
         .insert({
           user_id: userId,
-          name,
+          name_enc: body.name_enc,
+          name_iv: body.name_iv,
+          name_blind: body.name_blind,
           custom: incomingCustom ?? {},
         })
         .select("id")
@@ -115,22 +143,22 @@ export async function POST(req: Request) {
       accountId = (inserted as { id: string }).id;
     }
 
-    // 5) (Opzionale) Inserisci contatti collegati
+    // 5) Inserisci contatti collegati (con crittografia)
     if (accountId && Array.isArray(body.contacts) && body.contacts.length > 0) {
       const toInsert = body.contacts
         .map(c => ({
           account_id: accountId,
-          full_name: (c.full_name || "").trim(),
+          full_name_enc: c.full_name_enc,
+          full_name_iv: c.full_name_iv,
           email: (c.email || "").trim() || null,
           phone: (c.phone || "").trim() || null,
           custom: {},
         }))
-        .filter(c => c.full_name);
+        .filter(c => c.full_name_enc && c.full_name_iv);
 
       if (toInsert.length > 0) {
         const { error: cErr } = await supabase.from("contacts").insert(toInsert);
         if (cErr) {
-          // Non blocco l’operazione principale: segnalo comunque
           return NextResponse.json({ accountId, warning: "contacts_insert_failed", details: cErr.message });
         }
       }
