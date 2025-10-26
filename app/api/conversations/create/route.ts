@@ -1,9 +1,9 @@
-
 // app/api/conversations/create/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "../../../../lib/supabase/server";
+import { encryptText, computeBlindIndex } from "../../../../lib/crypto/serverEncryption";
 
 export async function POST(req: Request) {
   const supabase = createSupabaseServer();
@@ -18,13 +18,23 @@ export async function POST(req: Request) {
       ? body.title.trim()
       : null;
 
-  // PATCH A: se l’utente non ha passato un titolo, non generiamo nulla qui.
-  // Inseriamo titolo vuoto: sarà rinominato automaticamente al primo messaggio.
+  // Se l'utente non ha passato un titolo, inseriamo titolo vuoto
   const title = passedTitle ?? "";
+
+  // 🔐 CIFRA il title (anche se vuoto, per coerenza)
+  const { ciphertext, iv, tag } = encryptText(title);
+  const blindIndex = title ? computeBlindIndex(title) : null;
 
   const { data, error } = await supabase
     .from("conversations")
-    .insert({ user_id: u.user.id, title })
+    .insert({ 
+      user_id: u.user.id, 
+      subject_enc: ciphertext,
+      subject_iv: iv,
+      subject_tag: tag,
+      subject_bi: blindIndex,
+      title: null, // ← campo vecchio lasciato null
+    })
     .select()
     .single();
 
@@ -35,5 +45,6 @@ export async function POST(req: Request) {
     );
   }
 
-  return NextResponse.json({ ok: true, conversation: data });
+  // Ritorna con title decifrato per il client
+  return NextResponse.json({ ok: true, conversation: { ...data, title } });
 }
