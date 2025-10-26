@@ -1,5 +1,9 @@
+// app/api/conversations/[id]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "../../../../lib/supabase/server";
+import { encryptText, computeBlindIndex } from "../../../../lib/crypto/serverEncryption";
+
+export const runtime = "nodejs";
 
 // PATCH /api/conversations/[id]  → aggiorna (es. title)
 export async function PATCH(
@@ -28,7 +32,16 @@ export async function PATCH(
       if (t.length === 0) {
         return NextResponse.json({ ok: false, error: "Titolo vuoto" }, { status: 400 });
       }
-      updates.title = t;
+      
+      // 🔐 CIFRA il nuovo title
+      const { ciphertext, iv, tag } = encryptText(t);
+      const blindIndex = computeBlindIndex(t);
+      
+      updates.subject_enc = ciphertext;
+      updates.subject_iv = iv;
+      updates.subject_tag = tag;
+      updates.subject_bi = blindIndex;
+      updates.title = null; // campo vecchio
     }
 
     if (Object.keys(updates).length === 0) {
@@ -85,6 +98,5 @@ export async function DELETE(
     return NextResponse.json({ ok: false, error: error.message }, { status: 400 });
   }
 
-  // NB: non usiamo .select() qui per evitare dipendenza da policy SELECT sul RETURNING
   return NextResponse.json({ ok: true, id: convId });
 }
