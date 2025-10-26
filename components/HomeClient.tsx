@@ -26,10 +26,24 @@ const NO  = /\b(no|annulla|stop|ferma|negativo|non ancora)\b/i;
 /** Patch minima: se la risposta sul prezzo contiene 0 o 0% sostituisco con fallback chiari. */
 function patchPriceReply(text: string): string {
   if (!text) return text;
+
   let t = text;
-  t = t.replace(/(Il prezzo base di «[^»]+» è )0([.,\s]|$)/i, "$1non disponibile a catalogo$2");
-  t = t.replace(/(Sconto(?:\sapplicato)?:\s*)0\s*%/i, "$1nessuno");
-  t = t.replace(/(Attualmente lo sconto applicato è\s*)0\s*%/i, "$1nessuno");
+
+  t = t.replace(
+    /(Il prezzo base di «[^»]+» è )0([.,\s]|$)/i,
+    "$1non disponibile a catalogo$2"
+  );
+
+  t = t.replace(
+    /(Sconto(?:\sapplicato)?:\s*)0\s*%/i,
+    "$1nessuno"
+  );
+
+  t = t.replace(
+    /(Attualmente lo sconto applicato è\s*)0\s*%/i,
+    "$1nessuno"
+  );
+
   return t;
 }
 
@@ -43,14 +57,12 @@ const STOPWORDS = new Set([
 function unaccentLower(s: string) {
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 }
-
 function extractProductTerm(normalized: string) {
   const tokens = normalized.replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter(Boolean);
   const candidates = tokens.filter(t => !STOPWORDS.has(t));
   if (!candidates.length) return normalized.trim();
   return candidates.sort((a,b)=>b.length-a.length)[0];
 }
-
 async function postJSON(url: string, body: any) {
   const r = await fetch(url, {
     method: "POST",
@@ -59,7 +71,6 @@ async function postJSON(url: string, body: any) {
   });
   return r.json();
 }
-
 function fillTemplateSimple(tpl: string, data: Record<string, any>) {
   return tpl.replace(/\{(\w+)\}/g, (_m, k) => {
     const v = data?.[k];
@@ -82,7 +93,8 @@ const LOCAL_TEMPLATES: Record<string, { response: string }> = {
 
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const convCtx = useConversation();
-  const { leftOpen, topOpen, openLeft, closeLeft, openTop, closeTop } = useDrawers();
+  // ✅ MODIFICA 1: Hook aggiornato
+  const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
   // ---- TTS
   const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
@@ -95,13 +107,26 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     onAssistantReply: (text) => { setLastAssistantText(text); },
   });
 
+// TRIPWIRE #1: intercetta qualsiasi invio al modello generico
+if (!(window as any).__TRACE_WRAP_SEND) {
+  (window as any).__TRACE_WRAP_SEND = true;
+  const origSend = conv.send as unknown as (text: string) => Promise<any>;
+  conv.send = (async (text: string) => {
+    console.error("[TRACE] conv.send HIT from HomeClient", { text });
+    return await origSend(text);
+  }) as any;
+}
+
+  
   useEffect(() => { conv.ensureConversation(); }, []); // eslint-disable-line
 
   // ---- Stato conferma intent (legacy voce)
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
 
   function speakIfEnabled(msg: string) {
-    if (voice.speakerEnabled) speakAssistant(msg);
+    if (voice.speakerEnabled) {
+      speakAssistant(msg);
+    }
   }
 
   function askConfirm(i: Intent) {
@@ -139,9 +164,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         if (intent.type !== "NONE") { askConfirm(intent); return; }
       }
 
-      // Per input vocale, usiamo submitFromComposer
-      conv.setInput(raw);
-      await submitFromComposer();
+      await conv.send(raw);
     },
     onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
@@ -160,17 +183,18 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     if (voice.speakerEnabled) speakAssistant(lastAssistantText);
   }, [lastAssistantText, voice.speakerEnabled, speakAssistant]);
 
+  // ✅ MODIFICA 3: handleAnyHomeInteraction aggiornato
   const handleAnyHomeInteraction = useCallback(() => {
     if (leftOpen) closeLeft();
-    if (topOpen) closeTop();
-  }, [leftOpen, topOpen, closeLeft, closeTop]);
+    if (rightOpen) closeRight();
+  }, [leftOpen, rightOpen, closeLeft, closeRight]);
 
   async function logout() {
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
 
-  // Patch bolle remote
+  // ✅ Patch solo in render: trasformo eventuali 0/0% nell'output assistant remoto
   const patchedBubbles = useMemo(() => {
     return (conv.bubbles || []).map((b: any) => {
       if (b?.role !== "assistant" || !b?.content) return b;
@@ -178,164 +202,149 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     });
   }, [conv.bubbles]);
 
-  // --- Stato per bolle locali ---
+  // --- Stato per bolle locali (domanda e risposta) ---
   const [localUser, setLocalUser] = useState<string[]>([]);
   const [localAssistant, setLocalAssistant] = useState<string[]>([]);
+
+  // 🆕 Memorizzo ultimo prodotto valido per "e quanti in …"
   const [lastProduct, setLastProduct] = useState<string | null>(null);
 
   function appendUserLocal(text: string) {
     setLocalUser(prev => [...prev, text]);
   }
-  
   function appendAssistantLocal(text: string) {
     setLocalAssistant(prev => [...prev, patchPriceReply(text)]);
   }
 
-  // Unione bolle
+  // Unione bolle: prima remote (model), poi locali (standard flow)
   const mergedBubbles = useMemo(() => {
     const localsUser = localUser.map((t) => ({ role: "user", content: t }));
     const localsAssistant = localAssistant.map((t) => ({ role: "assistant", content: t }));
     return [...patchedBubbles, ...localsUser, ...localsAssistant];
   }, [patchedBubbles, localUser, localAssistant]);
 
-  /**
-   * ========================================================================
-   * 🎯 FLUSSO UNIFICATO: submitFromComposer()
-   * Ordine di esecuzione:
-   * 1. Standard intents (prodotti)
-   * 2. Planner (clienti, email, ecc.)
-   * 3. Modello generico (fallback)
-   * ========================================================================
-   */
-  async function submitFromComposer() {
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.error("[submitFromComposer] INIZIO FLUSSO");
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+// invio da Composer (uso testuale) — NIENTE popup; domanda e risposta come in una chat normale
+async function submitFromComposer() {
+  console.error("[HC] submitFromComposer HIT", conv.input);
 
-    if (voice.isRecording) await voice.stopMic();
-    
-    const txt = conv.input.trim();
-    if (!txt) {
-      console.error("[submitFromComposer] STOP: input vuoto");
+  if (voice.isRecording) { await voice.stopMic(); }
+  const txt = conv.input.trim();
+  if (!txt) return;
+
+  // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
+  if (pendingIntent) {
+    if (YES.test(txt)) {
+      await handleIntent(pendingIntent);
+      setPendingIntent(null);
+      conv.setInput("");
       return;
     }
-
-    console.error("[submitFromComposer] Input utente:", txt);
-
-    // ========= STEP 0: Gestione conferme legacy =========
-    if (pendingIntent) {
-      if (YES.test(txt)) {
-        await handleIntent(pendingIntent);
-        setPendingIntent(null);
-        conv.setInput("");
-        return;
-      }
-      if (NO.test(txt)) {
-        speakIfEnabled("Ok, annullato.");
-        setPendingIntent(null);
-        conv.setInput("");
-        return;
-      }
+    if (NO.test(txt)) {
+      speakIfEnabled("Ok, annullato.");
+      setPendingIntent(null);
+      conv.setInput("");
+      return;
     }
-
-    // ========= STEP 1: STANDARD INTENTS (prodotti) =========
-    console.error("[STEP 1] Tentativo STANDARD INTENTS (prodotti)...");
-    
+  } else {
+    // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
     try {
-      const normalized = unaccentLower(txt);
-      const asksCount = /\b(quant[ie]|numero)\b/i.test(txt) && /\b(catalogo|referenz[ae]|prodott[io])\b/i.test(txt);
-      const asksStock = /\b(quant[ie]|numero)\b/i.test(txt) && /\b(deposito|magazzino|giacenz[ae]|pezzi)\b/i.test(txt);
-      const asksPrice = /\b(prezzo|costa|costo|quanto costa)\b/i.test(txt);
+      // 1) normalizza
+      const norm = await postJSON(`/api/standard/normalize`, { text: txt });
+      const normalized: string = norm?.normalized || txt;
 
-      // Estrazione termine prodotto
-      let prodotto: string | null = null;
-      if (/^e?\s*quant[ie]\s+(in\s+)?(\w+)\??$/i.test(normalized)) {
-        const m = normalized.match(/^e?\s*quant[ie]\s+(?:in\s+)?(\w+)\??$/i);
-        prodotto = m ? m[1] : null;
-      } else {
-        prodotto = extractProductTerm(normalized);
-      }
+      // 2) shortlist topK
+      const sl = await postJSON(`/api/standard/shortlist`, { q: normalized, topK: 5 });
+      const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
 
-      if (!prodotto && lastProduct && /^e?\s*quant[ie]\??$/i.test(normalized)) {
-        prodotto = lastProduct;
-      }
+      // 3) top-1 → se esiste, esegui direttamente
+      const top = items[0];
+      if (top && top.intent_key) {
+        const intentKey = top.intent_key;
 
-      if ((asksCount || asksStock || asksPrice) && prodotto) {
-        console.error("[STEP 1] Match trovato! Prodotto:", prodotto);
-        
-        const intentKey = asksCount ? "prod_conteggio_catalogo" :
-                         asksStock ? "prod_giacenza_magazzino" :
-                         "prod_prezzo_sconti";
-
-        console.error("[STEP 1] Intent:", intentKey);
-
-        const dataForTemplate: Record<string, any> = { prodotto };
-
-        if (asksCount) {
-          const r = await postJSON("/api/products/count", { normalizedTerm: prodotto });
-          dataForTemplate.count = r?.count ?? 0;
-        } else if (asksStock) {
-          const r = await postJSON("/api/products/stock", { normalizedTerm: prodotto });
-          dataForTemplate.stock = r?.stock ?? 0;
-        } else {
-          const r = await postJSON("/api/products/pricing", { normalizedTerm: prodotto });
-          const price = r?.base_price ?? 0;
-          const discount = r?.sconto_fattura ?? 0;
-          dataForTemplate.price = price > 0 ? `€ ${price.toFixed(2)}` : "non disponibile a catalogo";
-          dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
+        // 4) estrai {prodotto} con fallback all'ultimo valido per "e quanti …"
+        let prodotto = extractProductTerm(unaccentLower(normalized));
+        if (!prodotto || /\s/.test(prodotto)) {
+          if (lastProduct) prodotto = lastProduct;
         }
 
-        const responseTpl = LOCAL_TEMPLATES[intentKey]?.response || "Fatto.";
-        const finalText = fillTemplateSimple(responseTpl, dataForTemplate);
-
-        if (prodotto && !/\s/.test(prodotto)) {
-          setLastProduct(prodotto);
-        }
-
+        // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
         appendUserLocal(txt);
-        appendAssistantLocal(finalText);
-        console.error("[STEP 1] ✅ RISPOSTA STANDARD:", finalText);
 
-        // Persisti nel DB
-        const convId = conv.currentConv?.id;
-        if (convId) {
-          await fetch("/api/messages/append", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: finalText }),
-          });
+        // 5) execute
+        const execJson = await postJSON(`/api/standard/execute`, {
+          intent_key: intentKey,
+          slots: { prodotto }
+        });
 
-          const res = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-          const j = await res.json();
-          conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-          setLocalUser([]);
-          setLocalAssistant([]);
+        // Se non gestito → prosegui (non inviare nulla qui; passeremo al planner sotto)
+        if (!execJson?.ok) {
+          console.error("[standard→planner] exec non gestito, passo al planner");
+        } else {
+          // 6) compila template risposta (con fallback prezzo/sconto se 0)
+          const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
+          if (intentKey === "prod_prezzo_sconti") {
+            const price = Number(execJson?.data?.price) || 0;
+            const discount = Number(execJson?.data?.discount) || 0;
+            dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
+            dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
+          }
+
+          const responseTpl =
+            LOCAL_TEMPLATES[intentKey]?.response ||
+            "Fatto.";
+
+          const answer = fillTemplateSimple(responseTpl, dataForTemplate);
+
+          // 7) scrivi la risposta (assistente)
+          appendAssistantLocal(answer);
+
+          // 8) memorizza ultimo prodotto valido
+          if (prodotto && !/\s/.test(prodotto)) setLastProduct(prodotto);
+
+          // TTS (se altoparlante attivo)
+          speakIfEnabled(answer);
+
+          // 9) persisti in DB
+          const convId = conv.currentConv?.id;
+          if (convId) {
+            await fetch("/api/messages/append", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: answer }),
+            });
+            const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+            const j = await r.json();
+            conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+            setLocalUser([]);
+            setLocalAssistant([]);
+          }
+
+          conv.setInput("");
+          return; // ⬅️ STOP: abbiamo risposto con lo standard flow
         }
-
-        conv.setInput("");
-        console.error("[STEP 1] ✅ FINE FLUSSO - Standard intent gestito");
-        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-        return;
       }
     } catch (e) {
-      console.error("[STEP 1] ⚠️ Errore in standard intents:", e);
+      console.error("[standard → planner fallback]", e);
     }
 
-    console.error("[STEP 1] ❌ Nessun match standard intents");
-
-    // ========= STEP 2: PLANNER (clienti, email, ecc.) =========
-    console.error("[STEP 2] Tentativo PLANNER...");
-    
+    // Se lo standard non ha dato esito, proviamo il planner
     try {
-      const crypto = { decryptFields: async (_s:string,_t:string,_i:string,row:any)=>row };
-
       const res = await runPlanner(
         txt,
         {
+          scope: convCtx.state.scope === "prodotti" ? "products" :
+              convCtx.state.scope === "ordini"   ? "orders"   :
+              convCtx.state.scope === "vendite"  ? "sales"    :
+              convCtx.state.scope,
+          topic_attivo:
+            convCtx.state.topic_attivo === "prodotti" ? "products" :
+            convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+            convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+            convCtx.state.topic_attivo,
+        } as any,
+        {
           state: {
-            ...convCtx.state,
-            scope:
-              convCtx.state.scope === "prodotti" ? "products" :
+            scope: convCtx.state.scope === "prodotti" ? "products" :
               convCtx.state.scope === "ordini"   ? "orders"   :
               convCtx.state.scope === "vendite"  ? "sales"    :
               convCtx.state.scope,
@@ -346,24 +355,18 @@ export default function HomeClient({ email, userName }: { email: string; userNam
               convCtx.state.topic_attivo,
           } as any,
           expired: convCtx.expired,
-          setScope: (s:any)=>convCtx.setScope(
-            s==="products"?"prodotti":
-            s==="orders"?"ordini":
-            s==="sales"?"vendite":s
-          ),
+          setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
           remember: convCtx.remember,
           reset: convCtx.reset,
         } as any,
-        crypto as any
+        {} as any
       );
 
       if (res?.text) {
-        console.error("[STEP 2] ✅ PLANNER HA RISPOSTO:", res.text);
-        
         appendUserLocal(txt);
-        appendAssistantLocal(res.text);
+        appendAssistantLocal(`[planner] ${res.text}`);
+        console.error("[planner_v2:text_hit]", res);
 
-        // Persisti nel DB
         const convId = conv.currentConv?.id;
         if (convId) {
           await fetch("/api/messages/append", {
@@ -371,7 +374,6 @@ export default function HomeClient({ email, userName }: { email: string; userNam
             headers: { "content-type": "application/json" },
             body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
           });
-
           const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
           const j = await r.json();
           conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
@@ -380,40 +382,27 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         }
 
         conv.setInput("");
-        console.error("[STEP 2] ✅ FINE FLUSSO - Planner ha gestito");
-        console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
         return;
       }
     } catch (e) {
-      console.error("[STEP 2] ⚠️ Errore nel planner:", e);
+      console.error("[planner text fallback → model]", e);
     }
 
-    console.error("[STEP 2] ❌ Planner non ha risposto");
-
-    // ========= STEP 3: LEGACY VOICE INTENTS =========
-    console.error("[STEP 3] Tentativo LEGACY VOICE INTENTS...");
-    
+    // ---------- Legacy voice-intents (solo se proprio serve) ----------
     const intent = matchIntent(txt);
     if (intent.type !== "NONE") {
-      console.error("[STEP 3] ✅ Match voice intent:", intent.type);
       askConfirm(intent);
       conv.setInput("");
-      console.error("[STEP 3] ✅ FINE FLUSSO - Voice intent gestito");
-      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
       return;
     }
-
-    console.error("[STEP 3] ❌ Nessun voice intent");
-
-    // ========= STEP 4: MODELLO GENERICO (fallback) =========
-    console.error("[STEP 4] FALLBACK → Modello generico");
-    
-    await conv.send(txt);
-    conv.setInput("");
-    
-    console.error("[STEP 4] ✅ FINE FLUSSO - Modello generico chiamato");
-    console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
   }
+
+  // ---------- Fallback finale: modello generico ----------
+  console.error("[fallback:model] no standard intent, no planner match");
+  await conv.send(txt);
+  conv.setInput("");
+  return;
+}
 
   return (
     <>
@@ -423,9 +412,15 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           title={conv.currentConv?.title ?? ""}
           userName={userName}
           onOpenLeft={openLeft}
-          onOpenTop={openTop}
+          onOpenDati={openDati}
+          onOpenDocs={openDocs}
+          onOpenImpostazioni={openImpostazioni}
           onLogout={logout}
         />
+      </div>
+      
+      <div style={{position:"fixed",top:56,right:10,zIndex:2002,fontSize:12,opacity:0.8,background:"#222",color:"#fff",padding:"2px 6px",borderRadius:6}}>
+        HOMECLIENT LIVE
       </div>
 
       {/* Contenuto */}
@@ -460,9 +455,19 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         </div>
       </div>
 
+      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+        <button
+          onClick={submitFromComposer}
+          style={{ padding: "8px 12px", border: "1px solid var(--ring)", borderRadius: 8 }}
+        >
+          Invia (planner)
+        </button>
+      </div>
+
+      {/* ✅ MODIFICA 4: Drawer aggiornato */}
       <div style={{ position: "relative", zIndex: 2001 }}>
         <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={conv.handleSelectConv} />
-        <RightDrawer open={topOpen} onClose={closeTop} />
+        <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
       </div>
     </>
   );
