@@ -162,8 +162,9 @@ export function RightDrawer({
 
   function goQuickAdd() {
     onClose();
-    window.location.href = "/tools/quick-add";
+    window.location.href = "/tools/quick-add-client"; // ✅ LINK CORRETTO ALLA NUOVA PAGINA
   }
+  
   function goClientsList() {
     onClose();
     window.location.href = "/clients";
