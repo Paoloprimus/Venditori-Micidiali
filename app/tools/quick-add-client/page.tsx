@@ -41,6 +41,7 @@ type DialogState = {
 export default function QuickAddClientPage() {
   const router = useRouter();
   const { crypto, ready } = useCrypto();
+  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
 
   // Dati del form
   const [form, setForm] = useState<ClientForm>({
@@ -371,7 +372,7 @@ export default function QuickAddClientPage() {
     }
 
     // Attendi che crypto sia pronto
-    if (!crypto || !ready) {
+    if (!crypto || !actuallyReady) {
       setErrorMsg('Crittografia non ancora pronta. Attendi...');
       setSaving(false);
       return;
