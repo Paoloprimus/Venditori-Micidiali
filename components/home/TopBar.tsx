@@ -55,9 +55,9 @@ export default function TopBar({
       <div style={{ display: "flex", gap: 8 }}>
         <button
           className="iconbtn"
-          aria-label="Gestione dati"
+          aria-label="Gestione"
           onClick={onOpenDati}
-          title="Gestione dati"
+          title="Gestione"
         >
           📊
         </button>
