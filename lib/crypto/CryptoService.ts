@@ -192,6 +192,9 @@ function canonicalizeForBI(input: string): Uint8Array {
   return new TextEncoder().encode(s);
 }
 
+// Singleton globale per evitare che si ricrei tra pagine
+let globalCryptoInstance: CryptoService | null = null;
+
 /** ---------- CryptoService ---------- */
 export class CryptoService {
   private sb: SupabaseClient;
@@ -212,6 +215,17 @@ export class CryptoService {
     this.accountId = accountId;
   }
 
+// Se esiste già un'istanza globale sbloccata, copia il suo stato
+if (globalCryptoInstance && globalCryptoInstance.MK) {
+  this.MK = globalCryptoInstance.MK;
+  this.kekSalt = globalCryptoInstance.kekSalt;
+  this.kdfParams = globalCryptoInstance.kdfParams;
+  this.wrappedMkNonce = globalCryptoInstance.wrappedMkNonce;
+  this.scopeCache = globalCryptoInstance.scopeCache;
+}
+// Salva questa istanza come globale
+globalCryptoInstance = this;
+  
   public isUnlocked(): boolean {
   return this.MK !== null;
 }
@@ -314,6 +328,8 @@ export class CryptoService {
      this.kekSalt = salt;
      this.kdfParams = kdfParams;
      this.wrappedMkNonce = nonce;
+    // Aggiorna il singleton globale
+    globalCryptoInstance = this;
      console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ==='); 
   } 
 
