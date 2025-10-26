@@ -426,7 +426,7 @@ export default function QuickAddClientPage() {
         body: JSON.stringify({
           name_enc: nameEncrypted.name_enc,
           name_iv: nameEncrypted.name_iv,
-          name_blind: nameBlind,
+          name_bi: nameBlind,
           custom: customData,
           contacts: [contact],
         }),
