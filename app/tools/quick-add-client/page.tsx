@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
-import { useCrypto } from '@/hooks/useCrypto';
+import { useCrypto } from '@/lib/crypto/CryptoProvider';
 
 // Tipi di locali HoReCa predefiniti
 const TIPO_LOCALE = [
