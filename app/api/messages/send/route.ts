@@ -1,9 +1,10 @@
-// /app/api/messages/send/route.ts
+// app/api/messages/send/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { encryptText } from "@/lib/crypto/serverEncryption";
 
-export const runtime = "nodejs"; // usa Node (env e SDK ok)
+export const runtime = "nodejs";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -11,7 +12,7 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 const MODEL  = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
 const SYSTEM = process.env.OPENAI_SYSTEM_PROMPT || "Rispondi in italiano in modo chiaro e conciso.";
 
-// Tabelle (cambiale via ENV se hai nomi diversi)
+// Tabelle
 const CONVERSATIONS_TABLE = process.env.DB_CONVERSATIONS_TABLE || "conversations";
 const MESSAGES_TABLE      = process.env.DB_MESSAGES_TABLE || "messages";
 
@@ -28,7 +29,7 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 0) ➜ Recupera l'owner della conversazione (user_id)
+    // 0) Recupera l'owner della conversazione (user_id)
     const conv = await supabase
       .from(CONVERSATIONS_TABLE)
       .select("user_id")
@@ -43,16 +44,22 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const ownerUserId = conv.data.user_id; // ← NOT NULL richiesto da messages.user_id
+    const ownerUserId = conv.data.user_id;
 
-    // 1) ➜ Salva messaggio USER (con user_id)
+    // 🔐 CIFRA il messaggio USER prima di salvarlo
+    const userEnc = encryptText(content);
+
+    // 1) Salva messaggio USER cifrato
     const insUser = await supabase
       .from(MESSAGES_TABLE)
       .insert({
         conversation_id: conversationId,
-        user_id: ownerUserId,          // ✅ valorizza user_id
+        user_id: ownerUserId,
         role: "user",
-        content,
+        body_enc: userEnc.ciphertext,
+        body_iv: userEnc.iv,
+        body_tag: userEnc.tag,
+        content: null, // ← campo vecchio vuoto
       })
       .select("id")
       .single();
@@ -65,12 +72,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 1.b) ➜ INTENTO LOCALE: "quanti clienti ho?" (prima di chiamare il modello)
+    // 1.b) INTENTO LOCALE: "quanti clienti ho?"
     const normalized = content.toLowerCase().trim();
     const askClients = /^(quanti|numero|n\.)\s+(clienti|accounts?)(\s+ho)?\??$/.test(normalized);
 
     if (askClients) {
-      // Conta i clienti dell'utente (copriamo sia owner_id sia user_id)
       const { count, error } = await supabase
         .from("accounts")
         .select("id", { count: "exact", head: true })
@@ -82,14 +88,19 @@ export async function POST(req: NextRequest) {
           ? "Non riesco a contare i clienti adesso."
           : `Hai ${n} ${n === 1 ? "cliente" : "clienti"}.`;
 
-      // Salva messaggio ASSISTANT con la risposta locale
+      // 🔐 CIFRA la risposta locale
+      const replyEnc = encryptText(reply);
+
       const insAsstLocal = await supabase
         .from(MESSAGES_TABLE)
         .insert({
           conversation_id: conversationId,
           user_id: ownerUserId,
           role: "assistant",
-          content: reply,
+          body_enc: replyEnc.ciphertext,
+          body_iv: replyEnc.iv,
+          body_tag: replyEnc.tag,
+          content: null,
         })
         .select("id")
         .single();
@@ -101,39 +112,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply }, { status: 200 });
     }
 
-    // 2) ➜ Chiama il modello (solo se non intercettato sopra)
+    // 2) Chiama OpenAI (il testo è in chiaro QUI per permettere l'elaborazione)
     const sys = SYSTEM + (terse ? " Rispondi molto brevemente." : "");
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: [
         { role: "system", content: sys },
-        { role: "user", content },
+        { role: "user", content }, // ← in chiaro per OpenAI
       ],
       temperature: 0.3,
     });
 
     const reply = completion.choices?.[0]?.message?.content?.trim() || "Ok.";
 
-    // 3) ➜ Salva messaggio ASSISTANT (con stesso user_id dell’owner)
+    // 🔐 CIFRA la risposta dell'assistente prima di salvarla
+    const assistantEnc = encryptText(reply);
+
+    // 3) Salva messaggio ASSISTANT cifrato
     const insAsst = await supabase
       .from(MESSAGES_TABLE)
       .insert({
         conversation_id: conversationId,
-        user_id: ownerUserId,          // ✅ anche l’assistant ha lo stesso owner
+        user_id: ownerUserId,
         role: "assistant",
-        content: reply,
+        body_enc: assistantEnc.ciphertext,
+        body_iv: assistantEnc.iv,
+        body_tag: assistantEnc.tag,
+        content: null, // ← campo vecchio vuoto
       })
       .select("id")
       .single();
 
     if (insAsst.error) {
       console.error("[send] insert assistant msg error:", insAsst.error);
-      // Non blocchiamo l'UX: restituiamo comunque la reply
     }
 
-    return NextResponse.json({ reply });
+    return NextResponse.json({ reply }); // ← ritorna in chiaro al client (transitorio)
   } catch (err: any) {
-    // Quota OpenAI
+    // Gestione errori quota OpenAI
     const status = err?.status ?? 500;
     const type   = err?.error?.type ?? err?.code;
     const retryHeader = err?.headers?.get?.("retry-after");
@@ -146,7 +162,6 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Mancanze env supabase
     if (typeof err?.message === "string" && err.message.includes("[supabase] Missing env")) {
       console.error(err);
       return NextResponse.json({ error: err.message }, { status: 500 });
