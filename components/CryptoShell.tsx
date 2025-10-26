@@ -30,8 +30,8 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
       // pulizia pass in memoria persistente
 
       // pulizia pass in memoria persistente — RIMANDATA di 10s
-try { setTimeout(() => sessionStorage.removeItem("repping:pph"), 10000); } catch {}
-try { setTimeout(() => localStorage.removeItem("repping:pph"), 10000); } catch {}
+try { setTimeout(() => sessionStorage.removeItem("repping:pph"), 300000); } catch {}
+try { setTimeout(() => localStorage.removeItem("repping:pph"), 300000); } catch {}
 
       
       return true;
