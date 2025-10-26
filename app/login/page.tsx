@@ -19,14 +19,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
 
   // util: salva pass in storage per auto-unlock
-  function savePassphrase(pass: string) {
-    try {
-      // ✅ password salvata temporaneamente per sblocco automatico
-      sessionStorage.setItem("repping:pph", pass);
-      // In DEV potresti voler persistere tra tab/riaperture:
-      // localStorage.setItem("repping:pph", pass);
-    } catch {}
+function savePassphrase(pass: string) {
+  try {
+    console.log('[Login] Tentativo salvataggio password...');
+    sessionStorage.setItem("repping:pph", pass);
+    console.log('[Login] Password salvata! Verifica:', sessionStorage.getItem("repping:pph") ? 'OK' : 'FALLITO');
+  } catch (e) {
+    console.error('[Login] ERRORE salvataggio password:', e);
   }
+}
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
