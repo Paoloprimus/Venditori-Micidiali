@@ -417,10 +417,6 @@ async function submitFromComposer() {
           onLogout={logout}
         />
       </div>
-      
-      <div style={{position:"fixed",top:56,right:10,zIndex:2002,fontSize:12,opacity:0.8,background:"#222",color:"#fff",padding:"2px 6px",borderRadius:6}}>
-        HOMECLIENT LIVE
-      </div>
 
       {/* Contenuto */}
       <div onMouseDown={handleAnyHomeInteraction} onTouchStart={handleAnyHomeInteraction} style={{ minHeight: "100vh" }}>
