@@ -5,16 +5,22 @@ import ProductManager from "./products/ProductManager";
 import { ToastProvider } from "./ui/Toast";
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
+export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
+
 export function useDrawers() {
   const [leftOpen, setLeftOpen] = useState(false);
-  const [topOpen, setTopOpen] = useState(false); // riusato per il drawer destro
+  const [rightContent, setRightContent] = useState<RightDrawerContent>(null);
+  
   return {
     leftOpen,
-    topOpen,
+    rightOpen: rightContent !== null,
+    rightContent,
     openLeft: () => setLeftOpen(true),
     closeLeft: () => setLeftOpen(false),
-    openTop: () => setTopOpen(true),
-    closeTop: () => setTopOpen(false),
+    openDati: () => setRightContent('dati'),
+    openDocs: () => setRightContent('docs'),
+    openImpostazioni: () => setRightContent('impostazioni'),
+    closeRight: () => setRightContent(null),
   };
 }
 
@@ -149,20 +155,29 @@ export function LeftDrawer({
 /* ------------------------------- RightDrawer ------------------------------- */
 export function RightDrawer({
   open,
+  content,
   onClose,
 }: {
   open: boolean;
+  content: RightDrawerContent;
   onClose: () => void;
 }) {
-  const [tab, setTab] = useState<"settings" | "products">("products");
+  return (
+    <aside className={`drawer right ${open ? "open" : ""}`}>
+      {content === 'dati' && <DrawerDati onClose={onClose} />}
+      {content === 'docs' && <DrawerDocs onClose={onClose} />}
+      {content === 'impostazioni' && <DrawerImpostazioni onClose={onClose} />}
+    </aside>
+  );
+}
 
-  useEffect(() => {
-    if (!open) setTab("products");
-  }, [open]);
+/* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
+function DrawerDati({ onClose }: { onClose: () => void }) {
+  const [tab, setTab] = useState<'clienti' | 'prodotti'>('clienti');
 
   function goQuickAdd() {
     onClose();
-    window.location.href = "/tools/quick-add-client"; // ✅ LINK CORRETTO ALLA NUOVA PAGINA
+    window.location.href = "/tools/quick-add-client";
   }
   
   function goClientsList() {
@@ -170,43 +185,127 @@ export function RightDrawer({
     window.location.href = "/clients";
   }
 
+  function goProductsList() {
+    // TODO: quando avremo la pagina lista prodotti
+    alert("Lista prodotti - in arrivo");
+  }
+
   return (
-    <aside className={`drawer right ${open ? "open" : ""}`}>
-      <div className="topbar" style={{ gap: 8 }}>
+    <>
+      <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
-        <div className="title">Pannello</div>
-        <div className="spacer" />
+        <div className="title">Gestione dati</div>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
         <button
-          className={`btn ${tab === "settings" ? "active" : ""}`}
-          onClick={() => setTab("settings")}
+          onClick={() => setTab('clienti')}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 500,
+            color: tab === 'clienti' ? '#2563eb' : '#6b7280',
+            borderBottom: tab === 'clienti' ? '2px solid #2563eb' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}
         >
-          Impostazioni
+          CLIENTI
         </button>
         <button
-          className={`btn ${tab === "products" ? "active" : ""}`}
-          onClick={() => setTab("products")}
+          onClick={() => setTab('prodotti')}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 500,
+            color: tab === 'prodotti' ? '#2563eb' : '#6b7280',
+            borderBottom: tab === 'prodotti' ? '2px solid #2563eb' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}
         >
-          Gestione prodotti
+          PRODOTTI
         </button>
       </div>
 
-      <div className="list" style={{ padding: 8 }}>
-        {/* Link rapidi */}
-        <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
-          <button className="btn" onClick={goQuickAdd}>Quick Add clienti</button>
-          <button className="btn" onClick={goClientsList}>Lista clienti</button>
+      <div className="list" style={{ padding: 16 }}>
+        {tab === 'clienti' && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button className="btn" onClick={goClientsList}>
+              📋 Lista clienti
+            </button>
+            <button className="btn" onClick={goQuickAdd} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+              ➕ Aggiungi singolo
+            </button>
+            <button className="btn" onClick={() => alert('Import clienti - in arrivo')}>
+              📥 Importa lista
+            </button>
+          </div>
+        )}
+
+        {tab === 'prodotti' && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button className="btn" onClick={goProductsList}>
+              📦 Lista prodotti
+            </button>
+            <button className="btn" onClick={() => alert('Aggiungi prodotto - in arrivo')} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+              ➕ Aggiungi singolo
+            </button>
+            <ToastProvider>
+              <div style={{ marginTop: 8 }}>
+                <ProductManager onCloseDrawer={onClose} />
+              </div>
+            </ToastProvider>
+          </div>
+        )}
+      </div>
+    </>
+  );
+}
+
+/* -------------------------- Contenuto: DOCS -------------------------- */
+function DrawerDocs({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      <div className="topbar">
+        <button className="iconbtn" onClick={onClose}>Chiudi</button>
+        <div className="title">Documenti</div>
+      </div>
+      <div className="list" style={{ padding: 16 }}>
+        <div style={{ color: '#6b7280', fontSize: 14 }}>
+          Qui mostreremo i tuoi documenti e report generati.
         </div>
-
-        {tab === "settings" && (
-          <div style={{ color: "var(--muted)" }}>Impostazioni (coming soon)</div>
-        )}
-
-        {tab === "products" && (
-          <ToastProvider>
-            <ProductManager onCloseDrawer={onClose} />
-          </ToastProvider>
-        )}
+        <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 13 }}>
+          📄 Coming soon...
+        </div>
       </div>
-    </aside>
+    </>
+  );
+}
+
+/* --------------------- Contenuto: IMPOSTAZIONI --------------------- */
+function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
+  return (
+    <>
+      <div className="topbar">
+        <button className="iconbtn" onClick={onClose}>Chiudi</button>
+        <div className="title">Impostazioni</div>
+      </div>
+      <div className="list" style={{ padding: 16 }}>
+        <div style={{ color: '#6b7280', fontSize: 14 }}>
+          Qui ci saranno le configurazioni dell'app.
+        </div>
+        <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 13 }}>
+          ⚙️ Coming soon...
+        </div>
+      </div>
+    </>
   );
 }
