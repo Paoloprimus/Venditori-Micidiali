@@ -173,7 +173,7 @@ export function RightDrawer({
 
 /* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
 function DrawerDati({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'clienti' | 'prodotti'>('clienti');
+  const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('clienti');
 
   function goQuickAdd() {
     onClose();
@@ -194,7 +194,7 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     <>
       <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
-        <div className="title">Gestione dati</div>
+        <div className="title">Gestione</div>
       </div>
 
       {/* Tabs */}
@@ -233,6 +233,23 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
         >
           PRODOTTI
         </button>
+        <button
+          onClick={() => setTab('uscite')}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 500,
+            color: tab === 'uscite' ? '#2563eb' : '#6b7280',
+            borderBottom: tab === 'uscite' ? '2px solid #2563eb' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}
+        >
+          USCITE
+        </button>
       </div>
 
       <div className="list" style={{ padding: 16 }}>
@@ -263,6 +280,22 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
                 <ProductManager onCloseDrawer={onClose} />
               </div>
             </ToastProvider>
+          </div>
+        )}
+
+        {tab === 'uscite' && (
+          <div style={{ padding: 16 }}>
+            <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 16 }}>
+              Qui vedrai il diario delle tue giornate lavorative.
+            </div>
+            <div style={{ padding: 16, background: '#f9fafb', borderRadius: 8, border: '1px dashed #d1d5db' }}>
+              <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
+                📅 Coming soon...
+              </div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8, textAlign: 'center' }}>
+                Lista cronologica delle giornate lavorative con sintesi delle attività
+              </div>
+            </div>
           </div>
         )}
       </div>
