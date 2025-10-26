@@ -358,8 +358,7 @@ async function submitFromComposer() {
           setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
           remember: convCtx.remember,
           reset: convCtx.reset,
-        } as any,
-        {} as any
+        } as any
       );
 
       if (res?.text) {
