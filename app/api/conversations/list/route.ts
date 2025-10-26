@@ -1,7 +1,9 @@
+// app/api/conversations/list/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "../../../../lib/supabase/server";
+import { decryptText } from "../../../../lib/crypto/serverEncryption";
 
 export async function GET(req: Request) {
   const supabase = createSupabaseServer();
@@ -16,7 +18,7 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("conversations")
-    .select("id, title, updated_at")
+    .select("id, subject_enc, subject_iv, subject_tag, title, updated_at")
     .eq("user_id", u.user.id)
     .order("updated_at", { ascending: false })
     .range(offset, offset + limit - 1);
@@ -28,10 +30,34 @@ export async function GET(req: Request) {
     );
   }
 
+  // 🔓 DECIFRA i title
+  const items = (data || []).map((row) => {
+    let title = "Senza titolo";
+    
+    // Prova a decifrare se cifrato
+    if (row.subject_enc && row.subject_iv && row.subject_tag) {
+      try {
+        title = decryptText(row.subject_enc, row.subject_iv, row.subject_tag);
+      } catch {
+        title = "[Errore decifratura]";
+      }
+    } 
+    // Fallback su campo vecchio in chiaro (retrocompatibilità)
+    else if (row.title) {
+      title = row.title;
+    }
+
+    return {
+      id: row.id,
+      title,
+      updated_at: row.updated_at,
+    };
+  });
+
   const nextOffset = data && data.length === limit ? offset + limit : null;
 
   return NextResponse.json({
-    items: data,
-    nextOffset, // sarà null quando NON c’è altro da caricare
+    items,
+    nextOffset,
   });
 }
