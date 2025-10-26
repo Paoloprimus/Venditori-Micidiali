@@ -1,7 +1,9 @@
+// app/api/messages/by-conversation/route.ts
 export const runtime = "nodejs";
 
 import { NextResponse } from "next/server";
 import { createSupabaseServer } from "../../../../lib/supabase/server";
+import { decryptText } from "../../../../lib/crypto/serverEncryption";
 
 export async function GET(req: Request) {
   const supabase = createSupabaseServer();
@@ -21,13 +23,38 @@ export async function GET(req: Request) {
 
   const { data, error } = await supabase
     .from("messages")
-    .select("id, role, content, created_at")
+    .select("id, role, body_enc, body_iv, body_tag, content, created_at")
     .eq("conversation_id", conversationId)
     .order("created_at", { ascending: true })
-    .order("id", { ascending: true })   // ⬅️ tie-break stabile
+    .order("id", { ascending: true })
     .limit(limit);
 
-
   if (error) return NextResponse.json({ error: "DB_LIST_MSG", details: error.message }, { status: 500 });
-  return NextResponse.json({ items: data ?? [] });
+
+  // 🔓 DECIFRA tutti i messaggi
+  const items = (data || []).map((row) => {
+    let content = "[Vuoto]";
+    
+    // Prova a decifrare se cifrato
+    if (row.body_enc && row.body_iv && row.body_tag) {
+      try {
+        content = decryptText(row.body_enc, row.body_iv, row.body_tag);
+      } catch {
+        content = "[Errore decifratura]";
+      }
+    }
+    // Fallback su campo vecchio in chiaro (retrocompatibilità)
+    else if (row.content) {
+      content = row.content;
+    }
+
+    return {
+      id: row.id,
+      role: row.role,
+      content,
+      created_at: row.created_at,
+    };
+  });
+
+  return NextResponse.json({ items });
 }
