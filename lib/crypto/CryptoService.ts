@@ -205,27 +205,26 @@ export class CryptoService {
   private wrappedMkNonce?: string;
   private scopeCache: Record<string, ScopeKeys> = {};
 
-  constructor(sb?: SupabaseClient, accountId: string | null = null) {
-    this.sb =
-      sb ??
-      createClient(
-        process.env.NEXT_PUBLIC_SUPABASE_URL!,
-        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-      );
-    this.accountId = accountId;
-  }
-
-// Se esiste già un'istanza globale sbloccata, copia il suo stato
-if (globalCryptoInstance && globalCryptoInstance.MK) {
-  this.MK = globalCryptoInstance.MK;
-  this.kekSalt = globalCryptoInstance.kekSalt;
-  this.kdfParams = globalCryptoInstance.kdfParams;
-  this.wrappedMkNonce = globalCryptoInstance.wrappedMkNonce;
-  this.scopeCache = globalCryptoInstance.scopeCache;
-}
-// Salva questa istanza come globale
-globalCryptoInstance = this;
+constructor(sb?: SupabaseClient, accountId: string | null = null) {
+  this.sb =
+    sb ??
+    createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  this.accountId = accountId;
   
+  // Se esiste già un'istanza globale sbloccata, copia il suo stato
+  if (globalCryptoInstance && globalCryptoInstance.MK) {
+    this.MK = globalCryptoInstance.MK;
+    this.kekSalt = globalCryptoInstance.kekSalt;
+    this.kdfParams = globalCryptoInstance.kdfParams;
+    this.wrappedMkNonce = globalCryptoInstance.wrappedMkNonce;
+    this.scopeCache = globalCryptoInstance.scopeCache;
+  }
+  // Salva questa istanza come globale
+  globalCryptoInstance = this;
+} 
   public isUnlocked(): boolean {
   return this.MK !== null;
 }
