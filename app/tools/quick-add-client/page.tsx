@@ -526,6 +526,75 @@ console.log('[QuickAdd] Nome contatto cifrato con successo:', {
     }
   }, [dialogState]);
 
+// 🔐 Blocco UI se crittografia non è pronta
+if (!actuallyReady || !crypto) {
+  return (
+    <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, border: '1px solid #e5e7eb', borderRadius: 12 }}>
+      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: '#111827' }}>
+        🔐 Crittografia in preparazione...
+      </h2>
+      <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
+        Il sistema di cifratura sta inizializzando. Questo può richiedere qualche secondo dopo il login.
+      </p>
+      <p style={{ color: '#6b7280', marginBottom: 20, fontSize: 14 }}>
+        Se questa schermata persiste per più di 10 secondi, prova a:
+      </p>
+      <ul style={{ color: '#6b7280', marginBottom: 24, paddingLeft: 20, fontSize: 14 }}>
+        <li style={{ marginBottom: 8 }}>Tornare alla home e attendere</li>
+        <li style={{ marginBottom: 8 }}>Effettuare logout e nuovo login</li>
+        <li>Ricaricare la pagina</li>
+      </ul>
+      
+      <div style={{ display: 'flex', gap: 12 }}>
+        <button
+          onClick={() => router.push('/')}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 8,
+            border: '1px solid #d1d5db',
+            background: 'white',
+            color: '#111827',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          ← Torna alla Home
+        </button>
+        <button
+          onClick={() => window.location.reload()}
+          style={{
+            padding: '10px 20px',
+            borderRadius: 8,
+            border: '1px solid #d1d5db',
+            background: 'white',
+            color: '#111827',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+        >
+          🔄 Ricarica Pagina
+        </button>
+      </div>
+      
+      {/* Info debug */}
+      <div style={{ 
+        marginTop: 24, 
+        padding: 12, 
+        background: '#fef3c7', 
+        borderRadius: 8,
+        fontSize: 13,
+        fontFamily: 'monospace',
+      }}>
+        <strong>Debug:</strong><br />
+        • ready: {String(ready)}<br />
+        • crypto: {crypto ? 'presente' : 'null'}<br />
+        • isUnlocked: {crypto && typeof crypto.isUnlocked === 'function' ? String(crypto.isUnlocked()) : 'n/a'}<br />
+        • actuallyReady: {String(actuallyReady)}
+      </div>
+    </div>
+  );
+}
+  
   return (
     <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
       {/* Header */}
