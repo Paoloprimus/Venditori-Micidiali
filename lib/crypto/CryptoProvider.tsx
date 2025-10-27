@@ -225,7 +225,9 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             await unlock(pass);
             await prewarm(DEFAULT_SCOPES);
             try {
-              sessionStorage.removeItem("repping:pph");
+              // NON cancelliamo la password finché il singleton non funziona
+              console.log('[CryptoProvider] Password mantenuta in storage per navigazione tra pagine');
+              // sessionStorage.removeItem('repping:pph');
             } catch {}
             try {
               localStorage.removeItem("repping:pph");
