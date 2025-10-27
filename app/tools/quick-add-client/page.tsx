@@ -40,12 +40,38 @@ type DialogState = {
 
 export default function QuickAddClientPage() {
   const router = useRouter();
+
   const { crypto, ready } = useCrypto();
-  const actuallyReady = ready || (
+
+// 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
+useEffect(() => {
+  if (!crypto) return;
+  
+  const checkAndUnlock = async () => {
+    if (!crypto.isUnlocked()) {
+      const pass = sessionStorage.getItem('repping:pph');
+      if (pass) {
+        console.log('[QuickAdd] 🔧 Crypto non sbloccato, tento re-unlock...');
+        try {
+          await crypto.unlock(pass);
+          console.log('[QuickAdd] ✅ Re-unlock completato!');
+          // Forza re-render
+          setForm(prev => ({ ...prev }));
+        } catch (e) {
+          console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
+        }
+      }
+    }
+  };
+  
+  checkAndUnlock();
+}, [crypto]);
+
+const actuallyReady = (
   crypto && 
   typeof crypto.isUnlocked === 'function' && 
   crypto.isUnlocked()
-  );
+);
 
   // Dati del form
   const [form, setForm] = useState<ClientForm>({
