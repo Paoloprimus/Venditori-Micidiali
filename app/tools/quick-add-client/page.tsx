@@ -41,7 +41,11 @@ type DialogState = {
 export default function QuickAddClientPage() {
   const router = useRouter();
   const { crypto, ready } = useCrypto();
-  const actuallyReady = ready || !!((crypto as any)?.MK);
+  const actuallyReady = ready || (
+  crypto && 
+  typeof crypto.isUnlocked === 'function' && 
+  crypto.isUnlocked()
+  );
 
   // Dati del form
   const [form, setForm] = useState<ClientForm>({
