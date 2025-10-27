@@ -393,10 +393,22 @@ export default function QuickAddClientPage() {
         { name: form.nomeCliente.trim() }
       );
 
-      // Calcola blind index per il nome
-      const nameBlind = crypto.computeBlindIndex 
-        ? await crypto.computeBlindIndex(scope, form.nomeCliente.trim())
-        : '';
+    
+// Verifica che computeBlindIndex sia disponibile
+if (typeof crypto.computeBlindIndex !== 'function') {
+  throw new Error(
+    'La funzione computeBlindIndex non è disponibile sul servizio crypto. ' +
+    'Rieffettua il login o contatta il supporto.'
+  );
+}
+
+// Calcola il blind index (obbligatorio)
+const nameBlind = await crypto.computeBlindIndex(scope, form.nomeCliente.trim());
+
+// Verifica che sia valido
+if (!nameBlind || typeof nameBlind !== 'string') {
+  throw new Error('Calcolo blind index fallito: valore non valido ritornato');
+}
 
       // Critta il nome contatto
       const contactNameEncrypted = await crypto.encryptFields(
