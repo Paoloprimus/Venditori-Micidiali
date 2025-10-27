@@ -45,22 +45,41 @@ const { crypto, ready } = useCrypto();
 
 // 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
 useEffect(() => {
-  if (!crypto) return;
+  console.log('[QuickAdd] 🔍 useEffect triggered, crypto:', !!crypto);
+  
+  if (!crypto) {
+    console.log('[QuickAdd] ⚠️ crypto è null/undefined, esco');
+    return;
+  }
   
   const checkAndUnlock = async () => {
-    if (!crypto || typeof crypto.isUnlocked !== 'function') return;
+    console.log('[QuickAdd] 🔍 checkAndUnlock started');
     
-    if (!crypto.isUnlocked()) {
+    if (!crypto || typeof crypto.isUnlocked !== 'function') {
+      console.log('[QuickAdd] ⚠️ crypto o isUnlocked non validi');
+      return;
+    }
+    
+    const unlocked = crypto.isUnlocked();
+    console.log('[QuickAdd] 🔍 isUnlocked:', unlocked);
+    
+    if (!unlocked) {
       const pass = sessionStorage.getItem('repping:pph');
+      console.log('[QuickAdd] 🔍 Password in storage:', !!pass);
+      
       if (pass && typeof crypto.unlockWithPassphrase === 'function') {
-        console.log('[QuickAdd] 🔧 Crypto non sbloccato, tento re-unlock...');
+        console.log('[QuickAdd] 🔧 Tento re-unlock...');
         try {
           await crypto.unlockWithPassphrase(pass);
           console.log('[QuickAdd] ✅ Re-unlock completato!');
         } catch (e) {
           console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
         }
+      } else {
+        console.log('[QuickAdd] ⚠️ Password mancante o unlockWithPassphrase non disponibile');
       }
+    } else {
+      console.log('[QuickAdd] ✅ Crypto già unlocked, niente da fare');
     }
   };
   
