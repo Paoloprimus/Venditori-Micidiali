@@ -52,10 +52,10 @@ useEffect(() => {
     
     if (!crypto.isUnlocked()) {
       const pass = sessionStorage.getItem('repping:pph');
-      if (pass && typeof crypto.unlock === 'function') {
+      if (pass && typeof crypto.unlockWithPassphrase === 'function') {
         console.log('[QuickAdd] 🔧 Crypto non sbloccato, tento re-unlock...');
         try {
-          await crypto.unlock(pass);
+          await crypto.unlockWithPassphrase(pass);
           console.log('[QuickAdd] ✅ Re-unlock completato!');
         } catch (e) {
           console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
