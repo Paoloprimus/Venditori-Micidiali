@@ -393,6 +393,25 @@ export default function QuickAddClientPage() {
         { name: form.nomeCliente.trim() }
       );
 
+      // ✅ VALIDAZIONE struttura nome cliente cifrato
+if (!nameEncrypted || typeof nameEncrypted !== 'object') {
+  throw new Error(
+    'Cifratura nome cliente fallita: encryptFields ha ritornato dati non validi. ' +
+    'Tipo ritornato: ' + typeof nameEncrypted
+  );
+}
+
+if (!nameEncrypted.name_enc || !nameEncrypted.name_iv) {
+  throw new Error(
+    'Cifratura nome cliente fallita: campi enc/iv mancanti nella risposta. ' +
+    'Campi presenti: ' + Object.keys(nameEncrypted).join(', ')
+  );
+}
+
+console.log('[QuickAdd] Nome cliente cifrato con successo:', {
+  hasEnc: !!nameEncrypted.name_enc,
+  hasIv: !!nameEncrypted.name_iv,
+});
     
 // Verifica che computeBlindIndex sia disponibile
 if (typeof crypto.computeBlindIndex !== 'function') {
@@ -418,6 +437,26 @@ if (!nameBlind || typeof nameBlind !== 'string') {
         { full_name: form.nomeContatto.trim() }
       );
 
+      // ✅ VALIDAZIONE struttura nome contatto cifrato
+if (!contactNameEncrypted || typeof contactNameEncrypted !== 'object') {
+  throw new Error(
+    'Cifratura nome contatto fallita: encryptFields ha ritornato dati non validi. ' +
+    'Tipo ritornato: ' + typeof contactNameEncrypted
+  );
+}
+
+if (!contactNameEncrypted.full_name_enc || !contactNameEncrypted.full_name_iv) {
+  throw new Error(
+    'Cifratura nome contatto fallita: campi enc/iv mancanti nella risposta. ' +
+    'Campi presenti: ' + Object.keys(contactNameEncrypted).join(', ')
+  );
+}
+
+console.log('[QuickAdd] Nome contatto cifrato con successo:', {
+  hasEnc: !!contactNameEncrypted.full_name_enc,
+  hasIv: !!contactNameEncrypted.full_name_iv,
+});
+      
       // Prepara i dati custom
       const customData = {
         vat_number: form.piva.trim() || undefined,
