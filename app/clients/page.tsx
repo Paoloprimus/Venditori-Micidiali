@@ -411,7 +411,16 @@ if (!actuallyReady || !crypto) {
         auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
       </div>
 
-      <h1 className="text-2xl font-bold">Clienti</h1>
+      <div className="flex items-center gap-4 mb-4">
+  <button
+    onClick={() => window.location.href = '/'}
+    className="px-3 py-2 rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+  >
+    ← Home
+  </button>
+  <h1 className="text-2xl font-bold">Clienti</h1>
+</div>
+      
       <div className="flex gap-2 items-center">
         <input
           className="border rounded p-2 flex-1"
