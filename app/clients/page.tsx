@@ -189,7 +189,7 @@ if (error) {
     console.log('🔍 [DEBUG] È Buffer?', data[0].name_enc instanceof Buffer);
     console.log('🔍 [DEBUG] È Uint8Array?', data[0].name_enc instanceof Uint8Array);
     console.log('🔍 [DEBUG] name_enc length:', data[0].name_enc?.length);
-
+}
     
 // tipizziamo con una variabile intermedia per evitare l'errore del ParserError
 const rowsAny = (data ?? []) as any[];
