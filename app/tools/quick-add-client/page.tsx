@@ -598,14 +598,6 @@ const res = await fetch('/api/clients/upsert', {
   }),
 });
 
-      // Prepara il contatto
-      const contact = {
-        full_name_enc: contactNameEncrypted.full_name_enc,
-        full_name_iv: contactNameEncrypted.full_name_iv,
-        email: form.email.trim() || undefined,
-        phone: form.telefono.trim(),
-      };
-
       // Invia al backend
       const res = await fetch('/api/clients/upsert', {
         method: 'POST',
