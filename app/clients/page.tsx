@@ -181,14 +181,15 @@ if (error) {
   return;
 }
 
-  // ✅ AGGIUNGI QUI QUESTI LOG
-  if (data && data.length > 0) {
-    console.log('🔍 [DEBUG] Primo record RAW da Supabase:', data[0]);
-    console.log('🔍 [DEBUG] Tipo name_enc:', typeof data[0].name_enc);
-    console.log('🔍 [DEBUG] Valore name_enc:', data[0].name_enc);
-    console.log('🔍 [DEBUG] È Buffer?', data[0].name_enc instanceof Buffer);
-    console.log('🔍 [DEBUG] È Uint8Array?', data[0].name_enc instanceof Uint8Array);
-    console.log('🔍 [DEBUG] name_enc length:', data[0].name_enc?.length);
+// ✅ AGGIUNGI QUI QUESTI LOG (con cast any)
+if (data && data.length > 0) {
+  const firstRecord = data[0] as any;
+  console.log('🔍 [DEBUG] Primo record RAW da Supabase:', firstRecord);
+  console.log('🔍 [DEBUG] Tipo name_enc:', typeof firstRecord.name_enc);
+  console.log('🔍 [DEBUG] Valore name_enc:', firstRecord.name_enc);
+  console.log('🔍 [DEBUG] È Buffer?', firstRecord.name_enc instanceof Buffer);
+  console.log('🔍 [DEBUG] È Uint8Array?', firstRecord.name_enc instanceof Uint8Array);
+  console.log('🔍 [DEBUG] name_enc length:', firstRecord.name_enc?.length);
 }
     
 // tipizziamo con una variabile intermedia per evitare l'errore del ParserError
