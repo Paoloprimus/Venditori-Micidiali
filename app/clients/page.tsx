@@ -203,7 +203,7 @@ for (const r0 of rowsAny) {
       !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc);
 
     if (!hasEncrypted) {
-      // ➜ record “plain”: usa direttamente i campi in chiaro
+      // ➜ record "plain": usa direttamente i campi in chiaro
       plain.push({
         id: r.id,
         created_at: r.created_at,
@@ -216,7 +216,32 @@ for (const r0 of rowsAny) {
       continue;
     }
 
-    // ➜ record cifrato: decripta come già fai
+    // 🔧 FIX: Converti hex-string (\\x...) in base64 per il decryptor
+    const hexToBase64 = (hexStr: any): string => {
+      if (!hexStr || typeof hexStr !== 'string') return '';
+      if (!hexStr.startsWith('\\x')) return hexStr;
+      
+      const hex = hexStr.slice(2); // rimuovi \x
+      const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+      return bytes;
+    };
+    
+    // Crea una copia del record con i campi convertiti
+    const recordForDecrypt = {
+      ...r,
+      name_enc: hexToBase64(r.name_enc),
+      name_iv: hexToBase64(r.name_iv),
+      email_enc: hexToBase64(r.email_enc),
+      email_iv: hexToBase64(r.email_iv),
+      phone_enc: hexToBase64(r.phone_enc),
+      phone_iv: hexToBase64(r.phone_iv),
+      vat_number_enc: hexToBase64(r.vat_number_enc),
+      vat_number_iv: hexToBase64(r.vat_number_iv),
+      notes_enc: hexToBase64(r.notes_enc),
+      notes_iv: hexToBase64(r.notes_iv),
+    };
+
+    // ➜ record cifrato: decripta
     if (typeof (crypto as any)?.decryptFields !== "function") {
       throw new Error("decryptFields non disponibile sul servizio crypto");
     }
@@ -229,7 +254,7 @@ for (const r0 of rowsAny) {
         : ((x ?? {}) as Record<string, unknown>);
 
     const decAny = await (crypto as any).decryptFields(
-      "table:accounts", "accounts", r.id, r,
+      "table:accounts", "accounts", recordForDecrypt.id, recordForDecrypt,
       ["name", "email", "phone", "vat_number", "notes"]
     );
     const dec = toObj(decAny);
