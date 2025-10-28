@@ -281,7 +281,9 @@ async function loadPage(p: number): Promise<void> {
     }
   }
 
-  console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
+  console.log("[/clients] plain len:", plain.length);
+console.log("[/clients] sample completo:", JSON.stringify(plain[0], null, 2));
+console.log("[/clients] nomi di tutti i clienti:", plain.map(p => p.name));
 
   setRows(plain);
   setLoading(false);
