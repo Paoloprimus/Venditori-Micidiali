@@ -108,7 +108,11 @@ useEffect(() => {
 // 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm (con mini-retry)
 useEffect(() => {
   if (!authChecked) return;       // aspetta check auth
-  if (ready) return;              // già sbloccato
+  // Controlla se è davvero unlocked, non fare affidamento su ready
+if (crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) {
+  console.log('[/clients] Crypto già unlocked, skip auto-unlock');
+  return;
+}
   if (unlockingRef.current) return;
 
   const readPass = () =>
