@@ -256,11 +256,26 @@ async function loadPage(p: number): Promise<void> {
             }, {})
           : ((x ?? {}) as Record<string, unknown>);
 
-      const decAny = await (crypto as any).decryptFields(
-        "table:accounts", "accounts", recordForDecrypt.id, recordForDecrypt,
-        ["name", "email", "phone", "vat_number", "notes"]
-      );
-      const dec = toObj(decAny);
+// ✅ LOG PRIMA
+console.log('[/clients] 🔍 Decifro record:', {
+  id: recordForDecrypt.id.substring(0, 8) + '...',
+  name_enc: recordForDecrypt.name_enc?.substring(0, 20) + '...',
+  name_iv: recordForDecrypt.name_iv
+});
+
+const decAny = await (crypto as any).decryptFields(
+  "table:accounts", "accounts", recordForDecrypt.id, recordForDecrypt,
+  ["name", "email", "phone", "vat_number", "notes"]
+);
+
+// ✅ LOG DOPO
+console.log('[/clients] 🔍 Risultato decAny:', decAny);
+console.log('[/clients] 🔍 È array?', Array.isArray(decAny));
+
+const dec = toObj(decAny);
+
+// ✅ LOG FINALE
+console.log('[/clients] 🔍 Dopo toObj:', dec);
 
       plain.push({
         id: r.id,
