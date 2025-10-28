@@ -181,6 +181,16 @@ if (error) {
   return;
 }
 
+  // ✅ AGGIUNGI QUI QUESTI LOG
+  if (data && data.length > 0) {
+    console.log('🔍 [DEBUG] Primo record RAW da Supabase:', data[0]);
+    console.log('🔍 [DEBUG] Tipo name_enc:', typeof data[0].name_enc);
+    console.log('🔍 [DEBUG] Valore name_enc:', data[0].name_enc);
+    console.log('🔍 [DEBUG] È Buffer?', data[0].name_enc instanceof Buffer);
+    console.log('🔍 [DEBUG] È Uint8Array?', data[0].name_enc instanceof Uint8Array);
+    console.log('🔍 [DEBUG] name_enc length:', data[0].name_enc?.length);
+
+    
 // tipizziamo con una variabile intermedia per evitare l'errore del ParserError
 const rowsAny = (data ?? []) as any[];
 const plain: PlainAccount[] = [];
