@@ -597,15 +597,6 @@ const res = await fetch('/api/clients/upsert', {
     contacts: [contact],
   }),
 });
-      
-      // Prepara i dati custom
-      const customData = {
-        vat_number: form.piva.trim() || undefined,
-        city: form.citta.trim(),
-        address: form.indirizzo.trim(),
-        tipo_locale: form.tipoLocale.trim(),
-        notes: form.note.trim() || undefined,
-      };
 
       // Prepara il contatto
       const contact = {
