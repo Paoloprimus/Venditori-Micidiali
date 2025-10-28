@@ -501,6 +501,102 @@ console.log('[QuickAdd] Nome contatto cifrato con successo:', {
   hasEnc: !!contactNameEncrypted.full_name_enc,
   hasIv: !!contactNameEncrypted.full_name_iv,
 });
+
+// 🔐 CIFRA EMAIL (se presente)
+let emailEncrypted = null;
+if (form.email.trim()) {
+  emailEncrypted = await crypto.encryptFields(
+    scope,
+    'contacts',
+    '',
+    { email: form.email.trim() }
+  );
+  if (!emailEncrypted?.email_enc || !emailEncrypted?.email_iv) {
+    throw new Error('Cifratura email fallita');
+  }
+  console.log('[QuickAdd] Email cifrata con successo');
+}
+
+// 🔐 CIFRA TELEFONO
+const phoneEncrypted = await crypto.encryptFields(
+  scope,
+  'contacts',
+  '',
+  { phone: form.telefono.trim() }
+);
+if (!phoneEncrypted?.phone_enc || !phoneEncrypted?.phone_iv) {
+  throw new Error('Cifratura telefono fallita');
+}
+console.log('[QuickAdd] Telefono cifrato con successo');
+
+// 🔐 CIFRA INDIRIZZO
+const addressEncrypted = await crypto.encryptFields(
+  scope,
+  'accounts',
+  '',
+  { address: form.indirizzo.trim() }
+);
+if (!addressEncrypted?.address_enc || !addressEncrypted?.address_iv) {
+  throw new Error('Cifratura indirizzo fallita');
+}
+console.log('[QuickAdd] Indirizzo cifrato con successo');
+
+// 🔐 CIFRA P.IVA (se presente)
+let pivaEncrypted = null;
+if (form.piva.trim()) {
+  pivaEncrypted = await crypto.encryptFields(
+    scope,
+    'accounts',
+    '',
+    { vat_number: form.piva.trim() }
+  );
+  if (!pivaEncrypted?.vat_number_enc || !pivaEncrypted?.vat_number_iv) {
+    throw new Error('Cifratura P.IVA fallita');
+  }
+  console.log('[QuickAdd] P.IVA cifrata con successo');
+}
+
+// Prepara i dati custom (SOLO città, tipo, note in chiaro)
+const customData = {
+  city: form.citta.trim(),
+  tipo_locale: form.tipoLocale.trim(),
+  notes: form.note.trim() || undefined,
+};
+
+// Prepara il contatto CON campi cifrati
+const contact = {
+  full_name_enc: contactNameEncrypted.full_name_enc,
+  full_name_iv: contactNameEncrypted.full_name_iv,
+  // Email cifrata
+  ...(emailEncrypted && {
+    email_enc: emailEncrypted.email_enc,
+    email_iv: emailEncrypted.email_iv,
+  }),
+  // Telefono cifrato
+  phone_enc: phoneEncrypted.phone_enc,
+  phone_iv: phoneEncrypted.phone_iv,
+};
+
+// Invia al backend
+const res = await fetch('/api/clients/upsert', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify({
+    name_enc: nameEncrypted.name_enc,
+    name_iv: nameEncrypted.name_iv,
+    name_bi: nameBlind,
+    // Indirizzo cifrato
+    address_enc: addressEncrypted.address_enc,
+    address_iv: addressEncrypted.address_iv,
+    // P.IVA cifrata (se presente)
+    ...(pivaEncrypted && {
+      vat_number_enc: pivaEncrypted.vat_number_enc,
+      vat_number_iv: pivaEncrypted.vat_number_iv,
+    }),
+    custom: customData,
+    contacts: [contact],
+  }),
+});
       
       // Prepara i dati custom
       const customData = {
