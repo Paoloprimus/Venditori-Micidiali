@@ -640,17 +640,37 @@ if (!actuallyReady || !crypto) {
   );
 }
   
-  return (
-    <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
-          Aggiungi Cliente HoReCa
+return (
+  <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
+    {/* Header */}
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
+        <button
+          onClick={() => window.location.href = '/'}
+          style={{
+            padding: '8px 16px',
+            border: '1px solid #d1d5db',
+            borderRadius: 6,
+            background: 'white',
+            cursor: 'pointer',
+            fontSize: 14,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8
+          }}
+          onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+        >
+          ← Home
+        </button>
+        <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>
+          Aggiungi Cliente
         </h1>
-        <p style={{ color: '#6b7280' }}>
-          Compila il form manualmente o attiva il dialogo vocale per inserire i dati a voce.
-        </p>
       </div>
+      <p style={{ color: '#6b7280' }}>
+        Compila il form manualmente o attiva il dialogo vocale per inserire i dati a voce.
+      </p>
+    </div>
 
       {/* Controlli dialogo vocale */}
       <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
