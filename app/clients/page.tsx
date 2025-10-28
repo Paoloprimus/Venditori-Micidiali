@@ -157,49 +157,6 @@ if (crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) {
 }, [authChecked, ready, unlock, prewarm]);
 
 
-  async function loadPage(p: number): Promise<void> {
-    if (!crypto || !userId) return;
-    setLoading(true);
-    const from = p * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
-
-const { data, error } = await supabase
-  .from("accounts")
-.select(
-  "id,created_at," +
-  "name," + // unico plain che esiste oggi
-  "name_enc,name_iv," +
-  "email_enc,email_iv," +
-  "phone_enc,phone_iv," +
-  "vat_number_enc,vat_number_iv," +
-  "notes_enc,notes_iv"
-)
-
-  .order("created_at", { ascending: false })
-  .range(from, to);
-
-
-if (error) {
-  console.error("[/clients] load error:", error);
-  setLoading(false);
-  return;
-}
-
-// ✅ AGGIUNGI QUI QUESTI LOG (con cast any)
-if (data && data.length > 0) {
-  const firstRecord = data[0] as any;
-  console.log('🔍 [DEBUG] Primo record RAW da Supabase:', firstRecord);
-  console.log('🔍 [DEBUG] Tipo name_enc:', typeof firstRecord.name_enc);
-  console.log('🔍 [DEBUG] Valore name_enc:', firstRecord.name_enc);
-  console.log('🔍 [DEBUG] È Buffer?', firstRecord.name_enc instanceof Buffer);
-  console.log('🔍 [DEBUG] È Uint8Array?', firstRecord.name_enc instanceof Uint8Array);
-  console.log('🔍 [DEBUG] name_enc length:', firstRecord.name_enc?.length);
-}
-    
-// tipizziamo con una variabile intermedia per evitare l'errore del ParserError
-const rowsAny = (data ?? []) as any[];
-const plain: PlainAccount[] = [];
-
 async function loadPage(p: number): Promise<void> {
   if (!crypto || !userId) return;
   setLoading(true);
@@ -208,15 +165,25 @@ async function loadPage(p: number): Promise<void> {
 
   const { data, error } = await supabase
     .from("accounts")
-    // ... query
-    
+    .select(
+      "id,created_at," +
+      "name," +
+      "name_enc,name_iv," +
+      "email_enc,email_iv," +
+      "phone_enc,phone_iv," +
+      "vat_number_enc,vat_number_iv," +
+      "notes_enc,notes_iv"
+    )
+    .order("created_at", { ascending: false })
+    .range(from, to);
+
   if (error) {
     console.error("[/clients] load error:", error);
     setLoading(false);
     return;
   }
 
-  // ✅ AGGIUNGI QUI: Forza creazione scope keys PRIMA di decifrare
+  // ✅ Forza creazione scope keys PRIMA di decifrare
   try {
     console.log('[/clients] 🔧 Creo scope keys prima di decifrare...');
     await (crypto as any).getOrCreateScopeKeys('table:accounts');
@@ -225,97 +192,101 @@ async function loadPage(p: number): Promise<void> {
     console.error('[/clients] ❌ Errore creazione scope keys:', e);
   }
 
-  // ... resto del codice con il loop
-
+  // DEBUG logs (opzionali, puoi rimuoverli dopo il test)
+  if (data && data.length > 0) {
+    const firstRecord = data[0] as any;
+    console.log('🔍 [DEBUG] Primo record RAW:', firstRecord.name_enc?.substring(0, 20) + '...');
+  }
     
-for (const r0 of rowsAny) {
-  const r = r0 as RawAccount;
-  try {
-    const hasEncrypted =
-      !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc);
+  const rowsAny = (data ?? []) as any[];
+  const plain: PlainAccount[] = [];
 
-    if (!hasEncrypted) {
-      // ➜ record "plain": usa direttamente i campi in chiaro
+  for (const r0 of rowsAny) {
+    const r = r0 as RawAccount;
+    try {
+      const hasEncrypted =
+        !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc);
+
+      if (!hasEncrypted) {
+        plain.push({
+          id: r.id,
+          created_at: r.created_at,
+          name: String(r.name ?? ""),
+          email: String(r.email ?? ""),
+          phone: String(r.phone ?? ""),
+          vat_number: String(r.vat_number ?? ""),
+          notes: String(r.notes ?? ""),
+        });
+        continue;
+      }
+
+      // 🔧 FIX: Converti hex-string in base64
+      const hexToBase64 = (hexStr: any): string => {
+        if (!hexStr || typeof hexStr !== 'string') return '';
+        if (!hexStr.startsWith('\\x')) return hexStr;
+        
+        const hex = hexStr.slice(2);
+        const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+        return bytes;
+      };
+      
+      const recordForDecrypt = {
+        ...r,
+        name_enc: hexToBase64(r.name_enc),
+        name_iv: hexToBase64(r.name_iv),
+        email_enc: hexToBase64(r.email_enc),
+        email_iv: hexToBase64(r.email_iv),
+        phone_enc: hexToBase64(r.phone_enc),
+        phone_iv: hexToBase64(r.phone_iv),
+        vat_number_enc: hexToBase64(r.vat_number_enc),
+        vat_number_iv: hexToBase64(r.vat_number_iv),
+        notes_enc: hexToBase64(r.notes_enc),
+        notes_iv: hexToBase64(r.notes_iv),
+      };
+
+      if (typeof (crypto as any)?.decryptFields !== "function") {
+        throw new Error("decryptFields non disponibile");
+      }
+      
+      const toObj = (x: any): Record<string, unknown> =>
+        Array.isArray(x)
+          ? x.reduce((acc: Record<string, unknown>, it: any) => {
+              if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
+              return acc;
+            }, {})
+          : ((x ?? {}) as Record<string, unknown>);
+
+      const decAny = await (crypto as any).decryptFields(
+        "table:accounts", "accounts", recordForDecrypt.id, recordForDecrypt,
+        ["name", "email", "phone", "vat_number", "notes"]
+      );
+      const dec = toObj(decAny);
+
       plain.push({
         id: r.id,
         created_at: r.created_at,
-        name: String(r.name ?? ""),
-        email: String(r.email ?? ""),
-        phone: String(r.phone ?? ""),
-        vat_number: String(r.vat_number ?? ""),
-        notes: String(r.notes ?? ""),
+        name:       String(dec.name ?? ""),
+        email:      String(dec.email ?? ""),
+        phone:      String(dec.phone ?? ""),
+        vat_number: String(dec.vat_number ?? ""),
+        notes:      String(dec.notes ?? ""),
       });
-      continue;
+    } catch (e) {
+      console.warn("[/clients] decrypt error for", r.id, e);
+      plain.push({
+        id: r.id,
+        created_at: r.created_at,
+        name: "", email: "", phone: "", vat_number: "", notes: "",
+      });
     }
-
-    // 🔧 FIX: Converti hex-string (\\x...) in base64 per il decryptor
-    const hexToBase64 = (hexStr: any): string => {
-      if (!hexStr || typeof hexStr !== 'string') return '';
-      if (!hexStr.startsWith('\\x')) return hexStr;
-      
-      const hex = hexStr.slice(2); // rimuovi \x
-      const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
-      return bytes;
-    };
-    
-    // Crea una copia del record con i campi convertiti
-    const recordForDecrypt = {
-      ...r,
-      name_enc: hexToBase64(r.name_enc),
-      name_iv: hexToBase64(r.name_iv),
-      email_enc: hexToBase64(r.email_enc),
-      email_iv: hexToBase64(r.email_iv),
-      phone_enc: hexToBase64(r.phone_enc),
-      phone_iv: hexToBase64(r.phone_iv),
-      vat_number_enc: hexToBase64(r.vat_number_enc),
-      vat_number_iv: hexToBase64(r.vat_number_iv),
-      notes_enc: hexToBase64(r.notes_enc),
-      notes_iv: hexToBase64(r.notes_iv),
-    };
-
-    // ➜ record cifrato: decripta
-    if (typeof (crypto as any)?.decryptFields !== "function") {
-      throw new Error("decryptFields non disponibile sul servizio crypto");
-    }
-    const toObj = (x: any): Record<string, unknown> =>
-      Array.isArray(x)
-        ? x.reduce((acc: Record<string, unknown>, it: any) => {
-            if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
-            return acc;
-          }, {})
-        : ((x ?? {}) as Record<string, unknown>);
-
-    const decAny = await (crypto as any).decryptFields(
-      "table:accounts", "accounts", recordForDecrypt.id, recordForDecrypt,
-      ["name", "email", "phone", "vat_number", "notes"]
-    );
-    const dec = toObj(decAny);
-
-    plain.push({
-      id: r.id,
-      created_at: r.created_at,
-      name:       String(dec.name ?? ""),
-      email:      String(dec.email ?? ""),
-      phone:      String(dec.phone ?? ""),
-      vat_number: String(dec.vat_number ?? ""),
-      notes:      String(dec.notes ?? ""),
-    });
-  } catch (e) {
-    console.warn("[/clients] decrypt error for", r.id, e);
-    plain.push({
-      id: r.id,
-      created_at: r.created_at,
-      name: "", email: "", phone: "", vat_number: "", notes: "",
-    });
   }
+
+  console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
+
+  setRows(plain);
+  setLoading(false);
+  setDiag((d) => ({ ...d, loaded: plain.length }));
 }
-
-    console.debug("[/clients] plain len:", plain.length, "sample:", plain[0]);
-
-    setRows(plain);
-    setLoading(false);
-    setDiag((d) => ({ ...d, loaded: plain.length }));
-  }
 
 // carica la pagina 0 appena la cifratura è sbloccata e c'è l'utente
 useEffect(() => {
