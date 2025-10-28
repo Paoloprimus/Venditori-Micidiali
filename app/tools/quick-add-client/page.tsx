@@ -598,19 +598,6 @@ const res = await fetch('/api/clients/upsert', {
   }),
 });
 
-      // Invia al backend
-      const res = await fetch('/api/clients/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          name_enc: nameEncrypted.name_enc,
-          name_iv: nameEncrypted.name_iv,
-          name_bi: nameBlind,
-          custom: customData,
-          contacts: [contact],
-        }),
-      });
-
       const data = await res.json();
 
       if (!res.ok) {
