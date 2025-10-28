@@ -200,6 +200,34 @@ if (data && data.length > 0) {
 const rowsAny = (data ?? []) as any[];
 const plain: PlainAccount[] = [];
 
+async function loadPage(p: number): Promise<void> {
+  if (!crypto || !userId) return;
+  setLoading(true);
+  const from = p * PAGE_SIZE;
+  const to = from + PAGE_SIZE - 1;
+
+  const { data, error } = await supabase
+    .from("accounts")
+    // ... query
+    
+  if (error) {
+    console.error("[/clients] load error:", error);
+    setLoading(false);
+    return;
+  }
+
+  // ✅ AGGIUNGI QUI: Forza creazione scope keys PRIMA di decifrare
+  try {
+    console.log('[/clients] 🔧 Creo scope keys prima di decifrare...');
+    await (crypto as any).getOrCreateScopeKeys('table:accounts');
+    console.log('[/clients] ✅ Scope keys creati');
+  } catch (e) {
+    console.error('[/clients] ❌ Errore creazione scope keys:', e);
+  }
+
+  // ... resto del codice con il loop
+
+    
 for (const r0 of rowsAny) {
   const r = r0 as RawAccount;
   try {
