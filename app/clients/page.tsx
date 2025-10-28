@@ -264,7 +264,7 @@ console.log('[/clients] 🔍 Decifro record:', {
 });
 
 const decAny = await (crypto as any).decryptFields(
-  "table:accounts", "accounts", recordForDecrypt.id, recordForDecrypt,
+  "table:accounts", "accounts", '', recordForDecrypt,
   ["name", "email", "phone", "vat_number", "notes"]
 );
 
