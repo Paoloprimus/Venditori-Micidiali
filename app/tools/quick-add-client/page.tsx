@@ -604,27 +604,6 @@ const res = await fetch('/api/clients/upsert', {
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify(payload),
 });
-      
-// Invia al backend
-const res = await fetch('/api/clients/upsert', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify({
-    name_enc: nameEncrypted.name_enc,
-    name_iv: nameEncrypted.name_iv,
-    name_bi: nameBlind,
-    // Indirizzo cifrato
-    address_enc: addressEncrypted.address_enc,
-    address_iv: addressEncrypted.address_iv,
-    // P.IVA cifrata (se presente)
-    ...(pivaEncrypted && {
-      vat_number_enc: pivaEncrypted.vat_number_enc,
-      vat_number_iv: pivaEncrypted.vat_number_iv,
-    }),
-    custom: customData,
-    contacts: [contact],
-  }),
-});
 
       const data = await res.json();
 
