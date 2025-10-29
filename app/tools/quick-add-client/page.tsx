@@ -57,6 +57,17 @@ async function logout() {
 
 const { crypto, ready } = useCrypto();
 
+  // Drawer
+const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+
+// Logout
+async function logout() {
+  try { sessionStorage.removeItem("repping:pph"); } catch {}
+  try { localStorage.removeItem("repping:pph"); } catch {}
+  await supabase.auth.signOut();
+  window.location.href = "/login";
+}
+
 // 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
 useEffect(() => {
   console.log('[QuickAdd] 🔍 useEffect triggered, crypto:', !!crypto);
