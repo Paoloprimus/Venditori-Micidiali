@@ -21,6 +21,7 @@ type RawAccount = {
 
   // encrypted (opzionali)
   name_enc?: any; name_iv?: any;
+  contact_name_enc?: any; contact_name_iv?: any;
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
@@ -34,6 +35,7 @@ type PlainAccount = {
   id: string;
   created_at: string;
   name: string;
+  contact_name: string;
   email: string;
   phone: string;
   vat_number: string;
@@ -195,6 +197,7 @@ useEffect(() => {
       .select(
       "id,created_at," +
       "name_enc,name_iv," +
+      "contact_name_enc,contact_name_iv," +
       "email_enc,email_iv," +
       "phone_enc,phone_iv," +
       "vat_number_enc,vat_number_iv," +
@@ -248,6 +251,8 @@ useEffect(() => {
           ...r,
           name_enc: hexToBase64(r.name_enc),
           name_iv: hexToBase64(r.name_iv),
+          contact_name_enc: hexToBase64(r.contact_name_enc),
+          contact_name_iv: hexToBase64(r.contact_name_iv),
           email_enc: hexToBase64(r.email_enc),
           email_iv: hexToBase64(r.email_iv),
           phone_enc: hexToBase64(r.phone_enc),
@@ -272,7 +277,7 @@ useEffect(() => {
 
         const decAny = await (crypto as any).decryptFields(
           "table:accounts", "accounts", '', recordForDecrypt,
-          ["name", "email", "phone", "vat_number", "address"]
+          ["name", "contact_name", "email", "phone", "vat_number", "address"]
         );
 
         const dec = toObj(decAny);
@@ -285,6 +290,7 @@ useEffect(() => {
           id: r.id,
           created_at: r.created_at,
           name: String(dec.name ?? ""),
+          contact_name: String(dec.contact_name ?? ""),
           email: String(dec.email ?? ""),
           phone: String(dec.phone ?? ""),
           vat_number: String(dec.vat_number ?? ""),
@@ -296,7 +302,7 @@ useEffect(() => {
         plain.push({
           id: r.id,
           created_at: r.created_at,
-          name: "", email: "", phone: "", vat_number: "", notes: "",
+          name: "", contact_name: "", email: "", phone: "", vat_number: "", notes: "",
         });
       }
     }
@@ -440,6 +446,7 @@ useEffect(() => {
             <thead className="bg-gray-50">
               <tr>
                 <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+                <th className="px-3 py-2 text-left">Contatto</th>
                 <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
                 <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
                 <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
@@ -451,6 +458,7 @@ useEffect(() => {
               {view.map((r) => (
                 <tr key={r.id} className="border-t hover:bg-gray-50">
                   <td className="px-3 py-2">{r.name || "—"}</td>
+                  <td className="px-3 py-2">{r.contact_name || "—"}</td>
                   <td className="px-3 py-2">{r.email || "—"}</td>
                   <td className="px-3 py-2">{r.phone || "—"}</td>
                   <td className="px-3 py-2">{r.vat_number || "—"}</td>
@@ -460,7 +468,7 @@ useEffect(() => {
               ))}
               {!loading && actuallyReady && view.length === 0 && (
                 <tr>
-                  <td className="px-3 py-8 text-center text-gray-500" colSpan={6}>Nessun cliente trovato.</td>
+                  <td className="px-3 py-8 text-center text-gray-500" colSpan={7}>Nessun cliente trovato.</td>
                 </tr>
               )}
             </tbody>
