@@ -3,6 +3,9 @@
 import { useRouter } from 'next/navigation';
 import { useState, useEffect, useRef } from 'react';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
+import { useDrawers, LeftDrawer, RightDrawer } from '@/components/Drawers';
+import TopBar from '@/components/home/TopBar';
+import { supabase } from '@/lib/supabase/client';
 
 // Tipi di locali HoReCa predefiniti
 const TIPO_LOCALE = [
@@ -40,6 +43,17 @@ type DialogState = {
 
 export default function QuickAddClientPage() {
   const router = useRouter();
+
+  // Drawer
+const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+
+// Logout
+async function logout() {
+  try { sessionStorage.removeItem("repping:pph"); } catch {}
+  try { localStorage.removeItem("repping:pph"); } catch {}
+  await supabase.auth.signOut();
+  window.location.href = "/login";
+}
 
 const { crypto, ready } = useCrypto();
 
@@ -714,32 +728,26 @@ if (!actuallyReady || !crypto) {
 }
   
 return (
-  <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
-    {/* Header */}
-    <div style={{ marginBottom: 24 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 16 }}>
-        <button
-          onClick={() => window.location.href = '/'}
-          style={{
-            padding: '8px 16px',
-            border: '1px solid #d1d5db',
-            borderRadius: 6,
-            background: 'white',
-            cursor: 'pointer',
-            fontSize: 14,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
-          onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
-        >
-          ← Home
-        </button>
-        <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>
-          Aggiungi Cliente
-        </h1>
-      </div>
+  <>
+    {/* TopBar */}
+    <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
+      <TopBar
+        title="Aggiungi Cliente"
+        onOpenLeft={openLeft}
+        onOpenDati={openDati}
+        onOpenDocs={openDocs}
+        onOpenImpostazioni={openImpostazioni}
+        onLogout={logout}
+      />
+    </div>
+
+    <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
+      {/* Spacer per TopBar */}
+      <div style={{ height: 70 }} />
+
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+  
       <p style={{ color: '#6b7280' }}>
         Compila il form manualmente o attiva il dialogo vocale per inserire i dati a voce.
       </p>
@@ -1026,6 +1034,13 @@ return (
           <span style={{ color: '#ef4444', fontWeight: 500 }}>{errorMsg}</span>
         )}
       </div>
+
+          {/* Drawer */}
+      <div style={{ position: "relative", zIndex: 2001 }}>
+        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
+        <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
+
+    
     </div>
   );
 }
