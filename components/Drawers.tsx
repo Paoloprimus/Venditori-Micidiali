@@ -1,3 +1,19 @@
+/**
+ * ============================================================================
+ * COMPONENTE: Drawers (navigazione laterale destra e sinistra)
+ * ============================================================================
+ * 
+ * PERCORSO: /components/Drawers.tsx
+ * 
+ * MODIFICHE PER IMPORT CLIENTI:
+ * - Riga ~248: Aggiunta funzione goImportClients()
+ * - Riga ~329: Collegato bottone "📥 Importa lista" alla funzione
+ * 
+ * La funzione naviga a: /tools/import-clients
+ * 
+ * ============================================================================
+ */
+
 // components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
