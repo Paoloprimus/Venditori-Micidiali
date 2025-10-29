@@ -224,14 +224,12 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
             console.log("[CryptoProvider] Auto-unlock con pass da storage");
             await unlock(pass);
             await prewarm(DEFAULT_SCOPES);
-            try {
-              // NON cancelliamo la password finché il singleton non funziona
-              console.log('[CryptoProvider] Password mantenuta in storage per navigazione tra pagine');
-              // sessionStorage.removeItem('repping:pph');
-            } catch {}
-            try {
-              localStorage.removeItem("repping:pph");
-            } catch {}
+try {
+  // NON cancelliamo la password - mantienila per tutta la sessione
+  console.log('[CryptoProvider] Password mantenuta in storage per navigazione tra pagine');
+  // sessionStorage.removeItem('repping:pph');
+  // localStorage.removeItem("repping:pph");  // ← COMMENTATA!
+} catch {}
           } catch (e) {
             // Evita rumorosità: OperationError può arrivare da scope racing altrove
             const msg = String((e as any)?.message || e || "");
