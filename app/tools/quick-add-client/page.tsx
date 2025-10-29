@@ -487,12 +487,12 @@ export default function QuickAddClientPage() {
         throw new Error('Calcolo blind index fallito: valore non valido ritornato');
       }
 
-      // Critta il nome contatto
+      // 🔐 CIFRA NOME CONTATTO (obbligatorio)
       const contactNameEncrypted = await crypto.encryptFields(
         scope,
-        'contacts',
+        'accounts',
         '',
-        { full_name: form.nomeContatto.trim() }
+        { contact_name: form.nomeContatto.trim() }
       );
 
       // ✅ VALIDAZIONE struttura nome contatto cifrato
@@ -503,7 +503,7 @@ export default function QuickAddClientPage() {
         );
       }
 
-      if (!contactNameEncrypted.full_name_enc || !contactNameEncrypted.full_name_iv) {
+      if (!contactNameEncrypted.contact_name_enc || !contactNameEncrypted.contact_name_iv) {
         throw new Error(
           'Cifratura nome contatto fallita: campi enc/iv mancanti nella risposta. ' +
           'Campi presenti: ' + Object.keys(contactNameEncrypted).join(', ')
@@ -511,8 +511,8 @@ export default function QuickAddClientPage() {
       }
 
       console.log('[QuickAdd] Nome contatto cifrato con successo:', {
-        hasEnc: !!contactNameEncrypted.full_name_enc,
-        hasIv: !!contactNameEncrypted.full_name_iv,
+        hasEnc: !!contactNameEncrypted.contact_name_enc,
+        hasIv: !!contactNameEncrypted.contact_name_iv,
       });
 
       // 🔐 CIFRA EMAIL (se presente)
@@ -583,6 +583,8 @@ export default function QuickAddClientPage() {
         name_bi: nameBlind,
         address_enc: addressEncrypted.address_enc,
         address_iv: addressEncrypted.address_iv,
+        contact_name_enc: contactNameEncrypted.contact_name_enc,
+        contact_name_iv: contactNameEncrypted.contact_name_iv,
         ...(pivaEncrypted && {
           vat_number_enc: pivaEncrypted.vat_number_enc,
           vat_number_iv: pivaEncrypted.vat_number_iv,
