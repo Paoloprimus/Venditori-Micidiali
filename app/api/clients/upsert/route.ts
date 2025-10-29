@@ -17,27 +17,23 @@ type CustomFields = {
 };
 
 type UpsertClientBody = {
-  // Nome cliente crittografato
+  // 🔐 Ditta (cifrati)
   name_enc?: string;
   name_iv?: string;
   name_bi?: string;
-  // 🔐 NUOVI: Indirizzo e P.IVA cifrati
   address_enc?: string;
   address_iv?: string;
   vat_number_enc?: string;
   vat_number_iv?: string;
-  // Campi custom (solo dati in chiaro per LLM)
+  
+  // 🔐 Contatto principale (cifrati)
+  email_enc?: string;
+  email_iv?: string;
+  phone_enc?: string;
+  phone_iv?: string;
+  
+  // 📝 Campi in chiaro per LLM
   custom?: CustomFields;
-  // Contatti con campi crittografati
-  contacts?: Array<{
-    full_name_enc: string;
-    full_name_iv: string;
-    // 🔐 Email e telefono cifrati
-    email_enc?: string;
-    email_iv?: string;
-    phone_enc?: string;
-    phone_iv?: string;
-  }>;
 };
 
 // --- Helpers
@@ -86,7 +82,7 @@ export async function POST(req: Request) {
     // 2) Input + validazioni minime
     const body = (await req.json()) as UpsertClientBody;
     
-    // Verifica che abbiamo i campi crittografati
+    // Verifica che abbiamo i campi crittografati della ditta
     if (!body.name_enc || !body.name_iv || !body.name_bi) {
       return NextResponse.json({ error: "encrypted_name_required" }, { status: 400 });
     }
@@ -108,13 +104,13 @@ export async function POST(req: Request) {
     let accountId: string | null = null;
 
     if (existingList && existingList.length > 0) {
-      // 4A) UPDATE (merge dei campi custom + aggiorna campi cifrati se presenti)
+      // 4A) UPDATE - Merge custom + aggiorna tutti i campi cifrati
       const existing = existingList[0];
       const mergedCustom = { ...(existing.custom ?? {}), ...(incomingCustom ?? {}) };
 
       const updateData: any = { custom: mergedCustom };
       
-      // 🔐 Aggiorna campi cifrati se presenti
+      // 🔐 Aggiorna campi cifrati ditta se presenti
       if (body.address_enc && body.address_iv) {
         updateData.address_enc = body.address_enc;
         updateData.address_iv = body.address_iv;
@@ -122,6 +118,16 @@ export async function POST(req: Request) {
       if (body.vat_number_enc && body.vat_number_iv) {
         updateData.vat_number_enc = body.vat_number_enc;
         updateData.vat_number_iv = body.vat_number_iv;
+      }
+      
+      // 🔐 Aggiorna campi cifrati contatto se presenti
+      if (body.email_enc && body.email_iv) {
+        updateData.email_enc = body.email_enc;
+        updateData.email_iv = body.email_iv;
+      }
+      if (body.phone_enc && body.phone_iv) {
+        updateData.phone_enc = body.phone_enc;
+        updateData.phone_iv = body.phone_iv;
       }
 
       const { data: updated, error: upErr } = await supabase
@@ -138,16 +144,18 @@ export async function POST(req: Request) {
 
       accountId = (updated && (updated as { id: string }).id) || existing.id;
     } else {
-      // 4B) INSERT con campi crittografati
+      // 4B) INSERT - Tutti i campi cifrati in accounts
       const insertData: any = {
         user_id: userId,
+        // 🔐 Ditta cifrata
         name_enc: body.name_enc,
         name_iv: body.name_iv,
         name_bi: body.name_bi,
+        // 📝 Custom in chiaro
         custom: incomingCustom ?? {},
       };
       
-      // 🔐 Aggiungi campi cifrati se presenti
+      // 🔐 Aggiungi campi cifrati ditta se presenti
       if (body.address_enc && body.address_iv) {
         insertData.address_enc = body.address_enc;
         insertData.address_iv = body.address_iv;
@@ -155,6 +163,16 @@ export async function POST(req: Request) {
       if (body.vat_number_enc && body.vat_number_iv) {
         insertData.vat_number_enc = body.vat_number_enc;
         insertData.vat_number_iv = body.vat_number_iv;
+      }
+      
+      // 🔐 Aggiungi campi cifrati contatto se presenti
+      if (body.email_enc && body.email_iv) {
+        insertData.email_enc = body.email_enc;
+        insertData.email_iv = body.email_iv;
+      }
+      if (body.phone_enc && body.phone_iv) {
+        insertData.phone_enc = body.phone_enc;
+        insertData.phone_iv = body.phone_iv;
       }
 
       const { data: inserted, error: insErr } = await supabase
@@ -170,40 +188,7 @@ export async function POST(req: Request) {
       accountId = (inserted as { id: string }).id;
     }
 
-    // 5) Inserisci contatti collegati (con crittografia)
-    if (accountId && Array.isArray(body.contacts) && body.contacts.length > 0) {
-      const toInsert = body.contacts
-        .map(c => {
-          const contact: any = {
-            account_id: accountId,
-            full_name_enc: c.full_name_enc,
-            full_name_iv: c.full_name_iv,
-            custom: {},
-          };
-          
-          // 🔐 Email e telefono cifrati
-          if (c.email_enc && c.email_iv) {
-            contact.email_enc = c.email_enc;
-            contact.email_iv = c.email_iv;
-          }
-          if (c.phone_enc && c.phone_iv) {
-            contact.phone_enc = c.phone_enc;
-            contact.phone_iv = c.phone_iv;
-          }
-          
-          return contact;
-        })
-        .filter(c => c.full_name_enc && c.full_name_iv);
-
-      if (toInsert.length > 0) {
-        const { error: cErr } = await supabase.from("contacts").insert(toInsert);
-        if (cErr) {
-          return NextResponse.json({ accountId, warning: "contacts_insert_failed", details: cErr.message });
-        }
-      }
-    }
-
-    // 6) Risposta OK
+    // 5) Risposta OK
     return NextResponse.json({ accountId });
   } catch (e: any) {
     return NextResponse.json({ error: "unexpected", details: e?.message ?? String(e) }, { status: 500 });
