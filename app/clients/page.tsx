@@ -207,7 +207,7 @@ async function loadPage(p: number): Promise<void> {
       const hasEncrypted =
       !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.address_enc);
 
-      // 🔧 FIX: Converti hex-string in base64
+// 🔧 FIX: Converti hex-string in base64
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
@@ -227,8 +227,8 @@ async function loadPage(p: number): Promise<void> {
         phone_iv: hexToBase64(r.phone_iv),
         vat_number_enc: hexToBase64(r.vat_number_enc),
         vat_number_iv: hexToBase64(r.vat_number_iv),
-        notes_enc: hexToBase64(r.notes_enc),
-        notes_iv: hexToBase64(r.notes_iv),
+        address_enc: hexToBase64(r.address_enc),
+        address_iv: hexToBase64(r.address_iv),
       };
 
       if (typeof (crypto as any)?.decryptFields !== "function") {
@@ -243,39 +243,26 @@ async function loadPage(p: number): Promise<void> {
             }, {})
           : ((x ?? {}) as Record<string, unknown>);
 
-// ✅ LOG PRIMA
-console.log('[/clients] 🔍 Decifro record:', {
-  id: recordForDecrypt.id.substring(0, 8) + '...',
-  name_enc: recordForDecrypt.name_enc?.substring(0, 20) + '...',
-  name_iv: recordForDecrypt.name_iv
-});
+      const decAny = await (crypto as any).decryptFields(
+        "table:accounts", "accounts", '', recordForDecrypt,
+        ["name", "email", "phone", "vat_number", "address"]
+      );
 
-const decAny = await (crypto as any).decryptFields(
-  "table:accounts", "accounts", '', recordForDecrypt,
-  ["name", "email", "phone", "vat_number", "address"]  // ← address invece di notes!
-);
+      const dec = toObj(decAny);
 
-console.log('[/clients] 🔍 Risultato decAny:', decAny);
-console.log('[/clients] 🔍 È array?', Array.isArray(decAny));
+      // ✅ Estrai note dal custom (sono in chiaro!)
+      const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
+      const notes = customObj.notes || "";
 
-const dec = toObj(decAny);
-
-console.log('[/clients] 🔍 Dopo toObj:', dec);
-
-// ✅ Estrai note dal custom (sono in chiaro!)
-const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
-const notes = customObj.notes || "";
-
-plain.push({
-  id: r.id,
-  created_at: r.created_at,
-  name: String(dec.name ?? ""),
-  email: String(dec.email ?? ""),
-  phone: String(dec.phone ?? ""),
-  vat_number: String(dec.vat_number ?? ""),
-  notes: String(notes),  // ← Dal custom, non cifrato
-});
-
+      plain.push({
+        id: r.id,
+        created_at: r.created_at,
+        name: String(dec.name ?? ""),
+        email: String(dec.email ?? ""),
+        phone: String(dec.phone ?? ""),
+        vat_number: String(dec.vat_number ?? ""),
+        notes: String(notes),
+      });
       
     } catch (e) {
       console.warn("[/clients] decrypt error for", r.id, e);
@@ -286,10 +273,6 @@ plain.push({
       });
     }
   }
-
-  console.log("[/clients] plain len:", plain.length);
-console.log("[/clients] sample completo:", JSON.stringify(plain[0], null, 2));
-console.log("[/clients] nomi di tutti i clienti:", plain.map(p => p.name));
 
   setRows(plain);
   setLoading(false);
@@ -310,48 +293,48 @@ useEffect(() => {
 }, [page, actuallyReady, crypto, userId]);
 
   
-  const view: PlainAccount[] = useMemo(() => {
-    const norm = (s: string) => (s || "").toLocaleLowerCase();
-    let arr = [...rows];
-    if (q.trim()) {
-      const qq = norm(q);
-      arr = arr.filter((r) =>
-        norm(r.name).includes(qq) ||
-        norm(r.email).includes(qq) ||
-        norm(r.phone).includes(qq) ||
-        norm(r.vat_number).includes(qq) ||
-        norm(r.notes).includes(qq)
-      );
-    }
-    arr.sort((a, b) => {
-      let va: string | number = a[sortBy] ?? "";
-      let vb: string | number = b[sortBy] ?? "";
-      if (sortBy === "created_at") {
-        va = new Date(a.created_at).getTime();
-        vb = new Date(b.created_at).getTime();
-      }
-      return sortDir === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (vb < va ? -1 : vb > va ? 1 : 0);
-    });
-    return arr;
-  }, [rows, q, sortBy, sortDir]);
-
-  if (!authChecked) {
-    return <div className="p-6 text-gray-600">Verifico sessione…</div>;
-  }
-
-  if (!userId) {
-    return (
-      <div className="p-6">
-        <div className="mb-2 font-semibold">Sessione non attiva</div>
-        <p className="text-sm text-gray-600">
-          Effettua di nuovo l'accesso per vedere i tuoi clienti.
-        </p>
-        <button className="px-3 py-2 rounded border mt-3" onClick={() => window.location.href = "/login"}>
-          Vai al login
-        </button>
-      </div>
+const view: PlainAccount[] = useMemo(() => {
+  const norm = (s: string) => (s || "").toLocaleLowerCase();
+  let arr = [...rows];
+  if (q.trim()) {
+    const qq = norm(q);
+    arr = arr.filter((r) =>
+      norm(r.name).includes(qq) ||
+      norm(r.email).includes(qq) ||
+      norm(r.phone).includes(qq) ||
+      norm(r.vat_number).includes(qq) ||
+      norm(r.notes).includes(qq)
     );
   }
+  arr.sort((a, b) => {
+    let va: string | number = a[sortBy] ?? "";
+    let vb: string | number = b[sortBy] ?? "";
+    if (sortBy === "created_at") {
+      va = new Date(a.created_at).getTime();
+      vb = new Date(b.created_at).getTime();
+    }
+    return sortDir === "asc" ? (va < vb ? -1 : va > vb ? 1 : 0) : (vb < va ? -1 : vb > va ? 1 : 0);
+  });
+  return arr;
+}, [rows, q, sortBy, sortDir]);
+
+if (!authChecked) {
+  return <div className="p-6 text-gray-600">Verifico sessione…</div>;
+}
+
+if (!userId) {
+  return (
+    <div className="p-6">
+      <div className="mb-2 font-semibold">Sessione non attiva</div>
+      <p className="text-sm text-gray-600">
+        Effettua di nuovo l'accesso per vedere i tuoi clienti.
+      </p>
+      <button className="px-3 py-2 rounded border mt-3" onClick={() => window.location.href = "/login"}>
+        Vai al login
+      </button>
+    </div>
+  );
+}
 
 if (!actuallyReady || !crypto) {
   return (
@@ -376,9 +359,8 @@ if (!actuallyReady || !crypto) {
               "table:accounts","table:contacts","table:products","table:profiles",
               "table:notes","table:conversations","table:messages","table:proposals",
             ]);
-            await loadPage(0);           // ← aggiungi questa riga
-            setPage(0);                  // opzionale, ma comodo
-            setPass("");
+            await loadPage(0);
+            setPage(0);
             setPass("");
           } catch (e) {
             console.error("[/clients] unlock failed:", e);
@@ -395,90 +377,89 @@ if (!actuallyReady || !crypto) {
   );
 }
 
-
-  return (
-    <div className="p-6 max-w-6xl mx-auto space-y-4">
-      <div className="text-xs text-gray-500">
-        auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
-      </div>
-
-      <div className="flex items-center gap-4 mb-4">
-  <button
-    onClick={() => window.location.href = '/'}
-    className="px-3 py-2 rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
-  >
-    ← Home
-  </button>
-  <h1 className="text-2xl font-bold">Clienti</h1>
-</div>
-      
-      <div className="flex gap-2 items-center">
-        <input
-          className="border rounded p-2 flex-1"
-          placeholder="Cerca (nome, email, telefono, P. IVA, note)"
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-        />
-        <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
-      </div>
-
-      <div className="overflow-auto border rounded">
-        <table className="min-w-full text-sm">
-          <thead className="bg-gray-50">
-            <tr>
-              <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-              <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-              <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-              <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-              <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-              <th className="px-3 py-2 text-left">Note</th>
-            </tr>
-          </thead>
-          <tbody>
-            {view.map((r) => (
-              <tr key={r.id} className="border-t hover:bg-gray-50">
-                <td className="px-3 py-2">{r.name || "—"}</td>
-                <td className="px-3 py-2">{r.email || "—"}</td>
-                <td className="px-3 py-2">{r.phone || "—"}</td>
-                <td className="px-3 py-2">{r.vat_number || "—"}</td>
-                <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
-                <td className="px-3 py-2">{r.notes || "—"}</td>
-              </tr>
-            ))}
-            {!loading && actuallyReady && view.length === 0 && (
-              <tr>
-                <td className="px-3 py-8 text-center text-gray-500" colSpan={6}>Nessun cliente trovato.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex items-center justify-between">
-        <button
-          className="px-3 py-2 rounded border"
-          disabled={page === 0 || loading || !actuallyReady}
-          onClick={() => setPage((p) => Math.max(0, p - 1))}
-        >◀︎ Precedenti</button>
-        <div className="text-sm text-gray-600">Pagina {page + 1}</div>
-        <button
-          className="px-3 py-2 rounded border"
-          disabled={loading || !actuallyReady || rows.length < PAGE_SIZE}
-          onClick={() => setPage((p) => p + 1)}
-        >Successivi ▶︎</button>
-      </div>
-
-      {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
+return (
+  <div className="p-6 max-w-6xl mx-auto space-y-4">
+    <div className="text-xs text-gray-500">
+      auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
     </div>
-  );
+
+    <div className="flex items-center gap-4 mb-4">
+      <button
+        onClick={() => window.location.href = '/'}
+        className="px-3 py-2 rounded border border-gray-300 hover:bg-gray-50 flex items-center gap-2"
+      >
+        ← Home
+      </button>
+      <h1 className="text-2xl font-bold">Clienti</h1>
+    </div>
+    
+    <div className="flex gap-2 items-center">
+      <input
+        className="border rounded p-2 flex-1"
+        placeholder="Cerca (nome, email, telefono, P. IVA, note)"
+        value={q}
+        onChange={(e) => setQ(e.target.value)}
+      />
+      <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
+    </div>
+
+    <div className="overflow-auto border rounded">
+      <table className="min-w-full text-sm">
+        <thead className="bg-gray-50">
+          <tr>
+            <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+            <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+            <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+            <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+            <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+            <th className="px-3 py-2 text-left">Note</th>
+          </tr>
+        </thead>
+        <tbody>
+          {view.map((r) => (
+            <tr key={r.id} className="border-t hover:bg-gray-50">
+              <td className="px-3 py-2">{r.name || "—"}</td>
+              <td className="px-3 py-2">{r.email || "—"}</td>
+              <td className="px-3 py-2">{r.phone || "—"}</td>
+              <td className="px-3 py-2">{r.vat_number || "—"}</td>
+              <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
+              <td className="px-3 py-2">{r.notes || "—"}</td>
+            </tr>
+          ))}
+          {!loading && actuallyReady && view.length === 0 && (
+            <tr>
+              <td className="px-3 py-8 text-center text-gray-500" colSpan={6}>Nessun cliente trovato.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+
+    <div className="flex items-center justify-between">
+      <button
+        className="px-3 py-2 rounded border"
+        disabled={page === 0 || loading || !actuallyReady}
+        onClick={() => setPage((p) => Math.max(0, p - 1))}
+      >◀︎ Precedenti</button>
+      <div className="text-sm text-gray-600">Pagina {page + 1}</div>
+      <button
+        className="px-3 py-2 rounded border"
+        disabled={loading || !actuallyReady || rows.length < PAGE_SIZE}
+        onClick={() => setPage((p) => p + 1)}
+      >Successivi ▶︎</button>
+    </div>
+
+    {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
+  </div>
+);
 }
 
 function Th({ label, k, sortBy, sortDir, onClick }: { label: string; k: SortKey; sortBy: SortKey; sortDir: "asc" | "desc"; onClick: (k: SortKey) => void }) {
-  const active = sortBy === k;
-  return (
-    <th className="px-3 py-2 text-left cursor-pointer select-none" onClick={() => onClick(k)}>
-      <span className={active ? "font-semibold" : ""}>{label}</span>
-      {active ? <span> {sortDir === "asc" ? "▲" : "▼"}</span> : null}
-    </th>
-  );
+const active = sortBy === k;
+return (
+  <th className="px-3 py-2 text-left cursor-pointer select-none" onClick={() => onClick(k)}>
+    <span className={active ? "font-semibold" : ""}>{label}</span>
+    {active ? <span> {sortDir === "asc" ? "▲" : "▼"}</span> : null}
+  </th>
+);
 }
