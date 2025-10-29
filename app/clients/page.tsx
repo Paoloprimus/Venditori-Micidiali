@@ -74,11 +74,15 @@ export default function ClientsPage(): JSX.Element {
 
   const [pass, setPass] = useState("");
 
-  // Logout
-  async function logout() {
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
+// Logout
+async function logout() {
+  // Pulisci la passphrase
+  try { sessionStorage.removeItem("repping:pph"); } catch {}
+  try { localStorage.removeItem("repping:pph"); } catch {}
+  
+  await supabase.auth.signOut();
+  window.location.href = "/login";
+}
 
   // 🔐 (disattivato) Auto-unlock locale in /clients: lasciamo che ci pensi il CryptoProvider
   useEffect(() => {
@@ -147,9 +151,6 @@ export default function ClientsPage(): JSX.Element {
         await unlock(pass);
         await prewarm(DEFAULT_SCOPES);
 
-        // cleanup ritardato: evitiamo di cancellare la pass troppo presto
-        try { setTimeout(() => sessionStorage.removeItem("repping:pph"), 10000); } catch {}
-        try { setTimeout(() => localStorage.removeItem("repping:pph"), 10000); } catch {}
       } catch (e: any) {
         const msg = String(e?.message || e || "");
         // non spammiamo OperationError "falso positivo"
