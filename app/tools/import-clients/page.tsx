@@ -245,7 +245,7 @@ export default function ImportClientsPage() {
       // IMPORTANTE: Assicurati che lo scope sia inizializzato
       try {
         console.log("🔐 Inizializzazione scope table:accounts...");
-        await crypto.ensureScope("table:accounts");
+        await crypto.prewarm(["table:accounts"]);
         console.log("✅ Scope table:accounts pronto!");
       } catch (err: any) {
         console.error("❌ Errore init scope:", err);
