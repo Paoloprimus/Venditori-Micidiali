@@ -115,53 +115,74 @@ async function logout() {
     return () => { alive = false; };
   }, []);
 
-  // 🔐 Auto-unlock dal login: legge la pass da session/localStorage e sblocca + prewarm (con mini-retry)
-  useEffect(() => {
-    if (!authChecked) return;       // aspetta check auth
-    // Controlla se è davvero unlocked, non fare affidamento su ready
-    if (crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) {
-      console.log('[/clients] Crypto già unlocked, skip auto-unlock');
-      return;
+// 🔐 Auto-unlock FORZATO: sblocca e carica dati
+useEffect(() => {
+  if (!authChecked || !crypto) return;
+  
+  console.log('[/clients] 🔍 Check unlock status:', {
+    isUnlocked: crypto.isUnlocked?.(),
+    unlockingInProgress: unlockingRef.current,
+  });
+  
+  // Se già unlocked, skip
+  if (typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) {
+    console.log('[/clients] ✅ Crypto già unlocked');
+    return;
+  }
+  
+  // Se già sta unlockando, skip
+  if (unlockingRef.current) {
+    console.log('[/clients] ⏳ Unlock già in corso');
+    return;
+  }
+
+  // Prova a leggere la passphrase
+  const pass = 
+    typeof window !== 'undefined'
+      ? (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph') || '')
+      : '';
+
+  console.log('[/clients] 🔑 Passphrase trovata:', !!pass);
+  
+  if (!pass) {
+    console.log('[/clients] ❌ Nessuna passphrase in storage');
+    return;
+  }
+
+  // FORZA unlock + caricamento dati
+  (async () => {
+    try {
+      unlockingRef.current = true;
+      setDiag((d) => ({ ...d, passInStorage: true, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
+      
+      console.log('[/clients] 🔓 Avvio unlock...');
+      await unlock(pass);
+      console.log('[/clients] ✅ Unlock completato!');
+      
+      console.log('[/clients] 🔧 Avvio prewarm...');
+      await prewarm(DEFAULT_SCOPES);
+      console.log('[/clients] ✅ Prewarm completato!');
+      
+      // 🚀 FORZA caricamento dati dopo unlock
+      console.log('[/clients] 📊 Carico i dati...');
+      await loadPage(0);
+      setPage(0);
+      console.log('[/clients] ✅ Dati caricati!');
+      
+    } catch (e: any) {
+      const msg = String(e?.message || e || '');
+      console.error('[/clients] ❌ Unlock fallito:', msg);
+      
+      // Se fallisce, pulisci passphrase invalida
+      if (!/OperationError/i.test(msg)) {
+        sessionStorage.removeItem('repping:pph');
+        localStorage.removeItem('repping:pph');
+      }
+    } finally {
+      unlockingRef.current = false;
     }
-    if (unlockingRef.current) return;
-
-    const readPass = () =>
-      typeof window !== "undefined"
-        ? (sessionStorage.getItem("repping:pph") ||
-           localStorage.getItem("repping:pph") || "")
-        : "";
-
-    (async () => {
-      // mini-retry: fino a 5 tentativi ogni 200ms (≈1s totale) per evitare gare di timing
-      let pass = readPass();
-      let tries = 0;
-      while (!pass && tries < 5) {
-        await new Promise(r => setTimeout(r, 200));
-        pass = readPass();
-        tries++;
-      }
-
-      setDiag((d) => ({ ...d, passInStorage: !!pass }));
-      if (!pass) return;
-
-      try {
-        unlockingRef.current = true;
-        setDiag((d) => ({ ...d, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
-
-        await unlock(pass);
-        await prewarm(DEFAULT_SCOPES);
-
-      } catch (e: any) {
-        const msg = String(e?.message || e || "");
-        // non spammiamo OperationError "falso positivo"
-        if (!/OperationError/i.test(msg)) {
-          console.error("[/clients] unlock failed:", e);
-        }
-      } finally {
-        unlockingRef.current = false;
-      }
-    })();
-  }, [authChecked, ready, unlock, prewarm, crypto]);
+  })();
+}, [authChecked, crypto, unlock, prewarm]);
 
   async function loadPage(p: number): Promise<void> {
     if (!crypto || !userId) return;
