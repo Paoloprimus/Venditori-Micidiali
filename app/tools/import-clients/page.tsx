@@ -1,27 +1,37 @@
 /**
  * ============================================================================
- * PAGINA: Import Clienti da CSV
+ * PAGINA: Import Clienti (Multipli Formati)
  * ============================================================================
  * 
  * PERCORSO: /app/tools/import-clients/page.tsx
  * URL: https://reping.app/tools/import-clients
  * 
  * DESCRIZIONE:
- * Pagina completa per l'importazione massiva di clienti da file CSV.
+ * Pagina completa per l'importazione massiva di clienti da file multipli.
  * Include 5 step: Upload → Mapping → Preview → Import → Report
  * 
+ * FORMATI SUPPORTATI:
+ * - CSV: Parsing con csv-parse
+ * - XLSX/XLS: Parsing con libreria xlsx
+ * - PDF: Estrazione testo con pdf-parse (solo testo stampato, no scansioni)
+ * - Foto (JPG, JPEG, PNG, HEIC): OCR con Tesseract.js (solo testo stampato)
+ * 
  * FUNZIONALITÀ:
- * - Upload CSV con drag & drop
+ * - Upload universale con drag & drop
+ * - Riconoscimento automatico formato da estensione
  * - Auto-detection intelligente delle colonne (match esatti + parziali)
  * - Mapping manuale con dropdown
  * - Validazione campi obbligatori
  * - Cifratura automatica campi sensibili (usa scope "table:accounts")
  * - Gestione duplicati tramite blind index
- * - Progress bar durante import
+ * - Progress bar durante parsing e import
  * - Report dettagliato finale
  * 
  * DIPENDENZE:
- * - csv-parse/browser/esm/sync (già in package.json)
+ * - csv-parse/browser/esm/sync (per CSV)
+ * - xlsx (per Excel)
+ * - pdf-parse (per PDF)
+ * - tesseract.js (per OCR foto)
  * - window.cryptoSvc (fornito da CryptoProvider)
  * - API /api/clients/upsert (per salvare i clienti)
  * 
@@ -36,6 +46,8 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { parse } from "csv-parse/browser/esm/sync";
+import * as XLSX from "xlsx";
+import { createWorker } from "tesseract.js";
 import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
 import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
@@ -112,6 +124,8 @@ export default function ImportClientsPage() {
   const [mapping, setMapping] = useState<ColumnMapping>({});
   const [processedClients, setProcessedClients] = useState<ProcessedClient[]>([]);
   const [importProgress, setImportProgress] = useState(0);
+  const [parsingProgress, setParsingProgress] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<string>("");
   const [importResults, setImportResults] = useState<{
     success: number;
     failed: number;
@@ -164,51 +178,242 @@ export default function ImportClientsPage() {
     return detected;
   };
 
-  // Gestione upload file
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  // ==================== PARSER PER OGNI FORMATO ====================
 
-    const reader = new FileReader();
-    
-    reader.onload = (event) => {
+  // Parser CSV
+  async function parseCSV(file: File): Promise<{ headers: string[]; data: any[] }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        try {
+          const csvText = event.target?.result as string;
+          const records = parse(csvText, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true,
+            bom: true,
+          });
+
+          if (records.length === 0) {
+            reject(new Error("Il file CSV è vuoto!"));
+            return;
+          }
+
+          const headers = Object.keys(records[0]);
+          resolve({ headers, data: records });
+        } catch (error: any) {
+          reject(new Error(`Errore parsing CSV: ${error.message}`));
+        }
+      };
+      
+      reader.onerror = () => reject(new Error("Errore nella lettura del file"));
+      reader.readAsText(file, "UTF-8");
+    });
+  }
+
+  // Parser XLSX
+  async function parseXLSX(file: File): Promise<{ headers: string[]; data: any[] }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      
+      reader.onload = (event) => {
+        try {
+          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const workbook = XLSX.read(data, { type: "array" });
+          
+          // Prendi il primo foglio
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          
+          // Converti in JSON
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: "" });
+          
+          if (jsonData.length === 0) {
+            reject(new Error("Il file Excel è vuoto!"));
+            return;
+          }
+
+          const headers = Object.keys(jsonData[0] as any);
+          resolve({ headers, data: jsonData });
+        } catch (error: any) {
+          reject(new Error(`Errore parsing Excel: ${error.message}`));
+        }
+      };
+      
+      reader.onerror = () => reject(new Error("Errore nella lettura del file"));
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Parser PDF
+  async function parsePDF(file: File): Promise<{ headers: string[]; data: any[] }> {
+    return new Promise(async (resolve, reject) => {
       try {
-        const csvText = event.target?.result as string;
+        setParsingProgress("Estrazione testo dal PDF...");
         
-        // Parse CSV con csv-parse
-        const records = parse(csvText, {
-          columns: true,
-          skip_empty_lines: true,
-          trim: true,
-          bom: true, // Gestisce UTF-8 BOM
-        });
-
-        if (records.length === 0) {
-          alert("Il file CSV è vuoto!");
+        // Leggi il file come ArrayBuffer
+        const arrayBuffer = await file.arrayBuffer();
+        
+        // Usa pdf-parse (importazione dinamica per evitare problemi SSR)
+        const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
+        const pdfData = await pdfParse(arrayBuffer);
+        
+        setParsingProgress("Analisi del testo...");
+        
+        // Estrai il testo e prova a riconoscere righe e colonne
+        const text = pdfData.text;
+        const lines = text.split("\n").filter(l => l.trim().length > 0);
+        
+        if (lines.length < 2) {
+          reject(new Error("Il PDF non contiene dati tabulari riconoscibili"));
           return;
         }
 
-        // Estrai headers dal primo record
-        const headers = Object.keys(records[0]);
+        // Prova a riconoscere la riga di intestazione
+        // (prima riga con più "parole" separate da spazi/tab)
+        const headerLine = lines[0];
+        const headers = headerLine.split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h.length > 0);
         
-        setRawData(records);
-        setCsvHeaders(headers);
-        
-        // Auto-detect mapping
-        const detectedMapping = autoDetectMapping(headers);
-        setMapping(detectedMapping);
-        
-        setStep("mapping");
+        if (headers.length === 0) {
+          reject(new Error("Impossibile identificare le colonne nel PDF"));
+          return;
+        }
+
+        // Prova a parsare le righe successive
+        const data: any[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(/\s{2,}|\t/).map(v => v.trim()).filter(v => v.length > 0);
+          
+          if (values.length === 0) continue;
+          
+          const row: any = {};
+          headers.forEach((header, idx) => {
+            row[header] = values[idx] || "";
+          });
+          data.push(row);
+        }
+
+        if (data.length === 0) {
+          reject(new Error("Nessun dato trovato nel PDF"));
+          return;
+        }
+
+        setParsingProgress(null);
+        resolve({ headers, data });
       } catch (error: any) {
-        alert(`Errore nel parsing del CSV: ${error.message}`);
+        setParsingProgress(null);
+        reject(new Error(`Errore parsing PDF: ${error.message}`));
       }
-    };
+    });
+  }
+
+  // Parser Immagini (OCR)
+  async function parseImage(file: File): Promise<{ headers: string[]; data: any[] }> {
+    return new Promise(async (resolve, reject) => {
+      try {
+        setParsingProgress("Inizializzazione OCR...");
+        
+        // Crea worker Tesseract
+        const worker = await createWorker("ita");
+        
+        setParsingProgress("Lettura del testo dall'immagine...");
+        
+        // Esegui OCR
+        const { data: { text } } = await worker.recognize(file);
+        
+        await worker.terminate();
+        
+        setParsingProgress("Analisi del testo estratto...");
+        
+        // Analizza il testo estratto (simile al PDF)
+        const lines = text.split("\n").filter(l => l.trim().length > 0);
+        
+        if (lines.length < 2) {
+          reject(new Error("L'immagine non contiene dati tabulari riconoscibili"));
+          return;
+        }
+
+        // Prima riga = headers
+        const headerLine = lines[0];
+        const headers = headerLine.split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h.length > 0);
+        
+        if (headers.length === 0) {
+          reject(new Error("Impossibile identificare le colonne nell'immagine"));
+          return;
+        }
+
+        // Righe successive = dati
+        const data: any[] = [];
+        for (let i = 1; i < lines.length; i++) {
+          const values = lines[i].split(/\s{2,}|\t/).map(v => v.trim()).filter(v => v.length > 0);
+          
+          if (values.length === 0) continue;
+          
+          const row: any = {};
+          headers.forEach((header, idx) => {
+            row[header] = values[idx] || "";
+          });
+          data.push(row);
+        }
+
+        if (data.length === 0) {
+          reject(new Error("Nessun dato trovato nell'immagine"));
+          return;
+        }
+
+        setParsingProgress(null);
+        resolve({ headers, data });
+      } catch (error: any) {
+        setParsingProgress(null);
+        reject(new Error(`Errore OCR: ${error.message}`));
+      }
+    });
+  }
+
+  // Gestione upload file (UNIVERSALE)
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Rileva estensione
+    const fileName = file.name.toLowerCase();
+    const extension = fileName.substring(fileName.lastIndexOf("."));
     
-    reader.onerror = () => {
-      alert("Errore nella lettura del file");
-    };
-    
-    reader.readAsText(file, "UTF-8");
+    setFileType(extension);
+    setParsingProgress("Caricamento file...");
+
+    try {
+      let result: { headers: string[]; data: any[] };
+
+      // Switch sul tipo di file
+      if (extension === ".csv") {
+        result = await parseCSV(file);
+      } else if (extension === ".xlsx" || extension === ".xls") {
+        result = await parseXLSX(file);
+      } else if (extension === ".pdf") {
+        result = await parsePDF(file);
+      } else if (extension === ".jpg" || extension === ".jpeg" || extension === ".heic" || extension === ".png") {
+        result = await parseImage(file);
+      } else {
+        alert(`Formato file non supportato: ${extension}\n\nFormati accettati: CSV, XLSX, XLS, PDF, JPG, JPEG, PNG, HEIC`);
+        setParsingProgress(null);
+        return;
+      }
+
+      // Unifica i risultati
+      setRawData(result.data);
+      setCsvHeaders(result.headers);
+      
+      // Auto-detect mapping
+      const detectedMapping = autoDetectMapping(result.headers);
+      setMapping(detectedMapping);
+      
+      setParsingProgress(null);
+      setStep("mapping");
+    } catch (error: any) {
+      setParsingProgress(null);
+      alert(error.message);
+    }
   };
 
   // Validazione singolo cliente
@@ -359,7 +564,7 @@ export default function ImportClientsPage() {
       {/* TopBar */}
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
         <TopBar
-          title="Importa Clienti CSV"
+          title="Importa Clienti"
           onOpenLeft={openLeft}
           onOpenDati={openDati}
           onOpenDocs={openDocs}
@@ -414,71 +619,113 @@ export default function ImportClientsPage() {
         {/* ========== STEP: UPLOAD ========== */}
         {step === "upload" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File CSV</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File</h2>
             <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Carica un file CSV con l'elenco dei tuoi clienti. Il sistema cifrerà automaticamente i dati sensibili.
+              Carica un file con l'elenco dei tuoi clienti. Supportiamo CSV, Excel, PDF e foto. Il sistema cifrerà automaticamente i dati sensibili.
             </p>
 
+            {/* Indicatore parsing progress */}
+            {parsingProgress && (
+              <div style={{ marginBottom: 24, padding: 16, background: "#fef3c7", borderRadius: 8, border: "1px solid #fbbf24" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ fontSize: 24 }}>⏳</div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "#92400e" }}>{parsingProgress}</div>
+                    <div style={{ fontSize: 12, color: "#92400e", marginTop: 4 }}>
+                      Attendi... l'operazione potrebbe richiedere alcuni secondi
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             <div
-              onClick={() => fileInputRef.current?.click()}
+              onClick={() => !parsingProgress && fileInputRef.current?.click()}
               style={{
                 border: "2px dashed #d1d5db",
                 borderRadius: 12,
                 padding: 48,
                 textAlign: "center",
-                cursor: "pointer",
+                cursor: parsingProgress ? "wait" : "pointer",
                 background: "#f9fafb",
                 transition: "all 0.2s",
+                opacity: parsingProgress ? 0.6 : 1,
               }}
               onMouseEnter={(e) => {
-                e.currentTarget.style.background = "#f3f4f6";
-                e.currentTarget.style.borderColor = "#9ca3af";
+                if (!parsingProgress) {
+                  e.currentTarget.style.background = "#f3f4f6";
+                  e.currentTarget.style.borderColor = "#9ca3af";
+                }
               }}
               onMouseLeave={(e) => {
-                e.currentTarget.style.background = "#f9fafb";
-                e.currentTarget.style.borderColor = "#d1d5db";
+                if (!parsingProgress) {
+                  e.currentTarget.style.background = "#f9fafb";
+                  e.currentTarget.style.borderColor = "#d1d5db";
+                }
               }}
             >
               <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
               <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-                Clicca per selezionare un file CSV
+                Clicca per selezionare un file
               </p>
               <p style={{ fontSize: 14, color: "#6b7280" }}>
                 oppure trascina il file qui
+              </p>
+              <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
+                CSV • Excel • PDF • Foto (JPG, PNG, HEIC)
               </p>
             </div>
 
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.heic"
               onChange={handleFileSelect}
               style={{ display: "none" }}
+              disabled={!!parsingProgress}
             />
 
             <div style={{ marginTop: 32, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8 }}>📋 Formato CSV richiesto</h3>
-              <p style={{ fontSize: 13, color: "#1e40af", marginBottom: 8 }}>
-                <strong>Campi obbligatori:</strong> Nome Cliente, Nome Contatto, Città, Indirizzo, Tipo Locale, Telefono
-              </p>
-              <p style={{ fontSize: 13, color: "#1e40af", marginBottom: 12 }}>
-                <strong>Campi opzionali:</strong> Email, P.IVA, Note
-              </p>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📋 Formati Supportati</h3>
+              
+              <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📄 CSV / Excel:</strong>
+                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
+                    File tabellari con colonne Nome Cliente, Nome Contatto, Città, Indirizzo, Tipo Locale, Telefono (Email, P.IVA, Note opzionali)
+                  </p>
+                </div>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📕 PDF:</strong>
+                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
+                    Documenti PDF con tabelle o liste (testo stampato, non scansioni)
+                  </p>
+                </div>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📸 Foto:</strong>
+                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
+                    Foto di liste stampate con OCR (solo testo stampato, non manoscritto)
+                  </p>
+                </div>
+              </div>
+
               <p style={{ fontSize: 13, color: "#1e40af", fontFamily: "monospace", background: "white", padding: 8, borderRadius: 4, overflow: "auto" }}>
-                name,contact_name,city,address,tipo_locale,phone,email,vat_number,notes
+                Esempio colonne: name,contact_name,city,address,tipo_locale,phone
               </p>
             </div>
 
             <button
               onClick={() => router.push("/clients")}
+              disabled={!!parsingProgress}
               style={{
                 marginTop: 24,
                 padding: "10px 20px",
                 borderRadius: 8,
                 border: "1px solid #d1d5db",
                 background: "white",
-                cursor: "pointer",
+                cursor: parsingProgress ? "not-allowed" : "pointer",
                 fontSize: 14,
+                opacity: parsingProgress ? 0.6 : 1,
               }}
             >
               ← Annulla
