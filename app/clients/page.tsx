@@ -205,7 +205,7 @@ async function loadPage(p: number): Promise<void> {
     const r = r0 as RawAccount;
     try {
       const hasEncrypted =
-        !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.notes_enc);
+      !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.address_enc);
 
       if (!hasEncrypted) {
         plain.push({
