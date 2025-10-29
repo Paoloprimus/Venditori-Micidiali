@@ -577,6 +577,34 @@ const contact = {
   phone_iv: phoneEncrypted.phone_iv,
 };
 
+// 🔍 DEBUG: Vedi cosa mando all'API
+const payload = {
+  name_enc: nameEncrypted.name_enc,
+  name_iv: nameEncrypted.name_iv,
+  name_bi: nameBlind,
+  address_enc: addressEncrypted.address_enc,
+  address_iv: addressEncrypted.address_iv,
+  ...(pivaEncrypted && {
+    vat_number_enc: pivaEncrypted.vat_number_enc,
+    vat_number_iv: pivaEncrypted.vat_number_iv,
+  }),
+  ...(emailEncrypted && {
+    email_enc: emailEncrypted.email_enc,
+    email_iv: emailEncrypted.email_iv,
+  }),
+  phone_enc: phoneEncrypted.phone_enc,
+  phone_iv: phoneEncrypted.phone_iv,
+  custom: customData,
+};
+
+console.log('🔍 [QuickAdd] Payload da inviare all\'API:', JSON.stringify(payload, null, 2));
+
+const res = await fetch('/api/clients/upsert', {
+  method: 'POST',
+  headers: { 'Content-Type': 'application/json' },
+  body: JSON.stringify(payload),
+});
+      
 // Invia al backend
 const res = await fetch('/api/clients/upsert', {
   method: 'POST',
