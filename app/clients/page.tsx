@@ -4,7 +4,7 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
-import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
+import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
 import TopBar from "@/components/home/TopBar";
 
 // helper: prendi sempre la decryptFields "viva" da window.debugCrypto
@@ -463,11 +463,11 @@ async function logout() {
         {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
       </div>
 
-      {/* Drawer */}
-      <div style={{ position: "relative", zIndex: 2001 }}>
-        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
-        <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
-      </div>
+{/* Drawer */}
+<div style={{ position: "relative", zIndex: 2001 }}>
+  <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
+  <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
+</div>
     </>
   );
 }
