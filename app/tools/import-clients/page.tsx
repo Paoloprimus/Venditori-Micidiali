@@ -70,23 +70,15 @@ export default function ImportClientsPage() {
     duplicates: number;
     errors: string[];
   }>({ success: 0, failed: 0, duplicates: 0, errors: [] });
-  const [cryptoReady, setCryptoReady] = useState(false);
 
-  // Inizializza CryptoService
-  useEffect(() => {
-    const initCrypto = async () => {
-      try {
-        const { CryptoService } = await import("@/lib/crypto/CryptoService");
-        const svc = CryptoService.getInstance();
-        await svc.ensureReady();
-        setCryptoReady(true);
-      } catch (err) {
-        console.error("❌ Errore init crypto:", err);
-        alert("Errore nell'inizializzazione della cifratura. Ricarica la pagina.");
-      }
-    };
-    initCrypto();
-  }, []);
+  // Verifica che il crypto sia pronto (esposto dal CryptoProvider su window.cryptoSvc)
+  const getCryptoService = () => {
+    const svc = (window as any).cryptoSvc;
+    if (!svc) {
+      throw new Error("CryptoService non disponibile. Assicurati che il CryptoProvider sia attivo.");
+    }
+    return svc;
+  };
 
   // Auto-detect colonne
   const autoDetectMapping = (headers: string[]): ColumnMapping => {
@@ -190,11 +182,6 @@ export default function ImportClientsPage() {
 
   // Import con cifratura
   const handleImport = async () => {
-    if (!cryptoReady) {
-      alert("Sistema di cifratura non pronto. Riprova.");
-      return;
-    }
-
     setStep("importing");
     setImportProgress(0);
 
@@ -202,33 +189,41 @@ export default function ImportClientsPage() {
     const results = { success: 0, failed: 0, duplicates: 0, errors: [] as string[] };
 
     try {
-      const { CryptoService } = await import("@/lib/crypto/CryptoService");
-      const crypto = CryptoService.getInstance();
+      const crypto = getCryptoService();
 
       for (let i = 0; i < validClients.length; i++) {
         const client = validClients[i];
         
         try {
-          // 1. Cifra i campi sensibili
-          const nameEnc = await crypto.encryptText(client.name!, "clients");
-          const addressEnc = client.address ? await crypto.encryptText(client.address, "clients") : null;
-          const contactNameEnc = await crypto.encryptText(client.contact_name!, "clients");
-          const phoneEnc = await crypto.encryptText(client.phone!, "clients");
-          const emailEnc = client.email ? await crypto.encryptText(client.email, "clients") : null;
-          const vatEnc = client.vat_number ? await crypto.encryptText(client.vat_number, "clients") : null;
+          // 1. Prepara i campi da cifrare
+          const fieldsToEncrypt: Record<string, string> = {
+            name: client.name!,
+            contact_name: client.contact_name!,
+            phone: client.phone!,
+          };
 
-          // 2. Calcola blind index per name
-          const nameBI = await crypto.computeBlindIndex(client.name!);
+          // Aggiungi campi opzionali solo se presenti
+          if (client.address) fieldsToEncrypt.address = client.address;
+          if (client.email) fieldsToEncrypt.email = client.email;
+          if (client.vat_number) fieldsToEncrypt.vat_number = client.vat_number;
 
-          // 3. Prepara payload
+          // 2. Cifra tutti i campi in un colpo solo
+          const encrypted = await crypto.encryptFields("clients", "accounts", null, fieldsToEncrypt);
+
+          // 3. Calcola blind index per name
+          const nameBI = await crypto.computeBlindIndex("clients", client.name!);
+
+          // 4. Prepara payload per l'API
           const payload: any = {
-            name_enc: nameEnc.ciphertext,
-            name_iv: nameEnc.iv,
+            // Campi cifrati obbligatori
+            name_enc: encrypted.name_enc,
+            name_iv: encrypted.name_iv,
             name_bi: nameBI,
-            contact_name_enc: contactNameEnc.ciphertext,
-            contact_name_iv: contactNameEnc.iv,
-            phone_enc: phoneEnc.ciphertext,
-            phone_iv: phoneEnc.iv,
+            contact_name_enc: encrypted.contact_name_enc,
+            contact_name_iv: encrypted.contact_name_iv,
+            phone_enc: encrypted.phone_enc,
+            phone_iv: encrypted.phone_iv,
+            // Campi in chiaro per LLM
             custom: {
               city: client.city || "",
               tipo_locale: client.tipo_locale || "",
@@ -236,20 +231,21 @@ export default function ImportClientsPage() {
             },
           };
 
-          if (addressEnc) {
-            payload.address_enc = addressEnc.ciphertext;
-            payload.address_iv = addressEnc.iv;
+          // Aggiungi campi cifrati opzionali se presenti
+          if (encrypted.address_enc) {
+            payload.address_enc = encrypted.address_enc;
+            payload.address_iv = encrypted.address_iv;
           }
-          if (emailEnc) {
-            payload.email_enc = emailEnc.ciphertext;
-            payload.email_iv = emailEnc.iv;
+          if (encrypted.email_enc) {
+            payload.email_enc = encrypted.email_enc;
+            payload.email_iv = encrypted.email_iv;
           }
-          if (vatEnc) {
-            payload.vat_number_enc = vatEnc.ciphertext;
-            payload.vat_number_iv = vatEnc.iv;
+          if (encrypted.vat_number_enc) {
+            payload.vat_number_enc = encrypted.vat_number_enc;
+            payload.vat_number_iv = encrypted.vat_number_iv;
           }
 
-          // 4. Salva via API upsert
+          // 5. Salva via API upsert
           const res = await fetch("/api/clients/upsert", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
