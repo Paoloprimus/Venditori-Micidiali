@@ -1038,20 +1038,20 @@ return (
           {saving ? 'Salvataggio...' : '✅ Salva Cliente'}
         </button>
 
-        {resultMsg && (
+{resultMsg && (
           <span style={{ color: '#10b981', fontWeight: 500 }}>{resultMsg}</span>
         )}
         {errorMsg && (
           <span style={{ color: '#ef4444', fontWeight: 500 }}>{errorMsg}</span>
         )}
       </div>
-
-          {/* Drawer */}
-      <div style={{ position: "relative", zIndex: 2001 }}>
-        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
-        <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
-
-    
     </div>
-  );
+
+    {/* Drawer */}
+    <div style={{ position: "relative", zIndex: 2001 }}>
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
+      <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
+    </div>
+  </>
+);
 }
