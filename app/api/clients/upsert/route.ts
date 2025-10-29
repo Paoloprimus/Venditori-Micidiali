@@ -27,6 +27,8 @@ type UpsertClientBody = {
   vat_number_iv?: string;
   
   // 🔐 Contatto principale (cifrati)
+  contact_name_enc?: string;
+  contact_name_iv?: string;
   email_enc?: string;
   email_iv?: string;
   phone_enc?: string;
@@ -121,6 +123,10 @@ export async function POST(req: Request) {
       }
       
       // 🔐 Aggiorna campi cifrati contatto se presenti
+      if (body.contact_name_enc && body.contact_name_iv) {
+        updateData.contact_name_enc = body.contact_name_enc;
+        updateData.contact_name_iv = body.contact_name_iv;
+      }
       if (body.email_enc && body.email_iv) {
         updateData.email_enc = body.email_enc;
         updateData.email_iv = body.email_iv;
@@ -166,6 +172,10 @@ export async function POST(req: Request) {
       }
       
       // 🔐 Aggiungi campi cifrati contatto se presenti
+      if (body.contact_name_enc && body.contact_name_iv) {
+        insertData.contact_name_enc = body.contact_name_enc;
+        insertData.contact_name_iv = body.contact_name_iv;
+      }
       if (body.email_enc && body.email_iv) {
         insertData.email_enc = body.email_enc;
         insertData.email_iv = body.email_iv;
