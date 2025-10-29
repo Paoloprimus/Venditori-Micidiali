@@ -507,7 +507,7 @@ let emailEncrypted = null;
 if (form.email.trim()) {
   emailEncrypted = await crypto.encryptFields(
     scope,
-    'contacts',
+    'accounts',
     '',
     { email: form.email.trim() }
   );
@@ -520,7 +520,7 @@ if (form.email.trim()) {
 // 🔐 CIFRA TELEFONO
 const phoneEncrypted = await crypto.encryptFields(
   scope,
-  'contacts',
+  'accounts',
   '',
   { phone: form.telefono.trim() }
 );
