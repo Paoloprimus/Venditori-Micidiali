@@ -166,13 +166,13 @@ async function loadPage(p: number): Promise<void> {
   const { data, error } = await supabase
     .from("accounts")
     .select(
-      "id,created_at," +
-      "name," +
-      "name_enc,name_iv," +
-      "email_enc,email_iv," +
-      "phone_enc,phone_iv," +
-      "vat_number_enc,vat_number_iv," +
-      "notes_enc,notes_iv"
+    "id,created_at," +
+    "name_enc,name_iv," +
+    "email_enc,email_iv," +
+    "phone_enc,phone_iv," +
+    "vat_number_enc,vat_number_iv," +
+    "address_enc,address_iv," +
+    "custom"
     )
     .order("created_at", { ascending: false })
     .range(from, to);
