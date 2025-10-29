@@ -245,6 +245,11 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     window.location.href = "/clients";
   }
 
+  function goImportClients() {
+    onClose();
+    window.location.href = "/tools/import-clients";
+  }
+
   function goProductsList() {
     // TODO: quando avremo la pagina lista prodotti
     alert("Lista prodotti - in arrivo");
@@ -321,7 +326,7 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goQuickAdd} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Aggiungi singolo
             </button>
-            <button className="btn" onClick={() => alert('Import clienti - in arrivo')}>
+            <button className="btn" onClick={goImportClients}>
               📥 Importa lista
             </button>
           </div>
