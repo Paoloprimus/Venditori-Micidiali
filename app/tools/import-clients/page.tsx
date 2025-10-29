@@ -33,9 +33,12 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { parse } from "csv-parse/browser/esm/sync";
+import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
+import TopBar from "@/components/home/TopBar";
+import { supabase } from "@/lib/supabase/client";
 
 type CsvRow = {
   name?: string;
@@ -91,6 +94,18 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 export default function ImportClientsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Drawer
+  const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+  
+  // Logout
+  async function logout() {
+    try { sessionStorage.removeItem("repping:pph"); } catch {}
+    try { localStorage.removeItem("repping:pph"); } catch {}
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+  
   const [step, setStep] = useState<ImportStep>("upload");
   const [rawData, setRawData] = useState<any[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
@@ -340,8 +355,24 @@ export default function ImportClientsPage() {
   };
 
   return (
-    <div style={{ minHeight: "100vh", background: "#f9fafb", padding: 24 }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto" }}>
+    <>
+      {/* TopBar */}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
+        <TopBar
+          title="Importa Clienti CSV"
+          onOpenLeft={openLeft}
+          onOpenDati={openDati}
+          onOpenDocs={openDocs}
+          onOpenImpostazioni={openImpostazioni}
+          onLogout={logout}
+        />
+      </div>
+
+      <div style={{ minHeight: "100vh", background: "#f9fafb", padding: 24 }}>
+        {/* Spacer per TopBar */}
+        <div style={{ height: 70 }} />
+        
+        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
         {/* Header */}
         <div style={{ marginBottom: 32 }}>
           <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
@@ -743,5 +774,12 @@ export default function ImportClientsPage() {
         )}
       </div>
     </div>
+
+    {/* Drawer */}
+    <div style={{ position: "relative", zIndex: 2001 }}>
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
+      <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
+    </div>
+  </>
   );
 }
