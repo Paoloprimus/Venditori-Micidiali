@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
-import Papa from "papaparse";
+import { parse } from "csv-parse/browser/esm/sync";
 
 type CsvRow = {
   name?: string;
@@ -111,17 +111,29 @@ export default function ImportClientsPage() {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: true,
-      complete: (results) => {
-        if (results.data.length === 0) {
+    const reader = new FileReader();
+    
+    reader.onload = (event) => {
+      try {
+        const csvText = event.target?.result as string;
+        
+        // Parse CSV con csv-parse
+        const records = parse(csvText, {
+          columns: true,
+          skip_empty_lines: true,
+          trim: true,
+          bom: true, // Gestisce UTF-8 BOM
+        });
+
+        if (records.length === 0) {
           alert("Il file CSV è vuoto!");
           return;
         }
 
-        const headers = results.meta.fields || [];
-        setRawData(results.data);
+        // Estrai headers dal primo record
+        const headers = Object.keys(records[0]);
+        
+        setRawData(records);
         setCsvHeaders(headers);
         
         // Auto-detect mapping
@@ -129,11 +141,16 @@ export default function ImportClientsPage() {
         setMapping(detectedMapping);
         
         setStep("mapping");
-      },
-      error: (error) => {
+      } catch (error: any) {
         alert(`Errore nel parsing del CSV: ${error.message}`);
-      },
-    });
+      }
+    };
+    
+    reader.onerror = () => {
+      alert("Errore nella lettura del file");
+    };
+    
+    reader.readAsText(file, "UTF-8");
   };
 
   // Validazione singolo cliente
