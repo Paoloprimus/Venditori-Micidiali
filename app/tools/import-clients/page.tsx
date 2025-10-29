@@ -242,6 +242,18 @@ export default function ImportClientsPage() {
     try {
       const crypto = getCryptoService();
 
+      // IMPORTANTE: Assicurati che lo scope sia inizializzato
+      try {
+        console.log("🔐 Inizializzazione scope table:accounts...");
+        await crypto.ensureScope("table:accounts");
+        console.log("✅ Scope table:accounts pronto!");
+      } catch (err: any) {
+        console.error("❌ Errore init scope:", err);
+        alert(`Errore nell'inizializzazione della cifratura: ${err.message}\n\nRicarica la pagina e riprova.`);
+        setStep("preview");
+        return;
+      }
+
       for (let i = 0; i < validClients.length; i++) {
         const client = validClients[i];
         
