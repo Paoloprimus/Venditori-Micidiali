@@ -207,19 +207,6 @@ async function loadPage(p: number): Promise<void> {
       const hasEncrypted =
       !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.address_enc);
 
-      if (!hasEncrypted) {
-        plain.push({
-          id: r.id,
-          created_at: r.created_at,
-          name: String(r.name ?? ""),
-          email: String(r.email ?? ""),
-          phone: String(r.phone ?? ""),
-          vat_number: String(r.vat_number ?? ""),
-          notes: String(r.notes ?? ""),
-        });
-        continue;
-      }
-
       // 🔧 FIX: Converti hex-string in base64
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
