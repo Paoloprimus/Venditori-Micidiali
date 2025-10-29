@@ -463,11 +463,14 @@ async function logout() {
         {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
       </div>
 
-{/* Drawer */}
-<div style={{ position: "relative", zIndex: 2001 }}>
-  <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
-  <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
-</div>
+{/* Drawer con backdrop */}
+<DrawersWithBackdrop
+  leftOpen={leftOpen}
+  rightOpen={rightOpen}
+  rightContent={rightContent}
+  onCloseLeft={closeLeft}
+  onCloseRight={closeRight}
+/>
     </>
   );
 }
