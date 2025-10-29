@@ -265,27 +265,31 @@ console.log('[/clients] 🔍 Decifro record:', {
 
 const decAny = await (crypto as any).decryptFields(
   "table:accounts", "accounts", '', recordForDecrypt,
-  ["name", "email", "phone", "vat_number", "notes"]
+  ["name", "email", "phone", "vat_number", "address"]  // ← address invece di notes!
 );
 
-// ✅ LOG DOPO
 console.log('[/clients] 🔍 Risultato decAny:', decAny);
 console.log('[/clients] 🔍 È array?', Array.isArray(decAny));
 
 const dec = toObj(decAny);
 
-// ✅ LOG FINALE
 console.log('[/clients] 🔍 Dopo toObj:', dec);
 
-      plain.push({
-        id: r.id,
-        created_at: r.created_at,
-        name:       String(dec.name ?? ""),
-        email:      String(dec.email ?? ""),
-        phone:      String(dec.phone ?? ""),
-        vat_number: String(dec.vat_number ?? ""),
-        notes:      String(dec.notes ?? ""),
-      });
+// ✅ Estrai note dal custom (sono in chiaro!)
+const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
+const notes = customObj.notes || "";
+
+plain.push({
+  id: r.id,
+  created_at: r.created_at,
+  name: String(dec.name ?? ""),
+  email: String(dec.email ?? ""),
+  phone: String(dec.phone ?? ""),
+  vat_number: String(dec.vat_number ?? ""),
+  notes: String(notes),  // ← Dal custom, non cifrato
+});
+
+      
     } catch (e) {
       console.warn("[/clients] decrypt error for", r.id, e);
       plain.push({
