@@ -30,26 +30,35 @@ export default function TopBar({
         ☰
       </button>
 
-      {/* Centro: Repping (bold) + titolo chat */}
-      <div
-        style={{
-          flex: 1,
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          gap: 8,
-          minWidth: 0,
-        }}
-      >
-        <span className="title" style={{ whiteSpace: "nowrap", fontWeight: 600 }}>
-          {brand}
-        </span>
-        {!!title?.trim() && (
-          <span className="title" style={{ whiteSpace: "nowrap" }}>
-            {" "}{title.trim()}
-          </span>
-        )}
-      </div>
+{/* Centro: Repping (bold, cliccabile) + titolo chat */}
+<div
+  style={{
+    flex: 1,
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    minWidth: 0,
+  }}
+>
+  <span 
+    className="title" 
+    style={{ 
+      whiteSpace: "nowrap", 
+      fontWeight: 600,
+      cursor: "pointer",
+      userSelect: "none",
+    }}
+    onClick={() => window.location.href = '/'}
+  >
+    {brand}
+  </span>
+  {!!title?.trim() && (
+    <span className="title" style={{ whiteSpace: "nowrap" }}>
+      {" "}{title.trim()}
+    </span>
+  )}
+</div>
 
       {/* Azioni a destra */}
       <div style={{ display: "flex", gap: 8 }}>
