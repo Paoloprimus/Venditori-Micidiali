@@ -1,3 +1,36 @@
+/**
+ * ============================================================================
+ * PAGINA: Import Clienti da CSV
+ * ============================================================================
+ * 
+ * PERCORSO: /app/tools/import-clients/page.tsx
+ * URL: https://reping.app/tools/import-clients
+ * 
+ * DESCRIZIONE:
+ * Pagina completa per l'importazione massiva di clienti da file CSV.
+ * Include 5 step: Upload → Mapping → Preview → Import → Report
+ * 
+ * FUNZIONALITÀ:
+ * - Upload CSV con drag & drop
+ * - Auto-detection intelligente delle colonne (match esatti + parziali)
+ * - Mapping manuale con dropdown
+ * - Validazione campi obbligatori
+ * - Cifratura automatica campi sensibili (usa scope "table:accounts")
+ * - Gestione duplicati tramite blind index
+ * - Progress bar durante import
+ * - Report dettagliato finale
+ * 
+ * DIPENDENZE:
+ * - csv-parse/browser/esm/sync (già in package.json)
+ * - window.cryptoSvc (fornito da CryptoProvider)
+ * - API /api/clients/upsert (per salvare i clienti)
+ * 
+ * NOTA IMPORTANTE:
+ * Usa scope "table:accounts" per la cifratura, NON "clients"!
+ * 
+ * ============================================================================
+ */
+
 "use client";
 
 import { useState, useRef, useEffect } from "react";
@@ -80,14 +113,32 @@ export default function ImportClientsPage() {
     return svc;
   };
 
-  // Auto-detect colonne
+  // Auto-detect colonne con priorità ai match esatti
   const autoDetectMapping = (headers: string[]): ColumnMapping => {
     const detected: ColumnMapping = {};
     
+    // Prima passata: match esatti
     for (const header of headers) {
       const normalized = header.toLowerCase().trim();
       
       for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+        // Match esatto con uno degli alias
+        if (aliases.some(alias => normalized === alias)) {
+          detected[field as keyof ColumnMapping] = header;
+          break;
+        }
+      }
+    }
+    
+    // Seconda passata: match parziali (solo per campi non ancora mappati)
+    for (const header of headers) {
+      const normalized = header.toLowerCase().trim();
+      
+      for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+        // Salta se già mappato nella prima passata
+        if (detected[field as keyof ColumnMapping]) continue;
+        
+        // Match parziale
         if (aliases.some(alias => normalized.includes(alias))) {
           detected[field as keyof ColumnMapping] = header;
           break;
@@ -208,10 +259,10 @@ export default function ImportClientsPage() {
           if (client.vat_number) fieldsToEncrypt.vat_number = client.vat_number;
 
           // 2. Cifra tutti i campi in un colpo solo
-          const encrypted = await crypto.encryptFields("clients", "accounts", null, fieldsToEncrypt);
+          const encrypted = await crypto.encryptFields("table:accounts", "accounts", null, fieldsToEncrypt);
 
           // 3. Calcola blind index per name
-          const nameBI = await crypto.computeBlindIndex("clients", client.name!);
+          const nameBI = await crypto.computeBlindIndex("table:accounts", client.name!);
 
           // 4. Prepara payload per l'API
           const payload: any = {
