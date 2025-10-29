@@ -18,15 +18,15 @@ type RawAccount = {
   id: string;
   created_at: string;
 
-  // plain (opzionali)
-  name?: string; email?: string; phone?: string; vat_number?: string; notes?: string;
-
   // encrypted (opzionali)
   name_enc?: any; name_iv?: any;
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
-  notes_enc?: any; notes_iv?: any;
+  address_enc?: any; address_iv?: any;
+  
+  // custom (plain text per LLM)
+  custom?: any;
 };
 
 
