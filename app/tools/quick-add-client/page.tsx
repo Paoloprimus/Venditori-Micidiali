@@ -43,79 +43,67 @@ type DialogState = {
 
 export default function QuickAddClientPage() {
   const router = useRouter();
-
-  // Drawer
-const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
-
-// Logout
-async function logout() {
-  try { sessionStorage.removeItem("repping:pph"); } catch {}
-  try { localStorage.removeItem("repping:pph"); } catch {}
-  await supabase.auth.signOut();
-  window.location.href = "/login";
-}
-
-const { crypto, ready } = useCrypto();
-
-  // Drawer
-const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
-
-// Logout
-async function logout() {
-  try { sessionStorage.removeItem("repping:pph"); } catch {}
-  try { localStorage.removeItem("repping:pph"); } catch {}
-  await supabase.auth.signOut();
-  window.location.href = "/login";
-}
-
-// 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
-useEffect(() => {
-  console.log('[QuickAdd] 🔍 useEffect triggered, crypto:', !!crypto);
+  const { crypto, ready } = useCrypto();
   
-  if (!crypto) {
-    console.log('[QuickAdd] ⚠️ crypto è null/undefined, esco');
-    return;
+  // Drawer
+  const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+
+  // Logout
+  async function logout() {
+    try { sessionStorage.removeItem("repping:pph"); } catch {}
+    try { localStorage.removeItem("repping:pph"); } catch {}
+    await supabase.auth.signOut();
+    window.location.href = "/login";
   }
-  
-  const checkAndUnlock = async () => {
-    console.log('[QuickAdd] 🔍 checkAndUnlock started');
+
+  // 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
+  useEffect(() => {
+    console.log('[QuickAdd] 🔍 useEffect triggered, crypto:', !!crypto);
     
-    if (!crypto || typeof crypto.isUnlocked !== 'function') {
-      console.log('[QuickAdd] ⚠️ crypto o isUnlocked non validi');
+    if (!crypto) {
+      console.log('[QuickAdd] ⚠️ crypto è null/undefined, esco');
       return;
     }
     
-    const unlocked = crypto.isUnlocked();
-    console.log('[QuickAdd] 🔍 isUnlocked:', unlocked);
-    
-    if (!unlocked) {
-      const pass = sessionStorage.getItem('repping:pph');
-      console.log('[QuickAdd] 🔍 Password in storage:', !!pass);
+    const checkAndUnlock = async () => {
+      console.log('[QuickAdd] 🔍 checkAndUnlock started');
       
-      if (pass && typeof crypto.unlockWithPassphrase === 'function') {
-        console.log('[QuickAdd] 🔧 Tento re-unlock...');
-        try {
-          await crypto.unlockWithPassphrase(pass);
-          console.log('[QuickAdd] ✅ Re-unlock completato!');
-        } catch (e) {
-          console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
+      if (!crypto || typeof crypto.isUnlocked !== 'function') {
+        console.log('[QuickAdd] ⚠️ crypto o isUnlocked non validi');
+        return;
+      }
+      
+      const unlocked = crypto.isUnlocked();
+      console.log('[QuickAdd] 🔍 isUnlocked:', unlocked);
+      
+      if (!unlocked) {
+        const pass = sessionStorage.getItem('repping:pph');
+        console.log('[QuickAdd] 🔍 Password in storage:', !!pass);
+        
+        if (pass && typeof crypto.unlockWithPassphrase === 'function') {
+          console.log('[QuickAdd] 🔧 Tento re-unlock...');
+          try {
+            await crypto.unlockWithPassphrase(pass);
+            console.log('[QuickAdd] ✅ Re-unlock completato!');
+          } catch (e) {
+            console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
+          }
+        } else {
+          console.log('[QuickAdd] ⚠️ Password mancante o unlockWithPassphrase non disponibile');
         }
       } else {
-        console.log('[QuickAdd] ⚠️ Password mancante o unlockWithPassphrase non disponibile');
+        console.log('[QuickAdd] ✅ Crypto già unlocked, niente da fare');
       }
-    } else {
-      console.log('[QuickAdd] ✅ Crypto già unlocked, niente da fare');
-    }
-  };
-  
-  checkAndUnlock();
-}, [crypto]);
+    };
+    
+    checkAndUnlock();
+  }, [crypto]);
 
-const actuallyReady = (
-  crypto && 
-  typeof crypto.isUnlocked === 'function' && 
-  crypto.isUnlocked()
-);
+  const actuallyReady = (
+    crypto && 
+    typeof crypto.isUnlocked === 'function' && 
+    crypto.isUnlocked()
+  );
 
   // Dati del form
   const [form, setForm] = useState<ClientForm>({
@@ -464,40 +452,40 @@ const actuallyReady = (
       );
 
       // ✅ VALIDAZIONE struttura nome cliente cifrato
-if (!nameEncrypted || typeof nameEncrypted !== 'object') {
-  throw new Error(
-    'Cifratura nome cliente fallita: encryptFields ha ritornato dati non validi. ' +
-    'Tipo ritornato: ' + typeof nameEncrypted
-  );
-}
+      if (!nameEncrypted || typeof nameEncrypted !== 'object') {
+        throw new Error(
+          'Cifratura nome cliente fallita: encryptFields ha ritornato dati non validi. ' +
+          'Tipo ritornato: ' + typeof nameEncrypted
+        );
+      }
 
-if (!nameEncrypted.name_enc || !nameEncrypted.name_iv) {
-  throw new Error(
-    'Cifratura nome cliente fallita: campi enc/iv mancanti nella risposta. ' +
-    'Campi presenti: ' + Object.keys(nameEncrypted).join(', ')
-  );
-}
+      if (!nameEncrypted.name_enc || !nameEncrypted.name_iv) {
+        throw new Error(
+          'Cifratura nome cliente fallita: campi enc/iv mancanti nella risposta. ' +
+          'Campi presenti: ' + Object.keys(nameEncrypted).join(', ')
+        );
+      }
 
-console.log('[QuickAdd] Nome cliente cifrato con successo:', {
-  hasEnc: !!nameEncrypted.name_enc,
-  hasIv: !!nameEncrypted.name_iv,
-});
-    
-// Verifica che computeBlindIndex sia disponibile
-if (typeof crypto.computeBlindIndex !== 'function') {
-  throw new Error(
-    'La funzione computeBlindIndex non è disponibile sul servizio crypto. ' +
-    'Rieffettua il login o contatta il supporto.'
-  );
-}
+      console.log('[QuickAdd] Nome cliente cifrato con successo:', {
+        hasEnc: !!nameEncrypted.name_enc,
+        hasIv: !!nameEncrypted.name_iv,
+      });
+      
+      // Verifica che computeBlindIndex sia disponibile
+      if (typeof crypto.computeBlindIndex !== 'function') {
+        throw new Error(
+          'La funzione computeBlindIndex non è disponibile sul servizio crypto. ' +
+          'Rieffettua il login o contatta il supporto.'
+        );
+      }
 
-// Calcola il blind index (obbligatorio)
-const nameBlind = await crypto.computeBlindIndex(scope, form.nomeCliente.trim());
+      // Calcola il blind index (obbligatorio)
+      const nameBlind = await crypto.computeBlindIndex(scope, form.nomeCliente.trim());
 
-// Verifica che sia valido
-if (!nameBlind || typeof nameBlind !== 'string') {
-  throw new Error('Calcolo blind index fallito: valore non valido ritornato');
-}
+      // Verifica che sia valido
+      if (!nameBlind || typeof nameBlind !== 'string') {
+        throw new Error('Calcolo blind index fallito: valore non valido ritornato');
+      }
 
       // Critta il nome contatto
       const contactNameEncrypted = await crypto.encryptFields(
@@ -508,127 +496,113 @@ if (!nameBlind || typeof nameBlind !== 'string') {
       );
 
       // ✅ VALIDAZIONE struttura nome contatto cifrato
-if (!contactNameEncrypted || typeof contactNameEncrypted !== 'object') {
-  throw new Error(
-    'Cifratura nome contatto fallita: encryptFields ha ritornato dati non validi. ' +
-    'Tipo ritornato: ' + typeof contactNameEncrypted
-  );
-}
+      if (!contactNameEncrypted || typeof contactNameEncrypted !== 'object') {
+        throw new Error(
+          'Cifratura nome contatto fallita: encryptFields ha ritornato dati non validi. ' +
+          'Tipo ritornato: ' + typeof contactNameEncrypted
+        );
+      }
 
-if (!contactNameEncrypted.full_name_enc || !contactNameEncrypted.full_name_iv) {
-  throw new Error(
-    'Cifratura nome contatto fallita: campi enc/iv mancanti nella risposta. ' +
-    'Campi presenti: ' + Object.keys(contactNameEncrypted).join(', ')
-  );
-}
+      if (!contactNameEncrypted.full_name_enc || !contactNameEncrypted.full_name_iv) {
+        throw new Error(
+          'Cifratura nome contatto fallita: campi enc/iv mancanti nella risposta. ' +
+          'Campi presenti: ' + Object.keys(contactNameEncrypted).join(', ')
+        );
+      }
 
-console.log('[QuickAdd] Nome contatto cifrato con successo:', {
-  hasEnc: !!contactNameEncrypted.full_name_enc,
-  hasIv: !!contactNameEncrypted.full_name_iv,
-});
+      console.log('[QuickAdd] Nome contatto cifrato con successo:', {
+        hasEnc: !!contactNameEncrypted.full_name_enc,
+        hasIv: !!contactNameEncrypted.full_name_iv,
+      });
 
-// 🔐 CIFRA EMAIL (se presente)
-let emailEncrypted = null;
-if (form.email.trim()) {
-  emailEncrypted = await crypto.encryptFields(
-    scope,
-    'accounts',
-    '',
-    { email: form.email.trim() }
-  );
-  if (!emailEncrypted?.email_enc || !emailEncrypted?.email_iv) {
-    throw new Error('Cifratura email fallita');
-  }
-  console.log('[QuickAdd] Email cifrata con successo');
-}
+      // 🔐 CIFRA EMAIL (se presente)
+      let emailEncrypted = null;
+      if (form.email.trim()) {
+        emailEncrypted = await crypto.encryptFields(
+          scope,
+          'accounts',
+          '',
+          { email: form.email.trim() }
+        );
+        if (!emailEncrypted?.email_enc || !emailEncrypted?.email_iv) {
+          throw new Error('Cifratura email fallita');
+        }
+        console.log('[QuickAdd] Email cifrata con successo');
+      }
 
-// 🔐 CIFRA TELEFONO
-const phoneEncrypted = await crypto.encryptFields(
-  scope,
-  'accounts',
-  '',
-  { phone: form.telefono.trim() }
-);
-if (!phoneEncrypted?.phone_enc || !phoneEncrypted?.phone_iv) {
-  throw new Error('Cifratura telefono fallita');
-}
-console.log('[QuickAdd] Telefono cifrato con successo');
+      // 🔐 CIFRA TELEFONO
+      const phoneEncrypted = await crypto.encryptFields(
+        scope,
+        'accounts',
+        '',
+        { phone: form.telefono.trim() }
+      );
+      if (!phoneEncrypted?.phone_enc || !phoneEncrypted?.phone_iv) {
+        throw new Error('Cifratura telefono fallita');
+      }
+      console.log('[QuickAdd] Telefono cifrato con successo');
 
-// 🔐 CIFRA INDIRIZZO
-const addressEncrypted = await crypto.encryptFields(
-  scope,
-  'accounts',
-  '',
-  { address: form.indirizzo.trim() }
-);
-if (!addressEncrypted?.address_enc || !addressEncrypted?.address_iv) {
-  throw new Error('Cifratura indirizzo fallita');
-}
-console.log('[QuickAdd] Indirizzo cifrato con successo');
+      // 🔐 CIFRA INDIRIZZO
+      const addressEncrypted = await crypto.encryptFields(
+        scope,
+        'accounts',
+        '',
+        { address: form.indirizzo.trim() }
+      );
+      if (!addressEncrypted?.address_enc || !addressEncrypted?.address_iv) {
+        throw new Error('Cifratura indirizzo fallita');
+      }
+      console.log('[QuickAdd] Indirizzo cifrato con successo');
 
-// 🔐 CIFRA P.IVA (se presente)
-let pivaEncrypted = null;
-if (form.piva.trim()) {
-  pivaEncrypted = await crypto.encryptFields(
-    scope,
-    'accounts',
-    '',
-    { vat_number: form.piva.trim() }
-  );
-  if (!pivaEncrypted?.vat_number_enc || !pivaEncrypted?.vat_number_iv) {
-    throw new Error('Cifratura P.IVA fallita');
-  }
-  console.log('[QuickAdd] P.IVA cifrata con successo');
-}
+      // 🔐 CIFRA P.IVA (se presente)
+      let pivaEncrypted = null;
+      if (form.piva.trim()) {
+        pivaEncrypted = await crypto.encryptFields(
+          scope,
+          'accounts',
+          '',
+          { vat_number: form.piva.trim() }
+        );
+        if (!pivaEncrypted?.vat_number_enc || !pivaEncrypted?.vat_number_iv) {
+          throw new Error('Cifratura P.IVA fallita');
+        }
+        console.log('[QuickAdd] P.IVA cifrata con successo');
+      }
 
-// Prepara i dati custom (SOLO città, tipo, note in chiaro)
-const customData = {
-  city: form.citta.trim(),
-  tipo_locale: form.tipoLocale.trim(),
-  notes: form.note.trim() || undefined,
-};
+      // Prepara i dati custom (SOLO città, tipo, note in chiaro)
+      const customData = {
+        city: form.citta.trim(),
+        tipo_locale: form.tipoLocale.trim(),
+        notes: form.note.trim() || undefined,
+      };
 
-// Prepara il contatto CON campi cifrati
-const contact = {
-  full_name_enc: contactNameEncrypted.full_name_enc,
-  full_name_iv: contactNameEncrypted.full_name_iv,
-  // Email cifrata
-  ...(emailEncrypted && {
-    email_enc: emailEncrypted.email_enc,
-    email_iv: emailEncrypted.email_iv,
-  }),
-  // Telefono cifrato
-  phone_enc: phoneEncrypted.phone_enc,
-  phone_iv: phoneEncrypted.phone_iv,
-};
+      // Prepara il payload
+      const payload = {
+        name_enc: nameEncrypted.name_enc,
+        name_iv: nameEncrypted.name_iv,
+        name_bi: nameBlind,
+        address_enc: addressEncrypted.address_enc,
+        address_iv: addressEncrypted.address_iv,
+        ...(pivaEncrypted && {
+          vat_number_enc: pivaEncrypted.vat_number_enc,
+          vat_number_iv: pivaEncrypted.vat_number_iv,
+        }),
+        ...(emailEncrypted && {
+          email_enc: emailEncrypted.email_enc,
+          email_iv: emailEncrypted.email_iv,
+        }),
+        phone_enc: phoneEncrypted.phone_enc,
+        phone_iv: phoneEncrypted.phone_iv,
+        custom: customData,
+      };
 
-// 🔍 DEBUG: Vedi cosa mando all'API
-const payload = {
-  name_enc: nameEncrypted.name_enc,
-  name_iv: nameEncrypted.name_iv,
-  name_bi: nameBlind,
-  address_enc: addressEncrypted.address_enc,
-  address_iv: addressEncrypted.address_iv,
-  ...(pivaEncrypted && {
-    vat_number_enc: pivaEncrypted.vat_number_enc,
-    vat_number_iv: pivaEncrypted.vat_number_iv,
-  }),
-  ...(emailEncrypted && {
-    email_enc: emailEncrypted.email_enc,
-    email_iv: emailEncrypted.email_iv,
-  }),
-  phone_enc: phoneEncrypted.phone_enc,
-  phone_iv: phoneEncrypted.phone_iv,
-  custom: customData,
-};
+      console.log('🔍 [QuickAdd] Payload da inviare all\'API:', JSON.stringify(payload, null, 2));
 
-console.log('🔍 [QuickAdd] Payload da inviare all\'API:', JSON.stringify(payload, null, 2));
-
-const res = await fetch('/api/clients/upsert', {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/json' },
-  body: JSON.stringify(payload),
-});
+      const res = await fetch('/api/clients/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
 
       const data = await res.json();
 
@@ -669,389 +643,388 @@ const res = await fetch('/api/clients/upsert', {
     }
   }, [dialogState]);
 
-// 🔐 Blocco UI se crittografia non è pronta
-if (!actuallyReady || !crypto) {
-  return (
-    <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, border: '1px solid #e5e7eb', borderRadius: 12 }}>
-      <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: '#111827' }}>
-        🔐 Crittografia in preparazione...
-      </h2>
-      <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
-        Il sistema di cifratura sta inizializzando. Questo può richiedere qualche secondo dopo il login.
-      </p>
-      <p style={{ color: '#6b7280', marginBottom: 20, fontSize: 14 }}>
-        Se questa schermata persiste per più di 10 secondi, prova a:
-      </p>
-      <ul style={{ color: '#6b7280', marginBottom: 24, paddingLeft: 20, fontSize: 14 }}>
-        <li style={{ marginBottom: 8 }}>Tornare alla home e attendere</li>
-        <li style={{ marginBottom: 8 }}>Effettuare logout e nuovo login</li>
-        <li>Ricaricare la pagina</li>
-      </ul>
-      
-      <div style={{ display: 'flex', gap: 12 }}>
-        <button
-          onClick={() => router.push('/')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: '1px solid #d1d5db',
-            background: 'white',
-            color: '#111827',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          ← Torna alla Home
-        </button>
-        <button
-          onClick={() => window.location.reload()}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: '1px solid #d1d5db',
-            background: 'white',
-            color: '#111827',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          🔄 Ricarica Pagina
-        </button>
-      </div>
-      
-      {/* Info debug */}
-      <div style={{ 
-        marginTop: 24, 
-        padding: 12, 
-        background: '#fef3c7', 
-        borderRadius: 8,
-        fontSize: 13,
-        fontFamily: 'monospace',
-      }}>
-        <strong>Debug:</strong><br />
-        • ready: {String(ready)}<br />
-        • crypto: {crypto ? 'presente' : 'null'}<br />
-        • isUnlocked: {crypto && typeof crypto.isUnlocked === 'function' ? String(crypto.isUnlocked()) : 'n/a'}<br />
-        • actuallyReady: {String(actuallyReady)}
-      </div>
-    </div>
-  );
-}
-  
-return (
-  <>
-    {/* TopBar */}
-    <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
-      <TopBar
-        title="Aggiungi Cliente"
-        onOpenLeft={openLeft}
-        onOpenDati={openDati}
-        onOpenDocs={openDocs}
-        onOpenImpostazioni={openImpostazioni}
-        onLogout={logout}
-      />
-    </div>
-
-    <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
-      {/* Spacer per TopBar */}
-      <div style={{ height: 70 }} />
-
-      {/* Header */}
-      <div style={{ marginBottom: 24 }}>
-  
-      <p style={{ color: '#6b7280' }}>
-        Compila il form manualmente o attiva il dialogo vocale per inserire i dati a voce.
-      </p>
-    </div>
-
-      {/* Controlli dialogo vocale */}
-      <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
-        {!dialogState.active ? (
+  // 🔐 Blocco UI se crittografia non è pronta
+  if (!actuallyReady || !crypto) {
+    return (
+      <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, border: '1px solid #e5e7eb', borderRadius: 12 }}>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: '#111827' }}>
+          🔐 Crittografia in preparazione...
+        </h2>
+        <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
+          Il sistema di cifratura sta inizializzando. Questo può richiedere qualche secondo dopo il login.
+        </p>
+        <p style={{ color: '#6b7280', marginBottom: 20, fontSize: 14 }}>
+          Se questa schermata persiste per più di 10 secondi, prova a:
+        </p>
+        <ul style={{ color: '#6b7280', marginBottom: 24, paddingLeft: 20, fontSize: 14 }}>
+          <li style={{ marginBottom: 8 }}>Tornare alla home e attendere</li>
+          <li style={{ marginBottom: 8 }}>Effettuare logout e nuovo login</li>
+          <li>Ricaricare la pagina</li>
+        </ul>
+        
+        <div style={{ display: 'flex', gap: 12 }}>
           <button
-            onClick={startDialog}
+            onClick={() => router.push('/')}
             style={{
               padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#10b981',
-              color: 'white',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            🎤 Avvia Dialogo Vocale
-          </button>
-        ) : (
-          <button
-            onClick={stopDialog}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: '#ef4444',
-              color: 'white',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            🛑 Ferma Dialogo
-          </button>
-        )}
-
-        {dialogState.active && (
-          <span style={{ color: '#10b981', fontWeight: 500 }}>
-            🎙️ Dialogo attivo - Campo: {dialogState.currentField || 'conferma finale'}
-          </span>
-        )}
-      </div>
-
-      {/* Form */}
-      <div style={{ background: '#f9fafb', padding: 24, borderRadius: 12, border: '1px solid #e5e7eb' }}>
-        {/* DATI PRINCIPALI */}
-        <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📋 Dati Principali</h2>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Nome Cliente */}
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Nome Cliente/Azienda *
-              </label>
-              <input
-                type="text"
-                value={form.nomeCliente}
-                onChange={(e) => updateField('nomeCliente', e.target.value)}
-                placeholder="Es. Pizzeria Da Mario"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-
-            {/* Città */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Città *
-              </label>
-              <input
-                type="text"
-                value={form.citta}
-                onChange={(e) => updateField('citta', e.target.value)}
-                placeholder="Es. Milano"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-
-            {/* Indirizzo */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Via e Num. Civico *
-              </label>
-              <input
-                type="text"
-                value={form.indirizzo}
-                onChange={(e) => updateField('indirizzo', e.target.value)}
-                placeholder="Es. Via Roma, 123"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-
-            {/* Tipo Locale */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Tipo di Locale *
-              </label>
-              <select
-                value={form.tipoLocale}
-                onChange={(e) => updateField('tipoLocale', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              >
-                <option value="">Seleziona...</option>
-                {TIPO_LOCALE.map(tipo => (
-                  <option key={tipo} value={tipo}>{tipo}</option>
-                ))}
-              </select>
-            </div>
-
-            {/* P.IVA */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                P.IVA (opzionale)
-              </label>
-              <input
-                type="text"
-                value={form.piva}
-                onChange={(e) => updateField('piva', e.target.value)}
-                placeholder="Es. IT12345678901"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* CONTATTO */}
-        <div style={{ marginBottom: 24 }}>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>👤 Contatto Principale</h2>
-          
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-            {/* Nome Contatto */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Nome Contatto *
-              </label>
-              <input
-                type="text"
-                value={form.nomeContatto}
-                onChange={(e) => updateField('nomeContatto', e.target.value)}
-                placeholder="Es. Mario Rossi"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-
-            {/* Telefono */}
-            <div>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Telefono *
-              </label>
-              <input
-                type="tel"
-                value={form.telefono}
-                onChange={(e) => updateField('telefono', e.target.value)}
-                placeholder="Es. 333 1234567"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-
-            {/* Email */}
-            <div style={{ gridColumn: '1 / -1' }}>
-              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                Email (opzionale)
-              </label>
-              <input
-                type="email"
-                value={form.email}
-                onChange={(e) => updateField('email', e.target.value)}
-                placeholder="Es. mario@pizzeria.it"
-                style={{
-                  width: '100%',
-                  padding: 10,
-                  borderRadius: 8,
-                  border: '1px solid #d1d5db',
-                  fontSize: 14,
-                }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* NOTE */}
-        <div>
-          <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📝 Note</h2>
-          
-          <textarea
-            value={form.note}
-            onChange={(e) => updateField('note', e.target.value)}
-            placeholder="Note aggiuntive sul cliente..."
-            rows={4}
-            style={{
-              width: '100%',
-              padding: 10,
               borderRadius: 8,
               border: '1px solid #d1d5db',
-              fontSize: 14,
-              resize: 'vertical',
+              background: 'white',
+              color: '#111827',
+              fontWeight: 600,
+              cursor: 'pointer',
             }}
-          />
+          >
+            ← Torna alla Home
+          </button>
+          <button
+            onClick={() => window.location.reload()}
+            style={{
+              padding: '10px 20px',
+              borderRadius: 8,
+              border: '1px solid #d1d5db',
+              background: 'white',
+              color: '#111827',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            🔄 Ricarica Pagina
+          </button>
+        </div>
+        
+        {/* Info debug */}
+        <div style={{ 
+          marginTop: 24, 
+          padding: 12, 
+          background: '#fef3c7', 
+          borderRadius: 8,
+          fontSize: 13,
+          fontFamily: 'monospace',
+        }}>
+          <strong>Debug:</strong><br />
+          • ready: {String(ready)}<br />
+          • crypto: {crypto ? 'presente' : 'null'}<br />
+          • isUnlocked: {crypto && typeof crypto.isUnlocked === 'function' ? String(crypto.isUnlocked()) : 'n/a'}<br />
+          • actuallyReady: {String(actuallyReady)}
+        </div>
+      </div>
+    );
+  }
+    
+  return (
+    <>
+      {/* TopBar */}
+      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
+        <TopBar
+          title="Aggiungi Cliente"
+          onOpenLeft={openLeft}
+          onOpenDati={openDati}
+          onOpenDocs={openDocs}
+          onOpenImpostazioni={openImpostazioni}
+          onLogout={logout}
+        />
+      </div>
+
+      <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
+        {/* Spacer per TopBar */}
+        <div style={{ height: 70 }} />
+
+        {/* Header */}
+        <div style={{ marginBottom: 24 }}>
+          <p style={{ color: '#6b7280' }}>
+            Compila il form manualmente o attiva il dialogo vocale per inserire i dati a voce.
+          </p>
+        </div>
+
+        {/* Controlli dialogo vocale */}
+        <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
+          {!dialogState.active ? (
+            <button
+              onClick={startDialog}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#10b981',
+                color: 'white',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🎤 Avvia Dialogo Vocale
+            </button>
+          ) : (
+            <button
+              onClick={stopDialog}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#ef4444',
+                color: 'white',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🛑 Ferma Dialogo
+            </button>
+          )}
+
+          {dialogState.active && (
+            <span style={{ color: '#10b981', fontWeight: 500 }}>
+              🎙️ Dialogo attivo - Campo: {dialogState.currentField || 'conferma finale'}
+            </span>
+          )}
+        </div>
+
+        {/* Form */}
+        <div style={{ background: '#f9fafb', padding: 24, borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          {/* DATI PRINCIPALI */}
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📋 Dati Principali</h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Nome Cliente */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Nome Cliente/Azienda *
+                </label>
+                <input
+                  type="text"
+                  value={form.nomeCliente}
+                  onChange={(e) => updateField('nomeCliente', e.target.value)}
+                  placeholder="Es. Pizzeria Da Mario"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+
+              {/* Città */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Città *
+                </label>
+                <input
+                  type="text"
+                  value={form.citta}
+                  onChange={(e) => updateField('citta', e.target.value)}
+                  placeholder="Es. Milano"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+
+              {/* Indirizzo */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Via e Num. Civico *
+                </label>
+                <input
+                  type="text"
+                  value={form.indirizzo}
+                  onChange={(e) => updateField('indirizzo', e.target.value)}
+                  placeholder="Es. Via Roma, 123"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+
+              {/* Tipo Locale */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Tipo di Locale *
+                </label>
+                <select
+                  value={form.tipoLocale}
+                  onChange={(e) => updateField('tipoLocale', e.target.value)}
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                >
+                  <option value="">Seleziona...</option>
+                  {TIPO_LOCALE.map(tipo => (
+                    <option key={tipo} value={tipo}>{tipo}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* P.IVA */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  P.IVA (opzionale)
+                </label>
+                <input
+                  type="text"
+                  value={form.piva}
+                  onChange={(e) => updateField('piva', e.target.value)}
+                  placeholder="Es. IT12345678901"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* CONTATTO */}
+          <div style={{ marginBottom: 24 }}>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>👤 Contatto Principale</h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              {/* Nome Contatto */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Nome Contatto *
+                </label>
+                <input
+                  type="text"
+                  value={form.nomeContatto}
+                  onChange={(e) => updateField('nomeContatto', e.target.value)}
+                  placeholder="Es. Mario Rossi"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+
+              {/* Telefono */}
+              <div>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Telefono *
+                </label>
+                <input
+                  type="tel"
+                  value={form.telefono}
+                  onChange={(e) => updateField('telefono', e.target.value)}
+                  placeholder="Es. 333 1234567"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+
+              {/* Email */}
+              <div style={{ gridColumn: '1 / -1' }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
+                  Email (opzionale)
+                </label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => updateField('email', e.target.value)}
+                  placeholder="Es. mario@pizzeria.it"
+                  style={{
+                    width: '100%',
+                    padding: 10,
+                    borderRadius: 8,
+                    border: '1px solid #d1d5db',
+                    fontSize: 14,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* NOTE */}
+          <div>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📝 Note</h2>
+            
+            <textarea
+              value={form.note}
+              onChange={(e) => updateField('note', e.target.value)}
+              placeholder="Note aggiuntive sul cliente..."
+              rows={4}
+              style={{
+                width: '100%',
+                padding: 10,
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                fontSize: 14,
+                resize: 'vertical',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Azioni */}
+        <div style={{ marginTop: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
+          <button
+            onClick={() => router.push('/')}
+            style={{
+              padding: '10px 20px',
+              borderRadius: 8,
+              border: '1px solid #d1d5db',
+              background: 'white',
+              color: '#111827',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            ← Annulla
+          </button>
+
+          <button
+            onClick={saveClient}
+            disabled={saving || dialogState.active}
+            style={{
+              padding: '10px 20px',
+              borderRadius: 8,
+              border: 'none',
+              background: saving || dialogState.active ? '#9ca3af' : '#111827',
+              color: 'white',
+              fontWeight: 600,
+              cursor: saving || dialogState.active ? 'not-allowed' : 'pointer',
+            }}
+          >
+            {saving ? 'Salvataggio...' : '✅ Salva Cliente'}
+          </button>
+
+          {resultMsg && (
+            <span style={{ color: '#10b981', fontWeight: 500 }}>{resultMsg}</span>
+          )}
+          {errorMsg && (
+            <span style={{ color: '#ef4444', fontWeight: 500 }}>{errorMsg}</span>
+          )}
         </div>
       </div>
 
-      {/* Azioni */}
-      <div style={{ marginTop: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
-        <button
-          onClick={() => router.push('/')}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: '1px solid #d1d5db',
-            background: 'white',
-            color: '#111827',
-            fontWeight: 600,
-            cursor: 'pointer',
-          }}
-        >
-          ← Annulla
-        </button>
-
-        <button
-          onClick={saveClient}
-          disabled={saving || dialogState.active}
-          style={{
-            padding: '10px 20px',
-            borderRadius: 8,
-            border: 'none',
-            background: saving || dialogState.active ? '#9ca3af' : '#111827',
-            color: 'white',
-            fontWeight: 600,
-            cursor: saving || dialogState.active ? 'not-allowed' : 'pointer',
-          }}
-        >
-          {saving ? 'Salvataggio...' : '✅ Salva Cliente'}
-        </button>
-
-{resultMsg && (
-          <span style={{ color: '#10b981', fontWeight: 500 }}>{resultMsg}</span>
-        )}
-        {errorMsg && (
-          <span style={{ color: '#ef4444', fontWeight: 500 }}>{errorMsg}</span>
-        )}
+      {/* Drawer */}
+      <div style={{ position: "relative", zIndex: 2001 }}>
+        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
+        <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
       </div>
-    </div>
-
-    {/* Drawer */}
-    <div style={{ position: "relative", zIndex: 2001 }}>
-      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
-      <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
-    </div>
-  </>
-);
+    </>
+  );
 }
