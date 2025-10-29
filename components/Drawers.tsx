@@ -35,13 +35,26 @@ export function LeftDrawer({
 }: {
   open: boolean;
   onClose: () => void;
-  onSelect: (c: Conv) => void;
+  onSelect?: (c: Conv) => void; // ← Ora opzionale!
 }) {
   const [items, setItems] = useState<Conv[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+
+  // ✅ Funzione di default per selezionare una conversazione
+  const handleSelect = (conv: Conv) => {
+    if (onSelect) {
+      onSelect(conv);
+    } else {
+      // Default: chiudi drawer e vai alla home con la conversazione
+      onClose();
+      if (typeof window !== 'undefined') {
+        window.location.href = '/';
+      }
+    }
+  };
 
   async function load(reset = false) {
     if (loading) return;
@@ -107,7 +120,7 @@ export function LeftDrawer({
       return;
     }
     setItems((prev) => [conv, ...prev]);
-    onSelect(conv);
+    handleSelect(conv);
   }
 
   return (
@@ -130,7 +143,7 @@ export function LeftDrawer({
           <div key={c.id} className="row" style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div
               style={{ flex: 1, cursor: "pointer" }}
-              onClick={() => onSelect(c)}
+              onClick={() => handleSelect(c)}
               title={c.title}
             >
               <div className="title" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -168,6 +181,53 @@ export function RightDrawer({
       {content === 'docs' && <DrawerDocs onClose={onClose} />}
       {content === 'impostazioni' && <DrawerImpostazioni onClose={onClose} />}
     </aside>
+  );
+}
+
+/* ---------------------- WRAPPER CON BACKDROP ---------------------- */
+export function DrawersWithBackdrop({
+  leftOpen,
+  rightOpen,
+  rightContent,
+  onCloseLeft,
+  onCloseRight,
+  onSelectConversation,
+}: {
+  leftOpen: boolean;
+  rightOpen: boolean;
+  rightContent: RightDrawerContent;
+  onCloseLeft: () => void;
+  onCloseRight: () => void;
+  onSelectConversation?: (c: Conv) => void;
+}) {
+  return (
+    <>
+      {/* ✅ Backdrop: chiude i drawer quando clicchi fuori */}
+      {(leftOpen || rightOpen) && (
+        <div
+          onClick={() => {
+            if (leftOpen) onCloseLeft();
+            if (rightOpen) onCloseRight();
+          }}
+          style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            background: 'rgba(0, 0, 0, 0.5)',
+            zIndex: 1999,
+            cursor: 'pointer',
+          }}
+        />
+      )}
+
+      {/* Drawer */}
+      <div style={{ position: 'relative', zIndex: 2001 }}>
+        <LeftDrawer open={leftOpen} onClose={onCloseLeft} onSelect={onSelectConversation} />
+        <RightDrawer open={rightOpen} content={rightContent} onClose={onCloseRight} />
+      </div>
+    </>
   );
 }
 
