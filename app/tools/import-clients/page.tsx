@@ -249,37 +249,53 @@ export default function ImportClientsPage() {
   async function parsePDF(file: File): Promise<{ headers: string[]; data: any[] }> {
     return new Promise(async (resolve, reject) => {
       try {
-        setParsingProgress("Estrazione testo dal PDF...");
+        setParsingProgress("Caricamento PDF...");
         
+        // Import dinamico di pdfjs-dist (compatibile browser)
+        const pdfjsLib = await import("pdfjs-dist");
+        
+        // Configurazione worker da CDN
+        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
+
         // Leggi il file come ArrayBuffer
         const arrayBuffer = await file.arrayBuffer();
         
-        // Usa pdf-parse (importazione dinamica per evitare problemi SSR)
-        const pdfParse = (await import("pdf-parse/lib/pdf-parse.js")).default;
-        const pdfData = await pdfParse(arrayBuffer);
+        setParsingProgress("Estrazione testo...");
         
-        setParsingProgress("Analisi del testo...");
+        // Carica il PDF
+        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
         
-        // Estrai il testo e prova a riconoscere righe e colonne
-        const text = pdfData.text;
-        const lines = text.split("\n").filter(l => l.trim().length > 0);
+        let fullText = "";
+        
+        // Estrai testo da tutte le pagine
+        for (let i = 1; i <= pdf.numPages; i++) {
+          setParsingProgress(`Pagina ${i}/${pdf.numPages}...`);
+          const page = await pdf.getPage(i);
+          const textContent = await page.getTextContent();
+          const pageText = textContent.items.map((item: any) => item.str).join(" ");
+          fullText += pageText + "\n";
+        }
+
+        setParsingProgress("Analisi dati...");
+
+        // Parsing intelligente: cerca pattern di tabelle
+        const lines = fullText.split("\n").filter(l => l.trim().length > 0);
         
         if (lines.length < 2) {
           reject(new Error("Il PDF non contiene dati tabulari riconoscibili"));
           return;
         }
 
-        // Prova a riconoscere la riga di intestazione
-        // (prima riga con più "parole" separate da spazi/tab)
+        // Prima riga = headers
         const headerLine = lines[0];
         const headers = headerLine.split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h.length > 0);
-        
+
         if (headers.length === 0) {
           reject(new Error("Impossibile identificare le colonne nel PDF"));
           return;
         }
 
-        // Prova a parsare le righe successive
+        // Resto = dati
         const data: any[] = [];
         for (let i = 1; i < lines.length; i++) {
           const values = lines[i].split(/\s{2,}|\t/).map(v => v.trim()).filter(v => v.length > 0);
