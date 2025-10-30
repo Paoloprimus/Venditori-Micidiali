@@ -13,12 +13,15 @@
  * FORMATI SUPPORTATI:
  * - CSV: Parsing con csv-parse
  * - XLSX/XLS: Parsing con libreria xlsx
- * - PDF: Estrazione testo con pdf-parse (solo testo stampato, no scansioni)
- * - Foto (JPG, JPEG, PNG, HEIC): OCR con Tesseract.js (solo testo stampato)
+ * - PDF: Estrazione testo con pdfjs-dist (browser-compatible)
+ * - Foto (JPG, JPEG, PNG, HEIC): OCR con Tesseract.js + Column Detection
+ * - Scatta foto: Accesso diretto alla fotocamera del dispositivo
  * 
  * FUNZIONALITÀ:
  * - Upload universale con drag & drop
+ * - Scatta foto diretta dalla fotocamera
  * - Riconoscimento automatico formato da estensione
+ * - OCR migliorato con preprocessing immagine e column detection
  * - Auto-detection intelligente delle colonne (match esatti + parziali)
  * - Mapping manuale con dropdown
  * - Validazione campi obbligatori
@@ -30,8 +33,8 @@
  * DIPENDENZE:
  * - csv-parse/browser/esm/sync (per CSV)
  * - xlsx (per Excel)
- * - pdf-parse (per PDF)
- * - tesseract.js (per OCR foto)
+ * - pdfjs-dist (per PDF, browser-compatible)
+ * - tesseract.js (per OCR foto con TSV output)
  * - window.cryptoSvc (fornito da CryptoProvider)
  * - API /api/clients/upsert (per salvare i clienti)
  * 
@@ -106,6 +109,7 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 export default function ImportClientsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null); // NUOVO: per la fotocamera
   
   // Drawer
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
@@ -206,13 +210,13 @@ export default function ImportClientsPage() {
           reject(new Error(`Errore parsing CSV: ${error.message}`));
         }
       };
-      
-      reader.onerror = () => reject(new Error("Errore nella lettura del file"));
-      reader.readAsText(file, "UTF-8");
+
+      reader.onerror = () => reject(new Error("Errore lettura file"));
+      reader.readAsText(file);
     });
   }
 
-  // Parser XLSX
+  // Parser XLSX/XLS
   async function parseXLSX(file: File): Promise<{ headers: string[]; data: any[] }> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -222,30 +226,27 @@ export default function ImportClientsPage() {
           const data = new Uint8Array(event.target?.result as ArrayBuffer);
           const workbook = XLSX.read(data, { type: "array" });
           
-          // Prendi il primo foglio
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          
-          // Converti in JSON
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet, { raw: false, defval: "" });
-          
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
           if (jsonData.length === 0) {
             reject(new Error("Il file Excel è vuoto!"));
             return;
           }
 
           const headers = Object.keys(jsonData[0] as any);
-          resolve({ headers, data: jsonData });
+          resolve({ headers, data: jsonData as any[] });
         } catch (error: any) {
           reject(new Error(`Errore parsing Excel: ${error.message}`));
         }
       };
-      
-      reader.onerror = () => reject(new Error("Errore nella lettura del file"));
+
+      reader.onerror = () => reject(new Error("Errore lettura file"));
       reader.readAsArrayBuffer(file);
     });
   }
 
-  // Parser PDF
+  // Parser PDF (con pdfjs-dist per browser)
   async function parsePDF(file: File): Promise<{ headers: string[]; data: any[] }> {
     return new Promise(async (resolve, reject) => {
       try {
@@ -323,67 +324,272 @@ export default function ImportClientsPage() {
     });
   }
 
-  // Parser Immagini (OCR)
+  // ==================== OCR MIGLIORATO CON COLUMN DETECTION ====================
+  // Parser Immagini con OCR avanzato + Column Detection
   async function parseImage(file: File): Promise<{ headers: string[]; data: any[] }> {
     return new Promise(async (resolve, reject) => {
       try {
         setParsingProgress("Inizializzazione OCR...");
         
-        // Crea worker Tesseract
+        // ========== STEP 1: PREPROCESSING IMMAGINE ==========
+        setParsingProgress("Ottimizzazione immagine...");
+        
+        const preprocessedImage = await preprocessImage(file);
+        
+        // ========== STEP 2: OCR CON COORDINATE TSV ==========
+        setParsingProgress("Lettura testo con OCR...");
+        
         const worker = await createWorker("ita");
         
-        setParsingProgress("Lettura del testo dall'immagine...");
+        // Configurazione Tesseract per output TSV (include coordinate XY)
+        await worker.setParameters({
+          tessedit_create_tsv: "1",
+        });
         
-        // Esegui OCR
-        const { data: { text } } = await worker.recognize(file);
+        // Esegui OCR ottenendo sia testo che coordinate
+        const { data: { text, tsv } } = await worker.recognize(preprocessedImage);
         
         await worker.terminate();
         
-        setParsingProgress("Analisi del testo estratto...");
+        setParsingProgress("Analisi struttura tabella...");
         
-        // Analizza il testo estratto (simile al PDF)
-        const lines = text.split("\n").filter(l => l.trim().length > 0);
+        // ========== STEP 3: PARSING TSV PER COORDINATE ==========
+        const words = parseTSV(tsv);
         
-        if (lines.length < 2) {
-          reject(new Error("L'immagine non contiene dati tabulari riconoscibili"));
+        if (words.length === 0) {
+          reject(new Error("Nessun testo riconosciuto nell'immagine"));
           return;
         }
-
-        // Prima riga = headers
-        const headerLine = lines[0];
-        const headers = headerLine.split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h.length > 0);
+        
+        // ========== STEP 4: COLUMN DETECTION ==========
+        const { headers, rows } = detectColumnsFromWords(words);
         
         if (headers.length === 0) {
           reject(new Error("Impossibile identificare le colonne nell'immagine"));
           return;
         }
-
-        // Righe successive = dati
-        const data: any[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(/\s{2,}|\t/).map(v => v.trim()).filter(v => v.length > 0);
-          
-          if (values.length === 0) continue;
-          
-          const row: any = {};
-          headers.forEach((header, idx) => {
-            row[header] = values[idx] || "";
-          });
-          data.push(row);
-        }
-
-        if (data.length === 0) {
+        
+        if (rows.length === 0) {
           reject(new Error("Nessun dato trovato nell'immagine"));
           return;
         }
-
+        
+        // ========== STEP 5: COSTRUZIONE TABELLA ==========
+        setParsingProgress("Costruzione tabella...");
+        
+        const data = rows.map(row => {
+          const obj: any = {};
+          headers.forEach((header, idx) => {
+            obj[header] = row[idx] || "";
+          });
+          return obj;
+        });
+        
         setParsingProgress(null);
         resolve({ headers, data });
+        
       } catch (error: any) {
         setParsingProgress(null);
         reject(new Error(`Errore OCR: ${error.message}`));
       }
     });
+  }
+
+  // Preprocessing immagine (migliora qualità per OCR)
+  async function preprocessImage(file: File): Promise<Blob> {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      const reader = new FileReader();
+      
+      reader.onload = (e) => {
+        img.src = e.target?.result as string;
+      };
+      
+      img.onload = () => {
+        // Crea canvas
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d")!;
+        
+        // Ridimensiona se troppo grande (max 2000px)
+        const maxSize = 2000;
+        let width = img.width;
+        let height = img.height;
+        
+        if (width > maxSize || height > maxSize) {
+          if (width > height) {
+            height = (height / width) * maxSize;
+            width = maxSize;
+          } else {
+            width = (width / height) * maxSize;
+            height = maxSize;
+          }
+        }
+        
+        canvas.width = width;
+        canvas.height = height;
+        
+        // Disegna immagine
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Ottimizzazioni per OCR
+        const imageData = ctx.getImageData(0, 0, width, height);
+        const data = imageData.data;
+        
+        // 1. Conversione scala di grigi + aumento contrasto
+        for (let i = 0; i < data.length; i += 4) {
+          // Grayscale
+          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
+          
+          // Aumento contrasto (±30)
+          let adjusted = ((gray - 128) * 1.3) + 128;
+          adjusted = Math.max(0, Math.min(255, adjusted));
+          
+          // Binarizzazione (soglia 140)
+          const binary = adjusted > 140 ? 255 : 0;
+          
+          data[i] = data[i + 1] = data[i + 2] = binary;
+        }
+        
+        ctx.putImageData(imageData, 0, 0);
+        
+        // Converti in Blob
+        canvas.toBlob((blob) => {
+          if (blob) {
+            resolve(blob);
+          } else {
+            reject(new Error("Errore preprocessing immagine"));
+          }
+        }, "image/png");
+      };
+      
+      img.onerror = () => reject(new Error("Errore caricamento immagine"));
+      reader.onerror = () => reject(new Error("Errore lettura file"));
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Parsing TSV output di Tesseract (coordinate XY)
+  function parseTSV(tsv: string): Array<{ text: string; x: number; y: number; width: number; height: number }> {
+    const lines = tsv.split("\n");
+    const words: Array<{ text: string; x: number; y: number; width: number; height: number }> = [];
+    
+    // Salta header TSV
+    for (let i = 1; i < lines.length; i++) {
+      const cols = lines[i].split("\t");
+      
+      if (cols.length < 12) continue;
+      
+      const level = parseInt(cols[0]);
+      const text = cols[11]?.trim();
+      const left = parseInt(cols[6]);
+      const top = parseInt(cols[7]);
+      const width = parseInt(cols[8]);
+      const height = parseInt(cols[9]);
+      
+      // Considera solo parole (level 5) con testo
+      if (level === 5 && text && text.length > 0) {
+        words.push({
+          text,
+          x: left,
+          y: top,
+          width,
+          height,
+        });
+      }
+    }
+    
+    return words;
+  }
+
+  // Column Detection Algorithm
+  function detectColumnsFromWords(words: Array<{ text: string; x: number; y: number; width: number; height: number }>): { headers: string[]; rows: string[][] } {
+    if (words.length === 0) return { headers: [], rows: [] };
+    
+    // ========== STEP 1: RAGGRUPPA PAROLE PER RIGHE (Y simile) ==========
+    const rowTolerance = 15; // pixel di tolleranza Y
+    const rows: Array<Array<{ text: string; x: number; y: number; width: number; height: number }>> = [];
+    
+    // Ordina per Y crescente
+    const sortedWords = [...words].sort((a, b) => a.y - b.y);
+    
+    let currentRow: Array<{ text: string; x: number; y: number; width: number; height: number }> = [];
+    let currentY = sortedWords[0].y;
+    
+    for (const word of sortedWords) {
+      if (Math.abs(word.y - currentY) <= rowTolerance) {
+        // Stessa riga
+        currentRow.push(word);
+      } else {
+        // Nuova riga
+        if (currentRow.length > 0) {
+          rows.push(currentRow.sort((a, b) => a.x - b.x)); // ordina per X
+        }
+        currentRow = [word];
+        currentY = word.y;
+      }
+    }
+    if (currentRow.length > 0) {
+      rows.push(currentRow.sort((a, b) => a.x - b.x));
+    }
+    
+    if (rows.length < 2) {
+      // Serve almeno header + 1 riga dati
+      return { headers: [], rows: [] };
+    }
+    
+    // ========== STEP 2: IDENTIFICA COLONNE DALLA PRIMA RIGA (HEADER) ==========
+    const headerRow = rows[0];
+    const columnRanges: Array<{ start: number; end: number }> = [];
+    
+    const columnTolerance = 50; // pixel di tolleranza X per identificare colonna
+    
+    for (const word of headerRow) {
+      const centerX = word.x + word.width / 2;
+      columnRanges.push({
+        start: centerX - columnTolerance,
+        end: centerX + columnTolerance,
+      });
+    }
+    
+    // Headers
+    const headers = headerRow.map(w => w.text);
+    
+    // ========== STEP 3: ASSEGNA PAROLE ALLE COLONNE PER OGNI RIGA ==========
+    const dataRows: string[][] = [];
+    
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      const rowData: string[] = new Array(headers.length).fill("");
+      
+      for (const word of row) {
+        const wordCenterX = word.x + word.width / 2;
+        
+        // Trova colonna più vicina
+        let bestCol = 0;
+        let bestDist = Math.abs(wordCenterX - (columnRanges[0].start + columnRanges[0].end) / 2);
+        
+        for (let col = 1; col < columnRanges.length; col++) {
+          const colCenterX = (columnRanges[col].start + columnRanges[col].end) / 2;
+          const dist = Math.abs(wordCenterX - colCenterX);
+          
+          if (dist < bestDist) {
+            bestDist = dist;
+            bestCol = col;
+          }
+        }
+        
+        // Aggiungi parola alla colonna (gestisce celle multi-parola)
+        if (rowData[bestCol]) {
+          rowData[bestCol] += " " + word.text;
+        } else {
+          rowData[bestCol] = word.text;
+        }
+      }
+      
+      dataRows.push(rowData);
+    }
+    
+    return { headers, rows: dataRows };
   }
 
   // Gestione upload file (UNIVERSALE)
@@ -448,9 +654,6 @@ export default function ImportClientsPage() {
     if (!client.name) errors.push("Nome azienda mancante");
     if (!client.contact_name) errors.push("Nome contatto mancante");
     if (!client.city) errors.push("Città mancante");
-    if (!client.address) errors.push("Indirizzo mancante");
-    if (!client.tipo_locale) errors.push("Tipo locale mancante");
-    if (!client.phone) errors.push("Telefono mancante");
 
     return {
       ...client,
@@ -460,147 +663,102 @@ export default function ImportClientsPage() {
     };
   };
 
-  // Preview e validazione
+  // Preview dopo mapping
   const handlePreview = () => {
-    const processed = rawData.map((row, idx) => validateClient(row, idx));
-    setProcessedClients(processed);
+    const validated = rawData.map((row, idx) => validateClient(row, idx));
+    setProcessedClients(validated);
     setStep("preview");
   };
 
-  // Import con cifratura
+  // Import finale
   const handleImport = async () => {
     setStep("importing");
     setImportProgress(0);
+    
+    const results = {
+      success: 0,
+      failed: 0,
+      duplicates: 0,
+      errors: [] as string[],
+    };
 
     const validClients = processedClients.filter(c => c.isValid);
-    const results = { success: 0, failed: 0, duplicates: 0, errors: [] as string[] };
+    const cryptoSvc = getCryptoService();
 
-    try {
-      const crypto = getCryptoService();
-
-      // IMPORTANTE: Assicurati che lo scope sia inizializzato
+    for (let i = 0; i < validClients.length; i++) {
+      const client = validClients[i];
+      
       try {
-        console.log("🔐 Inizializzazione scope table:accounts...");
-        await crypto.prewarm(["table:accounts"]);
-        console.log("✅ Scope table:accounts pronto!");
-      } catch (err: any) {
-        console.error("❌ Errore init scope:", err);
-        alert(`Errore nell'inizializzazione della cifratura: ${err.message}\n\nRicarica la pagina e riprova.`);
-        setStep("preview");
-        return;
-      }
-
-      for (let i = 0; i < validClients.length; i++) {
-        const client = validClients[i];
+        // Cifra campi sensibili
+        const encryptedClient: any = {};
         
-        try {
-          // 1. Prepara i campi da cifrare
-          const fieldsToEncrypt: Record<string, string> = {
-            name: client.name!,
-            contact_name: client.contact_name!,
-            phone: client.phone!,
-          };
-
-          // Aggiungi campi opzionali solo se presenti
-          if (client.address) fieldsToEncrypt.address = client.address;
-          if (client.email) fieldsToEncrypt.email = client.email;
-          if (client.vat_number) fieldsToEncrypt.vat_number = client.vat_number;
-
-          // 2. Cifra tutti i campi in un colpo solo
-          const encrypted = await crypto.encryptFields("table:accounts", "accounts", null, fieldsToEncrypt);
-
-          // 3. Calcola blind index per name
-          const nameBI = await crypto.computeBlindIndex("table:accounts", client.name!);
-
-          // 4. Prepara payload per l'API
-          const payload: any = {
-            // Campi cifrati obbligatori
-            name_enc: encrypted.name_enc,
-            name_iv: encrypted.name_iv,
-            name_bi: nameBI,
-            contact_name_enc: encrypted.contact_name_enc,
-            contact_name_iv: encrypted.contact_name_iv,
-            phone_enc: encrypted.phone_enc,
-            phone_iv: encrypted.phone_iv,
-            // Campi in chiaro per LLM
-            custom: {
-              city: client.city || "",
-              tipo_locale: client.tipo_locale || "",
-              notes: client.notes || "",
-            },
-          };
-
-          // Aggiungi campi cifrati opzionali se presenti
-          if (encrypted.address_enc) {
-            payload.address_enc = encrypted.address_enc;
-            payload.address_iv = encrypted.address_iv;
-          }
-          if (encrypted.email_enc) {
-            payload.email_enc = encrypted.email_enc;
-            payload.email_iv = encrypted.email_iv;
-          }
-          if (encrypted.vat_number_enc) {
-            payload.vat_number_enc = encrypted.vat_number_enc;
-            payload.vat_number_iv = encrypted.vat_number_iv;
-          }
-
-          // 5. Salva via API upsert
-          const res = await fetch("/api/clients/upsert", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(payload),
-          });
-
-          if (res.ok) {
-            results.success++;
+        for (const [key, value] of Object.entries(client)) {
+          if (key === "rowIndex" || key === "isValid" || key === "errors" || !value) continue;
+          
+          // Cifra solo campi sensibili
+          if (["name", "contact_name", "phone", "email", "address", "vat_number", "notes"].includes(key)) {
+            const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
+            encryptedClient[key] = encrypted.ciphertext;
           } else {
-            const err = await res.json();
-            results.failed++;
-            results.errors.push(`Riga ${client.rowIndex}: ${err.error || "Errore sconosciuto"}`);
+            encryptedClient[key] = value;
           }
-        } catch (err: any) {
-          results.failed++;
-          results.errors.push(`Riga ${client.rowIndex}: ${err.message || "Errore cifratura"}`);
         }
 
-        // Aggiorna progress
-        setImportProgress(Math.round(((i + 1) / validClients.length) * 100));
+        // Invia al server
+        const response = await fetch("/api/clients/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(encryptedClient),
+        });
+
+        if (response.ok) {
+          results.success++;
+        } else {
+          const errorData = await response.json();
+          if (errorData.error?.includes("duplicate")) {
+            results.duplicates++;
+          } else {
+            results.failed++;
+            results.errors.push(`Riga ${client.rowIndex}: ${errorData.error || "Errore sconosciuto"}`);
+          }
+        }
+      } catch (error: any) {
+        results.failed++;
+        results.errors.push(`Riga ${client.rowIndex}: ${error.message}`);
       }
 
-      setImportResults(results);
-      setStep("complete");
-    } catch (err: any) {
-      alert(`Errore durante l'import: ${err.message}`);
-      setStep("preview");
+      setImportProgress(Math.round(((i + 1) / validClients.length) * 100));
     }
+
+    setImportResults(results);
+    setStep("complete");
   };
 
   return (
-    <>
-      {/* TopBar */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
-        <TopBar
-          title="Importa Clienti"
-          onOpenLeft={openLeft}
-          onOpenDati={openDati}
-          onOpenDocs={openDocs}
-          onOpenImpostazioni={openImpostazioni}
-          onLogout={logout}
-        />
-      </div>
-
-      <div style={{ minHeight: "100vh", background: "#f9fafb", padding: 24 }}>
-        {/* Spacer per TopBar */}
-        <div style={{ height: 70 }} />
-        
-        <div style={{ maxWidth: 1200, margin: "0 auto" }}>
-        {/* Header */}
+  <>
+    <TopBar
+      leftOpen={leftOpen}
+      rightOpen={rightOpen}
+      onOpenLeft={openLeft}
+      onOpenDati={openDati}
+      onOpenDocs={openDocs}
+      onOpenImpostazioni={openImpostazioni}
+      onLogout={logout}
+    />
+    
+    <div style={{ 
+      minHeight: "100vh", 
+      background: "linear-gradient(to bottom right, #f0f9ff, #e0f2fe)",
+      paddingTop: 80,
+      paddingBottom: 40,
+    }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px" }}>
         <div style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
+          <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 8 }}>
             📥 Importa Lista Clienti
           </h1>
           <p style={{ color: "#6b7280", fontSize: 14 }}>
-            Carica un file CSV per importare clienti in blocco. Tutti i dati sensibili saranno cifrati automaticamente.
+            Carica un file o scatta una foto della lista clienti. Tutti i dati sensibili saranno cifrati automaticamente.
           </p>
         </div>
 
@@ -635,9 +793,9 @@ export default function ImportClientsPage() {
         {/* ========== STEP: UPLOAD ========== */}
         {step === "upload" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File o Scatta Foto</h2>
             <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Carica un file con l'elenco dei tuoi clienti. Supportiamo CSV, Excel, PDF e foto. Il sistema cifrerà automaticamente i dati sensibili.
+              Carica un file o scatta una foto della lista clienti. Supportiamo CSV, Excel, PDF e foto. Il sistema cifrerà automaticamente i dati sensibili.
             </p>
 
             {/* Indicatore parsing progress */}
@@ -655,43 +813,80 @@ export default function ImportClientsPage() {
               </div>
             )}
 
-            <div
-              onClick={() => !parsingProgress && fileInputRef.current?.click()}
-              style={{
-                border: "2px dashed #d1d5db",
-                borderRadius: 12,
-                padding: 48,
-                textAlign: "center",
-                cursor: parsingProgress ? "wait" : "pointer",
-                background: "#f9fafb",
-                transition: "all 0.2s",
-                opacity: parsingProgress ? 0.6 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!parsingProgress) {
-                  e.currentTarget.style.background = "#f3f4f6";
-                  e.currentTarget.style.borderColor = "#9ca3af";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!parsingProgress) {
-                  e.currentTarget.style.background = "#f9fafb";
-                  e.currentTarget.style.borderColor = "#d1d5db";
-                }
-              }}
-            >
-              <div style={{ fontSize: 48, marginBottom: 16 }}>📁</div>
-              <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>
-                Clicca per selezionare un file
-              </p>
-              <p style={{ fontSize: 14, color: "#6b7280" }}>
-                oppure trascina il file qui
-              </p>
-              <p style={{ fontSize: 12, color: "#9ca3af", marginTop: 8 }}>
-                CSV • Excel • PDF • Foto (JPG, PNG, HEIC)
-              </p>
+            {/* DUE BOTTONI AFFIANCATI: Carica File + Scatta Foto */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
+              {/* BOTTONE 1: Carica File */}
+              <div
+                onClick={() => !parsingProgress && fileInputRef.current?.click()}
+                style={{
+                  border: "2px dashed #d1d5db",
+                  borderRadius: 12,
+                  padding: 32,
+                  textAlign: "center",
+                  cursor: parsingProgress ? "wait" : "pointer",
+                  background: "#f9fafb",
+                  transition: "all 0.2s",
+                  opacity: parsingProgress ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!parsingProgress) {
+                    e.currentTarget.style.background = "#f3f4f6";
+                    e.currentTarget.style.borderColor = "#9ca3af";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!parsingProgress) {
+                    e.currentTarget.style.background = "#f9fafb";
+                    e.currentTarget.style.borderColor = "#d1d5db";
+                  }
+                }}
+              >
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
+                <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+                  Carica file
+                </p>
+                <p style={{ fontSize: 12, color: "#6b7280" }}>
+                  CSV, Excel, PDF, Foto
+                </p>
+              </div>
+
+              {/* BOTTONE 2: Scatta Foto */}
+              <div
+                onClick={() => !parsingProgress && cameraInputRef.current?.click()}
+                style={{
+                  border: "2px dashed #10b981",
+                  borderRadius: 12,
+                  padding: 32,
+                  textAlign: "center",
+                  cursor: parsingProgress ? "wait" : "pointer",
+                  background: "#f0fdf4",
+                  transition: "all 0.2s",
+                  opacity: parsingProgress ? 0.6 : 1,
+                }}
+                onMouseEnter={(e) => {
+                  if (!parsingProgress) {
+                    e.currentTarget.style.background = "#dcfce7";
+                    e.currentTarget.style.borderColor = "#059669";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!parsingProgress) {
+                    e.currentTarget.style.background = "#f0fdf4";
+                    e.currentTarget.style.borderColor = "#10b981";
+                  }
+                }}
+              >
+                <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
+                <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
+                  Scatta foto
+                </p>
+                <p style={{ fontSize: 12, color: "#059669" }}>
+                  Apri fotocamera
+                </p>
+              </div>
             </div>
 
+            {/* Input nascosto per file dalla galleria */}
             <input
               ref={fileInputRef}
               type="file"
@@ -701,7 +896,18 @@ export default function ImportClientsPage() {
               disabled={!!parsingProgress}
             />
 
-            <div style={{ marginTop: 32, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
+            {/* Input nascosto per fotocamera (capture="environment" apre fotocamera posteriore) */}
+            <input
+              ref={cameraInputRef}
+              type="file"
+              accept="image/*"
+              capture="environment"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+              disabled={!!parsingProgress}
+            />
+
+            <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
               <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📋 Formati Supportati</h3>
               
               <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
@@ -720,7 +926,13 @@ export default function ImportClientsPage() {
                 <div>
                   <strong style={{ fontSize: 13, color: "#1e40af" }}>📸 Foto:</strong>
                   <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
-                    Foto di liste stampate con OCR (solo testo stampato, non manoscritto)
+                    Foto di liste stampate con OCR avanzato (riconoscimento colonne automatico)
+                  </p>
+                </div>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#059669" }}>📱 Scatta Foto:</strong>
+                  <p style={{ fontSize: 12, color: "#059669", marginTop: 4 }}>
+                    Accedi direttamente alla fotocamera per scattare foto della lista al momento (più veloce!)
                   </p>
                 </div>
               </div>
@@ -752,9 +964,10 @@ export default function ImportClientsPage() {
         {/* ========== STEP: MAPPING ========== */}
         {step === "mapping" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>🔗 Mappa le Colonne</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>🔗 Mapping Colonne</h2>
             <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Collega le colonne del CSV ai campi cliente. Alcuni sono già stati mappati automaticamente.
+              Verifica o modifica l'associazione tra le colonne del file e i campi dell'applicazione.
+              Il sistema ha già provato a rilevare automaticamente le colonne.
             </p>
 
             <div style={{ display: "grid", gap: 16 }}>
@@ -762,39 +975,41 @@ export default function ImportClientsPage() {
                 name: "Nome Cliente *",
                 contact_name: "Nome Contatto *",
                 city: "Città *",
-                address: "Indirizzo *",
-                tipo_locale: "Tipo Locale *",
-                phone: "Telefono *",
+                address: "Indirizzo",
+                tipo_locale: "Tipo Locale",
+                phone: "Telefono",
                 email: "Email",
                 vat_number: "P.IVA",
                 notes: "Note",
               }).map(([field, label]) => (
-                <div key={field} style={{ display: "flex", alignItems: "center", gap: 16 }}>
-                  <div style={{ width: 200, fontWeight: 500, fontSize: 14 }}>
+                <div key={field}>
+                  <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
                     {label}
-                  </div>
+                  </label>
                   <select
                     value={mapping[field as keyof ColumnMapping] || ""}
-                    onChange={(e) => setMapping({ ...mapping, [field]: e.target.value })}
+                    onChange={(e) => setMapping({ ...mapping, [field]: e.target.value || undefined })}
                     style={{
-                      flex: 1,
-                      padding: "8px 12px",
+                      width: "100%",
+                      padding: "10px 12px",
                       borderRadius: 8,
                       border: "1px solid #d1d5db",
                       fontSize: 14,
                     }}
                   >
-                    <option value="">-- Non mappato --</option>
-                    {csvHeaders.map(h => (
-                      <option key={h} value={h}>{h}</option>
+                    <option value="">-- Non mappare --</option>
+                    {csvHeaders.map(header => (
+                      <option key={header} value={header}>{header}</option>
                     ))}
                   </select>
                 </div>
               ))}
             </div>
 
-            <div style={{ marginTop: 24, padding: 12, background: "#fef3c7", borderRadius: 8, fontSize: 13, color: "#92400e" }}>
-              ℹ️ I campi contrassegnati con * sono <strong>obbligatori</strong>
+            <div style={{ marginTop: 24, padding: 16, background: "#fef3c7", borderRadius: 8, border: "1px solid #fbbf24" }}>
+              <p style={{ fontSize: 13, color: "#92400e" }}>
+                <strong>Nota:</strong> I campi contrassegnati con * sono obbligatori. Assicurati che siano mappati correttamente.
+              </p>
             </div>
 
             <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
@@ -833,17 +1048,17 @@ export default function ImportClientsPage() {
         {/* ========== STEP: PREVIEW ========== */}
         {step === "preview" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>👀 Anteprima Dati</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>👁️ Anteprima Clienti</h2>
             <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Verifica i dati prima dell'importazione. I record con errori saranno saltati automaticamente.
+              Verifica i dati prima dell'importazione. I clienti con errori non saranno importati.
             </p>
 
-            <div style={{ marginBottom: 24, display: "flex", gap: 16 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
               <div style={{ padding: 12, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "#15803d" }}>
                   {processedClients.filter(c => c.isValid).length}
                 </div>
-                <div style={{ fontSize: 12, color: "#15803d" }}>✅ Validi</div>
+                <div style={{ fontSize: 12, color: "#15803d" }}>✅ Pronti per import</div>
               </div>
               <div style={{ padding: 12, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "#dc2626" }}>
