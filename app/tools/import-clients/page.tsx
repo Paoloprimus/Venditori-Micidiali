@@ -146,7 +146,7 @@ export default function ImportClientsPage() {
     return svc;
   };
 
-  // Auto-detect colonne con priorità ai match esatti
+  // Auto-detect colonne con priorità ai match esatti (INVERTITO: header -> field)
   const autoDetectMapping = (headers: string[]): ColumnMapping => {
     const detected: ColumnMapping = {};
     
@@ -157,23 +157,23 @@ export default function ImportClientsPage() {
       for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
         // Match esatto con uno degli alias
         if (aliases.some(alias => normalized === alias)) {
-          detected[field as keyof ColumnMapping] = header;
+          detected[header] = field; // INVERTITO: header -> field
           break;
         }
       }
     }
     
-    // Seconda passata: match parziali (solo per campi non ancora mappati)
+    // Seconda passata: match parziali (solo per colonne non ancora mappate)
     for (const header of headers) {
       const normalized = header.toLowerCase().trim();
       
       for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
         // Salta se già mappato nella prima passata
-        if (detected[field as keyof ColumnMapping]) continue;
+        if (detected[header]) continue;
         
         // Match parziale
         if (aliases.some(alias => normalized.includes(alias))) {
-          detected[field as keyof ColumnMapping] = header;
+          detected[header] = field; // INVERTITO: header -> field
           break;
         }
       }
@@ -710,9 +710,9 @@ export default function ImportClientsPage() {
     const errors: string[] = [];
     const client: CsvRow = {};
 
-    // Applica mapping
-    for (const [field, csvColumn] of Object.entries(mapping)) {
-      if (csvColumn && row[csvColumn]) {
+    // Applica mapping (INVERTITO: csvColumn -> field)
+    for (const [csvColumn, field] of Object.entries(mapping)) {
+      if (field && row[csvColumn]) {
         client[field as keyof CsvRow] = String(row[csvColumn]).trim();
       }
     }
@@ -1030,51 +1030,80 @@ export default function ImportClientsPage() {
         {/* ========== STEP: MAPPING ========== */}
         {step === "mapping" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>🔗 Mapping Colonne</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>🔗 Assegna Campi</h2>
             <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Verifica o modifica l'associazione tra le colonne del file e i campi dell'applicazione.
-              Il sistema ha già provato a rilevare automaticamente le colonne.
+              Per ogni colonna riconosciuta, scegli a quale campo corrisponde guardando i dati della prima riga.
             </p>
 
-            <div style={{ display: "grid", gap: 16 }}>
-              {Object.entries({
-                name: "Nome Cliente *",
-                contact_name: "Nome Contatto *",
-                city: "Città *",
-                address: "Indirizzo",
-                tipo_locale: "Tipo Locale",
-                phone: "Telefono",
-                email: "Email",
-                vat_number: "P.IVA",
-                notes: "Note",
-              }).map(([field, label]) => (
-                <div key={field}>
-                  <label style={{ display: "block", fontSize: 14, fontWeight: 600, marginBottom: 8 }}>
-                    {label}
-                  </label>
-                  <select
-                    value={mapping[field as keyof ColumnMapping] || ""}
-                    onChange={(e) => setMapping({ ...mapping, [field]: e.target.value || undefined })}
-                    style={{
-                      width: "100%",
-                      padding: "10px 12px",
-                      borderRadius: 8,
-                      border: "1px solid #d1d5db",
-                      fontSize: 14,
-                    }}
-                  >
-                    <option value="">-- Non mappare --</option>
-                    {csvHeaders.map(header => (
-                      <option key={header} value={header}>{header}</option>
+            {/* Tabella con dropdown sopra ogni colonna */}
+            <div style={{ overflow: "auto", marginBottom: 24 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {csvHeaders.map((header, idx) => (
+                      <th key={idx} style={{ 
+                        padding: 12, 
+                        background: "#f9fafb", 
+                        borderBottom: "2px solid #e5e7eb",
+                        verticalAlign: "top",
+                        minWidth: 150
+                      }}>
+                        <select
+                          value={mapping[header] || ""}
+                          onChange={(e) => setMapping({ ...mapping, [header]: e.target.value || undefined })}
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: 6,
+                            border: "2px solid #2563eb",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#2563eb",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="">Scegli dato</option>
+                          <option value="name">Nome Cliente *</option>
+                          <option value="contact_name">Nome Contatto *</option>
+                          <option value="city">Città *</option>
+                          <option value="address">Indirizzo</option>
+                          <option value="tipo_locale">Tipo Locale</option>
+                          <option value="phone">Telefono</option>
+                          <option value="email">Email</option>
+                          <option value="vat_number">P.IVA</option>
+                          <option value="notes">Note</option>
+                        </select>
+                        <div style={{ 
+                          marginTop: 8, 
+                          fontSize: 11, 
+                          color: "#9ca3af",
+                          fontWeight: "normal"
+                        }}>
+                          Colonna: {header}
+                        </div>
+                      </th>
                     ))}
-                  </select>
-                </div>
-              ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {csvHeaders.map((header, idx) => (
+                      <td key={idx} style={{ 
+                        padding: 12, 
+                        borderBottom: "1px solid #e5e7eb",
+                        background: "white"
+                      }}>
+                        {rawData[0]?.[header] || "-"}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
             </div>
 
-            <div style={{ marginTop: 24, padding: 16, background: "#fef3c7", borderRadius: 8, border: "1px solid #fbbf24" }}>
-              <p style={{ fontSize: 13, color: "#92400e" }}>
-                <strong>Nota:</strong> I campi contrassegnati con * sono obbligatori. Assicurati che siano mappati correttamente.
+            <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
+              <p style={{ fontSize: 13, color: "#1e40af" }}>
+                <strong>💡 Suggerimento:</strong> Guarda i valori nella prima riga per capire a quale campo corrisponde ogni colonna. I campi con * sono obbligatori.
               </p>
             </div>
 
