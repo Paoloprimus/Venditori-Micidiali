@@ -337,41 +337,61 @@ export default function ImportClientsPage() {
 
     const validClients = processedClients.filter(c => c.isValid);
     const cryptoSvc = getCryptoService();
-    
-    console.log("🔍 DEBUG: cryptoSvc =", cryptoSvc);
-    console.log("🔍 DEBUG: cryptoSvc.encrypt =", cryptoSvc?.encrypt);
-    console.log("🔍 DEBUG: typeof cryptoSvc.encrypt =", typeof cryptoSvc?.encrypt);
 
     for (let i = 0; i < validClients.length; i++) {
       const client = validClients[i];
       
       try {
-        // Cifra campi sensibili
-        const encryptedClient: any = {};
+        // Prepara l'oggetto plain con i campi da cifrare
+        const plainRecord: any = {};
+        const fieldsToEncrypt: string[] = [];
         
+        // Aggiungi campi cifrati al record
         for (const [key, value] of Object.entries(client)) {
-          if (key === "rowIndex" || key === "isValid" || key === "errors" || !value) continue;
+          if (key === "rowIndex" || key === "isValid" || key === "errors") continue;
           
-          // Cifra solo campi sensibili
-          if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key)) {
-            console.log(`🔐 Cifro campo ${key}:`, value);
-            const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
-            console.log(`✅ Cifrato ${key}:`, encrypted);
-            encryptedClient[key] = encrypted.ciphertext;
-          } else if (["city", "tipo_locale", "notes"].includes(key)) {
-            // Questi vanno in custom (non cifrati)
-            if (!encryptedClient.custom) encryptedClient.custom = {};
-            encryptedClient.custom[key] = value;
-          } else {
-            encryptedClient[key] = value;
+          // Campi da cifrare
+          if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key) && value) {
+            plainRecord[key] = value;
+            fieldsToEncrypt.push(key);
           }
+        }
+        
+        // Cifra tutti i campi in un colpo solo
+        const encrypted = await (cryptoSvc as any).encryptFields(
+          "table:accounts",
+          "accounts",
+          "",
+          plainRecord,
+          fieldsToEncrypt
+        );
+        
+        // Prepara il payload finale
+        const payload: any = {};
+        
+        // Aggiungi campi cifrati
+        for (const field of fieldsToEncrypt) {
+          const enc = encrypted.find((f: any) => f.name === field);
+          if (enc) {
+            payload[`${field}_enc`] = enc.ciphertext;
+            payload[`${field}_iv`] = enc.iv;
+          }
+        }
+        
+        // Aggiungi custom (city, tipo_locale, notes)
+        const custom: any = {};
+        if (client.city) custom.city = client.city;
+        if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
+        if (client.notes) custom.notes = client.notes;
+        if (Object.keys(custom).length > 0) {
+          payload.custom = custom;
         }
 
         // Invia al server
         const response = await fetch("/api/clients/upsert", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(encryptedClient),
+          body: JSON.stringify(payload),
         });
 
         if (response.ok) {
