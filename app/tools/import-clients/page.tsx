@@ -81,17 +81,8 @@ type ProcessedClient = CsvRow & {
 
 type ImportStep = "upload" | "mapping" | "preview" | "importing" | "complete";
 
-type ColumnMapping = {
-  name?: string;
-  contact_name?: string;
-  city?: string;
-  address?: string;
-  tipo_locale?: string;
-  phone?: string;
-  email?: string;
-  vat_number?: string;
-  notes?: string;
-};
+// Mapping: colonna CSV -> campo app
+type ColumnMapping = Record<string, string | undefined>;
 
 // Auto-detection intelligente delle colonne
 const COLUMN_ALIASES: Record<string, string[]> = {
