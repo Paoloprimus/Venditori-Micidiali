@@ -22,7 +22,7 @@ type RawAccount = {
   // encrypted (opzionali)
   name_enc?: any; name_iv?: any;
   contact_name_enc?: any; contact_name_iv?: any;
-  city_enc?: any; city_iv?: any;  // ✅ AGGIUNGI QUESTA RIGA
+  city_enc?: any; city_iv?: any;
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
@@ -37,7 +37,7 @@ type PlainAccount = {
   created_at: string;
   name: string;
   contact_name: string;
-  city: string;  // ✅ AGGIUNGI QUESTA RIGA
+  city: string;
   email: string;
   phone: string;
   vat_number: string;
@@ -45,7 +45,7 @@ type PlainAccount = {
 };
 
 const PAGE_SIZE = 25;
-type SortKey = "name" | "city" | "email" | "phone" | "vat_number" | "created_at";  // ✅ AGGIUNGI "city"
+type SortKey = "name" | "city" | "email" | "phone" | "vat_number" | "created_at";
 
 const DEFAULT_SCOPES = [
   "table:accounts", "table:contacts", "table:products",
@@ -77,6 +77,10 @@ export default function ClientsPage(): JSX.Element {
   const unlockingRef = useRef(false);
 
   const [pass, setPass] = useState("");
+
+  // 🆕 STATO PER EDITING INLINE
+  const [editingCell, setEditingCell] = useState<{rowId: string, field: string} | null>(null);
+  const [tempValue, setTempValue] = useState("");
 
 // Logout
 async function logout() {
@@ -200,7 +204,7 @@ const { data, error } = await supabase
     "id,created_at," +
     "name_enc,name_iv," +
     "contact_name_enc,contact_name_iv," +
-    "city_enc,city_iv," +  // ✅ AGGIUNGI QUESTA RIGA
+    "city_enc,city_iv," +
     "email_enc,email_iv," +
     "phone_enc,phone_iv," +
     "vat_number_enc,vat_number_iv," +
@@ -243,66 +247,79 @@ const { data, error } = await supabase
         // 🔧 FIX: Converti hex-string in base64
         const hexToBase64 = (hexStr: any): string => {
           if (!hexStr || typeof hexStr !== 'string') return '';
-          if (!hexStr.startsWith('\\x')) return hexStr;
-          
-          const hex = hexStr.slice(2);
-          const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
-          return bytes;
+          try {
+            // Se inizia con "\\x", è hex-escaped → converti
+            if (hexStr.startsWith('\\x')) {
+              const hex = hexStr.replace(/\\x/g, '');
+              const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
+              return btoa(String.fromCharCode(...bytes));
+            }
+            // Altrimenti assume sia già base64
+            return hexStr;
+          } catch (e) {
+            console.warn('hexToBase64 failed:', e);
+            return '';
+          }
         };
-        
-const recordForDecrypt = {
-  ...r,
-  name_enc: hexToBase64(r.name_enc),
-  name_iv: hexToBase64(r.name_iv),
-  contact_name_enc: hexToBase64(r.contact_name_enc),
-  contact_name_iv: hexToBase64(r.contact_name_iv),
-  city_enc: hexToBase64(r.city_enc),  // ✅ AGGIUNGI QUESTA RIGA
-  city_iv: hexToBase64(r.city_iv),    // ✅ AGGIUNGI QUESTA RIGA
-  email_enc: hexToBase64(r.email_enc),
-  email_iv: hexToBase64(r.email_iv),
-  phone_enc: hexToBase64(r.phone_enc),
-  phone_iv: hexToBase64(r.phone_iv),
-  vat_number_enc: hexToBase64(r.vat_number_enc),
-  vat_number_iv: hexToBase64(r.vat_number_iv),
-  address_enc: hexToBase64(r.address_enc),
-  address_iv: hexToBase64(r.address_iv),
-};
 
-        if (typeof (crypto as any)?.decryptFields !== "function") {
-          throw new Error("decryptFields non disponibile");
-        }
-        
-        const toObj = (x: any): Record<string, unknown> =>
-          Array.isArray(x)
-            ? x.reduce((acc: Record<string, unknown>, it: any) => {
-                if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
-                return acc;
-              }, {})
-            : ((x ?? {}) as Record<string, unknown>);
-
-const decAny = await (crypto as any).decryptFields(
-  "table:accounts", "accounts", '', recordForDecrypt,
-  ["name", "contact_name", "city", "email", "phone", "vat_number", "address"]  // ✅ AGGIUNGI "city"
-);
-
-        const dec = toObj(decAny);
-
-        // ✅ Estrai note dal custom (sono in chiaro!)
-        const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
-        const notes = customObj.notes || "";
+        if (hasEncrypted) {
+          // 🔧 Prepara il rowMap con conversione hex → base64
+          const rowMap: Record<string, unknown> = {
+            name_enc: hexToBase64(r.name_enc),
+            name_iv: hexToBase64(r.name_iv),
+            contact_name_enc: hexToBase64(r.contact_name_enc),
+            contact_name_iv: hexToBase64(r.contact_name_iv),
+            city_enc: hexToBase64(r.city_enc),
+            city_iv: hexToBase64(r.city_iv),
+            email_enc: hexToBase64(r.email_enc),
+            email_iv: hexToBase64(r.email_iv),
+            phone_enc: hexToBase64(r.phone_enc),
+            phone_iv: hexToBase64(r.phone_iv),
+            vat_number_enc: hexToBase64(r.vat_number_enc),
+            vat_number_iv: hexToBase64(r.vat_number_iv),
+            address_enc: hexToBase64(r.address_enc),
+            address_iv: hexToBase64(r.address_iv),
+          };
+  
+          const dec = await (crypto as any).decryptFields("table:accounts", "accounts", r.id, rowMap, [
+            "name",
+            "contact_name",
+            "city",
+            "email",
+            "phone",
+            "vat_number",
+            "address"
+          ]);
+  
+          // notes da custom.notes
+          const notes = (r.custom?.notes) ? String(r.custom.notes) : "";
 
 plain.push({
   id: r.id,
   created_at: r.created_at,
   name: String(dec.name ?? ""),
   contact_name: String(dec.contact_name ?? ""),
-  city: String(dec.city ?? ""),  // ✅ AGGIUNGI QUESTA RIGA
+  city: String(dec.city ?? ""),
   email: String(dec.email ?? ""),
   phone: String(dec.phone ?? ""),
   vat_number: String(dec.vat_number ?? ""),
   notes: String(notes),
 });
-        
+        } else {
+          // Dati non cifrati (legacy o custom)
+          const notes = (r.custom?.notes) ? String(r.custom.notes) : "";
+          plain.push({
+            id: r.id,
+            created_at: r.created_at,
+            name: "",
+            contact_name: "",
+            city: "",
+            email: "",
+            phone: "",
+            vat_number: "",
+            notes: String(notes),
+          });
+        }
       } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
 plain.push({
@@ -310,7 +327,7 @@ plain.push({
   created_at: r.created_at,
   name: "", 
   contact_name: "", 
-  city: "",  // ✅ AGGIUNGI QUESTA RIGA
+  city: "",
   email: "", 
   phone: "", 
   vat_number: "", 
@@ -344,8 +361,8 @@ plain.push({
       const qq = norm(q);
 arr = arr.filter((r) =>
   norm(r.name).includes(qq) ||
-  norm(r.contact_name).includes(qq) ||  // ✅ AGGIUNGI QUESTA RIGA
-  norm(r.city).includes(qq) ||          // ✅ AGGIUNGI QUESTA RIGA
+  norm(r.contact_name).includes(qq) ||
+  norm(r.city).includes(qq) ||
   norm(r.email).includes(qq) ||
   norm(r.phone).includes(qq) ||
   norm(r.vat_number).includes(qq) ||
@@ -363,6 +380,131 @@ arr = arr.filter((r) =>
     });
     return arr;
   }, [rows, q, sortBy, sortDir]);
+
+  // 🆕 UPDATE CAMPO CIFRATO
+  async function updateField(clientId: string, fieldName: string, newValue: string) {
+    if (!crypto || !userId) return;
+    
+    try {
+      // Cifra il nuovo valore
+      const fieldsToEncrypt: Record<string, string> = {};
+      fieldsToEncrypt[fieldName] = newValue;
+      
+      const encrypted = await (crypto as any).encryptFields(
+        "table:accounts",
+        "accounts",
+        clientId,
+        fieldsToEncrypt
+      );
+      
+      // Update su Supabase
+      const { error } = await supabase
+        .from("accounts")
+        .update(encrypted)
+        .eq("id", clientId);
+      
+      if (error) throw error;
+      
+      // Aggiorna la lista locale
+      setRows(prev => prev.map(r => 
+        r.id === clientId 
+          ? { ...r, [fieldName]: newValue }
+          : r
+      ));
+      
+      console.log(`✅ Campo ${fieldName} aggiornato per cliente ${clientId}`);
+    } catch (e) {
+      console.error(`❌ Errore update ${fieldName}:`, e);
+      alert(`Errore durante il salvataggio: ${e}`);
+    }
+  }
+
+  // 🆕 UPDATE NOTES (custom field, non cifrato)
+  async function updateNotes(clientId: string, newNotes: string) {
+    if (!userId) return;
+    
+    try {
+      // Recupera custom esistente
+      const { data: acc } = await supabase
+        .from("accounts")
+        .select("custom")
+        .eq("id", clientId)
+        .single();
+      
+      const currentCustom = acc?.custom || {};
+      const newCustom = { ...currentCustom, notes: newNotes };
+      
+      // Update
+      const { error } = await supabase
+        .from("accounts")
+        .update({ custom: newCustom })
+        .eq("id", clientId);
+      
+      if (error) throw error;
+      
+      // Aggiorna la lista locale
+      setRows(prev => prev.map(r => 
+        r.id === clientId 
+          ? { ...r, notes: newNotes }
+          : r
+      ));
+      
+      console.log(`✅ Note aggiornate per cliente ${clientId}`);
+    } catch (e) {
+      console.error("❌ Errore update notes:", e);
+      alert(`Errore durante il salvataggio: ${e}`);
+    }
+  }
+
+  // 🆕 DELETE CLIENTE
+  async function deleteClient(clientId: string) {
+    if (!userId) return;
+    
+    if (!confirm("Eliminare definitivamente questo cliente?")) return;
+    
+    try {
+      const { error } = await supabase
+        .from("accounts")
+        .delete()
+        .eq("id", clientId);
+      
+      if (error) throw error;
+      
+      // Rimuovi dalla lista locale
+      setRows(prev => prev.filter(r => r.id !== clientId));
+      
+      console.log(`✅ Cliente ${clientId} eliminato`);
+    } catch (e) {
+      console.error("❌ Errore delete:", e);
+      alert(`Errore durante l'eliminazione: ${e}`);
+    }
+  }
+
+  // 🆕 GESTIONE EDITING
+  function startEditing(rowId: string, field: string, currentValue: string) {
+    setEditingCell({ rowId, field });
+    setTempValue(currentValue);
+  }
+
+  function cancelEditing() {
+    setEditingCell(null);
+    setTempValue("");
+  }
+
+  async function saveEditing() {
+    if (!editingCell) return;
+    
+    const { rowId, field } = editingCell;
+    
+    // Se notes, gestisci diversamente (custom field)
+    if (field === "notes") {
+      await updateNotes(rowId, tempValue);
+    } else {
+      await updateField(rowId, field, tempValue);
+    }
+    
+    cancelEditing();
+  }
 
   if (!authChecked) {
     return <div className="p-6 text-gray-600">Verifico sessione…</div>;
@@ -448,7 +590,7 @@ arr = arr.filter((r) =>
         <div className="flex gap-2 items-center">
 <input
   className="border rounded p-2 flex-1"
-  placeholder="Cerca (nome, contatto, città, email, telefono, P. IVA, note)"  // ✅ AGGIUNGI "contatto, città"
+  placeholder="Cerca (nome, contatto, città, email, telefono, P. IVA, note)"
   value={q}
   onChange={(e) => setQ(e.target.value)}
 />
@@ -463,31 +605,108 @@ arr = arr.filter((r) =>
   <tr>
     <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <th className="px-3 py-2 text-left">Contatto</th>
-    <Th label="Città"      k="city"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />  {/* ✅ AGGIUNGI */}
+    <Th label="Città"      k="city"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <th className="px-3 py-2 text-left">Note</th>
+    <th className="px-3 py-2 text-left">Azioni</th>
   </tr>
 </thead>
 <tbody>
   {view.map((r) => (
     <tr key={r.id} className="border-t hover:bg-gray-50">
-      <td className="px-3 py-2">{r.name || "—"}</td>
-      <td className="px-3 py-2">{r.contact_name || "—"}</td>
-      <td className="px-3 py-2">{r.city || "—"}</td>  {/* ✅ AGGIUNGI */}
-      <td className="px-3 py-2">{r.email || "—"}</td>
-      <td className="px-3 py-2">{r.phone || "—"}</td>
-      <td className="px-3 py-2">{r.vat_number || "—"}</td>
-      <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
-      <td className="px-3 py-2">{r.notes || "—"}</td>
+      {/* Nome - NON EDITABILE */}
+      <td className="px-3 py-2 bg-gray-100">{r.name || "—"}</td>
+      
+      {/* Contatto - EDITABILE */}
+      <EditableCell
+        rowId={r.id}
+        field="contact_name"
+        value={r.contact_name}
+        editingCell={editingCell}
+        tempValue={tempValue}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={saveEditing}
+        onTempChange={setTempValue}
+      />
+      
+      {/* Città - EDITABILE */}
+      <EditableCell
+        rowId={r.id}
+        field="city"
+        value={r.city}
+        editingCell={editingCell}
+        tempValue={tempValue}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={saveEditing}
+        onTempChange={setTempValue}
+      />
+      
+      {/* Email - EDITABILE */}
+      <EditableCell
+        rowId={r.id}
+        field="email"
+        value={r.email}
+        editingCell={editingCell}
+        tempValue={tempValue}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={saveEditing}
+        onTempChange={setTempValue}
+      />
+      
+      {/* Telefono - EDITABILE */}
+      <EditableCell
+        rowId={r.id}
+        field="phone"
+        value={r.phone}
+        editingCell={editingCell}
+        tempValue={tempValue}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={saveEditing}
+        onTempChange={setTempValue}
+      />
+      
+      {/* P.IVA - NON EDITABILE */}
+      <td className="px-3 py-2 bg-gray-100">{r.vat_number || "—"}</td>
+      
+      {/* Data - NON EDITABILE */}
+      <td className="px-3 py-2 bg-gray-100">{new Date(r.created_at).toLocaleString()}</td>
+      
+      {/* Note - EDITABILE */}
+      <EditableCell
+        rowId={r.id}
+        field="notes"
+        value={r.notes}
+        editingCell={editingCell}
+        tempValue={tempValue}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={saveEditing}
+        onTempChange={setTempValue}
+      />
+      
+      {/* Azioni - CANCELLAZIONE */}
+      <td className="px-3 py-2">
+        <button
+          onClick={() => deleteClient(r.id)}
+          className="text-red-600 hover:text-red-800"
+          title="Elimina cliente"
+        >
+          🗑️
+        </button>
+      </td>
     </tr>
   ))}
               
 {!loading && actuallyReady && view.length === 0 && (
   <tr>
-    <td className="px-3 py-8 text-center text-gray-500" colSpan={8}>  {/* ✅ CAMBIA DA 7 A 8 */}
+    <td className="px-3 py-8 text-center text-gray-500" colSpan={9}>
       Nessun cliente trovato.
     </td>
   </tr>
@@ -532,5 +751,59 @@ function Th({ label, k, sortBy, sortDir, onClick }: { label: string; k: SortKey;
       <span className={active ? "font-semibold" : ""}>{label}</span>
       {active ? <span> {sortDir === "asc" ? "▲" : "▼"}</span> : null}
     </th>
+  );
+}
+
+// 🆕 COMPONENTE CELLA EDITABILE
+function EditableCell({
+  rowId,
+  field,
+  value,
+  editingCell,
+  tempValue,
+  onStartEdit,
+  onCancel,
+  onSave,
+  onTempChange
+}: {
+  rowId: string;
+  field: string;
+  value: string;
+  editingCell: {rowId: string, field: string} | null;
+  tempValue: string;
+  onStartEdit: (rowId: string, field: string, value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onTempChange: (value: string) => void;
+}) {
+  const isEditing = editingCell?.rowId === rowId && editingCell?.field === field;
+  
+  if (isEditing) {
+    return (
+      <td className="px-3 py-2">
+        <input
+          type="text"
+          value={tempValue}
+          onChange={(e) => onTempChange(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave();
+            if (e.key === "Escape") onCancel();
+          }}
+          autoFocus
+          className="w-full px-2 py-1 border rounded"
+        />
+      </td>
+    );
+  }
+  
+  return (
+    <td 
+      className="px-3 py-2 cursor-pointer hover:bg-blue-50"
+      onClick={() => onStartEdit(rowId, field, value)}
+      title="Clicca per modificare"
+    >
+      {value || "—"}
+    </td>
   );
 }
