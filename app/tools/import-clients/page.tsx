@@ -496,7 +496,7 @@ export default function ImportClientsPage() {
     return words;
   }
 
-  // Column Detection Algorithm - v3 con Auto-Header Detection
+  // Column Detection Algorithm - v4 con Word Merging
   function detectColumnsFromWords(words: Array<{ text: string; x: number; y: number; width: number; height: number }>): { headers: string[]; rows: string[][] } {
     if (words.length === 0) return { headers: [], rows: [] };
     
@@ -531,21 +531,51 @@ export default function ImportClientsPage() {
       return { headers: [], rows: [] };
     }
     
+    // ========== STEP 1.5: UNISCI PAROLE VICINE NELLA STESSA RIGA ==========
+    // Se due parole sono vicine in X (< 80px), sono parte della stessa cella!
+    const mergedRows: Array<Array<{ text: string; x: number; y: number; width: number; height: number }>> = [];
+    
+    for (const row of rows) {
+      const mergedRow: Array<{ text: string; x: number; y: number; width: number; height: number }> = [];
+      
+      for (let i = 0; i < row.length; i++) {
+        if (mergedRow.length === 0) {
+          // Prima parola della riga
+          mergedRow.push({ ...row[i] });
+        } else {
+          const lastMerged = mergedRow[mergedRow.length - 1];
+          const currentWord = row[i];
+          const gap = currentWord.x - (lastMerged.x + lastMerged.width);
+          
+          if (gap < 80) {
+            // Parole vicine → unisci nella stessa cella
+            lastMerged.text += " " + currentWord.text;
+            lastMerged.width = (currentWord.x + currentWord.width) - lastMerged.x;
+          } else {
+            // Parole lontane → nuova cella
+            mergedRow.push({ ...currentWord });
+          }
+        }
+      }
+      
+      mergedRows.push(mergedRow);
+    }
+    
     // ========== STEP 2: TROVA LA RIGA HEADER (quella con PIÙ parole) ==========
     // Ignora righe con 1-2 parole (probabilmente titoli come "esempio_clienti")
     // Prendi la riga con più parole come header (è la vera tabella!)
     
     let headerRowIndex = 0;
-    let maxWords = rows[0].length;
+    let maxWords = mergedRows[0].length;
     
-    for (let i = 0; i < Math.min(5, rows.length); i++) { // controlla prime 5 righe
-      if (rows[i].length > maxWords && rows[i].length >= 3) { // almeno 3 colonne
-        maxWords = rows[i].length;
+    for (let i = 0; i < Math.min(5, mergedRows.length); i++) { // controlla prime 5 righe
+      if (mergedRows[i].length > maxWords && mergedRows[i].length >= 3) { // almeno 3 colonne
+        maxWords = mergedRows[i].length;
         headerRowIndex = i;
       }
     }
     
-    const headerRow = rows[headerRowIndex];
+    const headerRow = mergedRows[headerRowIndex];
     const headers = headerRow.map(w => w.text);
     const numColumns = headers.length;
     
@@ -557,7 +587,7 @@ export default function ImportClientsPage() {
     // ========== STEP 3: CALCOLA CENTRI COLONNE DA TUTTE LE PAROLE ==========
     // Raccogli tutte le posizioni X (non solo header)
     const allXPositions: number[] = [];
-    for (const row of rows) {
+    for (const row of mergedRows) {
       for (const word of row) {
         allXPositions.push(word.x + word.width / 2); // centro X
       }
@@ -616,8 +646,8 @@ export default function ImportClientsPage() {
     const dataRows: string[][] = [];
     
     // Salta righe prima dell'header e l'header stesso
-    for (let i = headerRowIndex + 1; i < rows.length; i++) {
-      const row = rows[i];
+    for (let i = headerRowIndex + 1; i < mergedRows.length; i++) {
+      const row = mergedRows[i];
       const rowData: string[] = new Array(numColumns).fill("");
       
       for (const word of row) {
@@ -636,7 +666,7 @@ export default function ImportClientsPage() {
           }
         }
         
-        // Aggiungi parola alla colonna (gestisce celle multi-parola)
+        // Aggiungi parola alla colonna (le celle sono già unite in mergedRows)
         if (rowData[bestCol]) {
           rowData[bestCol] += " " + word.text;
         } else {
