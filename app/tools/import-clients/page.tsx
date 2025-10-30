@@ -342,41 +342,26 @@ export default function ImportClientsPage() {
       const client = validClients[i];
       
       try {
-        // Prepara l'oggetto plain con i campi da cifrare
-        const plainRecord: any = {};
-        const fieldsToEncrypt: string[] = [];
+        // Prepara l'oggetto con i campi da cifrare
+        const fieldsToEncrypt: Record<string, string> = {};
         
-        // Aggiungi campi cifrati al record
-        for (const [key, value] of Object.entries(client)) {
-          if (key === "rowIndex" || key === "isValid" || key === "errors") continue;
-          
-          // Campi da cifrare
-          if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key) && value) {
-            plainRecord[key] = value;
-            fieldsToEncrypt.push(key);
-          }
-        }
+        if (client.name) fieldsToEncrypt.name = client.name;
+        if (client.contact_name) fieldsToEncrypt.contact_name = client.contact_name;
+        if (client.phone) fieldsToEncrypt.phone = client.phone;
+        if (client.address) fieldsToEncrypt.address = client.address;
+        if (client.email) fieldsToEncrypt.email = client.email;
+        if (client.vat_number) fieldsToEncrypt.vat_number = client.vat_number;
         
-        // Cifra tutti i campi in un colpo solo
+        // Cifra tutti i campi
         const encrypted = await (cryptoSvc as any).encryptFields(
           "table:accounts",
           "accounts",
           "",
-          plainRecord,
           fieldsToEncrypt
         );
         
-        // Prepara il payload finale
-        const payload: any = {};
-        
-        // Aggiungi campi cifrati
-        for (const field of fieldsToEncrypt) {
-          const enc = encrypted.find((f: any) => f.name === field);
-          if (enc) {
-            payload[`${field}_enc`] = enc.ciphertext;
-            payload[`${field}_iv`] = enc.iv;
-          }
-        }
+        // encrypted è un oggetto tipo: { name_enc: "...", name_iv: "...", contact_name_enc: "...", ... }
+        const payload: any = { ...encrypted };
         
         // Aggiungi custom (city, tipo_locale, notes)
         const custom: any = {};
