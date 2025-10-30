@@ -354,6 +354,10 @@ export default function ImportClientsPage() {
         setParsingProgress("Analisi struttura tabella...");
         
         // ========== STEP 3: PARSING TSV PER COORDINATE ==========
+        if (!tsv) {
+          reject(new Error("OCR non ha prodotto coordinate utilizzabili"));
+          return;
+        }
         const words = parseTSV(tsv);
         
         if (words.length === 0) {
