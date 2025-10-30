@@ -342,27 +342,20 @@ export default function ImportClientsPage() {
       const client = validClients[i];
       
       try {
-        // Prepara custom (city, tipo_locale, notes)
-        const custom: any = {};
-        if (client.city) custom.city = client.city;
-        if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
-        if (client.notes) custom.notes = client.notes;
-        
         // Cifra campi sensibili
-        const encryptedClient: any = {
-          custom: Object.keys(custom).length > 0 ? custom : {}
-        };
+        const encryptedClient: any = {};
         
         for (const [key, value] of Object.entries(client)) {
           if (key === "rowIndex" || key === "isValid" || key === "errors" || !value) continue;
           
-          // Salta campi che vanno in custom
-          if (["city", "tipo_locale", "notes"].includes(key)) continue;
-          
-          // Cifra solo campi sensibili (DB normale)
-          if (["name", "contact_name", "phone", "address", "email", "vat_number"].includes(key)) {
+          // Cifra solo campi sensibili
+          if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key)) {
             const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
             encryptedClient[key] = encrypted.ciphertext;
+          } else if (["city", "tipo_locale", "notes"].includes(key)) {
+            // Questi vanno in custom (non cifrati)
+            if (!encryptedClient.custom) encryptedClient.custom = {};
+            encryptedClient.custom[key] = value;
           } else {
             encryptedClient[key] = value;
           }
