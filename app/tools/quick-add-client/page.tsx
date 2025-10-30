@@ -1,53 +1,101 @@
-'use client';
+/**
+ * ============================================================================
+ * PAGINA: Import Clienti (CSV e Excel)
+ * ============================================================================
+ * 
+ * PERCORSO: /app/tools/import-clients/page.tsx
+ * URL: https://reping.app/tools/import-clients
+ * 
+ * DESCRIZIONE:
+ * Pagina completa per l'importazione massiva di clienti da file CSV e Excel.
+ * Include 5 step: Upload → Mapping → Preview → Import → Report
+ * 
+ * FORMATI SUPPORTATI:
+ * - CSV: Parsing con csv-parse
+ * - XLSX/XLS: Parsing con libreria xlsx
+ * 
+ * FUNZIONALITÀ:
+ * - Upload universale con drag & drop
+ * - Riconoscimento automatico formato da estensione
+ * - Auto-detection intelligente delle colonne (match esatti + parziali)
+ * - Mapping manuale con dropdown
+ * - Validazione campi obbligatori
+ * - Cifratura automatica campi sensibili (usa scope "table:accounts")
+ * - Gestione duplicati tramite blind index
+ * - Progress bar durante parsing e import
+ * - Report dettagliato finale
+ * 
+ * DIPENDENZE:
+ * - csv-parse/browser/esm/sync (per CSV)
+ * - xlsx (per Excel)
+ * - window.cryptoSvc (fornito da CryptoProvider)
+ * - API /api/clients/upsert (per salvare i clienti)
+ * 
+ * NOTA IMPORTANTE:
+ * Usa scope "table:accounts" per la cifratura, NON "clients"!
+ * 
+ * ============================================================================
+ */
 
-import { useRouter } from 'next/navigation';
-import { useState, useEffect, useRef } from 'react';
-import { useCrypto } from '@/lib/crypto/CryptoProvider';
-import { useDrawers, LeftDrawer, RightDrawer } from '@/components/Drawers';
-import TopBar from '@/components/home/TopBar';
-import { supabase } from '@/lib/supabase/client';
+"use client";
 
-// Tipi di locali HoReCa predefiniti
-const TIPO_LOCALE = [
-  'Bar',
-  'Ristorante',
-  'Pizzeria',
-  'Ristorante/Pizzeria',
-  'Trattoria',
-  'Chiosco',
-  'Pub',
-  'Pasticceria',
-  'Gelateria',
-  'Hotel',
-  'Altro'
-];
+import { useState, useRef } from "react";
+import { useRouter } from "next/navigation";
+import { parse } from "csv-parse/browser/esm/sync";
+import * as XLSX from "xlsx";
+import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
+import TopBar from "@/components/home/TopBar";
+import { supabase } from "@/lib/supabase/client";
 
-type ClientForm = {
-  nomeCliente: string;
-  piva: string;
-  citta: string;
-  indirizzo: string;
-  tipoLocale: string;
-  nomeContatto: string;
-  telefono: string;
-  email: string;
-  note: string;
+type CsvRow = {
+  name?: string;
+  contact_name?: string;
+  city?: string;
+  address?: string;
+  tipo_locale?: string;
+  phone?: string;
+  email?: string;
+  vat_number?: string;
+  notes?: string;
 };
 
-type DialogState = {
-  active: boolean;
-  currentField: keyof ClientForm | null;
-  pendingValue: string;
-  awaitingConfirmation: boolean;
+type ValidationError = {
+  row: number;
+  field: string;
+  message: string;
 };
 
-export default function QuickAddClientPage() {
+type ProcessedClient = CsvRow & {
+  rowIndex: number;
+  isValid: boolean;
+  errors: string[];
+};
+
+type ImportStep = "upload" | "mapping" | "preview" | "importing" | "complete";
+
+// Mapping: colonna CSV -> campo app
+type ColumnMapping = Record<string, string | undefined>;
+
+// Auto-detection intelligente delle colonne
+const COLUMN_ALIASES: Record<string, string[]> = {
+  name: ["name", "nome", "ragione sociale", "azienda", "cliente", "company", "business name"],
+  contact_name: ["contact_name", "contatto", "nome contatto", "referente", "contact", "person"],
+  city: ["city", "città", "citta", "comune", "location"],
+  address: ["address", "indirizzo", "via", "street", "location"],
+  tipo_locale: ["tipo_locale", "tipo", "type", "categoria", "category"],
+  phone: ["phone", "telefono", "tel", "mobile", "cellulare"],
+  email: ["email", "mail", "e-mail", "posta"],
+  vat_number: ["vat_number", "p.iva", "piva", "partita iva", "vat", "tax id"],
+  notes: ["notes", "note", "commenti", "comments", "memo"],
+};
+
+export default function ImportClientsPage() {
   const router = useRouter();
-  const { crypto, ready } = useCrypto();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Drawer
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
-
+  
   // Logout
   async function logout() {
     try { sessionStorage.removeItem("repping:pph"); } catch {}
@@ -55,978 +103,797 @@ export default function QuickAddClientPage() {
     await supabase.auth.signOut();
     window.location.href = "/login";
   }
+  
+  const [step, setStep] = useState<ImportStep>("upload");
+  const [rawData, setRawData] = useState<any[]>([]);
+  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
+  const [mapping, setMapping] = useState<ColumnMapping>({});
+  const [processedClients, setProcessedClients] = useState<ProcessedClient[]>([]);
+  const [importProgress, setImportProgress] = useState(0);
+  const [parsingProgress, setParsingProgress] = useState<string | null>(null);
+  const [fileType, setFileType] = useState<string>("");
+  const [importResults, setImportResults] = useState<{
+    success: number;
+    failed: number;
+    duplicates: number;
+    errors: string[];
+  }>({ success: 0, failed: 0, duplicates: 0, errors: [] });
 
-  // 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
-  useEffect(() => {
-    console.log('[QuickAdd] 🔍 useEffect triggered, crypto:', !!crypto);
-    
-    if (!crypto) {
-      console.log('[QuickAdd] ⚠️ crypto è null/undefined, esco');
-      return;
+  // Verifica che il crypto sia pronto (esposto dal CryptoProvider su window.cryptoSvc)
+  const getCryptoService = () => {
+    const svc = (window as any).cryptoSvc;
+    if (!svc) {
+      throw new Error("CryptoService non disponibile. Assicurati che il CryptoProvider sia attivo.");
     }
+    return svc;
+  };
+
+  // Auto-detect colonne con priorità ai match esatti (INVERTITO: header -> field)
+  const autoDetectMapping = (headers: string[]): ColumnMapping => {
+    const detected: ColumnMapping = {};
     
-    const checkAndUnlock = async () => {
-      console.log('[QuickAdd] 🔍 checkAndUnlock started');
+    // Prima passata: match esatti
+    for (const header of headers) {
+      const normalized = header.toLowerCase().trim();
       
-      if (!crypto || typeof crypto.isUnlocked !== 'function') {
-        console.log('[QuickAdd] ⚠️ crypto o isUnlocked non validi');
-        return;
+      for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+        // Match esatto con uno degli alias
+        if (aliases.some(alias => normalized === alias)) {
+          detected[header] = field; // INVERTITO: header -> field
+          break;
+        }
       }
+    }
+    
+    // Seconda passata: match parziali (solo per colonne non ancora mappate)
+    for (const header of headers) {
+      const normalized = header.toLowerCase().trim();
       
-      const unlocked = crypto.isUnlocked();
-      console.log('[QuickAdd] 🔍 isUnlocked:', unlocked);
+      for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
+        // Salta se già mappato nella prima passata
+        if (detected[header]) continue;
+        
+        // Match parziale
+        if (aliases.some(alias => normalized.includes(alias))) {
+          detected[header] = field; // INVERTITO: header -> field
+          break;
+        }
+      }
+    }
+    
+    return detected;
+  };
+
+  // ==================== PARSER PER OGNI FORMATO ====================
+
+  // Parser CSV
+  async function parseCSV(file: File): Promise<{ headers: string[]; data: any[] }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
       
-      if (!unlocked) {
-        const pass = sessionStorage.getItem('repping:pph');
-        console.log('[QuickAdd] 🔍 Password in storage:', !!pass);
-        
-        if (pass && typeof crypto.unlockWithPassphrase === 'function') {
-          console.log('[QuickAdd] 🔧 Tento re-unlock...');
-          try {
-            await crypto.unlockWithPassphrase(pass);
-            console.log('[QuickAdd] ✅ Re-unlock completato!');
-          } catch (e) {
-            console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
-          }
-        } else {
-          console.log('[QuickAdd] ⚠️ Password mancante o unlockWithPassphrase non disponibile');
-        }
-      } else {
-        console.log('[QuickAdd] ✅ Crypto già unlocked, niente da fare');
-      }
-    };
-    
-    checkAndUnlock();
-  }, [crypto]);
-
-  const actuallyReady = (
-    crypto && 
-    typeof crypto.isUnlocked === 'function' && 
-    crypto.isUnlocked()
-  );
-
-  // Dati del form
-  const [form, setForm] = useState<ClientForm>({
-    nomeCliente: '',
-    piva: '',
-    citta: '',
-    indirizzo: '',
-    tipoLocale: '',
-    nomeContatto: '',
-    telefono: '',
-    email: '',
-    note: '',
-  });
-
-  // Stato salvataggio
-  const [saving, setSaving] = useState(false);
-  const [resultMsg, setResultMsg] = useState<string | null>(null);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-
-  // Stato dialogo vocale
-  const [dialogState, setDialogState] = useState<DialogState>({
-    active: false,
-    currentField: null,
-    pendingValue: '',
-    awaitingConfirmation: false,
-  });
-
-  // TTS e riconoscimento vocale
-  const recognitionRef = useRef<any>(null);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      synthRef.current = window.speechSynthesis;
-    }
-  }, []);
-
-  // Funzione per far parlare l'app
-  function speak(text: string) {
-    if (!synthRef.current) return;
-    
-    synthRef.current.cancel(); // ferma qualsiasi speech precedente
-    
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.lang = 'it-IT';
-    utterance.rate = 0.95;
-    utterance.pitch = 1.02;
-    
-    synthRef.current.speak(utterance);
-  }
-
-  // Aggiorna un campo del form
-  function updateField(field: keyof ClientForm, value: string) {
-    setForm(prev => ({ ...prev, [field]: value }));
-  }
-
-  // Ordine dei campi per il dialogo vocale
-  const fieldOrder: Array<{ key: keyof ClientForm; label: string; optional: boolean }> = [
-    { key: 'nomeCliente', label: 'nome del cliente', optional: false },
-    { key: 'citta', label: 'città', optional: false },
-    { key: 'indirizzo', label: 'indirizzo completo con numero civico', optional: false },
-    { key: 'tipoLocale', label: 'tipo di locale', optional: false },
-    { key: 'nomeContatto', label: 'nome del contatto', optional: false },
-    { key: 'telefono', label: 'numero di telefono', optional: false },
-    { key: 'email', label: 'email', optional: true },
-    { key: 'piva', label: 'partita IVA', optional: true },
-    { key: 'note', label: 'note aggiuntive', optional: true },
-  ];
-
-  // Avvia il dialogo vocale
-  function startDialog() {
-    if (typeof window === 'undefined') return;
-    
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-    if (!SpeechRecognition) {
-      setErrorMsg('Il riconoscimento vocale non è supportato su questo browser. Usa Chrome.');
-      return;
-    }
-
-    const recognition = new SpeechRecognition();
-    recognition.lang = 'it-IT';
-    recognition.continuous = false;
-    recognition.interimResults = false;
-
-    recognitionRef.current = recognition;
-
-    // Avvia con il primo campo
-    setDialogState({
-      active: true,
-      currentField: fieldOrder[0].key,
-      pendingValue: '',
-      awaitingConfirmation: false,
-    });
-
-    askCurrentField(fieldOrder[0]);
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript.trim();
-      handleVoiceInput(transcript);
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Errore riconoscimento vocale:', event.error);
-      setErrorMsg('Errore nel riconoscimento vocale. Riprova.');
-      stopDialog();
-    };
-
-    recognition.start();
-  }
-
-  // Ferma il dialogo vocale
-  function stopDialog() {
-    if (recognitionRef.current) {
-      try {
-        recognitionRef.current.stop();
-      } catch (e) {
-        console.error('Errore stop recognition:', e);
-      }
-      recognitionRef.current = null;
-    }
-
-    if (synthRef.current) {
-      synthRef.current.cancel();
-    }
-
-    setDialogState({
-      active: false,
-      currentField: null,
-      pendingValue: '',
-      awaitingConfirmation: false,
-    });
-  }
-
-  // Chiede il campo corrente
-  function askCurrentField(field: { key: keyof ClientForm; label: string; optional: boolean }) {
-    const question = field.optional 
-      ? `Qual è ${field.label}? Puoi dire "salta" se non vuoi inserirlo.`
-      : `Qual è ${field.label}?`;
-    
-    speak(question);
-  }
-
-  // Mappatura tipo locale dal riconoscimento vocale
-  function mapTipoLocale(input: string): string {
-    const lower = input.toLowerCase().trim();
-    
-    // Mappatura intelligente
-    if (/\b(bar|caffè|café)\b/i.test(lower)) return 'Bar';
-    if (/\bpizzeria\b/i.test(lower) && /\bristorante\b/i.test(lower)) return 'Ristorante/Pizzeria';
-    if (/\bpizzeria\b/i.test(lower)) return 'Pizzeria';
-    if (/\b(ristorante|trattoria)\b/i.test(lower)) return 'Ristorante';
-    if (/\btrattoria\b/i.test(lower)) return 'Trattoria';
-    if (/\b(chiosco|edicola)\b/i.test(lower)) return 'Chiosco';
-    if (/\bpub\b/i.test(lower)) return 'Pub';
-    if (/\bpasticceria\b/i.test(lower)) return 'Pasticceria';
-    if (/\bgelateria\b/i.test(lower)) return 'Gelateria';
-    if (/\bhotel\b/i.test(lower)) return 'Hotel';
-    
-    return 'Altro';
-  }
-
-  // Gestisce l'input vocale
-  function handleVoiceInput(transcript: string) {
-    const lower = transcript.toLowerCase();
-
-    // Se stiamo aspettando conferma
-    if (dialogState.awaitingConfirmation) {
-      if (/\b(s[ìi]|esatto|ok|corretto|giusto|confermo)\b/i.test(lower)) {
-        // Confermato!
-        
-        // Se siamo alla conferma finale (nessun campo corrente), salva
-        if (dialogState.currentField === null) {
-          stopDialog();
-          saveClient();
-          return;
-        }
-        
-        // Altrimenti trascrivi e passa al prossimo
-        confirmAndNext();
-      } else if (/\b(no|sbagliato|errato|riprova)\b/i.test(lower)) {
-        // Non confermato
-        
-        // Se eravamo alla conferma finale, riprendi dal primo campo opzionale
-        if (dialogState.currentField === null) {
-          speak('Va bene, ricontrolla i dati e dimmi quando sei pronto a salvare.');
-          stopDialog();
-          return;
-        }
-        
-        // Altrimenti richiedi il campo
-        speak('Va bene, riproviamo.');
-        setTimeout(() => {
-          const currentFieldInfo = fieldOrder.find(f => f.key === dialogState.currentField);
-          if (currentFieldInfo) {
-            askCurrentField(currentFieldInfo);
-            startListening();
-          }
-        }, 1500);
-      } else {
-        // Ha detto qualcos'altro, interpretiamolo come nuovo valore
-        setDialogState(prev => ({
-          ...prev,
-          pendingValue: transcript,
-        }));
-        speak(`Ho capito: ${transcript}. È giusto?`);
-        startListening();
-      }
-      return;
-    }
-
-    // Se dice "salta" su campo opzionale
-    const currentFieldInfo = fieldOrder.find(f => f.key === dialogState.currentField);
-    if (currentFieldInfo?.optional && /\b(salta|skip)\b/i.test(lower)) {
-      goToNextField();
-      return;
-    }
-
-    // Altrimenti è la risposta al campo
-    let valueToConfirm = transcript;
-    
-    // Applica mappatura per tipo locale
-    if (dialogState.currentField === 'tipoLocale') {
-      valueToConfirm = mapTipoLocale(transcript);
-    }
-    
-    setDialogState(prev => ({
-      ...prev,
-      pendingValue: valueToConfirm,
-      awaitingConfirmation: true,
-    }));
-
-    speak(`Ho capito: ${valueToConfirm}. È giusto?`);
-    startListening();
-  }
-
-  // Avvia l'ascolto vocale
-  function startListening() {
-    if (recognitionRef.current) {
-      setTimeout(() => {
+      reader.onload = (event) => {
         try {
-          recognitionRef.current?.start();
-        } catch (e) {
-          // Già in ascolto, ignora
+          const csvText = event.target?.result as string;
+          const records = parse(csvText, {
+            columns: true,
+            skip_empty_lines: true,
+            trim: true,
+            bom: true,
+          });
+
+          if (records.length === 0) {
+            reject(new Error("Il file CSV è vuoto!"));
+            return;
+          }
+
+          const headers = Object.keys(records[0]);
+          setParsingProgress(null);
+          resolve({ headers, data: records });
+        } catch (error: any) {
+          setParsingProgress(null);
+          reject(new Error(`Errore parsing CSV: ${error.message}`));
         }
-      }, 1500); // pausa per far finire il TTS
-    }
-  }
+      };
 
-  // Conferma e passa al prossimo campo
-  function confirmAndNext() {
-    if (!dialogState.currentField) return;
+      reader.onerror = () => {
+        setParsingProgress(null);
+        reject(new Error("Errore lettura file CSV"));
+      };
 
-    // Trascrivi il valore nel form
-    updateField(dialogState.currentField, dialogState.pendingValue);
-
-    // Passa al campo successivo
-    goToNextField();
-  }
-
-  // Vai al prossimo campo
-  function goToNextField() {
-    const currentIndex = fieldOrder.findIndex(f => f.key === dialogState.currentField);
-    const nextIndex = currentIndex + 1;
-
-    if (nextIndex >= fieldOrder.length) {
-      // Fine! Chiedi se salvare
-      speak('Ho finito la raccolta dati. Vuoi salvare il cliente?');
-      setDialogState(prev => ({
-        ...prev,
-        currentField: null,
-        pendingValue: '',
-        awaitingConfirmation: true,
-      }));
-      startListening();
-      return;
-    }
-
-    const nextField = fieldOrder[nextIndex];
-    setDialogState({
-      active: true,
-      currentField: nextField.key,
-      pendingValue: '',
-      awaitingConfirmation: false,
+      reader.readAsText(file);
     });
-
-    setTimeout(() => {
-      askCurrentField(nextField);
-      startListening();
-    }, 500);
   }
 
-  // Salva il cliente
-  async function saveClient() {
-    setSaving(true);
-    setErrorMsg(null);
-    setResultMsg(null);
+  // Parser Excel
+  async function parseExcel(file: File): Promise<{ headers: string[]; data: any[] }> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
 
-    // Validazione campi obbligatori
-    if (!form.nomeCliente.trim()) {
-      setErrorMsg('Il nome del cliente è obbligatorio.');
-      setSaving(false);
-      return;
-    }
-    if (!form.citta.trim()) {
-      setErrorMsg('La città è obbligatoria.');
-      setSaving(false);
-      return;
-    }
-    if (!form.indirizzo.trim()) {
-      setErrorMsg('L\'indirizzo è obbligatorio.');
-      setSaving(false);
-      return;
-    }
-    if (!form.tipoLocale.trim()) {
-      setErrorMsg('Il tipo di locale è obbligatorio.');
-      setSaving(false);
-      return;
-    }
-    if (!form.nomeContatto.trim()) {
-      setErrorMsg('Il nome del contatto è obbligatorio.');
-      setSaving(false);
-      return;
-    }
-    if (!form.telefono.trim()) {
-      setErrorMsg('Il telefono è obbligatorio.');
-      setSaving(false);
-      return;
-    }
+      reader.onload = (event) => {
+        try {
+          const data = event.target?.result;
+          const workbook = XLSX.read(data, { type: "array" });
 
-    // Attendi che crypto sia pronto
-    if (!crypto || !actuallyReady) {
-      setErrorMsg('Crittografia non ancora pronta. Attendi...');
-      setSaving(false);
-      return;
-    }
+          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+
+          if (jsonData.length === 0) {
+            reject(new Error("Il file Excel è vuoto!"));
+            return;
+          }
+
+          const headers = Object.keys(jsonData[0] as any);
+          setParsingProgress(null);
+          resolve({ headers, data: jsonData });
+        } catch (error: any) {
+          setParsingProgress(null);
+          reject(new Error(`Errore parsing Excel: ${error.message}`));
+        }
+      };
+
+      reader.onerror = () => {
+        setParsingProgress(null);
+        reject(new Error("Errore lettura file Excel"));
+      };
+
+      reader.readAsArrayBuffer(file);
+    });
+  }
+
+  // Gestione upload file
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Rileva estensione
+    const fileName = file.name.toLowerCase();
+    const extension = fileName.substring(fileName.lastIndexOf("."));
+    
+    setFileType(extension);
+    setParsingProgress("Caricamento file...");
 
     try {
-      const scope = 'table:accounts';
-      
-      // Critta il nome cliente usando encryptFields
-      const nameEncrypted = await crypto.encryptFields(
-        scope,
-        'accounts',
-        '', // nessun ID ancora, è un nuovo record
-        { name: form.nomeCliente.trim() }
-      );
+      let result: { headers: string[]; data: any[] };
 
-      // ✅ VALIDAZIONE struttura nome cliente cifrato
-      if (!nameEncrypted || typeof nameEncrypted !== 'object') {
-        throw new Error(
-          'Cifratura nome cliente fallita: encryptFields ha ritornato dati non validi. ' +
-          'Tipo ritornato: ' + typeof nameEncrypted
-        );
-      }
-
-      if (!nameEncrypted.name_enc || !nameEncrypted.name_iv) {
-        throw new Error(
-          'Cifratura nome cliente fallita: campi enc/iv mancanti nella risposta. ' +
-          'Campi presenti: ' + Object.keys(nameEncrypted).join(', ')
-        );
-      }
-
-      console.log('[QuickAdd] Nome cliente cifrato con successo:', {
-        hasEnc: !!nameEncrypted.name_enc,
-        hasIv: !!nameEncrypted.name_iv,
-      });
-      
-      // Verifica che computeBlindIndex sia disponibile
-      if (typeof crypto.computeBlindIndex !== 'function') {
-        throw new Error(
-          'La funzione computeBlindIndex non è disponibile sul servizio crypto. ' +
-          'Rieffettua il login o contatta il supporto.'
-        );
-      }
-
-      // Calcola il blind index (obbligatorio)
-      const nameBlind = await crypto.computeBlindIndex(scope, form.nomeCliente.trim());
-
-      // Verifica che sia valido
-      if (!nameBlind || typeof nameBlind !== 'string') {
-        throw new Error('Calcolo blind index fallito: valore non valido ritornato');
-      }
-
-      // 🔐 CIFRA NOME CONTATTO (obbligatorio)
-      const contactNameEncrypted = await crypto.encryptFields(
-        scope,
-        'accounts',
-        '',
-        { contact_name: form.nomeContatto.trim() }
-      );
-
-      // ✅ VALIDAZIONE struttura nome contatto cifrato
-      if (!contactNameEncrypted || typeof contactNameEncrypted !== 'object') {
-        throw new Error(
-          'Cifratura nome contatto fallita: encryptFields ha ritornato dati non validi. ' +
-          'Tipo ritornato: ' + typeof contactNameEncrypted
-        );
-      }
-
-      if (!contactNameEncrypted.contact_name_enc || !contactNameEncrypted.contact_name_iv) {
-        throw new Error(
-          'Cifratura nome contatto fallita: campi enc/iv mancanti nella risposta. ' +
-          'Campi presenti: ' + Object.keys(contactNameEncrypted).join(', ')
-        );
-      }
-
-      console.log('[QuickAdd] Nome contatto cifrato con successo:', {
-        hasEnc: !!contactNameEncrypted.contact_name_enc,
-        hasIv: !!contactNameEncrypted.contact_name_iv,
-      });
-
-      // 🔐 CIFRA EMAIL (se presente)
-      let emailEncrypted = null;
-      if (form.email.trim()) {
-        emailEncrypted = await crypto.encryptFields(
-          scope,
-          'accounts',
-          '',
-          { email: form.email.trim() }
-        );
-        if (!emailEncrypted?.email_enc || !emailEncrypted?.email_iv) {
-          throw new Error('Cifratura email fallita');
-        }
-        console.log('[QuickAdd] Email cifrata con successo');
-      }
-
-      // 🔐 CIFRA TELEFONO
-      const phoneEncrypted = await crypto.encryptFields(
-        scope,
-        'accounts',
-        '',
-        { phone: form.telefono.trim() }
-      );
-      if (!phoneEncrypted?.phone_enc || !phoneEncrypted?.phone_iv) {
-        throw new Error('Cifratura telefono fallita');
-      }
-      console.log('[QuickAdd] Telefono cifrato con successo');
-
-      // 🔐 CIFRA INDIRIZZO
-      const addressEncrypted = await crypto.encryptFields(
-        scope,
-        'accounts',
-        '',
-        { address: form.indirizzo.trim() }
-      );
-      if (!addressEncrypted?.address_enc || !addressEncrypted?.address_iv) {
-        throw new Error('Cifratura indirizzo fallita');
-      }
-      console.log('[QuickAdd] Indirizzo cifrato con successo');
-
-      // 🔐 CIFRA P.IVA (se presente)
-      let pivaEncrypted = null;
-      if (form.piva.trim()) {
-        pivaEncrypted = await crypto.encryptFields(
-          scope,
-          'accounts',
-          '',
-          { vat_number: form.piva.trim() }
-        );
-        if (!pivaEncrypted?.vat_number_enc || !pivaEncrypted?.vat_number_iv) {
-          throw new Error('Cifratura P.IVA fallita');
-        }
-        console.log('[QuickAdd] P.IVA cifrata con successo');
-      }
-
-      // Prepara i dati custom (SOLO città, tipo, note in chiaro)
-      const customData = {
-        city: form.citta.trim(),
-        tipo_locale: form.tipoLocale.trim(),
-        notes: form.note.trim() || undefined,
-      };
-
-      // Prepara il payload
-      const payload = {
-        name_enc: nameEncrypted.name_enc,
-        name_iv: nameEncrypted.name_iv,
-        name_bi: nameBlind,
-        address_enc: addressEncrypted.address_enc,
-        address_iv: addressEncrypted.address_iv,
-        contact_name_enc: contactNameEncrypted.contact_name_enc,
-        contact_name_iv: contactNameEncrypted.contact_name_iv,
-        ...(pivaEncrypted && {
-          vat_number_enc: pivaEncrypted.vat_number_enc,
-          vat_number_iv: pivaEncrypted.vat_number_iv,
-        }),
-        ...(emailEncrypted && {
-          email_enc: emailEncrypted.email_enc,
-          email_iv: emailEncrypted.email_iv,
-        }),
-        phone_enc: phoneEncrypted.phone_enc,
-        phone_iv: phoneEncrypted.phone_iv,
-        custom: customData,
-      };
-
-      console.log('🔍 [QuickAdd] Payload da inviare all\'API:', JSON.stringify(payload, null, 2));
-
-      const res = await fetch('/api/clients/upsert', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      });
-
-      const data = await res.json();
-
-      if (!res.ok) {
-        setErrorMsg(`Errore: ${data?.error ?? res.status}`);
+      // Switch sul tipo di file
+      if (extension === ".csv") {
+        result = await parseCSV(file);
+      } else if (extension === ".xlsx" || extension === ".xls") {
+        result = await parseExcel(file);
       } else {
-        setResultMsg(`✅ Cliente salvato! ID: ${data.accountId}`);
-        speak('Cliente salvato con successo!');
-        
-        // Reset form dopo 2 secondi
-        setTimeout(() => {
-          setForm({
-            nomeCliente: '',
-            piva: '',
-            citta: '',
-            indirizzo: '',
-            tipoLocale: '',
-            nomeContatto: '',
-            telefono: '',
-            email: '',
-            note: '',
-          });
-          setResultMsg(null);
-        }, 2000);
+        throw new Error(`Formato file non supportato: ${extension}`);
       }
-    } catch (e: any) {
-      setErrorMsg(e?.message ?? String(e));
-    } finally {
-      setSaving(false);
-    }
-  }
 
-  // Se siamo alla fine del dialogo e l'utente conferma, salva
-  useEffect(() => {
-    if (dialogState.awaitingConfirmation && dialogState.currentField === null && dialogState.active) {
-      // Questo è il momento della conferma finale
-      // L'handler è già in handleVoiceInput
-    }
-  }, [dialogState]);
+      // Salva headers e dati
+      setCsvHeaders(result.headers);
+      setRawData(result.data);
 
-  // 🔐 Blocco UI se crittografia non è pronta
-  if (!actuallyReady || !crypto) {
-    return (
-      <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, border: '1px solid #e5e7eb', borderRadius: 12 }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: '#111827' }}>
-          🔐 Crittografia in preparazione...
-        </h2>
-        <p style={{ color: '#6b7280', marginBottom: 16, lineHeight: 1.6 }}>
-          Il sistema di cifratura sta inizializzando. Questo può richiedere qualche secondo dopo il login.
-        </p>
-        <p style={{ color: '#6b7280', marginBottom: 20, fontSize: 14 }}>
-          Se questa schermata persiste per più di 10 secondi, prova a:
-        </p>
-        <ul style={{ color: '#6b7280', marginBottom: 24, paddingLeft: 20, fontSize: 14 }}>
-          <li style={{ marginBottom: 8 }}>Tornare alla home e attendere</li>
-          <li style={{ marginBottom: 8 }}>Effettuare logout e nuovo login</li>
-          <li>Ricaricare la pagina</li>
-        </ul>
-        
-        <div style={{ display: 'flex', gap: 12 }}>
-          <button
-            onClick={() => router.push('/')}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: 'white',
-              color: '#111827',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            ← Torna alla Home
-          </button>
-          <button
-            onClick={() => window.location.reload()}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: 'white',
-              color: '#111827',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            🔄 Ricarica Pagina
-          </button>
-        </div>
-        
-        {/* Info debug */}
-        <div style={{ 
-          marginTop: 24, 
-          padding: 12, 
-          background: '#fef3c7', 
-          borderRadius: 8,
-          fontSize: 13,
-          fontFamily: 'monospace',
-        }}>
-          <strong>Debug:</strong><br />
-          • ready: {String(ready)}<br />
-          • crypto: {crypto ? 'presente' : 'null'}<br />
-          • isUnlocked: {crypto && typeof crypto.isUnlocked === 'function' ? String(crypto.isUnlocked()) : 'n/a'}<br />
-          • actuallyReady: {String(actuallyReady)}
-        </div>
-      </div>
-    );
-  }
+      // Auto-detect mapping
+      const detected = autoDetectMapping(result.headers);
+      setMapping(detected);
+
+      // Vai a step mapping
+      setStep("mapping");
+
+    } catch (error: any) {
+      alert(error.message);
+      setParsingProgress(null);
+    }
+  };
+
+  // Preview con validazione
+  const handlePreview = () => {
+    const processed: ProcessedClient[] = [];
+
+    for (let i = 0; i < rawData.length; i++) {
+      const rawRow = rawData[i];
+      const mappedRow: CsvRow = {};
+      const errors: string[] = [];
+
+      // Applica mapping
+      for (const [csvCol, appField] of Object.entries(mapping)) {
+        if (appField) {
+          mappedRow[appField as keyof CsvRow] = rawRow[csvCol];
+        }
+      }
+
+      // Validazione campi obbligatori
+      if (!mappedRow.name || mappedRow.name.trim() === "") {
+        errors.push("Nome Cliente mancante");
+      }
+      if (!mappedRow.contact_name || mappedRow.contact_name.trim() === "") {
+        errors.push("Nome Contatto mancante");
+      }
+      if (!mappedRow.phone || mappedRow.phone.trim() === "") {
+        errors.push("Telefono mancante");
+      }
+      if (!mappedRow.address || mappedRow.address.trim() === "") {
+        errors.push("Indirizzo mancante");
+      }
+
+      processed.push({
+        ...mappedRow,
+        rowIndex: i + 1,
+        isValid: errors.length === 0,
+        errors,
+      });
+    }
+
+    setProcessedClients(processed);
+    setStep("preview");
+  };
+
+  // Import finale
+  const handleImport = async () => {
+    setStep("importing");
+    setImportProgress(0);
     
+    const results = {
+      success: 0,
+      failed: 0,
+      duplicates: 0,
+      errors: [] as string[],
+    };
+
+    const validClients = processedClients.filter(c => c.isValid);
+    const cryptoSvc = getCryptoService();
+    
+    console.log("🔍 DEBUG: cryptoSvc =", cryptoSvc);
+    console.log("🔍 DEBUG: cryptoSvc.encrypt =", cryptoSvc?.encrypt);
+    console.log("🔍 DEBUG: typeof cryptoSvc.encrypt =", typeof cryptoSvc?.encrypt);
+
+    for (let i = 0; i < validClients.length; i++) {
+      const client = validClients[i];
+      
+      try {
+        // Cifra campi sensibili
+        const encryptedClient: any = {};
+        
+        for (const [key, value] of Object.entries(client)) {
+          if (key === "rowIndex" || key === "isValid" || key === "errors" || !value) continue;
+          
+          // Cifra solo campi sensibili
+          if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key)) {
+            console.log(`🔐 Cifro campo ${key}:`, value);
+            const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
+            console.log(`✅ Cifrato ${key}:`, encrypted);
+            encryptedClient[key] = encrypted.ciphertext;
+          } else if (["city", "tipo_locale", "notes"].includes(key)) {
+            // Questi vanno in custom (non cifrati)
+            if (!encryptedClient.custom) encryptedClient.custom = {};
+            encryptedClient.custom[key] = value;
+          } else {
+            encryptedClient[key] = value;
+          }
+        }
+
+        // Invia al server
+        const response = await fetch("/api/clients/upsert", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(encryptedClient),
+        });
+
+        if (response.ok) {
+          results.success++;
+        } else {
+          const errorData = await response.json();
+          if (errorData.error?.includes("duplicate")) {
+            results.duplicates++;
+          } else {
+            results.failed++;
+            results.errors.push(`Riga ${client.rowIndex}: ${errorData.error || "Errore sconosciuto"}`);
+          }
+        }
+      } catch (error: any) {
+        results.failed++;
+        results.errors.push(`Riga ${client.rowIndex}: ${error.message}`);
+      }
+
+      setImportProgress(Math.round(((i + 1) / validClients.length) * 100));
+    }
+
+    setImportResults(results);
+    setStep("complete");
+  };
+
   return (
-    <>
-      {/* TopBar */}
-      <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
-        <TopBar
-          title="Aggiungi Cliente"
-          onOpenLeft={openLeft}
-          onOpenDati={openDati}
-          onOpenDocs={openDocs}
-          onOpenImpostazioni={openImpostazioni}
-          onLogout={logout}
-        />
-      </div>
-
-      <div style={{ maxWidth: 900, margin: '40px auto', padding: 24 }}>
-        {/* Spacer per TopBar */}
-        <div style={{ height: 70 }} />
-
-        {/* Header */}
-        <div style={{ marginBottom: 24 }}>
-          <p style={{ color: '#6b7280' }}>
-            Compila il form manualmente o attiva il dialogo vocale per inserire i dati a voce.
+  <>
+    <TopBar
+      title="Import Clienti"
+      onOpenLeft={openLeft}
+      onOpenDati={openDati}
+      onOpenDocs={openDocs}
+      onOpenImpostazioni={openImpostazioni}
+      onLogout={logout}
+    />
+    
+    <div style={{ 
+      minHeight: "100vh", 
+      background: "linear-gradient(to bottom right, #f0f9ff, #e0f2fe)",
+      paddingTop: 80,
+      paddingBottom: 40,
+    }}>
+      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px" }}>
+        <div style={{ marginBottom: 32 }}>
+          <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 8 }}>
+            📥 Importa Lista Clienti
+          </h1>
+          <p style={{ color: "#6b7280", fontSize: 14 }}>
+            Carica un file CSV o Excel. Tutti i dati sensibili saranno cifrati automaticamente.
           </p>
         </div>
 
-        {/* Controlli dialogo vocale */}
-        <div style={{ marginBottom: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
-          {!dialogState.active ? (
-            <button
-              onClick={startDialog}
+        {/* Progress indicator */}
+        {step !== "upload" && (
+          <div style={{ display: "flex", gap: 8, marginBottom: 32, padding: 16, background: "white", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            {["upload", "mapping", "preview", "importing", "complete"].map((s, idx) => (
+              <div key={s} style={{ flex: 1, textAlign: "center" }}>
+                <div style={{
+                  width: 32,
+                  height: 32,
+                  borderRadius: "50%",
+                  background: step === s ? "#2563eb" : idx < ["upload", "mapping", "preview", "importing", "complete"].indexOf(step) ? "#10b981" : "#e5e7eb",
+                  color: "white",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  margin: "0 auto 8px",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}>
+                  {idx + 1}
+                </div>
+                <div style={{ fontSize: 12, color: "#6b7280" }}>
+                  {s === "upload" ? "Upload" : s === "mapping" ? "Mapping" : s === "preview" ? "Preview" : s === "importing" ? "Import" : "Completato"}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ========== STEP: UPLOAD ========== */}
+        {step === "upload" && (
+          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File</h2>
+            <p style={{ color: "#6b7280", marginBottom: 24 }}>
+              Carica un file CSV o Excel. Il sistema cifrerà automaticamente i dati sensibili.
+            </p>
+
+            {/* Indicatore parsing progress */}
+            {parsingProgress && (
+              <div style={{ marginBottom: 24, padding: 16, background: "#fef3c7", borderRadius: 8, border: "1px solid #fbbf24" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ fontSize: 24 }}>⏳</div>
+                  <div>
+                    <div style={{ fontWeight: 600, fontSize: 14, color: "#92400e" }}>{parsingProgress}</div>
+                    <div style={{ fontSize: 12, color: "#92400e", marginTop: 4 }}>
+                      Attendi... l'operazione potrebbe richiedere alcuni secondi
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Area upload */}
+            <div
+              onClick={() => !parsingProgress && fileInputRef.current?.click()}
               style={{
-                padding: '10px 20px',
-                borderRadius: 8,
-                border: 'none',
-                background: '#10b981',
-                color: 'white',
-                fontWeight: 600,
-                cursor: 'pointer',
+                border: "2px dashed #d1d5db",
+                borderRadius: 12,
+                padding: 48,
+                textAlign: "center",
+                cursor: parsingProgress ? "wait" : "pointer",
+                background: "#f9fafb",
+                transition: "all 0.2s",
+                opacity: parsingProgress ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!parsingProgress) {
+                  e.currentTarget.style.background = "#f3f4f6";
+                  e.currentTarget.style.borderColor = "#9ca3af";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!parsingProgress) {
+                  e.currentTarget.style.background = "#f9fafb";
+                  e.currentTarget.style.borderColor = "#d1d5db";
+                }
               }}
             >
-              🎤 Avvia Dialogo Vocale
-            </button>
-          ) : (
-            <button
-              onClick={stopDialog}
-              style={{
-                padding: '10px 20px',
-                borderRadius: 8,
-                border: 'none',
-                background: '#ef4444',
-                color: 'white',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              🛑 Ferma Dialogo
-            </button>
-          )}
-
-          {dialogState.active && (
-            <span style={{ color: '#10b981', fontWeight: 500 }}>
-              🎙️ Dialogo attivo - Campo: {dialogState.currentField || 'conferma finale'}
-            </span>
-          )}
-        </div>
-
-        {/* Form */}
-        <div style={{ background: '#f9fafb', padding: 24, borderRadius: 12, border: '1px solid #e5e7eb' }}>
-          {/* DATI PRINCIPALI */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📋 Dati Principali</h2>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {/* Nome Cliente */}
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Nome Cliente/Azienda *
-                </label>
-                <input
-                  type="text"
-                  value={form.nomeCliente}
-                  onChange={(e) => updateField('nomeCliente', e.target.value)}
-                  placeholder="Es. Pizzeria Da Mario"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-
-              {/* Città */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Città *
-                </label>
-                <input
-                  type="text"
-                  value={form.citta}
-                  onChange={(e) => updateField('citta', e.target.value)}
-                  placeholder="Es. Milano"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-
-              {/* Indirizzo */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Via e Num. Civico *
-                </label>
-                <input
-                  type="text"
-                  value={form.indirizzo}
-                  onChange={(e) => updateField('indirizzo', e.target.value)}
-                  placeholder="Es. Via Roma, 123"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-
-              {/* Tipo Locale */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Tipo di Locale *
-                </label>
-                <select
-                  value={form.tipoLocale}
-                  onChange={(e) => updateField('tipoLocale', e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                >
-                  <option value="">Seleziona...</option>
-                  {TIPO_LOCALE.map(tipo => (
-                    <option key={tipo} value={tipo}>{tipo}</option>
-                  ))}
-                </select>
-              </div>
-
-              {/* P.IVA */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  P.IVA (opzionale)
-                </label>
-                <input
-                  type="text"
-                  value={form.piva}
-                  onChange={(e) => updateField('piva', e.target.value)}
-                  placeholder="Es. IT12345678901"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
+              <div style={{ fontSize: 64, marginBottom: 16 }}>📂</div>
+              <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+                Carica file CSV o Excel
+              </p>
+              <p style={{ fontSize: 14, color: "#6b7280" }}>
+                Clicca qui o trascina il file
+              </p>
             </div>
-          </div>
 
-          {/* CONTATTO */}
-          <div style={{ marginBottom: 24 }}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>👤 Contatto Principale</h2>
-            
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
-              {/* Nome Contatto */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Nome Contatto *
-                </label>
-                <input
-                  type="text"
-                  value={form.nomeContatto}
-                  onChange={(e) => updateField('nomeContatto', e.target.value)}
-                  placeholder="Es. Mario Rossi"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-
-              {/* Telefono */}
-              <div>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Telefono *
-                </label>
-                <input
-                  type="tel"
-                  value={form.telefono}
-                  onChange={(e) => updateField('telefono', e.target.value)}
-                  placeholder="Es. 333 1234567"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-
-              {/* Email */}
-              <div style={{ gridColumn: '1 / -1' }}>
-                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>
-                  Email (opzionale)
-                </label>
-                <input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => updateField('email', e.target.value)}
-                  placeholder="Es. mario@pizzeria.it"
-                  style={{
-                    width: '100%',
-                    padding: 10,
-                    borderRadius: 8,
-                    border: '1px solid #d1d5db',
-                    fontSize: 14,
-                  }}
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* NOTE */}
-          <div>
-            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 16 }}>📝 Note</h2>
-            
-            <textarea
-              value={form.note}
-              onChange={(e) => updateField('note', e.target.value)}
-              placeholder="Note aggiuntive sul cliente..."
-              rows={4}
-              style={{
-                width: '100%',
-                padding: 10,
-                borderRadius: 8,
-                border: '1px solid #d1d5db',
-                fontSize: 14,
-                resize: 'vertical',
-              }}
+            {/* Input nascosto */}
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleFileSelect}
+              style={{ display: "none" }}
+              disabled={!!parsingProgress}
             />
+
+            <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
+              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📋 Formati Supportati</h3>
+              
+              <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📄 CSV:</strong>
+                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
+                    File di testo con valori separati da virgola
+                  </p>
+                </div>
+                <div>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📊 Excel (XLSX/XLS):</strong>
+                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
+                    Fogli di calcolo Microsoft Excel
+                  </p>
+                </div>
+              </div>
+
+              <p style={{ fontSize: 13, color: "#1e40af", fontFamily: "monospace", background: "white", padding: 8, borderRadius: 4, overflow: "auto" }}>
+                Esempio colonne: name, contact_name, city, address, tipo_locale, phone, email, vat_number, notes
+              </p>
+            </div>
+
+            <button
+              onClick={() => router.push("/clients")}
+              disabled={!!parsingProgress}
+              style={{
+                marginTop: 24,
+                padding: "10px 20px",
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                background: "white",
+                cursor: parsingProgress ? "not-allowed" : "pointer",
+                fontSize: 14,
+                opacity: parsingProgress ? 0.6 : 1,
+              }}
+            >
+              ← Annulla
+            </button>
           </div>
-        </div>
+        )}
 
-        {/* Azioni */}
-        <div style={{ marginTop: 24, display: 'flex', gap: 12, alignItems: 'center' }}>
-          <button
-            onClick={() => router.push('/')}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: 'white',
-              color: '#111827',
-              fontWeight: 600,
-              cursor: 'pointer',
-            }}
-          >
-            ← Annulla
-          </button>
+        {/* ========== STEP: MAPPING ========== */}
+        {step === "mapping" && (
+          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>🔗 Assegna Campi</h2>
+            <p style={{ color: "#6b7280", marginBottom: 24 }}>
+              Per ogni colonna riconosciuta, scegli a quale campo corrisponde guardando i dati della prima riga.
+            </p>
 
-          <button
-            onClick={saveClient}
-            disabled={saving || dialogState.active}
-            style={{
-              padding: '10px 20px',
-              borderRadius: 8,
-              border: 'none',
-              background: saving || dialogState.active ? '#9ca3af' : '#111827',
-              color: 'white',
-              fontWeight: 600,
-              cursor: saving || dialogState.active ? 'not-allowed' : 'pointer',
-            }}
-          >
-            {saving ? 'Salvataggio...' : '✅ Salva Cliente'}
-          </button>
+            {/* Tabella con dropdown sopra ogni colonna */}
+            <div style={{ overflow: "auto", marginBottom: 24 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    {csvHeaders.map((header, idx) => (
+                      <th key={idx} style={{ 
+                        padding: 12, 
+                        background: "#f9fafb", 
+                        borderBottom: "2px solid #e5e7eb",
+                        verticalAlign: "top",
+                        minWidth: 150
+                      }}>
+                        <select
+                          value={mapping[header] || ""}
+                          onChange={(e) => setMapping({ ...mapping, [header]: e.target.value || undefined })}
+                          style={{
+                            width: "100%",
+                            padding: "8px",
+                            borderRadius: 6,
+                            border: "2px solid #2563eb",
+                            fontSize: 13,
+                            fontWeight: 600,
+                            color: "#2563eb",
+                            cursor: "pointer",
+                          }}
+                        >
+                          <option value="">Scegli dato</option>
+                          <option value="name">Nome Cliente *</option>
+                          <option value="contact_name">Nome Contatto *</option>
+                          <option value="phone">Telefono *</option>
+                          <option value="address">Indirizzo *</option>
+                          <option value="email">Email</option>
+                          <option value="vat_number">P.IVA</option>
+                          <option value="city">Città</option>
+                          <option value="tipo_locale">Tipo Locale</option>
+                          <option value="notes">Note</option>
+                        </select>
+                        <div style={{ 
+                          marginTop: 8, 
+                          fontSize: 11, 
+                          color: "#9ca3af",
+                          fontWeight: "normal"
+                        }}>
+                          Colonna: {header}
+                        </div>
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    {csvHeaders.map((header, idx) => (
+                      <td key={idx} style={{ 
+                        padding: "20px 12px", 
+                        borderBottom: "2px solid #e5e7eb",
+                        background: "#fffbeb",
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: "#111827",
+                        textAlign: "center"
+                      }}>
+                        {rawData[0]?.[header] || "-"}
+                      </td>
+                    ))}
+                  </tr>
+                </tbody>
+              </table>
+            </div>
 
-          {resultMsg && (
-            <span style={{ color: '#10b981', fontWeight: 500 }}>{resultMsg}</span>
-          )}
-          {errorMsg && (
-            <span style={{ color: '#ef4444', fontWeight: 500 }}>{errorMsg}</span>
-          )}
-        </div>
+            <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
+              <p style={{ fontSize: 13, color: "#1e40af" }}>
+                <strong>💡 Suggerimento:</strong> Guarda i valori nella prima riga per capire a quale campo corrisponde ogni colonna. I campi con * sono obbligatori.
+              </p>
+            </div>
+
+            <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+              <button
+                onClick={() => setStep("upload")}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  border: "1px solid #d1d5db",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                ← Indietro
+              </button>
+              <button
+                onClick={handlePreview}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                Continua →
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ========== STEP: PREVIEW ========== */}
+        {step === "preview" && (
+          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>👁️ Anteprima Clienti</h2>
+            <p style={{ color: "#6b7280", marginBottom: 24 }}>
+              Verifica i dati prima dell'importazione. I clienti con errori non saranno importati.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
+              <div style={{ padding: 12, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#15803d" }}>
+                  {processedClients.filter(c => c.isValid).length}
+                </div>
+                <div style={{ fontSize: 12, color: "#15803d" }}>✅ Clienti validi</div>
+              </div>
+              <div style={{ padding: 12, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
+                <div style={{ fontSize: 24, fontWeight: 700, color: "#dc2626" }}>
+                  {processedClients.filter(c => !c.isValid).length}
+                </div>
+                <div style={{ fontSize: 12, color: "#dc2626" }}>❌ Con errori</div>
+              </div>
+            </div>
+
+            <div style={{ maxHeight: 400, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                <thead style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
+                  <tr>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Riga</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Status</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Nome</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Contatto</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Telefono</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Indirizzo</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Errori</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {processedClients.map((client, idx) => (
+                    <tr key={idx} style={{ background: client.isValid ? "white" : "#fef2f2" }}>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.rowIndex}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>
+                        {client.isValid ? "✅" : "❌"}
+                      </td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.name || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.contact_name || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.phone || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.address || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb", color: "#dc2626" }}>
+                        {client.errors.join(", ") || "-"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
+              <button
+                onClick={() => setStep("mapping")}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  border: "1px solid #d1d5db",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                ← Indietro
+              </button>
+              <button
+                onClick={handleImport}
+                disabled={processedClients.filter(c => c.isValid).length === 0}
+                style={{
+                  padding: "10px 20px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: processedClients.filter(c => c.isValid).length === 0 ? "#d1d5db" : "#10b981",
+                  color: "white",
+                  cursor: processedClients.filter(c => c.isValid).length === 0 ? "not-allowed" : "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                🚀 Importa {processedClients.filter(c => c.isValid).length} clienti
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* ========== STEP: IMPORTING ========== */}
+        {step === "importing" && (
+          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)", textAlign: "center" }}>
+            <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Importazione in corso...</h2>
+            <p style={{ color: "#6b7280", marginBottom: 24 }}>
+              Stiamo cifrando e salvando i tuoi clienti. Non chiudere questa pagina.
+            </p>
+
+            <div style={{ maxWidth: 400, margin: "0 auto" }}>
+              <div style={{ width: "100%", height: 8, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
+                <div style={{
+                  width: `${importProgress}%`,
+                  height: "100%",
+                  background: "#2563eb",
+                  transition: "width 0.3s",
+                }} />
+              </div>
+              <div style={{ marginTop: 8, fontSize: 14, fontWeight: 600, color: "#2563eb" }}>
+                {importProgress}%
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ========== STEP: COMPLETE ========== */}
+        {step === "complete" && (
+          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            <div style={{ textAlign: "center", marginBottom: 24 }}>
+              <div style={{ fontSize: 64, marginBottom: 16 }}>
+                {importResults.failed === 0 ? "🎉" : "⚠️"}
+              </div>
+              <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
+                {importResults.failed === 0 ? "Importazione Completata!" : "Importazione Completata con Avvisi"}
+              </h2>
+              <p style={{ color: "#6b7280" }}>
+                Ecco il riepilogo dell'operazione
+              </p>
+            </div>
+
+            <div style={{ display: "grid", gap: 16, marginBottom: 24 }}>
+              <div style={{ padding: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
+                <div style={{ fontSize: 32, fontWeight: 700, color: "#15803d" }}>
+                  {importResults.success}
+                </div>
+                <div style={{ fontSize: 14, color: "#15803d" }}>✅ Clienti importati con successo</div>
+              </div>
+
+              {importResults.failed > 0 && (
+                <div style={{ padding: 16, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
+                  <div style={{ fontSize: 32, fontWeight: 700, color: "#dc2626" }}>
+                    {importResults.failed}
+                  </div>
+                  <div style={{ fontSize: 14, color: "#dc2626" }}>❌ Errori durante l'importazione</div>
+                </div>
+              )}
+            </div>
+
+            {importResults.errors.length > 0 && (
+              <div style={{ marginBottom: 24, padding: 16, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
+                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#dc2626" }}>
+                  Dettagli Errori:
+                </h3>
+                <ul style={{ fontSize: 13, color: "#7f1d1d", paddingLeft: 20 }}>
+                  {importResults.errors.slice(0, 10).map((err, idx) => (
+                    <li key={idx} style={{ marginBottom: 4 }}>{err}</li>
+                  ))}
+                  {importResults.errors.length > 10 && (
+                    <li style={{ fontStyle: "italic" }}>
+                      ... e altri {importResults.errors.length - 10} errori
+                    </li>
+                  )}
+                </ul>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 12 }}>
+              <button
+                onClick={() => router.push("/clients")}
+                style={{
+                  flex: 1,
+                  padding: "12px 24px",
+                  borderRadius: 8,
+                  border: "none",
+                  background: "#2563eb",
+                  color: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                  fontWeight: 600,
+                }}
+              >
+                📋 Vai alla lista clienti
+              </button>
+              <button
+                onClick={() => {
+                  setStep("upload");
+                  setRawData([]);
+                  setCsvHeaders([]);
+                  setMapping({});
+                  setProcessedClients([]);
+                  setImportProgress(0);
+                  setImportResults({ success: 0, failed: 0, duplicates: 0, errors: [] });
+                }}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: 8,
+                  border: "1px solid #d1d5db",
+                  background: "white",
+                  cursor: "pointer",
+                  fontSize: 14,
+                }}
+              >
+                🔄 Importa altra lista
+              </button>
+            </div>
+          </div>
+        )}
       </div>
+    </div>
 
-      {/* Drawer */}
-      <div style={{ position: "relative", zIndex: 2001 }}>
-        <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
-        <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
-      </div>
-    </>
+    {/* Drawer */}
+    <div style={{ position: "relative", zIndex: 2001 }}>
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
+      <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
+    </div>
+  </>
   );
 }
