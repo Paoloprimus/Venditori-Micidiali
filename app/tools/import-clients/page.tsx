@@ -304,8 +304,11 @@ export default function ImportClientsPage() {
       if (!mappedRow.contact_name || mappedRow.contact_name.trim() === "") {
         errors.push("Nome Contatto mancante");
       }
-      if (!mappedRow.city || mappedRow.city.trim() === "") {
-        errors.push("Città mancante");
+      if (!mappedRow.phone || mappedRow.phone.trim() === "") {
+        errors.push("Telefono mancante");
+      }
+      if (!mappedRow.address || mappedRow.address.trim() === "") {
+        errors.push("Indirizzo mancante");
       }
 
       processed.push({
@@ -336,19 +339,22 @@ export default function ImportClientsPage() {
         // Cifra campi sensibili
         const encryptedName = await cryptoSvc.encrypt(client.name || "", "table:accounts");
         const encryptedContactName = await cryptoSvc.encrypt(client.contact_name || "", "table:accounts");
-        const encryptedCity = await cryptoSvc.encrypt(client.city || "", "table:accounts");
-        const encryptedAddress = client.address ? await cryptoSvc.encrypt(client.address, "table:accounts") : null;
-        const encryptedTipoLocale = client.tipo_locale ? await cryptoSvc.encrypt(client.tipo_locale, "table:accounts") : null;
-        const encryptedPhone = client.phone ? await cryptoSvc.encrypt(client.phone, "table:accounts") : null;
+        const encryptedPhone = await cryptoSvc.encrypt(client.phone || "", "table:accounts");
+        const encryptedAddress = await cryptoSvc.encrypt(client.address || "", "table:accounts");
         const encryptedEmail = client.email ? await cryptoSvc.encrypt(client.email, "table:accounts") : null;
         const encryptedVatNumber = client.vat_number ? await cryptoSvc.encrypt(client.vat_number, "table:accounts") : null;
-        const encryptedNotes = client.notes ? await cryptoSvc.encrypt(client.notes, "table:accounts") : null;
 
         // Blind index per duplicate detection
         const blindIndex = await cryptoSvc.blindIndex(
-          `${client.name}|${client.contact_name}|${client.city}`,
+          `${client.name}|${client.contact_name}|${client.phone}`,
           "table:accounts"
         );
+
+        // Campi custom (jsonb) - NON cifrati
+        const custom: any = {};
+        if (client.city) custom.city = client.city;
+        if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
+        if (client.notes) custom.notes = client.notes;
 
         // Salva su DB
         const response = await fetch("/api/clients/upsert", {
@@ -357,14 +363,12 @@ export default function ImportClientsPage() {
           body: JSON.stringify({
             name: encryptedName,
             contact_name: encryptedContactName,
-            city: encryptedCity,
-            address: encryptedAddress,
-            tipo_locale: encryptedTipoLocale,
             phone: encryptedPhone,
+            address: encryptedAddress,
             email: encryptedEmail,
             vat_number: encryptedVatNumber,
-            notes: encryptedNotes,
             blind_index: blindIndex,
+            custom: Object.keys(custom).length > 0 ? custom : null,
           }),
         });
 
@@ -594,12 +598,12 @@ export default function ImportClientsPage() {
                           <option value="">Scegli dato</option>
                           <option value="name">Nome Cliente *</option>
                           <option value="contact_name">Nome Contatto *</option>
-                          <option value="city">Città *</option>
-                          <option value="address">Indirizzo</option>
-                          <option value="tipo_locale">Tipo Locale</option>
-                          <option value="phone">Telefono</option>
+                          <option value="phone">Telefono *</option>
+                          <option value="address">Indirizzo *</option>
                           <option value="email">Email</option>
                           <option value="vat_number">P.IVA</option>
+                          <option value="city">Città</option>
+                          <option value="tipo_locale">Tipo Locale</option>
                           <option value="notes">Note</option>
                         </select>
                         <div style={{ 
@@ -704,7 +708,8 @@ export default function ImportClientsPage() {
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Status</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Nome</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Contatto</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Città</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Telefono</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Indirizzo</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Errori</th>
                   </tr>
                 </thead>
@@ -717,7 +722,8 @@ export default function ImportClientsPage() {
                       </td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.name || "-"}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.contact_name || "-"}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.city || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.phone || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.address || "-"}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb", color: "#dc2626" }}>
                         {client.errors.join(", ") || "-"}
                       </td>
