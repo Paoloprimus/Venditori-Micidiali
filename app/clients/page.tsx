@@ -452,7 +452,7 @@ arr = arr.filter((r) =>
   value={q}
   onChange={(e) => setQ(e.target.value)}
 />
-          />
+  
           <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
         </div>
 
