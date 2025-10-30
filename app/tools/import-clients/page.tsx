@@ -741,8 +741,7 @@ export default function ImportClientsPage() {
   return (
   <>
     <TopBar
-      leftOpen={leftOpen}
-      rightOpen={rightOpen}
+      title="Import Clienti"
       onOpenLeft={openLeft}
       onOpenDati={openDati}
       onOpenDocs={openDocs}
