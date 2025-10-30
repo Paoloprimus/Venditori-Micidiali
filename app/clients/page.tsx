@@ -22,6 +22,7 @@ type RawAccount = {
   // encrypted (opzionali)
   name_enc?: any; name_iv?: any;
   contact_name_enc?: any; contact_name_iv?: any;
+  city_enc?: any; city_iv?: any;  // ✅ AGGIUNGI QUESTA RIGA
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
@@ -36,6 +37,7 @@ type PlainAccount = {
   created_at: string;
   name: string;
   contact_name: string;
+  city: string;  // ✅ AGGIUNGI QUESTA RIGA
   email: string;
   phone: string;
   vat_number: string;
@@ -43,7 +45,7 @@ type PlainAccount = {
 };
 
 const PAGE_SIZE = 25;
-type SortKey = "name" | "email" | "phone" | "vat_number" | "created_at";
+type SortKey = "name" | "city" | "email" | "phone" | "vat_number" | "created_at";  // ✅ AGGIUNGI "city"
 
 const DEFAULT_SCOPES = [
   "table:accounts", "table:contacts", "table:products",
@@ -192,20 +194,21 @@ useEffect(() => {
     const from = p * PAGE_SIZE;
     const to = from + PAGE_SIZE - 1;
 
-    const { data, error } = await supabase
-      .from("accounts")
-      .select(
-      "id,created_at," +
-      "name_enc,name_iv," +
-      "contact_name_enc,contact_name_iv," +
-      "email_enc,email_iv," +
-      "phone_enc,phone_iv," +
-      "vat_number_enc,vat_number_iv," +
-      "address_enc,address_iv," +
-      "custom"
-      )
-      .order("created_at", { ascending: false })
-      .range(from, to);
+const { data, error } = await supabase
+  .from("accounts")
+  .select(
+    "id,created_at," +
+    "name_enc,name_iv," +
+    "contact_name_enc,contact_name_iv," +
+    "city_enc,city_iv," +  // ✅ AGGIUNGI QUESTA RIGA
+    "email_enc,email_iv," +
+    "phone_enc,phone_iv," +
+    "vat_number_enc,vat_number_iv," +
+    "address_enc,address_iv," +
+    "custom"
+  )
+  .order("created_at", { ascending: false })
+  .range(from, to);
 
     if (error) {
       console.error("[/clients] load error:", error);
@@ -247,21 +250,23 @@ useEffect(() => {
           return bytes;
         };
         
-        const recordForDecrypt = {
-          ...r,
-          name_enc: hexToBase64(r.name_enc),
-          name_iv: hexToBase64(r.name_iv),
-          contact_name_enc: hexToBase64(r.contact_name_enc),
-          contact_name_iv: hexToBase64(r.contact_name_iv),
-          email_enc: hexToBase64(r.email_enc),
-          email_iv: hexToBase64(r.email_iv),
-          phone_enc: hexToBase64(r.phone_enc),
-          phone_iv: hexToBase64(r.phone_iv),
-          vat_number_enc: hexToBase64(r.vat_number_enc),
-          vat_number_iv: hexToBase64(r.vat_number_iv),
-          address_enc: hexToBase64(r.address_enc),
-          address_iv: hexToBase64(r.address_iv),
-        };
+const recordForDecrypt = {
+  ...r,
+  name_enc: hexToBase64(r.name_enc),
+  name_iv: hexToBase64(r.name_iv),
+  contact_name_enc: hexToBase64(r.contact_name_enc),
+  contact_name_iv: hexToBase64(r.contact_name_iv),
+  city_enc: hexToBase64(r.city_enc),  // ✅ AGGIUNGI QUESTA RIGA
+  city_iv: hexToBase64(r.city_iv),    // ✅ AGGIUNGI QUESTA RIGA
+  email_enc: hexToBase64(r.email_enc),
+  email_iv: hexToBase64(r.email_iv),
+  phone_enc: hexToBase64(r.phone_enc),
+  phone_iv: hexToBase64(r.phone_iv),
+  vat_number_enc: hexToBase64(r.vat_number_enc),
+  vat_number_iv: hexToBase64(r.vat_number_iv),
+  address_enc: hexToBase64(r.address_enc),
+  address_iv: hexToBase64(r.address_iv),
+};
 
         if (typeof (crypto as any)?.decryptFields !== "function") {
           throw new Error("decryptFields non disponibile");
@@ -275,10 +280,10 @@ useEffect(() => {
               }, {})
             : ((x ?? {}) as Record<string, unknown>);
 
-        const decAny = await (crypto as any).decryptFields(
-          "table:accounts", "accounts", '', recordForDecrypt,
-          ["name", "contact_name", "email", "phone", "vat_number", "address"]
-        );
+const decAny = await (crypto as any).decryptFields(
+  "table:accounts", "accounts", '', recordForDecrypt,
+  ["name", "contact_name", "city", "email", "phone", "vat_number", "address"]  // ✅ AGGIUNGI "city"
+);
 
         const dec = toObj(decAny);
 
@@ -286,24 +291,31 @@ useEffect(() => {
         const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
         const notes = customObj.notes || "";
 
-        plain.push({
-          id: r.id,
-          created_at: r.created_at,
-          name: String(dec.name ?? ""),
-          contact_name: String(dec.contact_name ?? ""),
-          email: String(dec.email ?? ""),
-          phone: String(dec.phone ?? ""),
-          vat_number: String(dec.vat_number ?? ""),
-          notes: String(notes),
-        });
+plain.push({
+  id: r.id,
+  created_at: r.created_at,
+  name: String(dec.name ?? ""),
+  contact_name: String(dec.contact_name ?? ""),
+  city: String(dec.city ?? ""),  // ✅ AGGIUNGI QUESTA RIGA
+  email: String(dec.email ?? ""),
+  phone: String(dec.phone ?? ""),
+  vat_number: String(dec.vat_number ?? ""),
+  notes: String(notes),
+});
         
       } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
-        plain.push({
-          id: r.id,
-          created_at: r.created_at,
-          name: "", contact_name: "", email: "", phone: "", vat_number: "", notes: "",
-        });
+plain.push({
+  id: r.id,
+  created_at: r.created_at,
+  name: "", 
+  contact_name: "", 
+  city: "",  // ✅ AGGIUNGI QUESTA RIGA
+  email: "", 
+  phone: "", 
+  vat_number: "", 
+  notes: "",
+});
       }
     }
 
@@ -330,13 +342,15 @@ useEffect(() => {
     let arr = [...rows];
     if (q.trim()) {
       const qq = norm(q);
-      arr = arr.filter((r) =>
-        norm(r.name).includes(qq) ||
-        norm(r.email).includes(qq) ||
-        norm(r.phone).includes(qq) ||
-        norm(r.vat_number).includes(qq) ||
-        norm(r.notes).includes(qq)
-      );
+arr = arr.filter((r) =>
+  norm(r.name).includes(qq) ||
+  norm(r.contact_name).includes(qq) ||  // ✅ AGGIUNGI QUESTA RIGA
+  norm(r.city).includes(qq) ||          // ✅ AGGIUNGI QUESTA RIGA
+  norm(r.email).includes(qq) ||
+  norm(r.phone).includes(qq) ||
+  norm(r.vat_number).includes(qq) ||
+  norm(r.notes).includes(qq)
+);
     }
     arr.sort((a, b) => {
       let va: string | number = a[sortBy] ?? "";
@@ -432,45 +446,52 @@ useEffect(() => {
         </div>
         
         <div className="flex gap-2 items-center">
-          <input
-            className="border rounded p-2 flex-1"
-            placeholder="Cerca (nome, email, telefono, P. IVA, note)"
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
+<input
+  className="border rounded p-2 flex-1"
+  placeholder="Cerca (nome, contatto, città, email, telefono, P. IVA, note)"  // ✅ AGGIUNGI "contatto, città"
+  value={q}
+  onChange={(e) => setQ(e.target.value)}
+/>
           />
           <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
         </div>
 
         <div className="overflow-auto border rounded">
           <table className="min-w-full text-sm">
-            <thead className="bg-gray-50">
-              <tr>
-                <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-                <th className="px-3 py-2 text-left">Contatto</th>
-                <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-                <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-                <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-                <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-                <th className="px-3 py-2 text-left">Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {view.map((r) => (
-                <tr key={r.id} className="border-t hover:bg-gray-50">
-                  <td className="px-3 py-2">{r.name || "—"}</td>
-                  <td className="px-3 py-2">{r.contact_name || "—"}</td>
-                  <td className="px-3 py-2">{r.email || "—"}</td>
-                  <td className="px-3 py-2">{r.phone || "—"}</td>
-                  <td className="px-3 py-2">{r.vat_number || "—"}</td>
-                  <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
-                  <td className="px-3 py-2">{r.notes || "—"}</td>
-                </tr>
-              ))}
-              {!loading && actuallyReady && view.length === 0 && (
-                <tr>
-                  <td className="px-3 py-8 text-center text-gray-500" colSpan={7}>Nessun cliente trovato.</td>
-                </tr>
-              )}
+            
+<thead className="bg-gray-50">
+  <tr>
+    <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+    <th className="px-3 py-2 text-left">Contatto</th>
+    <Th label="Città"      k="city"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />  {/* ✅ AGGIUNGI */}
+    <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+    <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+    <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+    <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+    <th className="px-3 py-2 text-left">Note</th>
+  </tr>
+</thead>
+<tbody>
+  {view.map((r) => (
+    <tr key={r.id} className="border-t hover:bg-gray-50">
+      <td className="px-3 py-2">{r.name || "—"}</td>
+      <td className="px-3 py-2">{r.contact_name || "—"}</td>
+      <td className="px-3 py-2">{r.city || "—"}</td>  {/* ✅ AGGIUNGI */}
+      <td className="px-3 py-2">{r.email || "—"}</td>
+      <td className="px-3 py-2">{r.phone || "—"}</td>
+      <td className="px-3 py-2">{r.vat_number || "—"}</td>
+      <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
+      <td className="px-3 py-2">{r.notes || "—"}</td>
+    </tr>
+  ))}
+              
+{!loading && actuallyReady && view.length === 0 && (
+  <tr>
+    <td className="px-3 py-8 text-center text-gray-500" colSpan={8}>  {/* ✅ CAMBIA DA 7 A 8 */}
+      Nessun cliente trovato.
+    </td>
+  </tr>
+)}
             </tbody>
           </table>
         </div>
