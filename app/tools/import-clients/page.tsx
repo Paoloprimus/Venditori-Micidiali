@@ -337,6 +337,10 @@ export default function ImportClientsPage() {
 
     const validClients = processedClients.filter(c => c.isValid);
     const cryptoSvc = getCryptoService();
+    
+    console.log("🔍 DEBUG: cryptoSvc =", cryptoSvc);
+    console.log("🔍 DEBUG: cryptoSvc.encrypt =", cryptoSvc?.encrypt);
+    console.log("🔍 DEBUG: typeof cryptoSvc.encrypt =", typeof cryptoSvc?.encrypt);
 
     for (let i = 0; i < validClients.length; i++) {
       const client = validClients[i];
@@ -350,7 +354,9 @@ export default function ImportClientsPage() {
           
           // Cifra solo campi sensibili
           if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key)) {
+            console.log(`🔐 Cifro campo ${key}:`, value);
             const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
+            console.log(`✅ Cifrato ${key}:`, encrypted);
             encryptedClient[key] = encrypted.ciphertext;
           } else if (["city", "tipo_locale", "notes"].includes(key)) {
             // Questi vanno in custom (non cifrati)
