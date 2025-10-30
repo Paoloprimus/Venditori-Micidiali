@@ -244,55 +244,56 @@ const { data, error } = await supabase
         const hasEncrypted =
         !!(r.name_enc || r.email_enc || r.phone_enc || r.vat_number_enc || r.address_enc);
 
-        // 🔧 FIX: Converti hex-string in base64
+        // 🔧 FIX: Converti hex-string in base64 (ORIGINALE - NON MODIFICATO!)
         const hexToBase64 = (hexStr: any): string => {
           if (!hexStr || typeof hexStr !== 'string') return '';
-          try {
-            // Se inizia con "\\x", è hex-escaped → converti
-            if (hexStr.startsWith('\\x')) {
-              const hex = hexStr.replace(/\\x/g, '');
-              const bytes = new Uint8Array(hex.match(/.{1,2}/g)!.map(byte => parseInt(byte, 16)));
-              return btoa(String.fromCharCode(...bytes));
-            }
-            // Altrimenti assume sia già base64
-            return hexStr;
-          } catch (e) {
-            console.warn('hexToBase64 failed:', e);
-            return '';
-          }
+          if (!hexStr.startsWith('\\x')) return hexStr;
+          
+          const hex = hexStr.slice(2);
+          const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+          return bytes;
         };
+        
+const recordForDecrypt = {
+  ...r,
+  name_enc: hexToBase64(r.name_enc),
+  name_iv: hexToBase64(r.name_iv),
+  contact_name_enc: hexToBase64(r.contact_name_enc),
+  contact_name_iv: hexToBase64(r.contact_name_iv),
+  city_enc: hexToBase64(r.city_enc),
+  city_iv: hexToBase64(r.city_iv),
+  email_enc: hexToBase64(r.email_enc),
+  email_iv: hexToBase64(r.email_iv),
+  phone_enc: hexToBase64(r.phone_enc),
+  phone_iv: hexToBase64(r.phone_iv),
+  vat_number_enc: hexToBase64(r.vat_number_enc),
+  vat_number_iv: hexToBase64(r.vat_number_iv),
+  address_enc: hexToBase64(r.address_enc),
+  address_iv: hexToBase64(r.address_iv),
+};
 
-        if (hasEncrypted) {
-          // 🔧 Prepara il rowMap con conversione hex → base64
-          const rowMap: Record<string, unknown> = {
-            name_enc: hexToBase64(r.name_enc),
-            name_iv: hexToBase64(r.name_iv),
-            contact_name_enc: hexToBase64(r.contact_name_enc),
-            contact_name_iv: hexToBase64(r.contact_name_iv),
-            city_enc: hexToBase64(r.city_enc),
-            city_iv: hexToBase64(r.city_iv),
-            email_enc: hexToBase64(r.email_enc),
-            email_iv: hexToBase64(r.email_iv),
-            phone_enc: hexToBase64(r.phone_enc),
-            phone_iv: hexToBase64(r.phone_iv),
-            vat_number_enc: hexToBase64(r.vat_number_enc),
-            vat_number_iv: hexToBase64(r.vat_number_iv),
-            address_enc: hexToBase64(r.address_enc),
-            address_iv: hexToBase64(r.address_iv),
-          };
-  
-          const dec = await (crypto as any).decryptFields("table:accounts", "accounts", r.id, rowMap, [
-            "name",
-            "contact_name",
-            "city",
-            "email",
-            "phone",
-            "vat_number",
-            "address"
-          ]);
-  
-          // notes da custom.notes
-          const notes = (r.custom?.notes) ? String(r.custom.notes) : "";
+        if (typeof (crypto as any)?.decryptFields !== "function") {
+          throw new Error("decryptFields non disponibile");
+        }
+        
+        const toObj = (x: any): Record<string, unknown> =>
+          Array.isArray(x)
+            ? x.reduce((acc: Record<string, unknown>, it: any) => {
+                if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
+                return acc;
+              }, {})
+            : ((x ?? {}) as Record<string, unknown>);
+
+const decAny = await (crypto as any).decryptFields(
+  "table:accounts", "accounts", '', recordForDecrypt,
+  ["name", "contact_name", "city", "email", "phone", "vat_number", "address"]
+);
+
+        const dec = toObj(decAny);
+
+        // ✅ Estrai note dal custom (sono in chiaro!)
+        const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
+        const notes = customObj.notes || "";
 
 plain.push({
   id: r.id,
@@ -305,21 +306,7 @@ plain.push({
   vat_number: String(dec.vat_number ?? ""),
   notes: String(notes),
 });
-        } else {
-          // Dati non cifrati (legacy o custom)
-          const notes = (r.custom?.notes) ? String(r.custom.notes) : "";
-          plain.push({
-            id: r.id,
-            created_at: r.created_at,
-            name: "",
-            contact_name: "",
-            city: "",
-            email: "",
-            phone: "",
-            vat_number: "",
-            notes: String(notes),
-          });
-        }
+        
       } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
 plain.push({
