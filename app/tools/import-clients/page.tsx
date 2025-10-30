@@ -347,6 +347,7 @@ export default function ImportClientsPage() {
         
         if (client.name) fieldsToEncrypt.name = client.name;
         if (client.contact_name) fieldsToEncrypt.contact_name = client.contact_name;
+        if (client.city) fieldsToEncrypt.city = client.city;  // ✅ Ora cifrato!
         if (client.phone) fieldsToEncrypt.phone = client.phone;
         if (client.address) fieldsToEncrypt.address = client.address;
         if (client.email) fieldsToEncrypt.email = client.email;
@@ -372,9 +373,8 @@ export default function ImportClientsPage() {
           name_bi: nameBlindIndex  // ✅ OBBLIGATORIO!
         };
         
-        // Aggiungi custom (city, tipo_locale, notes)
+        // Aggiungi custom (solo tipo_locale e notes, city ora è cifrato!)
         const custom: any = {};
-        if (client.city) custom.city = client.city;
         if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
         if (client.notes) custom.notes = client.notes;
         if (Object.keys(custom).length > 0) {
