@@ -505,12 +505,12 @@ export default function ImportClientsPage() {
     return words;
   }
 
-  // Column Detection Algorithm
+  // Column Detection Algorithm - SEMPLIFICATO E ROBUSTO
   function detectColumnsFromWords(words: Array<{ text: string; x: number; y: number; width: number; height: number }>): { headers: string[]; rows: string[][] } {
     if (words.length === 0) return { headers: [], rows: [] };
     
     // ========== STEP 1: RAGGRUPPA PAROLE PER RIGHE (Y simile) ==========
-    const rowTolerance = 15; // pixel di tolleranza Y
+    const rowTolerance = 25; // AUMENTATO: più tollerante per righe con sfondo grigio
     const rows: Array<Array<{ text: string; x: number; y: number; width: number; height: number }>> = [];
     
     // Ordina per Y crescente
@@ -537,44 +537,88 @@ export default function ImportClientsPage() {
     }
     
     if (rows.length < 2) {
-      // Serve almeno header + 1 riga dati
       return { headers: [], rows: [] };
     }
     
-    // ========== STEP 2: IDENTIFICA COLONNE DALLA PRIMA RIGA (HEADER) ==========
+    // ========== STEP 2: PRIMA RIGA = HEADERS (SEMPRE) ==========
     const headerRow = rows[0];
-    const columnRanges: Array<{ start: number; end: number }> = [];
+    const headers = headerRow.map(w => w.text);
+    const numColumns = headers.length;
     
-    const columnTolerance = 50; // pixel di tolleranza X per identificare colonna
-    
-    for (const word of headerRow) {
-      const centerX = word.x + word.width / 2;
-      columnRanges.push({
-        start: centerX - columnTolerance,
-        end: centerX + columnTolerance,
-      });
+    // ========== STEP 3: CALCOLA CENTRI COLONNE DA TUTTE LE PAROLE ==========
+    // Raccogli tutte le posizioni X (non solo header)
+    const allXPositions: number[] = [];
+    for (const row of rows) {
+      for (const word of row) {
+        allXPositions.push(word.x + word.width / 2); // centro X
+      }
     }
     
-    // Headers
-    const headers = headerRow.map(w => w.text);
+    // Ordina le X
+    allXPositions.sort((a, b) => a - b);
     
-    // ========== STEP 3: ASSEGNA PAROLE ALLE COLONNE PER OGNI RIGA ==========
+    // K-means semplificato: dividi in K cluster (K = numero headers)
+    const columnCenters: number[] = [];
+    
+    if (numColumns === 1) {
+      // Una sola colonna: usa il centro di tutte le X
+      columnCenters.push(allXPositions[Math.floor(allXPositions.length / 2)]);
+    } else {
+      // Più colonne: inizializza centri uniformemente distribuiti
+      const minX = allXPositions[0];
+      const maxX = allXPositions[allXPositions.length - 1];
+      const step = (maxX - minX) / (numColumns - 1);
+      
+      for (let i = 0; i < numColumns; i++) {
+        columnCenters.push(minX + i * step);
+      }
+      
+      // Raffina i centri (3 iterazioni K-means)
+      for (let iter = 0; iter < 3; iter++) {
+        // Assegna ogni X al centro più vicino
+        const clusters: number[][] = Array.from({ length: numColumns }, () => []);
+        
+        for (const x of allXPositions) {
+          let bestCluster = 0;
+          let bestDist = Math.abs(x - columnCenters[0]);
+          
+          for (let c = 1; c < numColumns; c++) {
+            const dist = Math.abs(x - columnCenters[c]);
+            if (dist < bestDist) {
+              bestDist = dist;
+              bestCluster = c;
+            }
+          }
+          
+          clusters[bestCluster].push(x);
+        }
+        
+        // Ricalcola centri come media dei cluster
+        for (let c = 0; c < numColumns; c++) {
+          if (clusters[c].length > 0) {
+            const sum = clusters[c].reduce((a, b) => a + b, 0);
+            columnCenters[c] = sum / clusters[c].length;
+          }
+        }
+      }
+    }
+    
+    // ========== STEP 4: ASSEGNA PAROLE ALLE COLONNE ==========
     const dataRows: string[][] = [];
     
     for (let i = 1; i < rows.length; i++) {
       const row = rows[i];
-      const rowData: string[] = new Array(headers.length).fill("");
+      const rowData: string[] = new Array(numColumns).fill("");
       
       for (const word of row) {
         const wordCenterX = word.x + word.width / 2;
         
         // Trova colonna più vicina
         let bestCol = 0;
-        let bestDist = Math.abs(wordCenterX - (columnRanges[0].start + columnRanges[0].end) / 2);
+        let bestDist = Math.abs(wordCenterX - columnCenters[0]);
         
-        for (let col = 1; col < columnRanges.length; col++) {
-          const colCenterX = (columnRanges[col].start + columnRanges[col].end) / 2;
-          const dist = Math.abs(wordCenterX - colCenterX);
+        for (let col = 1; col < numColumns; col++) {
+          const dist = Math.abs(wordCenterX - columnCenters[col]);
           
           if (dist < bestDist) {
             bestDist = dist;
