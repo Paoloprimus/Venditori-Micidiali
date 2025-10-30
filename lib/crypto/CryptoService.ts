@@ -1,919 +1,523 @@
-/**
- * ============================================================================
- * PAGINA: Import Clienti (CSV e Excel)
- * ============================================================================
- * 
- * PERCORSO: /app/tools/import-clients/page.tsx
- * URL: https://reping.app/tools/import-clients
- * 
- * DESCRIZIONE:
- * Pagina completa per l'importazione massiva di clienti da file CSV e Excel.
- * Include 5 step: Upload → Mapping → Preview → Import → Report
- * 
- * FORMATI SUPPORTATI:
- * - CSV: Parsing con csv-parse
- * - XLSX/XLS: Parsing con libreria xlsx
- * 
- * FUNZIONALITÀ:
- * - Upload universale con drag & drop
- * - Riconoscimento automatico formato da estensione
- * - Auto-detection intelligente delle colonne (match esatti + parziali)
- * - Mapping manuale con dropdown
- * - Validazione campi obbligatori
- * - Cifratura automatica campi sensibili (usa scope "table:accounts")
- * - Gestione duplicati tramite blind index
- * - Progress bar durante parsing e import
- * - Report dettagliato finale
- * 
- * DIPENDENZE:
- * - csv-parse/browser/esm/sync (per CSV)
- * - xlsx (per Excel)
- * - window.cryptoSvc (fornito da CryptoProvider)
- * - API /api/clients/upsert (per salvare i clienti)
- * 
- * NOTA IMPORTANTE:
- * Usa scope "table:accounts" per la cifratura, NON "clients"!
- * 
- * ============================================================================
- */
-
+// lib/crypto/CryptoService.ts
 "use client";
 
-import { useState, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { parse } from "csv-parse/browser/esm/sync";
-import * as XLSX from "xlsx";
-import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
-import TopBar from "@/components/home/TopBar";
-import { supabase } from "@/lib/supabase/client";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 
-type CsvRow = {
-  name?: string;
-  contact_name?: string;
-  city?: string;
-  address?: string;
-  tipo_locale?: string;
-  phone?: string;
-  email?: string;
-  vat_number?: string;
-  notes?: string;
+/** ---------- Tipi ---------- */
+type KdfParams = { algo: "pbkdf2"; iterations: number; hash: "SHA-256" };
+
+type ScopeKeys = {
+  DEK: Uint8Array;        // Data-Encryption Key (32B)
+  BI: Uint8Array | null;  // Blind-Index key (32B) opzionale
 };
 
-type ValidationError = {
-  row: number;
-  field: string;
-  message: string;
+type ProfileRow = {
+  wrapped_master_key: string | null;      // base64 (bytea)
+  wrapped_master_key_iv?: string | null;  // base64 (bytea)
+  kdf_salt: string | null;                // base64 (bytea)
+  kdf_params: KdfParams | null;
 };
 
-type ProcessedClient = CsvRow & {
-  rowIndex: number;
-  isValid: boolean;
-  errors: string[];
+type EncryptionRow = {
+  id: string;
+  user_id: string;
+  scope: string;
+  dek_wrapped: string;
+  dek_wrapped_iv: string;
+  bi_wrapped: string | null;
+  bi_wrapped_iv: string | null;
+  created_at?: string;
 };
 
-type ImportStep = "upload" | "mapping" | "preview" | "importing" | "complete";
-
-// Mapping: colonna CSV -> campo app
-type ColumnMapping = Record<string, string | undefined>;
-
-// Auto-detection intelligente delle colonne
-const COLUMN_ALIASES: Record<string, string[]> = {
-  name: ["name", "nome", "ragione sociale", "azienda", "cliente", "company", "business name"],
-  contact_name: ["contact_name", "contatto", "nome contatto", "referente", "contact", "person"],
-  city: ["city", "città", "citta", "comune", "location"],
-  address: ["address", "indirizzo", "via", "street", "location"],
-  tipo_locale: ["tipo_locale", "tipo", "type", "categoria", "category"],
-  phone: ["phone", "telefono", "tel", "mobile", "cellulare"],
-  email: ["email", "mail", "e-mail", "posta"],
-  vat_number: ["vat_number", "p.iva", "piva", "partita iva", "vat", "tax id"],
-  notes: ["notes", "note", "commenti", "comments", "memo"],
-};
-
-export default function ImportClientsPage() {
-  const router = useRouter();
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  
-  // Drawer
-  const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
-  
-  // Logout
-  async function logout() {
-    try { sessionStorage.removeItem("repping:pph"); } catch {}
-    try { localStorage.removeItem("repping:pph"); } catch {}
-    await supabase.auth.signOut();
-    window.location.href = "/login";
+/** ---------- Utils byte/base64 ---------- */
+function toBase64(u8: Uint8Array): string {
+  if (typeof window === "undefined") return Buffer.from(u8).toString("base64");
+  let s = "";
+  u8.forEach((b) => (s += String.fromCharCode(b)));
+  return btoa(s);
+}
+function isBase64Like(s: string): boolean {
+  return /^[A-Za-z0-9+/=]+$/.test(s);
+}
+function tryFromBase64(b64: string): Uint8Array | null {
+  try {
+    if (typeof window === "undefined") return new Uint8Array(Buffer.from(b64, "base64"));
+    const bin = atob(b64);
+    const u8 = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) u8[i] = bin.charCodeAt(i);
+    return u8;
+  } catch {
+    return null;
   }
-  
-  const [step, setStep] = useState<ImportStep>("upload");
-  const [rawData, setRawData] = useState<any[]>([]);
-  const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
-  const [mapping, setMapping] = useState<ColumnMapping>({});
-  const [processedClients, setProcessedClients] = useState<ProcessedClient[]>([]);
-  const [importProgress, setImportProgress] = useState(0);
-  const [parsingProgress, setParsingProgress] = useState<string | null>(null);
-  const [fileType, setFileType] = useState<string>("");
-  const [importResults, setImportResults] = useState<{
-    success: number;
-    failed: number;
-    duplicates: number;
-    errors: string[];
-  }>({ success: 0, failed: 0, duplicates: 0, errors: [] });
+}
+function tryFromHexMaybePrefixed(s: string): Uint8Array | null {
+  const hex = s.startsWith("\\x") ? s.slice(2) : s.startsWith("0x") ? s.slice(2) : s;
+  if (!/^[0-9a-fA-F]+$/.test(hex) || hex.length % 2 !== 0) return null;
+  const u8 = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < u8.length; i++) u8[i] = parseInt(hex.substr(i * 2, 2), 16);
+  return u8;
+}
+/* function fromBase64Safe(input: string): Uint8Array {
+  if (!input) return new Uint8Array();
+  // alcuni record legacy possono essere stati salvati come hex
+  const b64 = input.trim();
+  let u8: Uint8Array | null = null;
+  if (isBase64Like(b64)) u8 = tryFromBase64(b64);
+  if (!u8) u8 = tryFromHexMaybePrefixed(b64);
+  if (!u8) throw new Error("Dato cifrato non è base64/hex valido");
+  return u8;
+} */
 
-  // Verifica che il crypto sia pronto (esposto dal CryptoProvider su window.cryptoSvc)
-  const getCryptoService = () => {
-    const svc = (window as any).cryptoSvc;
-    if (!svc) {
-      throw new Error("CryptoService non disponibile. Assicurati che il CryptoProvider sia attivo.");
-    }
-    return svc;
-  };
+function fromBase64Safe(input: string): Uint8Array {
+  if (!input) return new Uint8Array();
 
-  // Auto-detect colonne con priorità ai match esatti (INVERTITO: header -> field)
-  const autoDetectMapping = (headers: string[]): ColumnMapping => {
-    const detected: ColumnMapping = {};
-    
-    // Prima passata: match esatti
-    for (const header of headers) {
-      const normalized = header.toLowerCase().trim();
-      
-      for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
-        // Match esatto con uno degli alias
-        if (aliases.some(alias => normalized === alias)) {
-          detected[header] = field; // INVERTITO: header -> field
-          break;
-        }
-      }
-    }
-    
-    // Seconda passata: match parziali (solo per colonne non ancora mappate)
-    for (const header of headers) {
-      const normalized = header.toLowerCase().trim();
-      
-      for (const [field, aliases] of Object.entries(COLUMN_ALIASES)) {
-        // Salta se già mappato nella prima passata
-        if (detected[header]) continue;
-        
-        // Match parziale
-        if (aliases.some(alias => normalized.includes(alias))) {
-          detected[header] = field; // INVERTITO: header -> field
-          break;
-        }
-      }
-    }
-    
-    return detected;
-  };
-
-  // ==================== PARSER PER OGNI FORMATO ====================
-
-  // Parser CSV
-  async function parseCSV(file: File): Promise<{ headers: string[]; data: any[] }> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      
-      reader.onload = (event) => {
-        try {
-          const csvText = event.target?.result as string;
-          const records = parse(csvText, {
-            columns: true,
-            skip_empty_lines: true,
-            trim: true,
-            bom: true,
-          });
-
-          if (records.length === 0) {
-            reject(new Error("Il file CSV è vuoto!"));
-            return;
-          }
-
-          const headers = Object.keys(records[0]);
-          setParsingProgress(null);
-          resolve({ headers, data: records });
-        } catch (error: any) {
-          setParsingProgress(null);
-          reject(new Error(`Errore parsing CSV: ${error.message}`));
-        }
-      };
-
-      reader.onerror = () => {
-        setParsingProgress(null);
-        reject(new Error("Errore lettura file CSV"));
-      };
-
-      reader.readAsText(file);
-    });
+  // 1) base64 "pulito"
+  const b64 = input.trim();
+  if (/^[A-Za-z0-9+/=]+$/.test(b64)) {
+    // base64 diretto
+    return tryFromBase64(b64) ?? new Uint8Array();
   }
 
-  // Parser Excel
-  async function parseExcel(file: File): Promise<{ headers: string[]; data: any[] }> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+  // 2) fallback: \xHEX o 0xHEX
+  const hex = tryFromHexMaybePrefixed(b64);
+  if (!hex) throw new Error("Dato cifrato non è base64/hex valido");
 
-      reader.onload = (event) => {
-        try {
-          const data = event.target?.result;
-          const workbook = XLSX.read(data, { type: "array" });
-
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
-
-          if (jsonData.length === 0) {
-            reject(new Error("Il file Excel è vuoto!"));
-            return;
-          }
-
-          const headers = Object.keys(jsonData[0] as any);
-          setParsingProgress(null);
-          resolve({ headers, data: jsonData });
-        } catch (error: any) {
-          setParsingProgress(null);
-          reject(new Error(`Errore parsing Excel: ${error.message}`));
-        }
-      };
-
-      reader.onerror = () => {
-        setParsingProgress(null);
-        reject(new Error("Errore lettura file Excel"));
-      };
-
-      reader.readAsArrayBuffer(file);
-    });
+  // ATTENZIONE: molti record sono HEX dell'ASCII di una stringa base64.
+  // Se 'hex' è tutto ASCII stampabile e "sembra" base64, decodiamolo ancora.
+  let ascii = "";
+  let allAscii = true;
+  for (let i = 0; i < hex.length; i++) {
+    const c = hex[i];
+    if (c < 0x20 || c > 0x7E) { allAscii = false; break; }
+    ascii += String.fromCharCode(c);
   }
 
-  // Gestione upload file
-  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  if (allAscii && /^[A-Za-z0-9+/=]+$/.test(ascii)) {
+    const b = tryFromBase64(ascii);
+    if (b) return b; // HEX -> ASCII (base64) -> BYTES
+  }
 
-    // Rileva estensione
-    const fileName = file.name.toLowerCase();
-    const extension = fileName.substring(fileName.lastIndexOf("."));
-    
-    setFileType(extension);
-    setParsingProgress("Caricamento file...");
+  // altrimenti trattiamo l'HEX come bytes "veri"
+  return hex;
+}
 
-    try {
-      let result: { headers: string[]; data: any[] };
 
-      // Switch sul tipo di file
-      if (extension === ".csv") {
-        result = await parseCSV(file);
-      } else if (extension === ".xlsx" || extension === ".xls") {
-        result = await parseExcel(file);
-      } else {
-        throw new Error(`Formato file non supportato: ${extension}`);
-      }
 
-      // Salva headers e dati
-      setCsvHeaders(result.headers);
-      setRawData(result.data);
+/** ---------- Buffer helpers (fix AAD & bytes) ---------- */
+function asBytes(x: unknown): Uint8Array {
+  if (x instanceof Uint8Array) return x;
+  if (x instanceof ArrayBuffer) return new Uint8Array(x);
+  if (ArrayBuffer.isView(x)) {
+    const v = x as ArrayBufferView;
+    return new Uint8Array(v.buffer, v.byteOffset, v.byteLength);
+  }
+  return new TextEncoder().encode(String(x ?? ""));
+}
+function ensureIv(iv?: ArrayBufferView | ArrayBuffer | Uint8Array): Uint8Array {
+  if (iv) {
+    const v = asBytes(iv);
+    if (v.byteLength === 12) return v;
+  }
+  const iv12 = new Uint8Array(12);
+  crypto.getRandomValues(iv12);
+  return iv12;
+}
 
-      // Auto-detect mapping
-      const detected = autoDetectMapping(result.headers);
-      setMapping(detected);
+/** ---------- WebCrypto helpers ---------- */
+async function importAesKey(raw: Uint8Array, usages: KeyUsage[] = ["encrypt", "decrypt"]): Promise<CryptoKey> {
+  return await crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, usages);
+}
+async function aesGcmEncrypt(
+  keyBytes: Uint8Array,
+  iv: Uint8Array | ArrayBufferView | ArrayBuffer,
+  plaintext: Uint8Array | ArrayBufferView | ArrayBuffer,
+  aad?: unknown
+): Promise<Uint8Array> {
+  const key = await importAesKey(asBytes(keyBytes));
+  const nonce = ensureIv(iv);
+  const data = asBytes(plaintext);
+  const params: AesGcmParams = { name: "AES-GCM", iv: nonce, tagLength: 128 };
+  const aadBytes = aad == null ? undefined : asBytes(aad);
+  if (aadBytes && aadBytes.byteLength > 0) (params as any).additionalData = aadBytes;
+  const ct = await crypto.subtle.encrypt(params, key, data);
+  return new Uint8Array(ct);
+}
+async function aesGcmDecrypt(
+  keyBytes: Uint8Array,
+  iv: Uint8Array | ArrayBufferView | ArrayBuffer,
+  ciphertext: Uint8Array | ArrayBufferView | ArrayBuffer,
+  aad?: unknown
+): Promise<Uint8Array> {
+  const key = await importAesKey(asBytes(keyBytes));
+  const nonce = ensureIv(iv);
+  const data = asBytes(ciphertext);
+  const params: AesGcmParams = { name: "AES-GCM", iv: nonce, tagLength: 128 };
+  const aadBytes = aad == null ? undefined : asBytes(aad);
+  if (aadBytes && aadBytes.byteLength > 0) (params as any).additionalData = aadBytes;
+  const pt = await crypto.subtle.decrypt(params, key, data);
+  return new Uint8Array(pt);
+}
 
-      // Vai a step mapping
-      setStep("mapping");
+/** ---------- Envelope (wrap/unwrap) con AES-GCM ---------- */
+async function wrapKey(rawToWrap: Uint8Array, kek: Uint8Array): Promise<{ wrapped: string; nonce: string }> {
+  const nonce = ensureIv();
+  const wrapped = await aesGcmEncrypt(kek, nonce, rawToWrap);
+  return { wrapped: toBase64(wrapped), nonce: toBase64(nonce) };
+}
+async function unwrapKey(wrapped_b64: string, nonce_b64: string, kek: Uint8Array): Promise<Uint8Array> {
+  const ct = fromBase64Safe(wrapped_b64);
+  const iv = fromBase64Safe(nonce_b64);
+  return await aesGcmDecrypt(kek, iv, ct);
+}
 
-    } catch (error: any) {
-      alert(error.message);
-      setParsingProgress(null);
-    }
-  };
-
-  // Preview con validazione
-  const handlePreview = () => {
-    const processed: ProcessedClient[] = [];
-
-    for (let i = 0; i < rawData.length; i++) {
-      const rawRow = rawData[i];
-      const mappedRow: CsvRow = {};
-      const errors: string[] = [];
-
-      // Applica mapping
-      for (const [csvCol, appField] of Object.entries(mapping)) {
-        if (appField) {
-          mappedRow[appField as keyof CsvRow] = rawRow[csvCol];
-        }
-      }
-
-      // Validazione campi obbligatori
-      if (!mappedRow.name || mappedRow.name.trim() === "") {
-        errors.push("Nome Cliente mancante");
-      }
-      if (!mappedRow.contact_name || mappedRow.contact_name.trim() === "") {
-        errors.push("Nome Contatto mancante");
-      }
-      if (!mappedRow.phone || mappedRow.phone.trim() === "") {
-        errors.push("Telefono mancante");
-      }
-      if (!mappedRow.address || mappedRow.address.trim() === "") {
-        errors.push("Indirizzo mancante");
-      }
-
-      processed.push({
-        ...mappedRow,
-        rowIndex: i + 1,
-        isValid: errors.length === 0,
-        errors,
-      });
-    }
-
-    setProcessedClients(processed);
-    setStep("preview");
-  };
-
-  // Import finale
-  const handleImport = async () => {
-    setStep("importing");
-    setImportProgress(0);
-    
-    const results = {
-      success: 0,
-      failed: 0,
-      duplicates: 0,
-      errors: [] as string[],
-    };
-
-    const validClients = processedClients.filter(c => c.isValid);
-    const cryptoSvc = getCryptoService();
-
-    for (let i = 0; i < validClients.length; i++) {
-      const client = validClients[i];
-      
-      try {
-        // Prepara l'oggetto plain con i campi da cifrare
-        const plainRecord: any = {};
-        const fieldsToEncrypt: string[] = [];
-        
-        // Aggiungi campi cifrati al record
-        for (const [key, value] of Object.entries(client)) {
-          if (key === "rowIndex" || key === "isValid" || key === "errors") continue;
-          
-          // Campi da cifrare
-          if (["name", "contact_name", "phone", "email", "address", "vat_number"].includes(key) && value) {
-            plainRecord[key] = value;
-            fieldsToEncrypt.push(key);
-          }
-        }
-        
-        // Cifra tutti i campi in un colpo solo
-        const encrypted = await (cryptoSvc as any).encryptFields(
-          "table:accounts",
-          "accounts",
-          "",
-          plainRecord,
-          fieldsToEncrypt
-        );
-        
-        // Prepara il payload finale
-        const payload: any = {};
-        
-        // Aggiungi campi cifrati
-        for (const field of fieldsToEncrypt) {
-          const enc = encrypted.find((f: any) => f.name === field);
-          if (enc) {
-            payload[`${field}_enc`] = enc.ciphertext;
-            payload[`${field}_iv`] = enc.iv;
-          }
-        }
-        
-        // Aggiungi custom (city, tipo_locale, notes)
-        const custom: any = {};
-        if (client.city) custom.city = client.city;
-        if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
-        if (client.notes) custom.notes = client.notes;
-        if (Object.keys(custom).length > 0) {
-          payload.custom = custom;
-        }
-
-        // Invia al server
-        const response = await fetch("/api/clients/upsert", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(payload),
-        });
-
-        if (response.ok) {
-          results.success++;
-        } else {
-          const errorData = await response.json();
-          if (errorData.error?.includes("duplicate")) {
-            results.duplicates++;
-          } else {
-            results.failed++;
-            results.errors.push(`Riga ${client.rowIndex}: ${errorData.error || "Errore sconosciuto"}`);
-          }
-        }
-      } catch (error: any) {
-        results.failed++;
-        results.errors.push(`Riga ${client.rowIndex}: ${error.message}`);
-      }
-
-      setImportProgress(Math.round(((i + 1) / validClients.length) * 100));
-    }
-
-    setImportResults(results);
-    setStep("complete");
-  };
-
-  return (
-  <>
-    <TopBar
-      title="Import Clienti"
-      onOpenLeft={openLeft}
-      onOpenDati={openDati}
-      onOpenDocs={openDocs}
-      onOpenImpostazioni={openImpostazioni}
-      onLogout={logout}
-    />
-    
-    <div style={{ 
-      minHeight: "100vh", 
-      background: "linear-gradient(to bottom right, #f0f9ff, #e0f2fe)",
-      paddingTop: 80,
-      paddingBottom: 40,
-    }}>
-      <div style={{ maxWidth: 1200, margin: "0 auto", padding: "0 20px" }}>
-        <div style={{ marginBottom: 32 }}>
-          <h1 style={{ fontSize: 32, fontWeight: 700, marginBottom: 8 }}>
-            📥 Importa Lista Clienti
-          </h1>
-          <p style={{ color: "#6b7280", fontSize: 14 }}>
-            Carica un file CSV o Excel. Tutti i dati sensibili saranno cifrati automaticamente.
-          </p>
-        </div>
-
-        {/* Progress indicator */}
-        {step !== "upload" && (
-          <div style={{ display: "flex", gap: 8, marginBottom: 32, padding: 16, background: "white", borderRadius: 12, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            {["upload", "mapping", "preview", "importing", "complete"].map((s, idx) => (
-              <div key={s} style={{ flex: 1, textAlign: "center" }}>
-                <div style={{
-                  width: 32,
-                  height: 32,
-                  borderRadius: "50%",
-                  background: step === s ? "#2563eb" : idx < ["upload", "mapping", "preview", "importing", "complete"].indexOf(step) ? "#10b981" : "#e5e7eb",
-                  color: "white",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  margin: "0 auto 8px",
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}>
-                  {idx + 1}
-                </div>
-                <div style={{ fontSize: 12, color: "#6b7280" }}>
-                  {s === "upload" ? "Upload" : s === "mapping" ? "Mapping" : s === "preview" ? "Preview" : s === "importing" ? "Import" : "Completato"}
-                </div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* ========== STEP: UPLOAD ========== */}
-        {step === "upload" && (
-          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File</h2>
-            <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Carica un file CSV o Excel. Il sistema cifrerà automaticamente i dati sensibili.
-            </p>
-
-            {/* Indicatore parsing progress */}
-            {parsingProgress && (
-              <div style={{ marginBottom: 24, padding: 16, background: "#fef3c7", borderRadius: 8, border: "1px solid #fbbf24" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                  <div style={{ fontSize: 24 }}>⏳</div>
-                  <div>
-                    <div style={{ fontWeight: 600, fontSize: 14, color: "#92400e" }}>{parsingProgress}</div>
-                    <div style={{ fontSize: 12, color: "#92400e", marginTop: 4 }}>
-                      Attendi... l'operazione potrebbe richiedere alcuni secondi
-                    </div>
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {/* Area upload */}
-            <div
-              onClick={() => !parsingProgress && fileInputRef.current?.click()}
-              style={{
-                border: "2px dashed #d1d5db",
-                borderRadius: 12,
-                padding: 48,
-                textAlign: "center",
-                cursor: parsingProgress ? "wait" : "pointer",
-                background: "#f9fafb",
-                transition: "all 0.2s",
-                opacity: parsingProgress ? 0.6 : 1,
-              }}
-              onMouseEnter={(e) => {
-                if (!parsingProgress) {
-                  e.currentTarget.style.background = "#f3f4f6";
-                  e.currentTarget.style.borderColor = "#9ca3af";
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!parsingProgress) {
-                  e.currentTarget.style.background = "#f9fafb";
-                  e.currentTarget.style.borderColor = "#d1d5db";
-                }
-              }}
-            >
-              <div style={{ fontSize: 64, marginBottom: 16 }}>📂</div>
-              <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
-                Carica file CSV o Excel
-              </p>
-              <p style={{ fontSize: 14, color: "#6b7280" }}>
-                Clicca qui o trascina il file
-              </p>
-            </div>
-
-            {/* Input nascosto */}
-            <input
-              ref={fileInputRef}
-              type="file"
-              accept=".csv,.xlsx,.xls"
-              onChange={handleFileSelect}
-              style={{ display: "none" }}
-              disabled={!!parsingProgress}
-            />
-
-            <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-              <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 12 }}>📋 Formati Supportati</h3>
-              
-              <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
-                <div>
-                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📄 CSV:</strong>
-                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
-                    File di testo con valori separati da virgola
-                  </p>
-                </div>
-                <div>
-                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📊 Excel (XLSX/XLS):</strong>
-                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
-                    Fogli di calcolo Microsoft Excel
-                  </p>
-                </div>
-              </div>
-
-              <p style={{ fontSize: 13, color: "#1e40af", fontFamily: "monospace", background: "white", padding: 8, borderRadius: 4, overflow: "auto" }}>
-                Esempio colonne: name, contact_name, city, address, tipo_locale, phone, email, vat_number, notes
-              </p>
-            </div>
-
-            <button
-              onClick={() => router.push("/clients")}
-              disabled={!!parsingProgress}
-              style={{
-                marginTop: 24,
-                padding: "10px 20px",
-                borderRadius: 8,
-                border: "1px solid #d1d5db",
-                background: "white",
-                cursor: parsingProgress ? "not-allowed" : "pointer",
-                fontSize: 14,
-                opacity: parsingProgress ? 0.6 : 1,
-              }}
-            >
-              ← Annulla
-            </button>
-          </div>
-        )}
-
-        {/* ========== STEP: MAPPING ========== */}
-        {step === "mapping" && (
-          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>🔗 Assegna Campi</h2>
-            <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Per ogni colonna riconosciuta, scegli a quale campo corrisponde guardando i dati della prima riga.
-            </p>
-
-            {/* Tabella con dropdown sopra ogni colonna */}
-            <div style={{ overflow: "auto", marginBottom: 24 }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr>
-                    {csvHeaders.map((header, idx) => (
-                      <th key={idx} style={{ 
-                        padding: 12, 
-                        background: "#f9fafb", 
-                        borderBottom: "2px solid #e5e7eb",
-                        verticalAlign: "top",
-                        minWidth: 150
-                      }}>
-                        <select
-                          value={mapping[header] || ""}
-                          onChange={(e) => setMapping({ ...mapping, [header]: e.target.value || undefined })}
-                          style={{
-                            width: "100%",
-                            padding: "8px",
-                            borderRadius: 6,
-                            border: "2px solid #2563eb",
-                            fontSize: 13,
-                            fontWeight: 600,
-                            color: "#2563eb",
-                            cursor: "pointer",
-                          }}
-                        >
-                          <option value="">Scegli dato</option>
-                          <option value="name">Nome Cliente *</option>
-                          <option value="contact_name">Nome Contatto *</option>
-                          <option value="phone">Telefono *</option>
-                          <option value="address">Indirizzo *</option>
-                          <option value="email">Email</option>
-                          <option value="vat_number">P.IVA</option>
-                          <option value="city">Città</option>
-                          <option value="tipo_locale">Tipo Locale</option>
-                          <option value="notes">Note</option>
-                        </select>
-                        <div style={{ 
-                          marginTop: 8, 
-                          fontSize: 11, 
-                          color: "#9ca3af",
-                          fontWeight: "normal"
-                        }}>
-                          Colonna: {header}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    {csvHeaders.map((header, idx) => (
-                      <td key={idx} style={{ 
-                        padding: "20px 12px", 
-                        borderBottom: "2px solid #e5e7eb",
-                        background: "#fffbeb",
-                        fontSize: 18,
-                        fontWeight: 700,
-                        color: "#111827",
-                        textAlign: "center"
-                      }}>
-                        {rawData[0]?.[header] || "-"}
-                      </td>
-                    ))}
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
-              <p style={{ fontSize: 13, color: "#1e40af" }}>
-                <strong>💡 Suggerimento:</strong> Guarda i valori nella prima riga per capire a quale campo corrisponde ogni colonna. I campi con * sono obbligatori.
-              </p>
-            </div>
-
-            <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
-              <button
-                onClick={() => setStep("upload")}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                  background: "white",
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                ← Indietro
-              </button>
-              <button
-                onClick={handlePreview}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#2563eb",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                Continua →
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ========== STEP: PREVIEW ========== */}
-        {step === "preview" && (
-          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>👁️ Anteprima Clienti</h2>
-            <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Verifica i dati prima dell'importazione. I clienti con errori non saranno importati.
-            </p>
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 24 }}>
-              <div style={{ padding: 12, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#15803d" }}>
-                  {processedClients.filter(c => c.isValid).length}
-                </div>
-                <div style={{ fontSize: 12, color: "#15803d" }}>✅ Clienti validi</div>
-              </div>
-              <div style={{ padding: 12, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
-                <div style={{ fontSize: 24, fontWeight: 700, color: "#dc2626" }}>
-                  {processedClients.filter(c => !c.isValid).length}
-                </div>
-                <div style={{ fontSize: 12, color: "#dc2626" }}>❌ Con errori</div>
-              </div>
-            </div>
-
-            <div style={{ maxHeight: 400, overflow: "auto", border: "1px solid #e5e7eb", borderRadius: 8 }}>
-              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
-                <thead style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
-                  <tr>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Riga</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Status</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Nome</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Contatto</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Telefono</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Indirizzo</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Errori</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {processedClients.map((client, idx) => (
-                    <tr key={idx} style={{ background: client.isValid ? "white" : "#fef2f2" }}>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.rowIndex}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>
-                        {client.isValid ? "✅" : "❌"}
-                      </td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.name || "-"}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.contact_name || "-"}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.phone || "-"}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.address || "-"}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb", color: "#dc2626" }}>
-                        {client.errors.join(", ") || "-"}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <div style={{ marginTop: 24, display: "flex", gap: 12 }}>
-              <button
-                onClick={() => setStep("mapping")}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                  background: "white",
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                ← Indietro
-              </button>
-              <button
-                onClick={handleImport}
-                disabled={processedClients.filter(c => c.isValid).length === 0}
-                style={{
-                  padding: "10px 20px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: processedClients.filter(c => c.isValid).length === 0 ? "#d1d5db" : "#10b981",
-                  color: "white",
-                  cursor: processedClients.filter(c => c.isValid).length === 0 ? "not-allowed" : "pointer",
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                🚀 Importa {processedClients.filter(c => c.isValid).length} clienti
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* ========== STEP: IMPORTING ========== */}
-        {step === "importing" && (
-          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)", textAlign: "center" }}>
-            <div style={{ fontSize: 48, marginBottom: 16 }}>⏳</div>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>Importazione in corso...</h2>
-            <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Stiamo cifrando e salvando i tuoi clienti. Non chiudere questa pagina.
-            </p>
-
-            <div style={{ maxWidth: 400, margin: "0 auto" }}>
-              <div style={{ width: "100%", height: 8, background: "#e5e7eb", borderRadius: 999, overflow: "hidden" }}>
-                <div style={{
-                  width: `${importProgress}%`,
-                  height: "100%",
-                  background: "#2563eb",
-                  transition: "width 0.3s",
-                }} />
-              </div>
-              <div style={{ marginTop: 8, fontSize: 14, fontWeight: 600, color: "#2563eb" }}>
-                {importProgress}%
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ========== STEP: COMPLETE ========== */}
-        {step === "complete" && (
-          <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <div style={{ textAlign: "center", marginBottom: 24 }}>
-              <div style={{ fontSize: 64, marginBottom: 16 }}>
-                {importResults.failed === 0 ? "🎉" : "⚠️"}
-              </div>
-              <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>
-                {importResults.failed === 0 ? "Importazione Completata!" : "Importazione Completata con Avvisi"}
-              </h2>
-              <p style={{ color: "#6b7280" }}>
-                Ecco il riepilogo dell'operazione
-              </p>
-            </div>
-
-            <div style={{ display: "grid", gap: 16, marginBottom: 24 }}>
-              <div style={{ padding: 16, background: "#f0fdf4", borderRadius: 8, border: "1px solid #bbf7d0" }}>
-                <div style={{ fontSize: 32, fontWeight: 700, color: "#15803d" }}>
-                  {importResults.success}
-                </div>
-                <div style={{ fontSize: 14, color: "#15803d" }}>✅ Clienti importati con successo</div>
-              </div>
-
-              {importResults.failed > 0 && (
-                <div style={{ padding: 16, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
-                  <div style={{ fontSize: 32, fontWeight: 700, color: "#dc2626" }}>
-                    {importResults.failed}
-                  </div>
-                  <div style={{ fontSize: 14, color: "#dc2626" }}>❌ Errori durante l'importazione</div>
-                </div>
-              )}
-            </div>
-
-            {importResults.errors.length > 0 && (
-              <div style={{ marginBottom: 24, padding: 16, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
-                <h3 style={{ fontSize: 14, fontWeight: 600, marginBottom: 8, color: "#dc2626" }}>
-                  Dettagli Errori:
-                </h3>
-                <ul style={{ fontSize: 13, color: "#7f1d1d", paddingLeft: 20 }}>
-                  {importResults.errors.slice(0, 10).map((err, idx) => (
-                    <li key={idx} style={{ marginBottom: 4 }}>{err}</li>
-                  ))}
-                  {importResults.errors.length > 10 && (
-                    <li style={{ fontStyle: "italic" }}>
-                      ... e altri {importResults.errors.length - 10} errori
-                    </li>
-                  )}
-                </ul>
-              </div>
-            )}
-
-            <div style={{ display: "flex", gap: 12 }}>
-              <button
-                onClick={() => router.push("/clients")}
-                style={{
-                  flex: 1,
-                  padding: "12px 24px",
-                  borderRadius: 8,
-                  border: "none",
-                  background: "#2563eb",
-                  color: "white",
-                  cursor: "pointer",
-                  fontSize: 14,
-                  fontWeight: 600,
-                }}
-              >
-                📋 Vai alla lista clienti
-              </button>
-              <button
-                onClick={() => {
-                  setStep("upload");
-                  setRawData([]);
-                  setCsvHeaders([]);
-                  setMapping({});
-                  setProcessedClients([]);
-                  setImportProgress(0);
-                  setImportResults({ success: 0, failed: 0, duplicates: 0, errors: [] });
-                }}
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: 8,
-                  border: "1px solid #d1d5db",
-                  background: "white",
-                  cursor: "pointer",
-                  fontSize: 14,
-                }}
-              >
-                🔄 Importa altra lista
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-
-    {/* Drawer */}
-    <div style={{ position: "relative", zIndex: 2001 }}>
-      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
-      <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
-    </div>
-  </>
+/** ---------- KDF / HKDF / HMAC ---------- */
+async function deriveKEK(passphrase: string, salt: Uint8Array, params: KdfParams): Promise<Uint8Array> {
+  if (params.algo !== "pbkdf2") throw new Error("KDF non supportato: usa pbkdf2");
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey("raw", enc.encode(passphrase), { name: "PBKDF2" }, false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: params.iterations, hash: params.hash },
+    keyMaterial,
+    256
   );
+  return new Uint8Array(bits);
+}
+async function hmacSha256(keyBytes: Uint8Array, msg: Uint8Array): Promise<Uint8Array> {
+  const key = await crypto.subtle.importKey("raw", keyBytes, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const sig = await crypto.subtle.sign("HMAC", key, msg);
+  return new Uint8Array(sig);
+}
+function canonicalizeForBI(input: string): Uint8Array {
+  const s = input.trim().toLowerCase().normalize("NFKC");
+  return new TextEncoder().encode(s);
+}
+
+// Singleton globale per evitare che si ricrei tra pagine
+let globalCryptoInstance: CryptoService | null = null;
+
+/** ---------- CryptoService ---------- */
+export class CryptoService {
+  private sb: SupabaseClient;
+  private accountId: string | null;
+  private MK: Uint8Array | null = null; // Master Key
+  private kekSalt?: Uint8Array;
+  private kdfParams?: KdfParams;
+  private wrappedMkNonce?: string;
+  private scopeCache: Record<string, ScopeKeys> = {};
+
+constructor(sb?: SupabaseClient, accountId: string | null = null) {
+  this.sb =
+    sb ??
+    createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+  this.accountId = accountId;
+  
+  // Se esiste già un'istanza globale sbloccata, copia il suo stato
+  if (globalCryptoInstance && globalCryptoInstance.MK) {
+    this.MK = globalCryptoInstance.MK;
+    this.kekSalt = globalCryptoInstance.kekSalt;
+    this.kdfParams = globalCryptoInstance.kdfParams;
+    this.wrappedMkNonce = globalCryptoInstance.wrappedMkNonce;
+    this.scopeCache = globalCryptoInstance.scopeCache;
+  }
+  // Salva questa istanza come globale
+  globalCryptoInstance = this;
+} 
+  public isUnlocked(): boolean {
+  return this.MK !== null;
+}
+  private async getUserId(): Promise<string> {
+    const { data, error } = await this.sb.auth.getUser();
+    if (error || !data.user) throw new Error("Utente non autenticato");
+    return data.user.id;
+  }
+
+  /** 1) Sblocco con passphrase */
+  public async unlockWithPassphrase(passphrase: string): Promise<void> {
+    console.log('🔐 [DEBUG] === INIZIO unlockWithPassphrase ===');
+    
+    const userId = await this.getUserId();
+    console.log('🔐 [DEBUG] UserID:', userId);
+    
+    const { data: prof, error } = await this.sb
+      .from("profiles")
+      .select("wrapped_master_key, wrapped_master_key_iv, kdf_salt, kdf_params")
+      .eq("id", userId)
+      .single();
+    
+    if (error) {
+      console.error('🔐 [DEBUG] ERRORE query profilo:', error);
+      throw new Error("Profilo non trovato o accesso negato");
+    }
+
+    const p = prof as unknown as ProfileRow;
+    console.log('🔐 [DEBUG] Stato profilo dal DB:', {
+      has_mk: p.wrapped_master_key !== null,
+      has_iv: p.wrapped_master_key_iv !== null,
+      has_salt: p.kdf_salt !== null,
+      kdf_params: p.kdf_params
+    });
+
+    const kdfParams: KdfParams = p.kdf_params ?? { algo: "pbkdf2", iterations: 310_000, hash: "SHA-256" };
+    const salt: Uint8Array = p.kdf_salt ? fromBase64Safe(p.kdf_salt) : crypto.getRandomValues(new Uint8Array(16));
+    console.log('🔐 [DEBUG] KDF params:', kdfParams);
+    console.log('🔐 [DEBUG] Salt:', salt.length, 'bytes');
+
+    const KEK = await deriveKEK(passphrase, salt, kdfParams);
+    console.log('🔐 [DEBUG] KEK derivata:', KEK.length, 'bytes');
+
+    if (p.wrapped_master_key) {
+      console.log('🔐 [DEBUG] Entrando in branch UNWRAP MK esistente');
+      const ivB64 = p.wrapped_master_key_iv;
+      if (!ivB64) throw new Error("Manca 'wrapped_master_key_iv' in profiles");
+      
+      console.log('🔐 [DEBUG] Tentativo unwrap MK...');
+      try {
+        this.MK = await unwrapKey(p.wrapped_master_key, ivB64, KEK);
+        console.log('🔐 [DEBUG] UNWRAP SUCCESSO! MK:', this.MK?.length, 'bytes');
+        this.kekSalt = salt;
+        this.kdfParams = kdfParams;
+        this.wrappedMkNonce = ivB64;
+        console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ===');
+        return;
+      } catch (unwrapError) {
+        console.error('🔐 [DEBUG] ERRORE durante unwrap:', unwrapError);
+        console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (ERRORE) ===');
+        throw unwrapError;
+      }
+    }
+
+
+  /* console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK - DISABILITATA');
+  // NON generare MK, lascia tutti i campi NULL
+  this.MK = new Uint8Array(32); // MK vuota per testing
+  console.log('🔐 [DEBUG] MK impostata come vuota per testing');
+  console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO FORZATO) ===');
+  return; */
+    
+     // 👇 Generazione nuova MK
+    console.log('🔐 [DEBUG] Entrando in branch GENERAZIONE nuova MK');
+    const MK = crypto.getRandomValues(new Uint8Array(32));
+    console.log('🔐 [DEBUG] Nuova MK generata:', MK.length, 'bytes');
+    
+     const { wrapped, nonce } = await wrapKey(MK, KEK);
+     console.log('🔐 [DEBUG] MK wrappata, tentativo salvataggio nel database...');
+
+     const { error: upErr } = await this.sb
+       .from("profiles")
+       .update({
+         wrapped_master_key: wrapped,
+         wrapped_master_key_iv: nonce,
+         kdf_salt: toBase64(salt),
+         kdf_params: kdfParams,
+       })
+       .eq("id", userId);
+       console.log('🔐 [DEBUG] Risultato UPDATE MK:', { error: upErr, hasError: !!upErr });
+
+     if (upErr) {
+       console.error('🔐 [DEBUG] ERRORE durante salvataggio MK:', upErr);
+       console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (ERRORE) ===');
+       throw upErr;
+     }
+
+     console.log('🔐 [DEBUG] MK salvata con successo, impostando stato interno...');
+     this.MK = MK;
+     this.kekSalt = salt;
+     this.kdfParams = kdfParams;
+     this.wrappedMkNonce = nonce;
+    // Aggiorna il singleton globale
+    globalCryptoInstance = this;
+     console.log('🔐 [DEBUG] === FINE unlockWithPassphrase (SUCCESSO) ==='); 
+  } 
+
+  /** 2) Chiavi per scope (DEK/BI) — **per-utente** */
+  public async getOrCreateScopeKeys(scope: string): Promise<void> {
+    if (!this.MK) throw new Error("Cifratura non sbloccata");
+    if (this.scopeCache[scope]) return;
+
+    const user_id = await this.getUserId();
+
+    // ✅ CERCA SOLO LE CHIAVI DELL'UTENTE CORRENTE
+    const { data: row, error } = await this.sb
+      .from("encryption_keys")
+      .select("id, user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, created_at")
+      .eq("user_id", user_id)
+      .eq("scope", scope)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) throw error;
+
+    if (row) {
+      const r = row as EncryptionRow;
+      const DEK = await unwrapKey(r.dek_wrapped, r.dek_wrapped_iv, this.MK);
+      const BI = r.bi_wrapped ? await unwrapKey(r.bi_wrapped, r.bi_wrapped_iv!, this.MK) : null;
+      this.scopeCache[scope] = { DEK, BI };
+      return;
+    }
+
+    // genera nuove per QUESTO utente
+    const DEK = crypto.getRandomValues(new Uint8Array(32));
+    const BI  = crypto.getRandomValues(new Uint8Array(32));
+
+    const { wrapped: dek_wrapped, nonce: dek_wrapped_iv } = await wrapKey(DEK, this.MK);
+    const { wrapped: bi_wrapped,  nonce: bi_wrapped_iv  } = await wrapKey(BI,  this.MK);
+
+// Calcola un fingerprint dalla MK
+const mkHash = await crypto.subtle.digest('SHA-256', this.MK!);
+const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
+    
+const { error: insErr } = await this.sb
+  .from("encryption_keys")
+  .upsert(
+    { user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint },
+    { onConflict: "user_id,scope", ignoreDuplicates: true }
+  );
+
+// accetta i “duplicati” come OK: niente eccezione nei casi di conflitto
+if (insErr && insErr.code !== "23505" && insErr.code !== "409") throw insErr;
+
+
+    this.scopeCache[scope] = { DEK, BI };
+  }
+
+  /** 3) Encrypt/Decrypt JSON */
+  public async encryptJSON(scope: string, table: string, field: string, recordId: string, obj: any) {
+    if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+    const { DEK } = this.scopeCache[scope];
+    const nonce = ensureIv();
+    const aad = asBytes(`${table}|${field}|${recordId}`);
+    const plaintext = asBytes(JSON.stringify(obj));
+    const ciphertext = await aesGcmEncrypt(DEK, nonce, plaintext, aad);
+    return { enc_b64: toBase64(ciphertext), iv_b64: toBase64(nonce) };
+  }
+public async decryptJSON(
+  scope: string,
+  table: string,
+  field: string,
+  recordId: string,
+  enc_b64: string,
+  iv_b64: string
+) {
+  // 🔧 DEV-compat: se l’“encrypted” è in realtà testo "enc(...)" (anche se arrivato in HEX/BASE64),
+  // estrai e ritorna subito, senza richiedere chiavi o AES-GCM.
+  try {
+    const encBytes = fromBase64Safe(enc_b64);             // accetta sia base64 che \xHEX
+    const asStr = new TextDecoder().decode(encBytes);     // prova a leggerlo come stringa
+    if (asStr.startsWith("enc(") && asStr.endsWith(")")) {
+      return asStr.slice(4, -1);                          // contenuto tra le parentesi
+    }
+  } catch {
+    // ignora: se fallisce, prosegui con il percorso normale AES-GCM
+  }
+
+  // 🔐 percorso normale AES-GCM
+  if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+  const { DEK } = this.scopeCache[scope];
+  const aad = asBytes(`${table}|${field}|${recordId}`);
+  const plaintext = await aesGcmDecrypt(
+    DEK,
+    fromBase64Safe(iv_b64),
+    fromBase64Safe(enc_b64),
+    aad
+  );
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+  /** 4) Blind Index (uguaglianza) */
+  public async computeBlindIndex(scope: string, value: string): Promise<string> {
+    if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
+    const { BI } = this.scopeCache[scope];
+    if (!BI) throw new Error(`BI non configurato per scope: ${scope}`);
+    const canon = canonicalizeForBI(value);
+    const mac = await hmacSha256(BI, canon);
+    return toBase64(mac);
+  }
+
+  /** 5) Helpers multipli (campi *_enc / *_iv)
+   *  Compat: supporta SIA (row + fieldNames[]) SIA (mappa { field: {enc, iv} })
+   */
+
+// Dentro la tua classe CryptoService
+
+    public async encryptFields(
+      scope: string,
+      table: string,
+      recordId: string | null,
+      fields: Record<string, string | null | undefined>
+    ) {
+      const out: Record<string, unknown> = {};
+      const rowId = recordId ?? ""; // se non lo hai ancora, passa stringa vuota (ma meglio passarlo quando possibile)
+    
+      for (const [field, val] of Object.entries(fields)) {
+        if (val == null) continue;
+        const { enc_b64, iv_b64 } = await this.encryptJSON(scope, table, field, rowId, val);
+        out[`${field}_enc`] = enc_b64;
+        out[`${field}_iv`]  = iv_b64;
+      }
+      return out;
+    }
+    
+      public async decryptFields<T extends Record<string, unknown> = Record<string, unknown>>(
+        scope: string,
+        table: string,
+        recordId: string | null,
+        rowOrMap: Record<string, unknown>,
+        fieldNames?: string[]
+      ) {
+        const out: Record<string, string | null> = {};
+        const row = rowOrMap ?? {};
+        const rowId = recordId ?? "";
+      
+        // Se non passi i nomi, li deduco dai *_enc presenti nella riga
+        const fields: string[] = fieldNames ?? Object.keys(row)
+          .filter((k) => k.endsWith("_enc"))
+          .map((k) => k.slice(0, -4));
+      
+        for (const field of fields) {
+          const enc_b64 = row[`${field}_enc`] as string | undefined;
+          const iv_b64  = row[`${field}_iv`]  as string | undefined;
+      
+          if (!enc_b64 || !iv_b64) {
+            out[field] = null; // campo mancante o non cifrato
+            continue;
+          }
+      
+          try {
+            const plain = await this.decryptJSON(scope, table, field, rowId, enc_b64, iv_b64);
+            out[field] = typeof plain === "string" ? plain : JSON.stringify(plain);
+          } catch {
+            out[field] = null; // errore decifratura → campo nullo
+          }
+        }
+      
+        return out as unknown as T;
+      }
+
+
+  /** 6) Cambio passphrase */
+  public async rewrapMasterKey(newPassphrase: string): Promise<void> {
+    if (!this.MK) throw new Error("Cifratura non sbloccata");
+    const userId = await this.getUserId();
+    const newSalt = crypto.getRandomValues(new Uint8Array(16));
+    const newParams: KdfParams = { algo: "pbkdf2", iterations: 310_000, hash: "SHA-256" };
+    const newKEK = await deriveKEK(newPassphrase, newSalt, newParams);
+    const { wrapped, nonce } = await wrapKey(this.MK, newKEK);
+    const { error } = await this.sb
+      .from("profiles")
+      .update({
+        wrapped_master_key: wrapped,
+        wrapped_master_key_iv: nonce,
+        kdf_salt: toBase64(newSalt),
+        kdf_params: newParams,
+      })
+      .eq("id", userId);
+    if (error) throw error;
+    this.kekSalt = newSalt;
+    this.kdfParams = newParams;
+    this.wrappedMkNonce = nonce;
+  }
 }
