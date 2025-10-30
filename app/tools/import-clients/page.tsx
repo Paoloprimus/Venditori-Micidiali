@@ -505,12 +505,12 @@ export default function ImportClientsPage() {
     return words;
   }
 
-  // Column Detection Algorithm - SEMPLIFICATO E ROBUSTO
+  // Column Detection Algorithm - v3 con Auto-Header Detection
   function detectColumnsFromWords(words: Array<{ text: string; x: number; y: number; width: number; height: number }>): { headers: string[]; rows: string[][] } {
     if (words.length === 0) return { headers: [], rows: [] };
     
     // ========== STEP 1: RAGGRUPPA PAROLE PER RIGHE (Y simile) ==========
-    const rowTolerance = 25; // AUMENTATO: più tollerante per righe con sfondo grigio
+    const rowTolerance = 30; // AUMENTATO: molto tollerante per sfondi grigi
     const rows: Array<Array<{ text: string; x: number; y: number; width: number; height: number }>> = [];
     
     // Ordina per Y crescente
@@ -540,10 +540,28 @@ export default function ImportClientsPage() {
       return { headers: [], rows: [] };
     }
     
-    // ========== STEP 2: PRIMA RIGA = HEADERS (SEMPRE) ==========
-    const headerRow = rows[0];
+    // ========== STEP 2: TROVA LA RIGA HEADER (quella con PIÙ parole) ==========
+    // Ignora righe con 1-2 parole (probabilmente titoli come "esempio_clienti")
+    // Prendi la riga con più parole come header (è la vera tabella!)
+    
+    let headerRowIndex = 0;
+    let maxWords = rows[0].length;
+    
+    for (let i = 0; i < Math.min(5, rows.length); i++) { // controlla prime 5 righe
+      if (rows[i].length > maxWords && rows[i].length >= 3) { // almeno 3 colonne
+        maxWords = rows[i].length;
+        headerRowIndex = i;
+      }
+    }
+    
+    const headerRow = rows[headerRowIndex];
     const headers = headerRow.map(w => w.text);
     const numColumns = headers.length;
+    
+    if (numColumns < 3) {
+      // Se ha meno di 3 colonne, probabilmente non è una tabella vera
+      return { headers: [], rows: [] };
+    }
     
     // ========== STEP 3: CALCOLA CENTRI COLONNE DA TUTTE LE PAROLE ==========
     // Raccogli tutte le posizioni X (non solo header)
@@ -573,8 +591,8 @@ export default function ImportClientsPage() {
         columnCenters.push(minX + i * step);
       }
       
-      // Raffina i centri (3 iterazioni K-means)
-      for (let iter = 0; iter < 3; iter++) {
+      // Raffina i centri (5 iterazioni K-means per maggiore precisione)
+      for (let iter = 0; iter < 5; iter++) {
         // Assegna ogni X al centro più vicino
         const clusters: number[][] = Array.from({ length: numColumns }, () => []);
         
@@ -606,7 +624,8 @@ export default function ImportClientsPage() {
     // ========== STEP 4: ASSEGNA PAROLE ALLE COLONNE ==========
     const dataRows: string[][] = [];
     
-    for (let i = 1; i < rows.length; i++) {
+    // Salta righe prima dell'header e l'header stesso
+    for (let i = headerRowIndex + 1; i < rows.length; i++) {
       const row = rows[i];
       const rowData: string[] = new Array(numColumns).fill("");
       
