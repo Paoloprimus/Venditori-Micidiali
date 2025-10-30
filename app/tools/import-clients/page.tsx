@@ -1,27 +1,22 @@
 /**
  * ============================================================================
- * PAGINA: Import Clienti (Multipli Formati)
+ * PAGINA: Import Clienti (CSV e Excel)
  * ============================================================================
  * 
  * PERCORSO: /app/tools/import-clients/page.tsx
  * URL: https://reping.app/tools/import-clients
  * 
  * DESCRIZIONE:
- * Pagina completa per l'importazione massiva di clienti da file multipli.
+ * Pagina completa per l'importazione massiva di clienti da file CSV e Excel.
  * Include 5 step: Upload → Mapping → Preview → Import → Report
  * 
  * FORMATI SUPPORTATI:
  * - CSV: Parsing con csv-parse
  * - XLSX/XLS: Parsing con libreria xlsx
- * - PDF: Estrazione testo con pdfjs-dist (browser-compatible)
- * - Foto (JPG, JPEG, PNG, HEIC): OCR con Tesseract.js + Column Detection
- * - Scatta foto: Accesso diretto alla fotocamera del dispositivo
  * 
  * FUNZIONALITÀ:
  * - Upload universale con drag & drop
- * - Scatta foto diretta dalla fotocamera
  * - Riconoscimento automatico formato da estensione
- * - OCR migliorato con preprocessing immagine e column detection
  * - Auto-detection intelligente delle colonne (match esatti + parziali)
  * - Mapping manuale con dropdown
  * - Validazione campi obbligatori
@@ -33,8 +28,6 @@
  * DIPENDENZE:
  * - csv-parse/browser/esm/sync (per CSV)
  * - xlsx (per Excel)
- * - pdfjs-dist (per PDF, browser-compatible)
- * - tesseract.js (per OCR foto con TSV output)
  * - window.cryptoSvc (fornito da CryptoProvider)
  * - API /api/clients/upsert (per salvare i clienti)
  * 
@@ -50,7 +43,6 @@ import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { parse } from "csv-parse/browser/esm/sync";
 import * as XLSX from "xlsx";
-import { createWorker } from "tesseract.js";
 import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
 import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
@@ -100,7 +92,6 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 export default function ImportClientsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const cameraInputRef = useRef<HTMLInputElement>(null); // NUOVO: per la fotocamera
   
   // Drawer
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
@@ -196,27 +187,33 @@ export default function ImportClientsPage() {
           }
 
           const headers = Object.keys(records[0]);
+          setParsingProgress(null);
           resolve({ headers, data: records });
         } catch (error: any) {
+          setParsingProgress(null);
           reject(new Error(`Errore parsing CSV: ${error.message}`));
         }
       };
 
-      reader.onerror = () => reject(new Error("Errore lettura file"));
+      reader.onerror = () => {
+        setParsingProgress(null);
+        reject(new Error("Errore lettura file CSV"));
+      };
+
       reader.readAsText(file);
     });
   }
 
-  // Parser XLSX/XLS
-  async function parseXLSX(file: File): Promise<{ headers: string[]; data: any[] }> {
+  // Parser Excel
+  async function parseExcel(file: File): Promise<{ headers: string[]; data: any[] }> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
-      
+
       reader.onload = (event) => {
         try {
-          const data = new Uint8Array(event.target?.result as ArrayBuffer);
+          const data = event.target?.result;
           const workbook = XLSX.read(data, { type: "array" });
-          
+
           const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
           const jsonData = XLSX.utils.sheet_to_json(firstSheet);
 
@@ -226,461 +223,24 @@ export default function ImportClientsPage() {
           }
 
           const headers = Object.keys(jsonData[0] as any);
-          resolve({ headers, data: jsonData as any[] });
+          setParsingProgress(null);
+          resolve({ headers, data: jsonData });
         } catch (error: any) {
+          setParsingProgress(null);
           reject(new Error(`Errore parsing Excel: ${error.message}`));
         }
       };
 
-      reader.onerror = () => reject(new Error("Errore lettura file"));
+      reader.onerror = () => {
+        setParsingProgress(null);
+        reject(new Error("Errore lettura file Excel"));
+      };
+
       reader.readAsArrayBuffer(file);
     });
   }
 
-  // Parser PDF (con pdfjs-dist per browser)
-  async function parsePDF(file: File): Promise<{ headers: string[]; data: any[] }> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        setParsingProgress("Caricamento PDF...");
-        
-        // Import dinamico di pdfjs-dist (compatibile browser)
-        const pdfjsLib = await import("pdfjs-dist");
-        
-        // Configurazione worker da CDN
-        pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`;
-
-        // Leggi il file come ArrayBuffer
-        const arrayBuffer = await file.arrayBuffer();
-        
-        setParsingProgress("Estrazione testo...");
-        
-        // Carica il PDF
-        const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
-        
-        let fullText = "";
-        
-        // Estrai testo da tutte le pagine
-        for (let i = 1; i <= pdf.numPages; i++) {
-          setParsingProgress(`Pagina ${i}/${pdf.numPages}...`);
-          const page = await pdf.getPage(i);
-          const textContent = await page.getTextContent();
-          const pageText = textContent.items.map((item: any) => item.str).join(" ");
-          fullText += pageText + "\n";
-        }
-
-        setParsingProgress("Analisi dati...");
-
-        // Parsing intelligente: cerca pattern di tabelle
-        const lines = fullText.split("\n").filter(l => l.trim().length > 0);
-        
-        if (lines.length < 2) {
-          reject(new Error("Il PDF non contiene dati tabulari riconoscibili"));
-          return;
-        }
-
-        // Prima riga = headers
-        const headerLine = lines[0];
-        const headers = headerLine.split(/\s{2,}|\t/).map(h => h.trim()).filter(h => h.length > 0);
-
-        if (headers.length === 0) {
-          reject(new Error("Impossibile identificare le colonne nel PDF"));
-          return;
-        }
-
-        // Resto = dati
-        const data: any[] = [];
-        for (let i = 1; i < lines.length; i++) {
-          const values = lines[i].split(/\s{2,}|\t/).map(v => v.trim()).filter(v => v.length > 0);
-          
-          if (values.length === 0) continue;
-          
-          const row: any = {};
-          headers.forEach((header, idx) => {
-            row[header] = values[idx] || "";
-          });
-          data.push(row);
-        }
-
-        if (data.length === 0) {
-          reject(new Error("Nessun dato trovato nel PDF"));
-          return;
-        }
-
-        setParsingProgress(null);
-        resolve({ headers, data });
-      } catch (error: any) {
-        setParsingProgress(null);
-        reject(new Error(`Errore parsing PDF: ${error.message}`));
-      }
-    });
-  }
-
-  // ==================== OCR MIGLIORATO CON COLUMN DETECTION ====================
-  // Parser Immagini con OCR avanzato + Column Detection
-  async function parseImage(file: File): Promise<{ headers: string[]; data: any[] }> {
-    return new Promise(async (resolve, reject) => {
-      try {
-        setParsingProgress("Inizializzazione OCR...");
-        
-        // ========== STEP 1: PREPROCESSING IMMAGINE ==========
-        setParsingProgress("Ottimizzazione immagine...");
-        
-        const preprocessedImage = await preprocessImage(file);
-        
-        // ========== STEP 2: OCR CON COORDINATE TSV ==========
-        setParsingProgress("Lettura testo con OCR...");
-        
-        const worker = await createWorker("ita");
-        
-        // Configurazione Tesseract per output TSV (include coordinate XY)
-        await worker.setParameters({
-          tessedit_create_tsv: "1",
-        });
-        
-        // Esegui OCR ottenendo sia testo che coordinate
-        const { data: { text, tsv } } = await worker.recognize(preprocessedImage);
-        
-        await worker.terminate();
-        
-        setParsingProgress("Analisi struttura tabella...");
-        
-        // ========== STEP 3: PARSING TSV PER COORDINATE ==========
-        if (!tsv) {
-          reject(new Error("OCR non ha prodotto coordinate utilizzabili"));
-          return;
-        }
-        const words = parseTSV(tsv);
-        
-        if (words.length === 0) {
-          reject(new Error("Nessun testo riconosciuto nell'immagine"));
-          return;
-        }
-        
-        // ========== STEP 4: COLUMN DETECTION ==========
-        const { headers, rows } = detectColumnsFromWords(words);
-        
-        if (headers.length === 0) {
-          reject(new Error("Impossibile identificare le colonne nell'immagine"));
-          return;
-        }
-        
-        if (rows.length === 0) {
-          reject(new Error("Nessun dato trovato nell'immagine"));
-          return;
-        }
-        
-        // ========== STEP 5: COSTRUZIONE TABELLA ==========
-        setParsingProgress("Costruzione tabella...");
-        
-        const data = rows.map(row => {
-          const obj: any = {};
-          headers.forEach((header, idx) => {
-            obj[header] = row[idx] || "";
-          });
-          return obj;
-        });
-        
-        setParsingProgress(null);
-        resolve({ headers, data });
-        
-      } catch (error: any) {
-        setParsingProgress(null);
-        reject(new Error(`Errore OCR: ${error.message}`));
-      }
-    });
-  }
-
-  // Preprocessing immagine (migliora qualità per OCR)
-  async function preprocessImage(file: File): Promise<Blob> {
-    return new Promise((resolve, reject) => {
-      const img = new Image();
-      const reader = new FileReader();
-      
-      reader.onload = (e) => {
-        img.src = e.target?.result as string;
-      };
-      
-      img.onload = () => {
-        // Crea canvas
-        const canvas = document.createElement("canvas");
-        const ctx = canvas.getContext("2d")!;
-        
-        // Ridimensiona se troppo grande (max 2000px)
-        const maxSize = 2000;
-        let width = img.width;
-        let height = img.height;
-        
-        if (width > maxSize || height > maxSize) {
-          if (width > height) {
-            height = (height / width) * maxSize;
-            width = maxSize;
-          } else {
-            width = (width / height) * maxSize;
-            height = maxSize;
-          }
-        }
-        
-        canvas.width = width;
-        canvas.height = height;
-        
-        // Disegna immagine
-        ctx.drawImage(img, 0, 0, width, height);
-        
-        // Ottimizzazioni per OCR
-        const imageData = ctx.getImageData(0, 0, width, height);
-        const data = imageData.data;
-        
-        // 1. Conversione scala di grigi + aumento contrasto
-        for (let i = 0; i < data.length; i += 4) {
-          // Grayscale
-          const gray = data[i] * 0.299 + data[i + 1] * 0.587 + data[i + 2] * 0.114;
-          
-          // Aumento contrasto (±30)
-          let adjusted = ((gray - 128) * 1.3) + 128;
-          adjusted = Math.max(0, Math.min(255, adjusted));
-          
-          // Binarizzazione (soglia 140)
-          const binary = adjusted > 140 ? 255 : 0;
-          
-          data[i] = data[i + 1] = data[i + 2] = binary;
-        }
-        
-        ctx.putImageData(imageData, 0, 0);
-        
-        // Converti in Blob
-        canvas.toBlob((blob) => {
-          if (blob) {
-            resolve(blob);
-          } else {
-            reject(new Error("Errore preprocessing immagine"));
-          }
-        }, "image/png");
-      };
-      
-      img.onerror = () => reject(new Error("Errore caricamento immagine"));
-      reader.onerror = () => reject(new Error("Errore lettura file"));
-      reader.readAsDataURL(file);
-    });
-  }
-
-  // Parsing TSV output di Tesseract (coordinate XY)
-  function parseTSV(tsv: string): Array<{ text: string; x: number; y: number; width: number; height: number }> {
-    const lines = tsv.split("\n");
-    const words: Array<{ text: string; x: number; y: number; width: number; height: number }> = [];
-    
-    // Salta header TSV
-    for (let i = 1; i < lines.length; i++) {
-      const cols = lines[i].split("\t");
-      
-      if (cols.length < 12) continue;
-      
-      const level = parseInt(cols[0]);
-      const text = cols[11]?.trim();
-      const left = parseInt(cols[6]);
-      const top = parseInt(cols[7]);
-      const width = parseInt(cols[8]);
-      const height = parseInt(cols[9]);
-      
-      // Considera solo parole (level 5) con testo
-      if (level === 5 && text && text.length > 0) {
-        words.push({
-          text,
-          x: left,
-          y: top,
-          width,
-          height,
-        });
-      }
-    }
-    
-    return words;
-  }
-
-  // Column Detection Algorithm - v4 con Word Merging
-  function detectColumnsFromWords(words: Array<{ text: string; x: number; y: number; width: number; height: number }>): { headers: string[]; rows: string[][] } {
-    if (words.length === 0) return { headers: [], rows: [] };
-    
-    // ========== STEP 1: RAGGRUPPA PAROLE PER RIGHE (Y simile) ==========
-    const rowTolerance = 30; // AUMENTATO: molto tollerante per sfondi grigi
-    const rows: Array<Array<{ text: string; x: number; y: number; width: number; height: number }>> = [];
-    
-    // Ordina per Y crescente
-    const sortedWords = [...words].sort((a, b) => a.y - b.y);
-    
-    let currentRow: Array<{ text: string; x: number; y: number; width: number; height: number }> = [];
-    let currentY = sortedWords[0].y;
-    
-    for (const word of sortedWords) {
-      if (Math.abs(word.y - currentY) <= rowTolerance) {
-        // Stessa riga
-        currentRow.push(word);
-      } else {
-        // Nuova riga
-        if (currentRow.length > 0) {
-          rows.push(currentRow.sort((a, b) => a.x - b.x)); // ordina per X
-        }
-        currentRow = [word];
-        currentY = word.y;
-      }
-    }
-    if (currentRow.length > 0) {
-      rows.push(currentRow.sort((a, b) => a.x - b.x));
-    }
-    
-    if (rows.length < 2) {
-      return { headers: [], rows: [] };
-    }
-    
-    // ========== STEP 1.5: UNISCI PAROLE VICINE NELLA STESSA RIGA ==========
-    // Se due parole sono vicine in X (< 80px), sono parte della stessa cella!
-    const mergedRows: Array<Array<{ text: string; x: number; y: number; width: number; height: number }>> = [];
-    
-    for (const row of rows) {
-      const mergedRow: Array<{ text: string; x: number; y: number; width: number; height: number }> = [];
-      
-      for (let i = 0; i < row.length; i++) {
-        if (mergedRow.length === 0) {
-          // Prima parola della riga
-          mergedRow.push({ ...row[i] });
-        } else {
-          const lastMerged = mergedRow[mergedRow.length - 1];
-          const currentWord = row[i];
-          const gap = currentWord.x - (lastMerged.x + lastMerged.width);
-          
-          if (gap < 80) {
-            // Parole vicine → unisci nella stessa cella
-            lastMerged.text += " " + currentWord.text;
-            lastMerged.width = (currentWord.x + currentWord.width) - lastMerged.x;
-          } else {
-            // Parole lontane → nuova cella
-            mergedRow.push({ ...currentWord });
-          }
-        }
-      }
-      
-      mergedRows.push(mergedRow);
-    }
-    
-    // ========== STEP 2: TROVA LA RIGA HEADER (quella con PIÙ parole) ==========
-    // Ignora righe con 1-2 parole (probabilmente titoli come "esempio_clienti")
-    // Prendi la riga con più parole come header (è la vera tabella!)
-    
-    let headerRowIndex = 0;
-    let maxWords = mergedRows[0].length;
-    
-    for (let i = 0; i < Math.min(5, mergedRows.length); i++) { // controlla prime 5 righe
-      if (mergedRows[i].length > maxWords && mergedRows[i].length >= 3) { // almeno 3 colonne
-        maxWords = mergedRows[i].length;
-        headerRowIndex = i;
-      }
-    }
-    
-    const headerRow = mergedRows[headerRowIndex];
-    const headers = headerRow.map(w => w.text);
-    const numColumns = headers.length;
-    
-    if (numColumns < 3) {
-      // Se ha meno di 3 colonne, probabilmente non è una tabella vera
-      return { headers: [], rows: [] };
-    }
-    
-    // ========== STEP 3: CALCOLA CENTRI COLONNE DA TUTTE LE PAROLE ==========
-    // Raccogli tutte le posizioni X (non solo header)
-    const allXPositions: number[] = [];
-    for (const row of mergedRows) {
-      for (const word of row) {
-        allXPositions.push(word.x + word.width / 2); // centro X
-      }
-    }
-    
-    // Ordina le X
-    allXPositions.sort((a, b) => a - b);
-    
-    // K-means semplificato: dividi in K cluster (K = numero headers)
-    const columnCenters: number[] = [];
-    
-    if (numColumns === 1) {
-      // Una sola colonna: usa il centro di tutte le X
-      columnCenters.push(allXPositions[Math.floor(allXPositions.length / 2)]);
-    } else {
-      // Più colonne: inizializza centri uniformemente distribuiti
-      const minX = allXPositions[0];
-      const maxX = allXPositions[allXPositions.length - 1];
-      const step = (maxX - minX) / (numColumns - 1);
-      
-      for (let i = 0; i < numColumns; i++) {
-        columnCenters.push(minX + i * step);
-      }
-      
-      // Raffina i centri (5 iterazioni K-means per maggiore precisione)
-      for (let iter = 0; iter < 5; iter++) {
-        // Assegna ogni X al centro più vicino
-        const clusters: number[][] = Array.from({ length: numColumns }, () => []);
-        
-        for (const x of allXPositions) {
-          let bestCluster = 0;
-          let bestDist = Math.abs(x - columnCenters[0]);
-          
-          for (let c = 1; c < numColumns; c++) {
-            const dist = Math.abs(x - columnCenters[c]);
-            if (dist < bestDist) {
-              bestDist = dist;
-              bestCluster = c;
-            }
-          }
-          
-          clusters[bestCluster].push(x);
-        }
-        
-        // Ricalcola centri come media dei cluster
-        for (let c = 0; c < numColumns; c++) {
-          if (clusters[c].length > 0) {
-            const sum = clusters[c].reduce((a, b) => a + b, 0);
-            columnCenters[c] = sum / clusters[c].length;
-          }
-        }
-      }
-    }
-    
-    // ========== STEP 4: ASSEGNA PAROLE ALLE COLONNE ==========
-    const dataRows: string[][] = [];
-    
-    // Salta righe prima dell'header e l'header stesso
-    for (let i = headerRowIndex + 1; i < mergedRows.length; i++) {
-      const row = mergedRows[i];
-      const rowData: string[] = new Array(numColumns).fill("");
-      
-      for (const word of row) {
-        const wordCenterX = word.x + word.width / 2;
-        
-        // Trova colonna più vicina
-        let bestCol = 0;
-        let bestDist = Math.abs(wordCenterX - columnCenters[0]);
-        
-        for (let col = 1; col < numColumns; col++) {
-          const dist = Math.abs(wordCenterX - columnCenters[col]);
-          
-          if (dist < bestDist) {
-            bestDist = dist;
-            bestCol = col;
-          }
-        }
-        
-        // Aggiungi parola alla colonna (le celle sono già unite in mergedRows)
-        if (rowData[bestCol]) {
-          rowData[bestCol] += " " + word.text;
-        } else {
-          rowData[bestCol] = word.text;
-        }
-      }
-      
-      dataRows.push(rowData);
-    }
-    
-    return { headers, rows: dataRows };
-  }
-
-  // Gestione upload file (UNIVERSALE)
+  // Gestione upload file
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -699,62 +259,67 @@ export default function ImportClientsPage() {
       if (extension === ".csv") {
         result = await parseCSV(file);
       } else if (extension === ".xlsx" || extension === ".xls") {
-        result = await parseXLSX(file);
-      } else if (extension === ".pdf") {
-        result = await parsePDF(file);
-      } else if (extension === ".jpg" || extension === ".jpeg" || extension === ".heic" || extension === ".png") {
-        result = await parseImage(file);
+        result = await parseExcel(file);
       } else {
-        alert(`Formato file non supportato: ${extension}\n\nFormati accettati: CSV, XLSX, XLS, PDF, JPG, JPEG, PNG, HEIC`);
-        setParsingProgress(null);
-        return;
+        throw new Error(`Formato file non supportato: ${extension}`);
       }
 
-      // Unifica i risultati
-      setRawData(result.data);
+      // Salva headers e dati
       setCsvHeaders(result.headers);
-      
+      setRawData(result.data);
+
       // Auto-detect mapping
-      const detectedMapping = autoDetectMapping(result.headers);
-      setMapping(detectedMapping);
-      
-      setParsingProgress(null);
+      const detected = autoDetectMapping(result.headers);
+      setMapping(detected);
+
+      // Vai a step mapping
       setStep("mapping");
+
     } catch (error: any) {
-      setParsingProgress(null);
       alert(error.message);
+      setParsingProgress(null);
     }
   };
 
-  // Validazione singolo cliente
-  const validateClient = (row: any, rowIndex: number): ProcessedClient => {
-    const errors: string[] = [];
-    const client: CsvRow = {};
-
-    // Applica mapping (INVERTITO: csvColumn -> field)
-    for (const [csvColumn, field] of Object.entries(mapping)) {
-      if (field && row[csvColumn]) {
-        client[field as keyof CsvRow] = String(row[csvColumn]).trim();
-      }
-    }
-
-    // Validazione campi obbligatori
-    if (!client.name) errors.push("Nome azienda mancante");
-    if (!client.contact_name) errors.push("Nome contatto mancante");
-    if (!client.city) errors.push("Città mancante");
-
-    return {
-      ...client,
-      rowIndex: rowIndex + 1,
-      isValid: errors.length === 0,
-      errors,
-    };
-  };
-
-  // Preview dopo mapping
+  // Preview con validazione
   const handlePreview = () => {
-    const validated = rawData.map((row, idx) => validateClient(row, idx));
-    setProcessedClients(validated);
+    const processed: ProcessedClient[] = [];
+
+    for (let i = 0; i < rawData.length; i++) {
+      const rawRow = rawData[i];
+      const mappedRow: CsvRow = {};
+      const errors: string[] = [];
+
+      // Applica mapping
+      for (const [csvCol, appField] of Object.entries(mapping)) {
+        if (appField) {
+          mappedRow[appField as keyof CsvRow] = rawRow[csvCol];
+        }
+      }
+
+      // Validazione campi obbligatori
+      if (!mappedRow.name || mappedRow.name.trim() === "") {
+        errors.push("Nome Cliente mancante");
+      }
+      if (!mappedRow.contact_name || mappedRow.contact_name.trim() === "") {
+        errors.push("Nome Contatto mancante");
+      }
+      if (!mappedRow.phone || mappedRow.phone.trim() === "") {
+        errors.push("Telefono mancante");
+      }
+      if (!mappedRow.address || mappedRow.address.trim() === "") {
+        errors.push("Indirizzo mancante");
+      }
+
+      processed.push({
+        ...mappedRow,
+        rowIndex: i + 1,
+        isValid: errors.length === 0,
+        errors,
+      });
+    }
+
+    setProcessedClients(processed);
     setStep("preview");
   };
 
@@ -777,14 +342,25 @@ export default function ImportClientsPage() {
       const client = validClients[i];
       
       try {
+        // Prepara custom (city, tipo_locale, notes)
+        const custom: any = {};
+        if (client.city) custom.city = client.city;
+        if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
+        if (client.notes) custom.notes = client.notes;
+        
         // Cifra campi sensibili
-        const encryptedClient: any = {};
+        const encryptedClient: any = {
+          custom: Object.keys(custom).length > 0 ? custom : {}
+        };
         
         for (const [key, value] of Object.entries(client)) {
           if (key === "rowIndex" || key === "isValid" || key === "errors" || !value) continue;
           
-          // Cifra solo campi sensibili
-          if (["name", "contact_name", "phone", "email", "address", "vat_number", "notes"].includes(key)) {
+          // Salta campi che vanno in custom
+          if (["city", "tipo_locale", "notes"].includes(key)) continue;
+          
+          // Cifra solo campi sensibili (DB normale)
+          if (["name", "contact_name", "phone", "address", "email", "vat_number"].includes(key)) {
             const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
             encryptedClient[key] = encrypted.ciphertext;
           } else {
@@ -845,7 +421,7 @@ export default function ImportClientsPage() {
             📥 Importa Lista Clienti
           </h1>
           <p style={{ color: "#6b7280", fontSize: 14 }}>
-            Carica un file o scatta una foto della lista clienti. Tutti i dati sensibili saranno cifrati automaticamente.
+            Carica un file CSV o Excel. Tutti i dati sensibili saranno cifrati automaticamente.
           </p>
         </div>
 
@@ -880,9 +456,9 @@ export default function ImportClientsPage() {
         {/* ========== STEP: UPLOAD ========== */}
         {step === "upload" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
-            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File o Scatta Foto</h2>
+            <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>📁 Seleziona File</h2>
             <p style={{ color: "#6b7280", marginBottom: 24 }}>
-              Carica un file o scatta una foto della lista clienti. Supportiamo CSV, Excel, PDF e foto. Il sistema cifrerà automaticamente i dati sensibili.
+              Carica un file CSV o Excel. Il sistema cifrerà automaticamente i dati sensibili.
             </p>
 
             {/* Indicatore parsing progress */}
@@ -900,95 +476,46 @@ export default function ImportClientsPage() {
               </div>
             )}
 
-            {/* DUE BOTTONI AFFIANCATI: Carica File + Scatta Foto */}
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 24 }}>
-              {/* BOTTONE 1: Carica File */}
-              <div
-                onClick={() => !parsingProgress && fileInputRef.current?.click()}
-                style={{
-                  border: "2px dashed #d1d5db",
-                  borderRadius: 12,
-                  padding: 32,
-                  textAlign: "center",
-                  cursor: parsingProgress ? "wait" : "pointer",
-                  background: "#f9fafb",
-                  transition: "all 0.2s",
-                  opacity: parsingProgress ? 0.6 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!parsingProgress) {
-                    e.currentTarget.style.background = "#f3f4f6";
-                    e.currentTarget.style.borderColor = "#9ca3af";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!parsingProgress) {
-                    e.currentTarget.style.background = "#f9fafb";
-                    e.currentTarget.style.borderColor = "#d1d5db";
-                  }
-                }}
-              >
-                <div style={{ fontSize: 48, marginBottom: 12 }}>📂</div>
-                <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
-                  Carica file
-                </p>
-                <p style={{ fontSize: 12, color: "#6b7280" }}>
-                  CSV, Excel, PDF, Foto
-                </p>
-              </div>
-
-              {/* BOTTONE 2: Scatta Foto */}
-              <div
-                onClick={() => !parsingProgress && cameraInputRef.current?.click()}
-                style={{
-                  border: "2px dashed #10b981",
-                  borderRadius: 12,
-                  padding: 32,
-                  textAlign: "center",
-                  cursor: parsingProgress ? "wait" : "pointer",
-                  background: "#f0fdf4",
-                  transition: "all 0.2s",
-                  opacity: parsingProgress ? 0.6 : 1,
-                }}
-                onMouseEnter={(e) => {
-                  if (!parsingProgress) {
-                    e.currentTarget.style.background = "#dcfce7";
-                    e.currentTarget.style.borderColor = "#059669";
-                  }
-                }}
-                onMouseLeave={(e) => {
-                  if (!parsingProgress) {
-                    e.currentTarget.style.background = "#f0fdf4";
-                    e.currentTarget.style.borderColor = "#10b981";
-                  }
-                }}
-              >
-                <div style={{ fontSize: 48, marginBottom: 12 }}>📸</div>
-                <p style={{ fontSize: 16, fontWeight: 600, marginBottom: 4 }}>
-                  Scatta foto
-                </p>
-                <p style={{ fontSize: 12, color: "#059669" }}>
-                  Apri fotocamera
-                </p>
-              </div>
+            {/* Area upload */}
+            <div
+              onClick={() => !parsingProgress && fileInputRef.current?.click()}
+              style={{
+                border: "2px dashed #d1d5db",
+                borderRadius: 12,
+                padding: 48,
+                textAlign: "center",
+                cursor: parsingProgress ? "wait" : "pointer",
+                background: "#f9fafb",
+                transition: "all 0.2s",
+                opacity: parsingProgress ? 0.6 : 1,
+              }}
+              onMouseEnter={(e) => {
+                if (!parsingProgress) {
+                  e.currentTarget.style.background = "#f3f4f6";
+                  e.currentTarget.style.borderColor = "#9ca3af";
+                }
+              }}
+              onMouseLeave={(e) => {
+                if (!parsingProgress) {
+                  e.currentTarget.style.background = "#f9fafb";
+                  e.currentTarget.style.borderColor = "#d1d5db";
+                }
+              }}
+            >
+              <div style={{ fontSize: 64, marginBottom: 16 }}>📂</div>
+              <p style={{ fontSize: 18, fontWeight: 600, marginBottom: 8 }}>
+                Carica file CSV o Excel
+              </p>
+              <p style={{ fontSize: 14, color: "#6b7280" }}>
+                Clicca qui o trascina il file
+              </p>
             </div>
 
-            {/* Input nascosto per file dalla galleria */}
+            {/* Input nascosto */}
             <input
               ref={fileInputRef}
               type="file"
-              accept=".csv,.xlsx,.xls,.pdf,.jpg,.jpeg,.png,.heic"
-              onChange={handleFileSelect}
-              style={{ display: "none" }}
-              disabled={!!parsingProgress}
-            />
-
-            {/* Input nascosto per fotocamera (capture="environment" apre fotocamera posteriore) */}
-            <input
-              ref={cameraInputRef}
-              type="file"
-              accept="image/*"
-              capture="environment"
+              accept=".csv,.xlsx,.xls"
               onChange={handleFileSelect}
               style={{ display: "none" }}
               disabled={!!parsingProgress}
@@ -999,33 +526,21 @@ export default function ImportClientsPage() {
               
               <div style={{ display: "grid", gap: 12, marginBottom: 16 }}>
                 <div>
-                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📄 CSV / Excel:</strong>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📄 CSV:</strong>
                   <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
-                    File tabellari con colonne Nome Cliente, Nome Contatto, Città, Indirizzo, Tipo Locale, Telefono (Email, P.IVA, Note opzionali)
+                    File di testo con valori separati da virgola
                   </p>
                 </div>
                 <div>
-                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📕 PDF:</strong>
+                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📊 Excel (XLSX/XLS):</strong>
                   <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
-                    Documenti PDF con tabelle o liste (testo stampato, non scansioni)
-                  </p>
-                </div>
-                <div>
-                  <strong style={{ fontSize: 13, color: "#1e40af" }}>📸 Foto:</strong>
-                  <p style={{ fontSize: 12, color: "#1e40af", marginTop: 4 }}>
-                    Foto di liste stampate con OCR avanzato (riconoscimento colonne automatico)
-                  </p>
-                </div>
-                <div>
-                  <strong style={{ fontSize: 13, color: "#059669" }}>📱 Scatta Foto:</strong>
-                  <p style={{ fontSize: 12, color: "#059669", marginTop: 4 }}>
-                    Accedi direttamente alla fotocamera per scattare foto della lista al momento (più veloce!)
+                    Fogli di calcolo Microsoft Excel
                   </p>
                 </div>
               </div>
 
               <p style={{ fontSize: 13, color: "#1e40af", fontFamily: "monospace", background: "white", padding: 8, borderRadius: 4, overflow: "auto" }}>
-                Esempio colonne: name,contact_name,city,address,tipo_locale,phone
+                Esempio colonne: name, contact_name, city, address, tipo_locale, phone, email, vat_number, notes
               </p>
             </div>
 
@@ -1086,12 +601,12 @@ export default function ImportClientsPage() {
                           <option value="">Scegli dato</option>
                           <option value="name">Nome Cliente *</option>
                           <option value="contact_name">Nome Contatto *</option>
-                          <option value="city">Città *</option>
-                          <option value="address">Indirizzo</option>
-                          <option value="tipo_locale">Tipo Locale</option>
-                          <option value="phone">Telefono</option>
+                          <option value="phone">Telefono *</option>
+                          <option value="address">Indirizzo *</option>
                           <option value="email">Email</option>
                           <option value="vat_number">P.IVA</option>
+                          <option value="city">Città</option>
+                          <option value="tipo_locale">Tipo Locale</option>
                           <option value="notes">Note</option>
                         </select>
                         <div style={{ 
@@ -1178,7 +693,7 @@ export default function ImportClientsPage() {
                 <div style={{ fontSize: 24, fontWeight: 700, color: "#15803d" }}>
                   {processedClients.filter(c => c.isValid).length}
                 </div>
-                <div style={{ fontSize: 12, color: "#15803d" }}>✅ Pronti per import</div>
+                <div style={{ fontSize: 12, color: "#15803d" }}>✅ Clienti validi</div>
               </div>
               <div style={{ padding: 12, background: "#fef2f2", borderRadius: 8, border: "1px solid #fecaca" }}>
                 <div style={{ fontSize: 24, fontWeight: 700, color: "#dc2626" }}>
@@ -1196,7 +711,8 @@ export default function ImportClientsPage() {
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Status</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Nome</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Contatto</th>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Città</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Telefono</th>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Indirizzo</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Errori</th>
                   </tr>
                 </thead>
@@ -1209,7 +725,8 @@ export default function ImportClientsPage() {
                       </td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.name || "-"}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.contact_name || "-"}</td>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.city || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.phone || "-"}</td>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.address || "-"}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb", color: "#dc2626" }}>
                         {client.errors.join(", ") || "-"}
                       </td>
