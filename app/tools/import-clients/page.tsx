@@ -323,53 +323,56 @@ export default function ImportClientsPage() {
     setStep("preview");
   };
 
-  // Import con cifratura
+  // Import finale
   const handleImport = async () => {
     setStep("importing");
     setImportProgress(0);
+    
+    const results = {
+      success: 0,
+      failed: 0,
+      duplicates: 0,
+      errors: [] as string[],
+    };
 
-    const cryptoSvc = getCryptoService();
     const validClients = processedClients.filter(c => c.isValid);
-    const results = { success: 0, failed: 0, duplicates: 0, errors: [] as string[] };
+    const cryptoSvc = getCryptoService();
 
     for (let i = 0; i < validClients.length; i++) {
       const client = validClients[i];
-
+      
       try {
-        // Cifra campi sensibili
-        const encryptedName = await cryptoSvc.encrypt(client.name || "", "table:accounts");
-        const encryptedContactName = await cryptoSvc.encrypt(client.contact_name || "", "table:accounts");
-        const encryptedPhone = await cryptoSvc.encrypt(client.phone || "", "table:accounts");
-        const encryptedAddress = await cryptoSvc.encrypt(client.address || "", "table:accounts");
-        const encryptedEmail = client.email ? await cryptoSvc.encrypt(client.email, "table:accounts") : null;
-        const encryptedVatNumber = client.vat_number ? await cryptoSvc.encrypt(client.vat_number, "table:accounts") : null;
-
-        // Blind index per duplicate detection
-        const blindIndex = await cryptoSvc.blindIndex(
-          `${client.name}|${client.contact_name}|${client.phone}`,
-          "table:accounts"
-        );
-
-        // Campi custom (jsonb) - NON cifrati
+        // Prepara custom (city, tipo_locale, notes)
         const custom: any = {};
         if (client.city) custom.city = client.city;
         if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
         if (client.notes) custom.notes = client.notes;
+        
+        // Cifra campi sensibili
+        const encryptedClient: any = {
+          custom: Object.keys(custom).length > 0 ? custom : {}
+        };
+        
+        for (const [key, value] of Object.entries(client)) {
+          if (key === "rowIndex" || key === "isValid" || key === "errors" || !value) continue;
+          
+          // Salta campi che vanno in custom
+          if (["city", "tipo_locale", "notes"].includes(key)) continue;
+          
+          // Cifra solo campi sensibili (DB normale)
+          if (["name", "contact_name", "phone", "address", "email", "vat_number"].includes(key)) {
+            const encrypted = await cryptoSvc.encrypt(String(value), "table:accounts");
+            encryptedClient[key] = encrypted.ciphertext;
+          } else {
+            encryptedClient[key] = value;
+          }
+        }
 
-        // Salva su DB
+        // Invia al server
         const response = await fetch("/api/clients/upsert", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: encryptedName,
-            contact_name: encryptedContactName,
-            phone: encryptedPhone,
-            address: encryptedAddress,
-            email: encryptedEmail,
-            vat_number: encryptedVatNumber,
-            blind_index: blindIndex,
-            custom: Object.keys(custom).length > 0 ? custom : null,
-          }),
+          body: JSON.stringify(encryptedClient),
         });
 
         if (response.ok) {
