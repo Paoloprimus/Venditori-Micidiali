@@ -1080,9 +1080,13 @@ export default function ImportClientsPage() {
                   <tr>
                     {csvHeaders.map((header, idx) => (
                       <td key={idx} style={{ 
-                        padding: 12, 
-                        borderBottom: "1px solid #e5e7eb",
-                        background: "white"
+                        padding: "20px 12px", 
+                        borderBottom: "2px solid #e5e7eb",
+                        background: "#fffbeb",
+                        fontSize: 18,
+                        fontWeight: 700,
+                        color: "#111827",
+                        textAlign: "center"
                       }}>
                         {rawData[0]?.[header] || "-"}
                       </td>
