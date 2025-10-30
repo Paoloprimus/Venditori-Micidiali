@@ -360,8 +360,17 @@ export default function ImportClientsPage() {
           fieldsToEncrypt
         );
         
+        // Genera blind index per il name (obbligatorio per duplicate detection)
+        const nameBlindIndex = await (cryptoSvc as any).computeBlindIndex(
+          "table:accounts",
+          client.name || ""
+        );
+        
         // encrypted è un oggetto tipo: { name_enc: "...", name_iv: "...", contact_name_enc: "...", ... }
-        const payload: any = { ...encrypted };
+        const payload: any = { 
+          ...encrypted,
+          name_bi: nameBlindIndex  // ✅ OBBLIGATORIO!
+        };
         
         // Aggiungi custom (city, tipo_locale, notes)
         const custom: any = {};
