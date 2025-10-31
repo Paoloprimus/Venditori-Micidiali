@@ -43,7 +43,6 @@ export default function ProductsPage(): JSX.Element {
   const [sortBy, setSortBy] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [q, setQ] = useState<string>("");
-  const [onlyActive, setOnlyActive] = useState<boolean>(true);
 
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
@@ -85,11 +84,6 @@ export default function ProductsPage(): JSX.Element {
       .select("id,created_at,codice,descrizione_articolo,unita_misura,giacenza,base_price,sconto_fattura,is_active")
       .order("created_at", { ascending: false });
 
-    // Filtro solo attivi
-    if (onlyActive) {
-      query = query.eq("is_active", true);
-    }
-
     const { data, error } = await query;
 
     if (error) {
@@ -119,12 +113,6 @@ export default function ProductsPage(): JSX.Element {
     if (!userId) return;
     loadProducts();
   }, [userId]);
-
-  // Ricarica quando cambia il filtro "Solo attivi"
-  useEffect(() => {
-    if (!userId) return;
-    loadProducts();
-  }, [onlyActive, userId]);
 
   // 🆕 DELETE PRODOTTO
   async function deleteProduct(productId: string) {
@@ -237,10 +225,6 @@ export default function ProductsPage(): JSX.Element {
             value={q}
             onChange={(e) => setQ(e.target.value)}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
-            <input type="checkbox" checked={onlyActive} onChange={(e) => setOnlyActive(e.target.checked)} />
-            Solo attivi
-          </label>
           <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
         </div>
 
@@ -255,7 +239,6 @@ export default function ProductsPage(): JSX.Element {
                 <Th label="Giacenza" k="giacenza" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
                 <Th label="Prezzo €" k="base_price" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
                 <th className="px-3 py-2 text-left">Sconto %</th>
-                <th className="px-3 py-2 text-left">Attivo</th>
                 <Th label="Creato il" k="created_at" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
                 <th className="px-3 py-2 text-left">Azioni</th>
               </tr>
@@ -270,7 +253,6 @@ export default function ProductsPage(): JSX.Element {
                   <td className="px-3 py-2">{r.giacenza}</td>
                   <td className="px-3 py-2">{r.base_price ? `€${r.base_price.toFixed(2)}` : "—"}</td>
                   <td className="px-3 py-2">{r.sconto_fattura ? `${r.sconto_fattura}%` : "—"}</td>
-                  <td className="px-3 py-2">{r.is_active ? "✓" : "✗"}</td>
                   <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
                   
                   {/* Azioni - CANCELLAZIONE */}
@@ -288,7 +270,7 @@ export default function ProductsPage(): JSX.Element {
               
               {!loading && view.length === 0 && (
                 <tr>
-                  <td className="px-3 py-8 text-center text-gray-500" colSpan={9}>
+                  <td className="px-3 py-8 text-center text-gray-500" colSpan={8}>
                     Nessun prodotto trovato.
                   </td>
                 </tr>
