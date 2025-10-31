@@ -648,9 +648,9 @@ async function saveEditing() {
         {/* Spacer per TopBar */}
         <div style={{ height: 70 }} />
 
-        <div className="text-xs text-gray-500">
-          auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
-        </div>
+        // <div className="text-xs text-gray-500">
+        //  auth:{diag.auth ?? "…"} · ready:{String(ready)} · passInStorage:{String(diag.passInStorage ?? false)} · attempts:{diag.unlockAttempts ?? 0} · loaded:{diag.loaded ?? 0}
+        // </div>
         
         <div className="flex gap-2 items-center">
 <input
