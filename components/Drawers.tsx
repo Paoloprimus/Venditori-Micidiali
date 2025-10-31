@@ -17,8 +17,6 @@
 // components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
-import ProductImport from "./products/ProductImport";
-import { ToastProvider } from "./ui/Toast";
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
@@ -364,11 +362,12 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goQuickAddProduct} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Aggiungi singolo
             </button>
-            <ToastProvider>
-              <div style={{ marginTop: 8 }}>
-                <ProductImport />
-              </div>
-            </ToastProvider>
+            <button className="btn" onClick={() => alert('Importa lista prodotti - in arrivo')}>
+              📥 Importa lista
+            </button>
+            <button className="btn" onClick={() => alert('Template CSV prodotti - in arrivo')}>
+              📄 Scarica template CSV
+            </button>
           </div>
         )}
 
