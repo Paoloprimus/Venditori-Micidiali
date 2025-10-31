@@ -571,7 +571,6 @@ export default function QuickAddClientPage() {
 
       // Prepara i dati custom (SOLO città, tipo, note in chiaro)
       const customData = {
-        tipo_locale: form.tipoLocale.trim(),
         notes: form.note.trim() || undefined,
       };
 
@@ -595,6 +594,7 @@ export default function QuickAddClientPage() {
         phone_enc: phoneEncrypted.phone_enc,
         phone_iv: phoneEncrypted.phone_iv,
         city: form.citta.trim(),
+        tipo_locale: form.tipoLocale.trim(),
         custom: customData,
       };
 
