@@ -23,6 +23,7 @@ type RawAccount = {
   name_enc?: any; name_iv?: any;
   contact_name_enc?: any; contact_name_iv?: any;
   city?: string; 
+  tipo_locale?: string;
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
@@ -38,6 +39,7 @@ type PlainAccount = {
   name: string;
   contact_name: string;
   city: string;
+  tipo_locale: string;
   email: string;
   phone: string;
   vat_number: string;
@@ -45,7 +47,7 @@ type PlainAccount = {
 };
 
 const PAGE_SIZE = 25;
-type SortKey = "name" | "city" | "email" | "phone" | "vat_number" | "created_at";
+type SortKey = "name" | "city" | "tipo_locale" | "email" | "phone" | "vat_number" | "created_at";
 
 const DEFAULT_SCOPES = [
   "table:accounts", "table:contacts", "table:products",
@@ -205,6 +207,7 @@ const { data, error } = await supabase
     "name_enc,name_iv," +
     "contact_name_enc,contact_name_iv," +
     "city," + 
+    "tipo_locale," +
     "email_enc,email_iv," +
     "phone_enc,phone_iv," +
     "vat_number_enc,vat_number_iv," +
@@ -293,6 +296,7 @@ const decAny = await (crypto as any).decryptFields(
         const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
         const notes = customObj.notes || "";
         const city = r.city || customObj.city || "";
+        const tipoLocale = r.tipo_locale || "";
 
 plain.push({
   id: r.id,
@@ -300,6 +304,7 @@ plain.push({
   name: String(dec.name ?? ""),
   contact_name: String(dec.contact_name ?? ""),
   city: String(city),  // <-- CAMBIA DA: String(dec.city ?? "")
+  tipo_locale: String(tipoLocale),
   email: String(dec.email ?? ""),
   phone: String(dec.phone ?? ""),
   vat_number: String(dec.vat_number ?? ""),
@@ -314,6 +319,7 @@ plain.push({
   name: "", 
   contact_name: "", 
   city: "",
+  tipo_locale: "",
   email: "", 
   phone: "", 
   vat_number: "", 
@@ -348,6 +354,8 @@ plain.push({
 arr = arr.filter((r) =>
   norm(r.name).includes(qq) ||
   norm(r.contact_name).includes(qq) ||
+  norm(r.city).includes(qq) ||
+  norm(r.tipo_locale).includes(qq) ||
   norm(r.city).includes(qq) ||
   norm(r.email).includes(qq) ||
   norm(r.phone).includes(qq) ||
@@ -468,6 +476,33 @@ async function updateCity(clientId: string, newCity: string) {
     alert(`Errore durante il salvataggio: ${e}`);
   }
 }
+
+// 🆕 UPDATE TIPO_LOCALE (campo in chiaro)
+async function updateTipoLocale(clientId: string, newTipoLocale: string) {
+  if (!userId) return;
+  
+  try {
+    // Update diretto (non cifrato)
+    const { error } = await supabase
+      .from("accounts")
+      .update({ tipo_locale: newTipoLocale })
+      .eq("id", clientId);
+    
+    if (error) throw error;
+    
+    // Aggiorna la lista locale
+    setRows(prev => prev.map(r => 
+      r.id === clientId 
+        ? { ...r, tipo_locale: newTipoLocale }
+        : r
+    ));
+    
+    console.log(`✅ Tipo locale aggiornato per cliente ${clientId}`);
+  } catch (e) {
+    console.error("❌ Errore update tipo_locale:", e);
+    alert(`Errore durante il salvataggio: ${e}`);
+  }
+}
   
   // 🆕 DELETE CLIENTE
   async function deleteClient(clientId: string) {
@@ -514,6 +549,8 @@ async function saveEditing() {
     await updateNotes(rowId, tempValue);
   } else if (field === "city") {  // <-- AGGIUNGI QUESTO ELSE IF
     await updateCity(rowId, tempValue);
+  } else if (field === "tipo_locale") {
+    await updateTipoLocale(rowId, tempValue);
   } else {
     await updateField(rowId, field, tempValue);
   }
@@ -621,6 +658,7 @@ async function saveEditing() {
     <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <th className="px-3 py-2 text-left">Contatto</th>
     <Th label="Città"      k="city"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+    <Th label="Tipo Locale" k="tipo_locale" sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
     <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
@@ -653,6 +691,19 @@ async function saveEditing() {
         rowId={r.id}
         field="city"
         value={r.city}
+        editingCell={editingCell}
+        tempValue={tempValue}
+        onStartEdit={startEditing}
+        onCancel={cancelEditing}
+        onSave={saveEditing}
+        onTempChange={setTempValue}
+      />
+      
+      {/* Tipo Locale - EDITABILE */}
+      <EditableCell
+        rowId={r.id}
+        field="tipo_locale"
+        value={r.tipo_locale}
         editingCell={editingCell}
         tempValue={tempValue}
         onStartEdit={startEditing}
@@ -721,7 +772,7 @@ async function saveEditing() {
               
 {!loading && actuallyReady && view.length === 0 && (
   <tr>
-    <td className="px-3 py-8 text-center text-gray-500" colSpan={9}>
+    <td className="px-3 py-8 text-center text-gray-500" colSpan={10}>
       Nessun cliente trovato.
     </td>
   </tr>
