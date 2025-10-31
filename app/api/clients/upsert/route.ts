@@ -3,7 +3,6 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 
 // --- Tipi utili (documentativi)
 type CustomFields = {
-  tipo_locale?: string;       // Tipo locale HoReCa (in chiaro per LLM)
   notes?: string;             // Note generali (in chiaro per LLM)
   // Campi legacy/futuri (stand-by)
   fascia?: "A" | "B" | "C";
@@ -21,6 +20,7 @@ type UpsertClientBody = {
   name_iv?: string;
   name_bi?: string;
   city?: string;              // ✅ MODIFICATO: Città in chiaro
+  tipo_locale?: string;       // ✅ MODIFICATO: Tipo locale in chiaro (separato da custom)
   address_enc?: string;
   address_iv?: string;
   vat_number_enc?: string;
@@ -51,7 +51,6 @@ function normalizeCustom(input?: CustomFields) {
   const out: Record<string, unknown> = {};
   
   // Solo campi in chiaro per LLM (NO PII)
-  if (input.tipo_locale) out.tipo_locale = String(input.tipo_locale);
   if (input.notes) out.notes = String(input.notes);
   
   // Campi legacy (stand-by)
@@ -115,6 +114,9 @@ export async function POST(req: Request) {
       if (body.city) {
         updateData.city = body.city;
       }
+      if (body.tipo_locale) {
+        updateData.tipo_locale = body.tipo_locale;
+      }
       if (body.address_enc && body.address_iv) {
         updateData.address_enc = body.address_enc;
         updateData.address_iv = body.address_iv;
@@ -166,6 +168,9 @@ export async function POST(req: Request) {
       // 🔐 Aggiungi campi cifrati ditta se presenti
       if (body.city) {
         insertData.city = body.city;
+      }
+      if (body.tipo_locale) {
+        insertData.tipo_locale = body.tipo_locale;
       }
       if (body.address_enc && body.address_iv) {
         insertData.address_enc = body.address_enc;
