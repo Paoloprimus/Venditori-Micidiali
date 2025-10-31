@@ -7,6 +7,21 @@ import { useCrypto } from "@/lib/crypto/CryptoProvider";
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
 import TopBar from "@/components/home/TopBar";
 
+// Opzioni per tipo locale
+const TIPO_LOCALE = [
+  'Bar',
+  'Ristorante',
+  'Pizzeria',
+  'Ristorante/Pizzeria',
+  'Trattoria',
+  'Chiosco',
+  'Pub',
+  'Pasticceria',
+  'Gelateria',
+  'Hotel',
+  'Altro'
+];
+
 // helper: prendi sempre la decryptFields "viva" da window.debugCrypto
 function getDbg(): any | null {
   if (typeof window === "undefined") return null;
@@ -642,7 +657,7 @@ async function saveEditing() {
         <div className="flex gap-2 items-center">
 <input
   className="border rounded p-2 flex-1"
-  placeholder="Cerca (nome, contatto, città, email, telefono, P. IVA, note)"
+  placeholder="Cerca (nome, contatto, città, tipo locale, email, telefono, P. IVA, note)"
   value={q}
   onChange={(e) => setQ(e.target.value)}
 />
@@ -710,6 +725,7 @@ async function saveEditing() {
         onCancel={cancelEditing}
         onSave={saveEditing}
         onTempChange={setTempValue}
+        options={TIPO_LOCALE}
       />
       
       {/* Email - EDITABILE */}
@@ -830,7 +846,8 @@ function EditableCell({
   onStartEdit,
   onCancel,
   onSave,
-  onTempChange
+  onTempChange,
+  options
 }: {
   rowId: string;
   field: string;
@@ -841,10 +858,36 @@ function EditableCell({
   onCancel: () => void;
   onSave: () => void;
   onTempChange: (value: string) => void;
+  options?: string[];
 }) {
   const isEditing = editingCell?.rowId === rowId && editingCell?.field === field;
   
   if (isEditing) {
+    // Se ci sono opzioni, mostra un select
+    if (options && options.length > 0) {
+      return (
+        <td className="px-3 py-2">
+          <select
+            value={tempValue}
+            onChange={(e) => onTempChange(e.target.value)}
+            onBlur={onSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSave();
+              if (e.key === "Escape") onCancel();
+            }}
+            autoFocus
+            className="w-full px-2 py-1 border rounded"
+          >
+            <option value="">Seleziona...</option>
+            {options.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </td>
+      );
+    }
+    
+    // Altrimenti mostra un input di testo normale
     return (
       <td className="px-3 py-2">
         <input
