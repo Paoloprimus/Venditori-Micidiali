@@ -17,7 +17,7 @@
 // components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
-import ProductManager from "./products/ProductManager";
+import ProductImport from "./products/ProductImport";
 import { ToastProvider } from "./ui/Toast";
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
@@ -267,8 +267,13 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   }
 
   function goProductsList() {
-    // TODO: quando avremo la pagina lista prodotti
-    alert("Lista prodotti - in arrivo");
+    onClose();
+    window.location.href = "/products";
+  }
+
+  function goQuickAddProduct() {
+    onClose();
+    window.location.href = "/tools/quick-add-product";
   }
 
   return (
@@ -345,6 +350,9 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goImportClients}>
               📥 Importa lista
             </button>
+            <button className="btn" onClick={() => alert('Template CSV clienti - in arrivo')}>
+              📄 Scarica template CSV
+            </button>
           </div>
         )}
 
@@ -353,12 +361,12 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goProductsList}>
               📦 Lista prodotti
             </button>
-            <button className="btn" onClick={() => alert('Aggiungi prodotto - in arrivo')} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+            <button className="btn" onClick={goQuickAddProduct} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Aggiungi singolo
             </button>
             <ToastProvider>
               <div style={{ marginTop: 8 }}>
-                <ProductManager onCloseDrawer={onClose} />
+                <ProductImport />
               </div>
             </ToastProvider>
           </div>
