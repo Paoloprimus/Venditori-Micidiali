@@ -373,13 +373,17 @@ export default function ImportClientsPage() {
           name_bi: nameBlindIndex  // ✅ OBBLIGATORIO!
         };
         
-        // Aggiungi custom (solo tipo_locale e notes, city ora è cifrato!)
-        const custom: any = {};
-        if (client.tipo_locale) custom.tipo_locale = client.tipo_locale;
-        if (client.notes) custom.notes = client.notes;
-        if (Object.keys(custom).length > 0) {
-          payload.custom = custom;
-        }
+// Aggiungi custom (solo notes in chiaro)
+const custom: any = {};
+if (client.notes) custom.notes = client.notes;
+if (Object.keys(custom).length > 0) {
+  payload.custom = custom;
+}
+
+// Aggiungi tipo_locale come campo separato (non in custom)
+if (client.tipo_locale) {
+  payload.tipo_locale = client.tipo_locale;
+}
 
         // Invia al server
         const response = await fetch("/api/clients/upsert", {
