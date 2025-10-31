@@ -139,6 +139,30 @@ export default function ProductsPage(): JSX.Element {
     setPage(0);
   }, [onlyActive, userId]);
 
+  // 🆕 DELETE PRODOTTO
+  async function deleteProduct(productId: string) {
+    if (!userId) return;
+    
+    if (!confirm("Eliminare definitivamente questo prodotto?")) return;
+    
+    try {
+      const { error } = await supabase
+        .from("products")
+        .delete()
+        .eq("id", productId);
+      
+      if (error) throw error;
+      
+      // Rimuovi dalla lista locale
+      setRows(prev => prev.filter(r => r.id !== productId));
+      
+      console.log(`✅ Prodotto eliminato: ${productId}`);
+    } catch (e) {
+      console.error("❌ Errore delete prodotto:", e);
+      alert(`Errore durante l'eliminazione: ${e}`);
+    }
+  }
+
   const view: PlainProduct[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
     let arr = [...rows];
@@ -246,6 +270,7 @@ export default function ProductsPage(): JSX.Element {
                 <th className="px-3 py-2 text-left">Sconto %</th>
                 <th className="px-3 py-2 text-left">Attivo</th>
                 <Th label="Creato il" k="created_at" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                <th className="px-3 py-2 text-left">Azioni</th>
               </tr>
             </thead>
             
@@ -260,12 +285,23 @@ export default function ProductsPage(): JSX.Element {
                   <td className="px-3 py-2">{r.sconto_fattura ? `${r.sconto_fattura}%` : "—"}</td>
                   <td className="px-3 py-2">{r.is_active ? "✓" : "✗"}</td>
                   <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
+                  
+                  {/* Azioni - CANCELLAZIONE */}
+                  <td className="px-3 py-2">
+                    <button
+                      onClick={() => deleteProduct(r.id)}
+                      className="text-red-600 hover:text-red-800"
+                      title="Elimina prodotto"
+                    >
+                      🗑️
+                    </button>
+                  </td>
                 </tr>
               ))}
               
               {!loading && view.length === 0 && (
                 <tr>
-                  <td className="px-3 py-8 text-center text-gray-500" colSpan={8}>
+                  <td className="px-3 py-8 text-center text-gray-500" colSpan={9}>
                     Nessun prodotto trovato.
                   </td>
                 </tr>
