@@ -61,7 +61,6 @@ type PlainAccount = {
   notes: string;
 };
 
-const PAGE_SIZE = 25;
 type SortKey = "name" | "contact_name" | "city" | "tipo_locale" | "email" | "phone" | "vat_number" | "created_at";
 
 const DEFAULT_SCOPES = [
@@ -81,7 +80,6 @@ export default function ClientsPage(): JSX.Element {
   // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
   const [rows, setRows] = useState<PlainAccount[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [page, setPage] = useState<number>(0);
 
   const [sortBy, setSortBy] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -202,8 +200,7 @@ useEffect(() => {
       
       // 🚀 FORZA caricamento dati dopo unlock
       console.log('[/clients] 📊 Carico i dati...');
-      await loadPage(0);
-      setPage(0);
+      await loadClients();
       console.log('[/clients] ✅ Dati caricati!');
       
     } catch (e: any) {
@@ -221,11 +218,9 @@ useEffect(() => {
   })();
 }, [authChecked, crypto, unlock, prewarm]);
 
-  async function loadPage(p: number): Promise<void> {
+  async function loadClients(): Promise<void> {
     if (!crypto || !userId) return;
     setLoading(true);
-    const from = p * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
 
 const { data, error } = await supabase
   .from("accounts")
@@ -241,8 +236,7 @@ const { data, error } = await supabase
     "address_enc,address_iv," +
     "custom"
   )
-  .order("created_at", { ascending: false })
-  .range(from, to);
+  .order("created_at", { ascending: false });
 
     if (error) {
       console.error("[/clients] load error:", error);
@@ -360,18 +354,11 @@ plain.push({
     setDiag((d) => ({ ...d, loaded: plain.length }));
   }
 
-  // carica la pagina 0 appena la cifratura è sbloccata e c'è l'utente
+  // carica dati appena la cifratura è sbloccata e c'è l'utente
   useEffect(() => {
     if (!actuallyReady || !crypto || !userId) return;
-    loadPage(0);
-    setPage(0);
+    loadClients();
   }, [actuallyReady, crypto, userId]);
-
-  // pagina successiva/precedente
-  useEffect(() => {
-    if (!actuallyReady || !crypto || !userId) return;
-    loadPage(page);
-  }, [page, actuallyReady, crypto, userId]);
 
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
@@ -626,8 +613,7 @@ async function saveEditing() {
                 "table:accounts","table:contacts","table:products","table:profiles",
                 "table:notes","table:conversations","table:messages","table:proposals",
               ]);
-              await loadPage(0);
-              setPage(0);
+              await loadClients();
               setPass("");
             } catch (e) {
               console.error("[/clients] unlock failed:", e);
@@ -810,20 +796,6 @@ async function saveEditing() {
 )}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <button
-            className="px-3 py-2 rounded border"
-            disabled={page === 0 || loading || !actuallyReady}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >◀︎ Precedenti</button>
-          <div className="text-sm text-gray-600">Pagina {page + 1}</div>
-          <button
-            className="px-3 py-2 rounded border"
-            disabled={loading || !actuallyReady || rows.length < PAGE_SIZE}
-            onClick={() => setPage((p) => p + 1)}
-          >Successivi ▶︎</button>
         </div>
 
         {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
