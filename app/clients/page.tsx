@@ -62,7 +62,7 @@ type PlainAccount = {
 };
 
 const PAGE_SIZE = 25;
-type SortKey = "name" | "city" | "tipo_locale" | "email" | "phone" | "vat_number" | "created_at";
+type SortKey = "name" | "contact_name" | "city" | "tipo_locale" | "email" | "phone" | "vat_number" | "created_at";
 
 const DEFAULT_SCOPES = [
   "table:accounts", "table:contacts", "table:products",
@@ -86,6 +86,18 @@ export default function ClientsPage(): JSX.Element {
   const [sortBy, setSortBy] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [q, setQ] = useState<string>("");
+
+  // 🆕 Funzione per gestire click su header ordinabili
+function handleSortClick(key: SortKey) {
+  if (sortBy === key) {
+    // Stessa colonna → inverti direzione
+    setSortDir(sortDir === "asc" ? "desc" : "asc");
+  } else {
+    // Colonna nuova → imposta quella colonna e DESC
+    setSortBy(key);
+    setSortDir("desc");
+  }
+}
 
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
@@ -670,14 +682,17 @@ async function saveEditing() {
             
 <thead className="bg-gray-50">
   <tr>
-    <Th label="Nome"       k="name"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-    <th className="px-3 py-2 text-left">Contatto</th>
-    <Th label="Città"      k="city"        sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-    <Th label="Tipo Locale" k="tipo_locale" sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-    <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-    <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-    <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
-    <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={setSortBy} />
+<Th label="Nome"       k="name"           sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+<Th label="Contatto"   k="contact_name"   sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+<Th label="Città"      k="city"           sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+    
+<Th label="Tipo Locale" k="tipo_locale" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+<Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+<Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+<Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+<Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+
+    
     <th className="px-3 py-2 text-left">Note</th>
     <th className="px-3 py-2 text-left">Azioni</th>
   </tr>
