@@ -31,7 +31,6 @@ type PlainProduct = {
   is_active: boolean;
 };
 
-const PAGE_SIZE = 25;
 type SortKey = "codice" | "descrizione_articolo" | "giacenza" | "base_price" | "created_at";
 
 export default function ProductsPage(): JSX.Element {
@@ -40,7 +39,6 @@ export default function ProductsPage(): JSX.Element {
 
   const [rows, setRows] = useState<PlainProduct[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
-  const [page, setPage] = useState<number>(0);
 
   const [sortBy, setSortBy] = useState<SortKey>("created_at");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
@@ -78,17 +76,14 @@ export default function ProductsPage(): JSX.Element {
   }, []);
 
   // Carica prodotti
-  async function loadPage(p: number): Promise<void> {
+  async function loadProducts(): Promise<void> {
     if (!userId) return;
     setLoading(true);
-    const from = p * PAGE_SIZE;
-    const to = from + PAGE_SIZE - 1;
 
     let query = supabase
       .from("products")
       .select("id,created_at,codice,descrizione_articolo,unita_misura,giacenza,base_price,sconto_fattura,is_active")
-      .order("created_at", { ascending: false })
-      .range(from, to);
+      .order("created_at", { ascending: false });
 
     // Filtro solo attivi
     if (onlyActive) {
@@ -119,24 +114,16 @@ export default function ProductsPage(): JSX.Element {
     setLoading(false);
   }
 
-  // Carica la pagina 0 all'inizio
+  // Carica all'inizio
   useEffect(() => {
     if (!userId) return;
-    loadPage(0);
-    setPage(0);
+    loadProducts();
   }, [userId]);
-
-  // Ricarica quando cambia pagina
-  useEffect(() => {
-    if (!userId) return;
-    loadPage(page);
-  }, [page, userId]);
 
   // Ricarica quando cambia il filtro "Solo attivi"
   useEffect(() => {
     if (!userId) return;
-    loadPage(0);
-    setPage(0);
+    loadProducts();
   }, [onlyActive, userId]);
 
   // 🆕 DELETE PRODOTTO
@@ -308,20 +295,6 @@ export default function ProductsPage(): JSX.Element {
               )}
             </tbody>
           </table>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <button
-            className="px-3 py-2 rounded border"
-            disabled={page === 0 || loading}
-            onClick={() => setPage((p) => Math.max(0, p - 1))}
-          >◀︎ Precedenti</button>
-          <div className="text-sm text-gray-600">Pagina {page + 1}</div>
-          <button
-            className="px-3 py-2 rounded border"
-            disabled={loading || rows.length < PAGE_SIZE}
-            onClick={() => setPage((p) => p + 1)}
-          >Successivi ▶︎</button>
         </div>
 
         {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
