@@ -20,8 +20,7 @@ type UpsertClientBody = {
   name_enc?: string;
   name_iv?: string;
   name_bi?: string;
-  city_enc?: string;          // ✅ NUOVO: Città cifrata
-  city_iv?: string;           // ✅ NUOVO: IV per città
+  city?: string;              // ✅ MODIFICATO: Città in chiaro
   address_enc?: string;
   address_iv?: string;
   vat_number_enc?: string;
@@ -113,9 +112,8 @@ export async function POST(req: Request) {
       const updateData: any = { custom: mergedCustom };
       
       // 🔐 Aggiorna campi cifrati ditta se presenti
-      if (body.city_enc && body.city_iv) {
-        updateData.city_enc = body.city_enc;
-        updateData.city_iv = body.city_iv;
+      if (body.city) {
+        updateData.city = body.city;
       }
       if (body.address_enc && body.address_iv) {
         updateData.address_enc = body.address_enc;
@@ -166,9 +164,8 @@ export async function POST(req: Request) {
       };
       
       // 🔐 Aggiungi campi cifrati ditta se presenti
-      if (body.city_enc && body.city_iv) {
-        insertData.city_enc = body.city_enc;
-        insertData.city_iv = body.city_iv;
+      if (body.city) {
+        insertData.city = body.city;
       }
       if (body.address_enc && body.address_iv) {
         insertData.address_enc = body.address_enc;
