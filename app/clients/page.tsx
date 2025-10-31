@@ -22,7 +22,7 @@ type RawAccount = {
   // encrypted (opzionali)
   name_enc?: any; name_iv?: any;
   contact_name_enc?: any; contact_name_iv?: any;
-  city_enc?: any; city_iv?: any;
+  city?: string; 
   email_enc?: any; email_iv?: any;
   phone_enc?: any; phone_iv?: any;
   vat_number_enc?: any; vat_number_iv?: any;
@@ -204,7 +204,7 @@ const { data, error } = await supabase
     "id,created_at," +
     "name_enc,name_iv," +
     "contact_name_enc,contact_name_iv," +
-    "city_enc,city_iv," +
+    "city," + 
     "email_enc,email_iv," +
     "phone_enc,phone_iv," +
     "vat_number_enc,vat_number_iv," +
@@ -260,8 +260,6 @@ const recordForDecrypt = {
   name_iv: hexToBase64(r.name_iv),
   contact_name_enc: hexToBase64(r.contact_name_enc),
   contact_name_iv: hexToBase64(r.contact_name_iv),
-  city_enc: hexToBase64(r.city_enc),
-  city_iv: hexToBase64(r.city_iv),
   email_enc: hexToBase64(r.email_enc),
   email_iv: hexToBase64(r.email_iv),
   phone_enc: hexToBase64(r.phone_enc),
@@ -286,7 +284,7 @@ const recordForDecrypt = {
 
 const decAny = await (crypto as any).decryptFields(
   "table:accounts", "accounts", '', recordForDecrypt,
-  ["name", "contact_name", "city", "email", "phone", "vat_number", "address"]
+  ["name", "contact_name", "email", "phone", "vat_number", "address"]
 );
 
         const dec = toObj(decAny);
@@ -294,13 +292,14 @@ const decAny = await (crypto as any).decryptFields(
         // ✅ Estrai note dal custom (sono in chiaro!)
         const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
         const notes = customObj.notes || "";
+        const city = r.city || customObj.city || "";
 
 plain.push({
   id: r.id,
   created_at: r.created_at,
   name: String(dec.name ?? ""),
   contact_name: String(dec.contact_name ?? ""),
-  city: String(dec.city ?? ""),
+  city: String(city),  // <-- CAMBIA DA: String(dec.city ?? "")
   email: String(dec.email ?? ""),
   phone: String(dec.phone ?? ""),
   vat_number: String(dec.vat_number ?? ""),
@@ -443,6 +442,33 @@ arr = arr.filter((r) =>
     }
   }
 
+// 🆕 UPDATE CITY (campo in chiaro)
+async function updateCity(clientId: string, newCity: string) {
+  if (!userId) return;
+  
+  try {
+    // Update diretto (non cifrato)
+    const { error } = await supabase
+      .from("accounts")
+      .update({ city: newCity })
+      .eq("id", clientId);
+    
+    if (error) throw error;
+    
+    // Aggiorna la lista locale
+    setRows(prev => prev.map(r => 
+      r.id === clientId 
+        ? { ...r, city: newCity }
+        : r
+    ));
+    
+    console.log(`✅ Città aggiornata per cliente ${clientId}`);
+  } catch (e) {
+    console.error("❌ Errore update city:", e);
+    alert(`Errore durante il salvataggio: ${e}`);
+  }
+}
+  
   // 🆕 DELETE CLIENTE
   async function deleteClient(clientId: string) {
     if (!userId) return;
@@ -478,20 +504,22 @@ arr = arr.filter((r) =>
     setTempValue("");
   }
 
-  async function saveEditing() {
-    if (!editingCell) return;
-    
-    const { rowId, field } = editingCell;
-    
-    // Se notes, gestisci diversamente (custom field)
-    if (field === "notes") {
-      await updateNotes(rowId, tempValue);
-    } else {
-      await updateField(rowId, field, tempValue);
-    }
-    
-    cancelEditing();
+async function saveEditing() {
+  if (!editingCell) return;
+  
+  const { rowId, field } = editingCell;
+  
+  // Gestione campi non cifrati
+  if (field === "notes") {
+    await updateNotes(rowId, tempValue);
+  } else if (field === "city") {  // <-- AGGIUNGI QUESTO ELSE IF
+    await updateCity(rowId, tempValue);
+  } else {
+    await updateField(rowId, field, tempValue);
   }
+  
+  cancelEditing();
+}
 
   if (!authChecked) {
     return <div className="p-6 text-gray-600">Verifico sessione…</div>;
