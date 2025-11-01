@@ -27,6 +27,8 @@ export default function VisitsPage(): JSX.Element {
   const { crypto, ready, unlock, prewarm } = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
+  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
+
   const [rows, setRows] = useState<PlainVisit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -40,6 +42,8 @@ export default function VisitsPage(): JSX.Element {
 
   const [editingImporto, setEditingImporto] = useState<string | null>(null);
   const [tempImporto, setTempImporto] = useState<string>('');
+
+  const [pass, setPass] = useState<string>('');
 
   function handleSortClick(key: SortKey) {
     if (sortBy === key) {
@@ -288,6 +292,43 @@ export default function VisitsPage(): JSX.Element {
 
   if (!userId) {
     return (<div style={{ padding: 20, textAlign: 'center' }}>Non autenticato. <a href="/login">Login</a></div>);
+  }
+
+  if (!actuallyReady || !crypto) {
+    return (
+      <div style={{ padding: 24, maxWidth: 448, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>🔐 Sblocca i dati cifrati</h2>
+        <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 16 }}>
+          Inserisci la tua passphrase per sbloccare la cifratura client-side (valida per questa sessione).
+        </p>
+        <input
+          type="password"
+          placeholder="Passphrase"
+          value={pass}
+          onChange={(e) => setPass(e.target.value)}
+          style={{ width: '100%', padding: '8px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, marginBottom: 12 }}
+        />
+        <button
+          onClick={async () => {
+            try {
+              await unlock(pass);
+              await prewarm(DEFAULT_SCOPES);
+              await loadVisits();
+              setPass("");
+            } catch (e) {
+              console.error("[/visits] unlock failed:", e);
+              alert("Passphrase non valida o sblocco fallito.");
+            }
+          }}
+          style={{ padding: '8px 16px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, cursor: 'pointer' }}
+        >
+          Sblocca
+        </button>
+        <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 12 }}>
+          ready: {String(ready)}
+        </div>
+      </div>
+    );
   }
 
   return (
