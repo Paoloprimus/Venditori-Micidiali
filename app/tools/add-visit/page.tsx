@@ -37,7 +37,6 @@ export default function AddVisitPage() {
     window.location.href = '/login';
   }
 
-  // Carica lista clienti
   useEffect(() => {
     (async () => {
       if (!crypto?.crypto) return;
@@ -58,7 +57,6 @@ export default function AddVisitPage() {
           return;
         }
 
-        // Decifra nomi clienti
         const hexToBase64 = (hexStr: any): string => {
           if (!hexStr || typeof hexStr !== 'string') return '';
           if (!hexStr.startsWith('\\x')) return hexStr;
@@ -112,7 +110,6 @@ export default function AddVisitPage() {
   }, [crypto]);
 
   async function handleSubmit() {
-    // Validazioni
     if (!form.account_id) {
       alert('Seleziona un cliente');
       return;
@@ -128,7 +125,6 @@ export default function AddVisitPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      // Prepara payload
       const payload: any = {
         user_id: user.id,
         account_id: form.account_id,
@@ -137,7 +133,6 @@ export default function AddVisitPage() {
         esito: form.esito,
       };
 
-      // Durata opzionale
       if (form.durata.trim()) {
         const dur = parseInt(form.durata.trim());
         if (!isNaN(dur) && dur > 0) {
@@ -145,14 +140,12 @@ export default function AddVisitPage() {
         }
       }
 
-      // ✅ Note IN CHIARO (per AI)
       if (form.note.trim()) {
         payload.notes = form.note.trim();
       }
 
       console.log('[AddVisit] Payload:', payload);
 
-      // Salva su DB
       const { error } = await supabase
         .from('visits')
         .insert(payload);
@@ -201,7 +194,6 @@ export default function AddVisitPage() {
         )}
 
         <div style={{ display: 'grid', gap: 16 }}>
-          {/* Cliente */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
               Cliente *
@@ -220,7 +212,6 @@ export default function AddVisitPage() {
             {loadingClients && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Caricamento clienti...</div>}
           </div>
 
-          {/* Tipo */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
               Tipo *
@@ -237,7 +228,6 @@ export default function AddVisitPage() {
             </div>
           </div>
 
-          {/* Data */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
               Data *
@@ -251,7 +241,6 @@ export default function AddVisitPage() {
             />
           </div>
 
-          {/* Durata */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
               Durata (minuti)
@@ -266,7 +255,6 @@ export default function AddVisitPage() {
             />
           </div>
 
-          {/* Esito */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
               Esito
@@ -285,7 +273,6 @@ export default function AddVisitPage() {
             </select>
           </div>
 
-          {/* Note */}
           <div>
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
               Note conversazione
@@ -303,5 +290,24 @@ export default function AddVisitPage() {
             </div>
           </div>
 
-          {/* Bottoni */}
-          <div style={{ display: 'f
+          <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+            <button
+              onClick={() => router.push('/visits')}
+              disabled={busy}
+              style={{ flex: 1, padding: '12px 16px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', background: 'white' }}
+            >
+              Annulla
+            </button>
+            <button
+              onClick={handleSubmit}
+              disabled={busy || !form.account_id || !form.data_visita}
+              style={{ flex: 1, padding: '12px 16px', background: busy ? '#9ca3af' : '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: busy ? 'not-allowed' : 'pointer' }}
+            >
+              {busy ? 'Salvataggio...' : '✅ Salva Visita'}
+            </button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
