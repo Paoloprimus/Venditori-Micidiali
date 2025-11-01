@@ -247,7 +247,7 @@ export function DrawersWithBackdrop({
 
 /* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
 function DrawerDati({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('clienti');
+  const [tab, setTab] = useState<'clienti' | 'uscite'>('clienti');
 
   function goQuickAdd() {
     onClose();
@@ -262,16 +262,6 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   function goImportClients() {
     onClose();
     window.location.href = "/tools/import-clients";
-  }
-
-  function goProductsList() {
-    onClose();
-    window.location.href = "/products";
-  }
-
-  function goQuickAddProduct() {
-    onClose();
-    window.location.href = "/tools/quick-add-product";
   }
 
   return (
@@ -299,23 +289,6 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           }}
         >
           CLIENTI
-        </button>
-        <button
-          onClick={() => setTab('prodotti')}
-          style={{
-            flex: 1,
-            padding: '12px 16px',
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 500,
-            color: tab === 'prodotti' ? '#2563eb' : '#6b7280',
-            borderBottom: tab === 'prodotti' ? '2px solid #2563eb' : '2px solid transparent',
-            transition: 'all 0.15s',
-          }}
-        >
-          PRODOTTI
         </button>
         <button
           onClick={() => setTab('uscite')}
@@ -349,23 +322,6 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
               📥 Importa lista
             </button>
             <button className="btn" onClick={() => alert('Template CSV clienti - in arrivo')}>
-              📄 Scarica template CSV
-            </button>
-          </div>
-        )}
-
-        {tab === 'prodotti' && (
-          <div style={{ display: 'grid', gap: 8 }}>
-            <button className="btn" onClick={goProductsList}>
-              📦 Lista prodotti
-            </button>
-            <button className="btn" onClick={goQuickAddProduct} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
-              ➕ Aggiungi singolo
-            </button>
-            <button className="btn" onClick={() => alert('Importa lista prodotti - in arrivo')}>
-              📥 Importa lista
-            </button>
-            <button className="btn" onClick={() => alert('Template CSV prodotti - in arrivo')}>
               📄 Scarica template CSV
             </button>
           </div>
