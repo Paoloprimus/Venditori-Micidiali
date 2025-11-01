@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
@@ -19,6 +19,8 @@ type PlainVisit = {
   created_at: string;
 };
 
+type SortKey = "data_visita" | "tipo" | "cliente_nome" | "esito" | "importo_vendita";
+
 const DEFAULT_SCOPES = ["table:accounts", "table:visits"];
 
 export default function VisitsPage(): JSX.Element {
@@ -31,11 +33,22 @@ export default function VisitsPage(): JSX.Element {
   const [authChecked, setAuthChecked] = useState<boolean>(false);
   const unlockingRef = useRef(false);
 
+  const [sortBy, setSortBy] = useState<SortKey>("data_visita");
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [filterTipo, setFilterTipo] = useState<'tutti' | 'visita' | 'chiamata'>('tutti');
   const [q, setQ] = useState<string>('');
 
   const [editingImporto, setEditingImporto] = useState<string | null>(null);
   const [tempImporto, setTempImporto] = useState<string>('');
+
+  function handleSortClick(key: SortKey) {
+    if (sortBy === key) {
+      setSortDir(sortDir === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(key);
+      setSortDir("desc");
+    }
+  }
 
   async function logout() {
     try { sessionStorage.removeItem("repping:pph"); } catch {}
@@ -212,13 +225,57 @@ export default function VisitsPage(): JSX.Element {
     }
   }
 
-  const filtered = rows.filter((v) => {
-    if (filterTipo !== 'tutti' && v.tipo !== filterTipo) return false;
-    if (q.trim() && !v.cliente_nome.toLowerCase().includes(q.toLowerCase())) return false;
-    return true;
-  });
+  const filtered = useMemo(() => {
+    let result = rows.filter((v) => {
+      if (filterTipo !== 'tutti' && v.tipo !== filterTipo) return false;
+      if (q.trim() && !v.cliente_nome.toLowerCase().includes(q.toLowerCase())) return false;
+      return true;
+    });
 
-  const totaleImporti = filtered.reduce((sum, v) => sum + (v.importo_vendita || 0), 0);
+    result.sort((a, b) => {
+      let aVal: any = a[sortBy];
+      let bVal: any = b[sortBy];
+
+      if (sortBy === 'importo_vendita') {
+        aVal = aVal || 0;
+        bVal = bVal || 0;
+      }
+
+      if (typeof aVal === 'string') aVal = aVal.toLowerCase();
+      if (typeof bVal === 'string') bVal = bVal.toLowerCase();
+
+      if (aVal < bVal) return sortDir === 'asc' ? -1 : 1;
+      if (aVal > bVal) return sortDir === 'asc' ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [rows, filterTipo, q, sortBy, sortDir]);
+
+  const stats = useMemo(() => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const weekAgo = new Date(today);
+    weekAgo.setDate(weekAgo.getDate() - 7);
+    const monthAgo = new Date(today);
+    monthAgo.setDate(monthAgo.getDate() - 30);
+    const quarterStart = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+
+    const calcStats = (startDate: Date) => {
+      const visits = rows.filter(v => new Date(v.data_visita) >= startDate);
+      return {
+        count: visits.length,
+        total: visits.reduce((sum, v) => sum + (v.importo_vendita || 0), 0)
+      };
+    };
+
+    return {
+      quarter: calcStats(quarterStart),
+      month: calcStats(monthAgo),
+      week: calcStats(weekAgo),
+      today: calcStats(today)
+    };
+  }, [rows]);
 
   function formatDate(isoStr: string): string {
     const d = new Date(isoStr);
@@ -268,11 +325,27 @@ export default function VisitsPage(): JSX.Element {
             <button onClick={() => window.location.href = '/tools/add-visit'} style={{ padding: '8px 16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>➕ Nuova</button>
           </div>
 
-          <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', gap: 16 }}>
-            <span>{filtered.length} {filtered.length === 1 ? 'visita' : 'visite'}</span>
-            {totaleImporti > 0 && (
-              <span style={{ fontWeight: 500, color: '#059669' }}>💰 Totale: €{totaleImporti.toFixed(2)}</span>
-            )}
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 12 }}>
+            <div style={{ padding: '8px 12px', background: '#f9fafb', borderRadius: 6, fontSize: 13 }}>
+              <div style={{ color: '#6b7280', marginBottom: 2 }}>📅 Trimestre</div>
+              <div style={{ fontWeight: 500 }}>{stats.quarter.count} visite • <span style={{ color: '#059669' }}>€{stats.quarter.total.toFixed(2)}</span></div>
+            </div>
+            <div style={{ padding: '8px 12px', background: '#f9fafb', borderRadius: 6, fontSize: 13 }}>
+              <div style={{ color: '#6b7280', marginBottom: 2 }}>📆 Ultimo mese</div>
+              <div style={{ fontWeight: 500 }}>{stats.month.count} visite • <span style={{ color: '#059669' }}>€{stats.month.total.toFixed(2)}</span></div>
+            </div>
+            <div style={{ padding: '8px 12px', background: '#f9fafb', borderRadius: 6, fontSize: 13 }}>
+              <div style={{ color: '#6b7280', marginBottom: 2 }}>🗓️ Ultima settimana</div>
+              <div style={{ fontWeight: 500 }}>{stats.week.count} visite • <span style={{ color: '#059669' }}>€{stats.week.total.toFixed(2)}</span></div>
+            </div>
+            <div style={{ padding: '8px 12px', background: '#f9fafb', borderRadius: 6, fontSize: 13 }}>
+              <div style={{ color: '#6b7280', marginBottom: 2 }}>📌 Oggi</div>
+              <div style={{ fontWeight: 500 }}>{stats.today.count} visite • <span style={{ color: '#059669' }}>€{stats.today.total.toFixed(2)}</span></div>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13, color: '#6b7280' }}>
+            {filtered.length} {filtered.length === 1 ? 'visita visualizzata' : 'visite visualizzate'}
           </div>
         </div>
 
@@ -295,11 +368,21 @@ export default function VisitsPage(): JSX.Element {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr style={{ background: '#f9fafb', borderBottom: '2px solid #e5e7eb' }}>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Data</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Tipo</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Cliente</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Esito</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 600 }}>Importo</th>
+                  <th onClick={() => handleSortClick('data_visita')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Data {sortBy === 'data_visita' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSortClick('tipo')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Tipo {sortBy === 'tipo' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSortClick('cliente_nome')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Cliente {sortBy === 'cliente_nome' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSortClick('esito')} style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Esito {sortBy === 'esito' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
+                  <th onClick={() => handleSortClick('importo_vendita')} style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 600, cursor: 'pointer', userSelect: 'none' }}>
+                    Importo {sortBy === 'importo_vendita' && (sortDir === 'asc' ? '↑' : '↓')}
+                  </th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Durata</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Note</th>
                 </tr>
