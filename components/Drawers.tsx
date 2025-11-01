@@ -327,19 +327,20 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {tab === 'uscite' && (
-          <div style={{ padding: 16 }}>
-            <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 16 }}>
-              Qui vedrai il diario delle tue giornate lavorative.
-            </div>
-            <div style={{ padding: 16, background: '#f9fafb', borderRadius: 8, border: '1px dashed #d1d5db' }}>
-              <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
-                📅 Coming soon...
-              </div>
-              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8, textAlign: 'center' }}>
-                Lista cronologica delle giornate lavorative con sintesi delle attività
-              </div>
-            </div>
+{tab === 'uscite' && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button className="btn" onClick={() => { onClose(); window.location.href = '/visits'; }}>
+              📅 Visite & Chiamate
+            </button>
+            <button className="btn" onClick={() => { onClose(); window.location.href = '/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+              ➕ Nuova visita
+            </button>
+            <button className="btn" onClick={() => alert('Planning giornaliero - in arrivo')}>
+              🗺️ Pianificazione giri
+            </button>
+            <button className="btn" onClick={() => alert('Promemoria - in arrivo')}>
+              ⏰ Promemoria
+            </button>
           </div>
         )}
       </div>
