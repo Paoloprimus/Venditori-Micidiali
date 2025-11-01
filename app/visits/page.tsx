@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
@@ -18,13 +18,16 @@ type RawVisit = {
   note_conversazione_enc: string | null;
   note_conversazione_iv: string | null;
   created_at: string;
-  // JOIN con accounts
-  account_name_enc?: string;
-  account_name_iv?: string;
+};
+
+type RawAccount = {
+  name_enc?: any;
+  name_iv?: any;
 };
 
 type PlainVisit = {
   id: string;
+  account_id: string;
   tipo: 'visita' | 'chiamata';
   data_visita: string;
   cliente_nome: string;
@@ -34,14 +37,21 @@ type PlainVisit = {
   created_at: string;
 };
 
+const DEFAULT_SCOPES = [
+  "table:accounts", "table:visits"
+];
+
 export default function VisitsPage(): JSX.Element {
-  const crypto = useCrypto();
+  const { crypto, ready, unlock, prewarm } = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+
+  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
 
   const [rows, setRows] = useState<PlainVisit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [userId, setUserId] = useState<string | null>(null);
   const [authChecked, setAuthChecked] = useState<boolean>(false);
+  const unlockingRef = useRef(false);
 
   // Filtri
   const [filterTipo, setFilterTipo] = useState<'tutti' | 'visita' | 'chiamata'>('tutti');
@@ -49,93 +59,237 @@ export default function VisitsPage(): JSX.Element {
 
   // Logout
   async function logout() {
+    try { sessionStorage.removeItem("repping:pph"); } catch {}
+    try { localStorage.removeItem("repping:pph"); } catch {}
     await supabase.auth.signOut();
     window.location.href = '/login';
   }
 
   // Auth check
   useEffect(() => {
+    let alive = true;
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id ?? null);
+      const { data, error } = await supabase.auth.getUser();
+      if (!alive) return;
+      if (error) {
+        setUserId(null);
+      } else {
+        setUserId(data.user?.id ?? null);
+      }
       setAuthChecked(true);
     })();
+    return () => { alive = false; };
   }, []);
+
+  // Auto-unlock FORZATO: sblocca e carica dati
+  useEffect(() => {
+    if (!authChecked || !crypto) return;
+    
+    console.log('[/visits] 🔍 Check unlock status:', {
+      isUnlocked: crypto.isUnlocked?.(),
+      unlockingInProgress: unlockingRef.current,
+    });
+    
+    // Se già unlocked, skip
+    if (typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) {
+      console.log('[/visits] ✅ Crypto già unlocked');
+      return;
+    }
+    
+    // Se già sta unlockando, skip
+    if (unlockingRef.current) {
+      console.log('[/visits] ⏳ Unlock già in corso');
+      return;
+    }
+
+    // Prova a leggere la passphrase
+    const pass = 
+      typeof window !== 'undefined'
+        ? (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph') || '')
+        : '';
+
+    console.log('[/visits] 🔑 Passphrase trovata:', !!pass);
+    
+    if (!pass) {
+      console.log('[/visits] ❌ Nessuna passphrase in storage');
+      return;
+    }
+
+    // FORZA unlock + caricamento dati
+    (async () => {
+      try {
+        unlockingRef.current = true;
+        
+        console.log('[/visits] 🔓 Avvio unlock...');
+        await unlock(pass);
+        console.log('[/visits] ✅ Unlock completato!');
+        
+        console.log('[/visits] 🔧 Avvio prewarm...');
+        await prewarm(DEFAULT_SCOPES);
+        console.log('[/visits] ✅ Prewarm completato!');
+        
+        // 🚀 FORZA caricamento dati dopo unlock
+        console.log('[/visits] 📊 Carico i dati...');
+        await loadVisits();
+        console.log('[/visits] ✅ Dati caricati!');
+        
+      } catch (e: any) {
+        const msg = String(e?.message || e || '');
+        console.error('[/visits] ❌ Unlock fallito:', msg);
+        
+        // Se fallisce, pulisci passphrase invalida
+        if (!/OperationError/i.test(msg)) {
+          sessionStorage.removeItem('repping:pph');
+          localStorage.removeItem('repping:pph');
+        }
+      } finally {
+        unlockingRef.current = false;
+      }
+    })();
+  }, [authChecked, crypto, unlock, prewarm]);
 
   // Carica visite
   async function loadVisits(): Promise<void> {
-    if (!userId || !crypto) return;
+    if (!crypto || !userId) return;
     setLoading(true);
 
     try {
-      // Query con JOIN su accounts per prendere nome cliente
-      const { data, error } = await supabase
+      // Query visite
+      const { data: visitsData, error: visitsError } = await supabase
         .from('visits')
-        .select(`
-          id,
-          user_id,
-          account_id,
-          tipo,
-          data_visita,
-          durata,
-          esito,
-          note_conversazione_enc,
-          note_conversazione_iv,
-          created_at,
-          accounts!inner(name_enc, name_iv)
-        `)
+        .select('*')
         .eq('user_id', userId)
         .order('data_visita', { ascending: false });
 
-      if (error) {
-        console.error('[/visits] load error:', error);
+      if (visitsError) {
+        console.error('[/visits] load error:', visitsError);
         setLoading(false);
         return;
       }
 
-      // Decifra nome clienti e note
-      const plain: PlainVisit[] = [];
-      for (const r of (data || [])) {
-        let clienteNome = 'Cliente Sconosciuto';
-        let noteDecrypted = '';
+      // Query accounts per prendere nomi clienti
+      const accountIds = [...new Set((visitsData || []).map((v: any) => v.account_id))];
+      const { data: accountsData, error: accountsError } = await supabase
+        .from('accounts')
+        .select('id, name_enc, name_iv')
+        .in('id', accountIds);
 
-        // Decifra nome cliente
-        if (r.accounts && Array.isArray(r.accounts) && r.accounts.length > 0) {
-          const acc = r.accounts[0];
-          if (acc.name_enc && acc.name_iv) {
+      if (accountsError) {
+        console.error('[/visits] accounts load error:', accountsError);
+      }
+
+      // Crea mappa accounts
+      const accountsMap = new Map<string, RawAccount>();
+      for (const acc of (accountsData || [])) {
+        accountsMap.set(acc.id, acc);
+      }
+
+      // Helper conversione hex -> base64
+      const hexToBase64 = (hexStr: any): string => {
+        if (!hexStr || typeof hexStr !== 'string') return '';
+        if (!hexStr.startsWith('\\x')) return hexStr;
+        
+        const hex = hexStr.slice(2);
+        const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+        return bytes;
+      };
+
+      const toObj = (x: any): Record<string, unknown> =>
+        Array.isArray(x)
+          ? x.reduce((acc: Record<string, unknown>, it: any) => {
+              if (it && typeof it === 'object' && "name" in it) acc[it.name] = it.value ?? "";
+              return acc;
+            }, {})
+          : ((x ?? {}) as Record<string, unknown>);
+
+      // ✅ Forza creazione scope keys PRIMA di decifrare
+      try {
+        console.log('[/visits] 🔧 Creo scope keys prima di decifrare...');
+        await (crypto as any).getOrCreateScopeKeys('table:accounts');
+        await (crypto as any).getOrCreateScopeKeys('table:visits');
+        console.log('[/visits] ✅ Scope keys creati');
+      } catch (e) {
+        console.error('[/visits] ❌ Errore creazione scope keys:', e);
+      }
+
+      // Decifra tutte le visite
+      const plain: PlainVisit[] = [];
+
+      for (const r of (visitsData || [])) {
+        try {
+          let clienteNome = 'Cliente Sconosciuto';
+          let noteDecrypted = '';
+
+          // Decifra nome cliente
+          const account = accountsMap.get(r.account_id);
+          if (account && account.name_enc && account.name_iv) {
             try {
-              clienteNome = await crypto.decryptText(
-                { ciphertext: acc.name_enc, iv: acc.name_iv },
-                'clients'
+              const accountForDecrypt = {
+                name_enc: hexToBase64(account.name_enc),
+                name_iv: hexToBase64(account.name_iv),
+              };
+
+              const decAny = await (crypto as any).decryptFields(
+                "table:accounts",
+                "accounts",
+                '',
+                accountForDecrypt,
+                ["name"]
               );
+              const dec = toObj(decAny);
+              clienteNome = String(dec.name ?? 'Cliente Sconosciuto');
             } catch (err) {
               console.error('[/visits] decrypt name error:', err);
             }
           }
-        }
 
-        // Decifra note conversazione
-        if (r.note_conversazione_enc && r.note_conversazione_iv) {
-          try {
-            noteDecrypted = await crypto.decryptText(
-              { ciphertext: r.note_conversazione_enc, iv: r.note_conversazione_iv },
-              'visits'
-            );
-          } catch (err) {
-            console.error('[/visits] decrypt note error:', err);
+          // Decifra note conversazione
+          if (r.note_conversazione_enc && r.note_conversazione_iv) {
+            try {
+              const visitForDecrypt = {
+                note_conversazione_enc: hexToBase64(r.note_conversazione_enc),
+                note_conversazione_iv: hexToBase64(r.note_conversazione_iv),
+              };
+
+              const decAny = await (crypto as any).decryptFields(
+                "table:visits",
+                "visits",
+                '',
+                visitForDecrypt,
+                ["note_conversazione"]
+              );
+              const dec = toObj(decAny);
+              noteDecrypted = String(dec.note_conversazione ?? '');
+            } catch (err) {
+              console.error('[/visits] decrypt note error:', err);
+            }
           }
-        }
 
-        plain.push({
-          id: r.id,
-          tipo: r.tipo,
-          data_visita: r.data_visita,
-          cliente_nome: clienteNome,
-          esito: r.esito || '—',
-          durata: r.durata,
-          note: noteDecrypted,
-          created_at: r.created_at,
-        });
+          plain.push({
+            id: r.id,
+            account_id: r.account_id,
+            tipo: r.tipo,
+            data_visita: r.data_visita,
+            cliente_nome: clienteNome,
+            esito: r.esito || '—',
+            durata: r.durata,
+            note: noteDecrypted,
+            created_at: r.created_at,
+          });
+        } catch (e) {
+          console.warn('[/visits] decrypt error for', r.id, e);
+          plain.push({
+            id: r.id,
+            account_id: r.account_id,
+            tipo: r.tipo,
+            data_visita: r.data_visita,
+            cliente_nome: 'Errore decifratura',
+            esito: r.esito || '—',
+            durata: r.durata,
+            note: '',
+            created_at: r.created_at,
+          });
+        }
       }
 
       setRows(plain);
@@ -145,11 +299,6 @@ export default function VisitsPage(): JSX.Element {
       setLoading(false);
     }
   }
-
-  useEffect(() => {
-    if (userId && crypto) loadVisits();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [userId, crypto]);
 
   // Filtra visite
   const filtered = rows.filter((v) => {
