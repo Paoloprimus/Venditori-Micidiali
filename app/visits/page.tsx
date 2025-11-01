@@ -6,23 +6,6 @@ import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
 import TopBar from '@/components/home/TopBar';
 
-type RawVisit = {
-  id: string;
-  user_id: string;
-  account_id: string;
-  tipo: 'visita' | 'chiamata';
-  data_visita: string;
-  durata: number | null;
-  esito: string | null;
-  notes: string | null;
-  created_at: string;
-};
-
-type RawAccount = {
-  name_enc?: any;
-  name_iv?: any;
-};
-
 type PlainVisit = {
   id: string;
   account_id: string;
@@ -31,6 +14,7 @@ type PlainVisit = {
   cliente_nome: string;
   esito: string;
   durata: number | null;
+  importo_vendita: number | null;
   note: string;
   created_at: string;
 };
@@ -41,8 +25,6 @@ export default function VisitsPage(): JSX.Element {
   const { crypto, ready, unlock, prewarm } = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
-  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
-
   const [rows, setRows] = useState<PlainVisit[]>([]);
   const [loading, setLoading] = useState<boolean>(false);
   const [userId, setUserId] = useState<string | null>(null);
@@ -51,6 +33,9 @@ export default function VisitsPage(): JSX.Element {
 
   const [filterTipo, setFilterTipo] = useState<'tutti' | 'visita' | 'chiamata'>('tutti');
   const [q, setQ] = useState<string>('');
+
+  const [editingImporto, setEditingImporto] = useState<string | null>(null);
+  const [tempImporto, setTempImporto] = useState<string>('');
 
   async function logout() {
     try { sessionStorage.removeItem("repping:pph"); } catch {}
@@ -76,23 +61,11 @@ export default function VisitsPage(): JSX.Element {
 
   useEffect(() => {
     if (!authChecked || !crypto) return;
-    
-    if (typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) {
-      return;
-    }
-    
-    if (unlockingRef.current) {
-      return;
-    }
+    if (typeof crypto.isUnlocked === 'function' && crypto.isUnlocked()) return;
+    if (unlockingRef.current) return;
 
-    const pass = 
-      typeof window !== 'undefined'
-        ? (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph') || '')
-        : '';
-    
-    if (!pass) {
-      return;
-    }
+    const pass = typeof window !== 'undefined' ? (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph') || '') : '';
+    if (!pass) return;
 
     (async () => {
       try {
@@ -140,7 +113,7 @@ export default function VisitsPage(): JSX.Element {
         console.error('[/visits] accounts load error:', accountsError);
       }
 
-      const accountsMap = new Map<string, RawAccount>();
+      const accountsMap = new Map<string, any>();
       for (const acc of (accountsData || [])) {
         accountsMap.set(acc.id, acc);
       }
@@ -199,22 +172,12 @@ export default function VisitsPage(): JSX.Element {
             cliente_nome: clienteNome,
             esito: r.esito || '—',
             durata: r.durata,
+            importo_vendita: r.importo_vendita,
             note: r.notes || '',
             created_at: r.created_at,
           });
         } catch (e) {
           console.warn('[/visits] decrypt error for', r.id, e);
-          plain.push({
-            id: r.id,
-            account_id: r.account_id,
-            tipo: r.tipo,
-            data_visita: r.data_visita,
-            cliente_nome: 'Errore decifratura',
-            esito: r.esito || '—',
-            durata: r.durata,
-            note: '',
-            created_at: r.created_at,
-          });
         }
       }
 
@@ -226,11 +189,36 @@ export default function VisitsPage(): JSX.Element {
     }
   }
 
+  async function updateImporto(visitId: string, newImporto: string) {
+    const importo = parseFloat(newImporto);
+    if (isNaN(importo) || importo < 0) {
+      alert('Importo non valido');
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('visits')
+        .update({ importo_vendita: importo > 0 ? importo : null })
+        .eq('id', visitId);
+
+      if (error) throw error;
+
+      setRows(rows.map(r => r.id === visitId ? { ...r, importo_vendita: importo > 0 ? importo : null } : r));
+      setEditingImporto(null);
+    } catch (e: any) {
+      console.error('[/visits] update importo error:', e);
+      alert(e?.message || 'Errore durante aggiornamento');
+    }
+  }
+
   const filtered = rows.filter((v) => {
     if (filterTipo !== 'tutti' && v.tipo !== filterTipo) return false;
     if (q.trim() && !v.cliente_nome.toLowerCase().includes(q.toLowerCase())) return false;
     return true;
   });
+
+  const totaleImporti = filtered.reduce((sum, v) => sum + (v.importo_vendita || 0), 0);
 
   function formatDate(isoStr: string): string {
     const d = new Date(isoStr);
@@ -280,7 +268,12 @@ export default function VisitsPage(): JSX.Element {
             <button onClick={() => window.location.href = '/tools/add-visit'} style={{ padding: '8px 16px', background: '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', whiteSpace: 'nowrap' }}>➕ Nuova</button>
           </div>
 
-          <div style={{ fontSize: 13, color: '#6b7280' }}>{filtered.length} {filtered.length === 1 ? 'visita' : 'visite'}</div>
+          <div style={{ fontSize: 13, color: '#6b7280', display: 'flex', gap: 16 }}>
+            <span>{filtered.length} {filtered.length === 1 ? 'visita' : 'visite'}</span>
+            {totaleImporti > 0 && (
+              <span style={{ fontWeight: 500, color: '#059669' }}>💰 Totale: €{totaleImporti.toFixed(2)}</span>
+            )}
+          </div>
         </div>
 
         {loading && (<div style={{ textAlign: 'center', padding: 40, color: '#6b7280' }}>Caricamento visite...</div>)}
@@ -306,13 +299,14 @@ export default function VisitsPage(): JSX.Element {
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Tipo</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Cliente</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Esito</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 600 }}>Importo</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Durata</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Note</th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((v) => (
-                  <tr key={v.id} onClick={() => alert(`Dettaglio visita: ${v.id}\n\nFunzionalità in arrivo...`)} style={{ borderBottom: '1px solid #e5e7eb', cursor: 'pointer', transition: 'background 0.15s' }} onMouseEnter={(e) => (e.currentTarget.style.background = '#f9fafb')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+                  <tr key={v.id} style={{ borderBottom: '1px solid #e5e7eb', transition: 'background 0.15s' }} onMouseEnter={(e) => (e.currentTarget.style.background = '#f9fafb')} onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
                     <td style={{ padding: '12px 8px' }}>{formatDate(v.data_visita)}</td>
                     <td style={{ padding: '12px 8px' }}>
                       <span style={{ display: 'inline-block', padding: '2px 8px', borderRadius: 4, fontSize: 12, fontWeight: 500, background: v.tipo === 'visita' ? '#dbeafe' : '#fef3c7', color: v.tipo === 'visita' ? '#1e40af' : '#92400e' }}>
@@ -321,6 +315,27 @@ export default function VisitsPage(): JSX.Element {
                     </td>
                     <td style={{ padding: '12px 8px', fontWeight: 500 }}>{v.cliente_nome}</td>
                     <td style={{ padding: '12px 8px', color: '#6b7280' }}>{v.esito}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'right' }}>
+                      {editingImporto === v.id ? (
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={tempImporto}
+                          onChange={(e) => setTempImporto(e.target.value)}
+                          onBlur={() => updateImporto(v.id, tempImporto)}
+                          onKeyDown={(e) => { if (e.key === 'Enter') updateImporto(v.id, tempImporto); if (e.key === 'Escape') setEditingImporto(null); }}
+                          autoFocus
+                          style={{ width: 80, padding: '4px 6px', border: '1px solid #2563eb', borderRadius: 4, fontSize: 13, textAlign: 'right' }}
+                        />
+                      ) : (
+                        <span
+                          onClick={() => { setEditingImporto(v.id); setTempImporto(String(v.importo_vendita || '0')); }}
+                          style={{ cursor: 'pointer', color: v.importo_vendita ? '#059669' : '#9ca3af', fontWeight: v.importo_vendita ? 500 : 400 }}
+                        >
+                          {v.importo_vendita ? `€${v.importo_vendita.toFixed(2)}` : '—'}
+                        </span>
+                      )}
+                    </td>
                     <td style={{ padding: '12px 8px', color: '#6b7280' }}>{v.durata ? `${v.durata} min` : '—'}</td>
                     <td style={{ padding: '12px 8px', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.note || '—'}</td>
                   </tr>
