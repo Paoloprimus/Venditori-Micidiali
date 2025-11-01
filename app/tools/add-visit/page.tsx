@@ -19,16 +19,15 @@ export default function AddVisitPage() {
 
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
-
   const [form, setForm] = useState({
     account_id: '',
     tipo: 'visita' as 'visita' | 'chiamata',
     data_visita: new Date().toISOString().split('T')[0],
     durata: '',
     esito: 'altro' as 'ordine_acquisito' | 'da_richiamare' | 'no_interesse' | 'info_richiesta' | 'altro',
+    importo_vendita: '',
     note: '',
   });
-
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
 
@@ -40,7 +39,6 @@ export default function AddVisitPage() {
   useEffect(() => {
     (async () => {
       if (!crypto?.crypto) return;
-      
       setLoadingClients(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -83,11 +81,7 @@ export default function AddVisitPage() {
               };
 
               const decAny = await (crypto.crypto as any).decryptFields(
-                "table:accounts",
-                "accounts",
-                '',
-                accountForDecrypt,
-                ["name"]
+                "table:accounts", "accounts", '', accountForDecrypt, ["name"]
               );
               const dec = toObj(decAny);
               clientList.push({
@@ -99,7 +93,6 @@ export default function AddVisitPage() {
             }
           }
         }
-
         setClients(clientList.sort((a, b) => a.name.localeCompare(b.name)));
       } catch (err) {
         console.error('Error loading clients:', err);
@@ -120,7 +113,6 @@ export default function AddVisitPage() {
     }
 
     setBusy(true);
-
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
@@ -140,23 +132,22 @@ export default function AddVisitPage() {
         }
       }
 
+      if (form.importo_vendita.trim()) {
+        const importo = parseFloat(form.importo_vendita.trim());
+        if (!isNaN(importo) && importo > 0) {
+          payload.importo_vendita = importo;
+        }
+      }
+
       if (form.note.trim()) {
         payload.notes = form.note.trim();
       }
 
-      console.log('[AddVisit] Payload:', payload);
-
-      const { error } = await supabase
-        .from('visits')
-        .insert(payload);
-
+      const { error } = await supabase.from('visits').insert(payload);
       if (error) throw error;
 
       setSuccess(true);
-      setTimeout(() => {
-        router.push('/visits');
-      }, 1500);
-
+      setTimeout(() => router.push('/visits'), 1500);
     } catch (e: any) {
       console.error('[AddVisit] Error:', e);
       alert(e?.message || 'Errore durante il salvataggio');
@@ -195,76 +186,48 @@ export default function AddVisitPage() {
 
         <div style={{ display: 'grid', gap: 16 }}>
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
-              Cliente *
-            </label>
-            <select
-              value={form.account_id}
-              onChange={(e) => setForm({ ...form, account_id: e.target.value })}
-              disabled={busy || loadingClients}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
-            >
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Cliente *</label>
+            <select value={form.account_id} onChange={(e) => setForm({ ...form, account_id: e.target.value })} disabled={busy || loadingClients} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}>
               <option value="">-- Seleziona cliente --</option>
-              {clients.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+              {clients.map((c) => (<option key={c.id} value={c.id}>{c.name}</option>))}
             </select>
             {loadingClients && <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>Caricamento clienti...</div>}
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
-              Tipo *
-            </label>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Tipo *</label>
             <div style={{ display: 'flex', gap: 12 }}>
               <label style={{ flex: 1, padding: 12, border: form.tipo === 'visita' ? '2px solid #2563eb' : '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', textAlign: 'center', background: form.tipo === 'visita' ? '#eff6ff' : 'white' }}>
-                <input type="radio" name="tipo" value="visita" checked={form.tipo === 'visita'} onChange={(e) => setForm({ ...form, tipo: 'visita' })} style={{ marginRight: 8 }} />
+                <input type="radio" name="tipo" value="visita" checked={form.tipo === 'visita'} onChange={() => setForm({ ...form, tipo: 'visita' })} style={{ marginRight: 8 }} />
                 🚗 Visita
               </label>
               <label style={{ flex: 1, padding: 12, border: form.tipo === 'chiamata' ? '2px solid #2563eb' : '1px solid #d1d5db', borderRadius: 6, cursor: 'pointer', textAlign: 'center', background: form.tipo === 'chiamata' ? '#eff6ff' : 'white' }}>
-                <input type="radio" name="tipo" value="chiamata" checked={form.tipo === 'chiamata'} onChange={(e) => setForm({ ...form, tipo: 'chiamata' })} style={{ marginRight: 8 }} />
+                <input type="radio" name="tipo" value="chiamata" checked={form.tipo === 'chiamata'} onChange={() => setForm({ ...form, tipo: 'chiamata' })} style={{ marginRight: 8 }} />
                 📞 Chiamata
               </label>
             </div>
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
-              Data *
-            </label>
-            <input
-              type="date"
-              value={form.data_visita}
-              onChange={(e) => setForm({ ...form, data_visita: e.target.value })}
-              disabled={busy}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
-            />
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Data *</label>
+            <input type="date" value={form.data_visita} onChange={(e) => setForm({ ...form, data_visita: e.target.value })} disabled={busy} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }} />
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Durata (min)</label>
+              <input type="number" placeholder="es. 30" value={form.durata} onChange={(e) => setForm({ ...form, durata: e.target.value })} disabled={busy} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }} />
+            </div>
+
+            <div>
+              <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Importo vendita (€)</label>
+              <input type="number" step="0.01" placeholder="es. 850.00" value={form.importo_vendita} onChange={(e) => setForm({ ...form, importo_vendita: e.target.value })} disabled={busy} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }} />
+            </div>
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
-              Durata (minuti)
-            </label>
-            <input
-              type="number"
-              placeholder="es. 30"
-              value={form.durata}
-              onChange={(e) => setForm({ ...form, durata: e.target.value })}
-              disabled={busy}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
-              Esito
-            </label>
-            <select
-              value={form.esito}
-              onChange={(e) => setForm({ ...form, esito: e.target.value as any })}
-              disabled={busy}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}
-            >
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Esito</label>
+            <select value={form.esito} onChange={(e) => setForm({ ...form, esito: e.target.value as any })} disabled={busy} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14 }}>
               <option value="ordine_acquisito">✅ Ordine acquisito</option>
               <option value="da_richiamare">📞 Da richiamare</option>
               <option value="no_interesse">❌ Nessun interesse</option>
@@ -274,37 +237,14 @@ export default function AddVisitPage() {
           </div>
 
           <div>
-            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>
-              Note conversazione
-            </label>
-            <textarea
-              placeholder="Cosa è successo durante la visita..."
-              value={form.note}
-              onChange={(e) => setForm({ ...form, note: e.target.value })}
-              disabled={busy}
-              rows={5}
-              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical' }}
-            />
-            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
-              💡 Le note sono accessibili all'AI per suggerimenti intelligenti
-            </div>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Note conversazione</label>
+            <textarea placeholder="Cosa è successo durante la visita..." value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} disabled={busy} rows={5} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical' }} />
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>💡 Le note sono accessibili all'AI per suggerimenti intelligenti</div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-            <button
-              onClick={() => router.push('/visits')}
-              disabled={busy}
-              style={{ flex: 1, padding: '12px 16px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', background: 'white' }}
-            >
-              Annulla
-            </button>
-            <button
-              onClick={handleSubmit}
-              disabled={busy || !form.account_id || !form.data_visita}
-              style={{ flex: 1, padding: '12px 16px', background: busy ? '#9ca3af' : '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: busy ? 'not-allowed' : 'pointer' }}
-            >
-              {busy ? 'Salvataggio...' : '✅ Salva Visita'}
-            </button>
+            <button onClick={() => router.push('/visits')} disabled={busy} style={{ flex: 1, padding: '12px 16px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: 'pointer', background: 'white' }}>Annulla</button>
+            <button onClick={handleSubmit} disabled={busy || !form.account_id || !form.data_visita} style={{ flex: 1, padding: '12px 16px', background: busy ? '#9ca3af' : '#2563eb', color: 'white', border: 'none', borderRadius: 6, fontSize: 14, fontWeight: 500, cursor: busy ? 'not-allowed' : 'pointer' }}>{busy ? 'Salvataggio...' : '✅ Salva Visita'}</button>
           </div>
         </div>
       </div>
