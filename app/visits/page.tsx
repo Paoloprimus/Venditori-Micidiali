@@ -243,8 +243,8 @@ export default function VisitsPage(): JSX.Element {
             }
           }
 
-          // Decifra note conversazione
-          if (r.note_conversazione_enc && r.note_conversazione_iv) {
+// ✅ Note in chiaro (accessibili all'AI)
+noteDecrypted = r.notes || '';
             try {
               const visitForDecrypt = {
                 note_conversazione_enc: hexToBase64(r.note_conversazione_enc),
