@@ -1,5 +1,35 @@
 'use client';
 
+/**
+ * SEED TEST DATA - Pagina per generare dataset di sviluppo
+ * 
+ * FUNZIONE:
+ * Genera 80 clienti fittizi + ~400 visite per testare le funzionalità di planning
+ * 
+ * ATTENZIONE: 
+ * - Usa SOLO su database di test, MAI in produzione
+ * - Replica esattamente la logica cifratura di quick-add-client
+ * - Genera coordinate GPS reali per algoritmo distanze
+ * 
+ * DATASET GENERATO:
+ * - 80 clienti provincia Verona (tutte le zone)
+ * - ~400 visite/chiamate distribuite ultimi 90 giorni
+ * - 40 clienti fedeli (visita ogni 10-15gg)
+ * - 20 clienti medi (visita ogni 20-30gg)  
+ * - 20 clienti nuovi/dormienti (0-2 visite)
+ * - Importi vendita €200-€2.000
+ * - Note prescrittive variegate per AI
+ * - Giro settimana scorsa (50 visite lun-ven)
+ * 
+ * UTILIZZO:
+ * 1. Vai su /tools/seed-test-data
+ * 2. Click "Genera Dataset" (attendi ~3-5 min)
+ * 3. Testa planning/algoritmi AI
+ * 4. Click "Pulisci Tutto" quando finito
+ * 
+ * @created 2025-11-02
+ */
+
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
