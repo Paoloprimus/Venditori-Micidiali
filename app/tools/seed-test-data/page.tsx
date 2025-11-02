@@ -234,6 +234,9 @@ export default function SeedTestDataPage() {
           }
 
           // 🔐 BLIND INDEX
+          if (typeof crypto.computeBlindIndex !== 'function') {
+            throw new Error('La funzione computeBlindIndex non è disponibile sul servizio crypto');
+          }
           const nameBlind = await crypto.computeBlindIndex(scope, client.nome);
           if (!nameBlind || typeof nameBlind !== 'string') {
             throw new Error('Calcolo blind index fallito');
