@@ -77,10 +77,21 @@ export default function ClientsPage(): JSX.Element {
 
   const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
 
-  useEffect(() => {
-  const timer = setTimeout(() => setChecking(false), 2000);
-  return () => clearTimeout(timer);
-}, []);
+useEffect(() => {
+  // Spegni checking quando:
+  // 1. Crypto è ready E unlocked
+  // 2. OPPURE passato abbastanza tempo senza unlock in corso
+  if (actuallyReady) {
+    setChecking(false);
+  } else {
+    const timer = setTimeout(() => {
+      if (!unlockingRef.current) {
+        setChecking(false);
+      }
+    }, 3000);
+    return () => clearTimeout(timer);
+  }
+}, [actuallyReady]);
   
   
   // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
