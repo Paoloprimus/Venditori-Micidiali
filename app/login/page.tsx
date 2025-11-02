@@ -23,6 +23,7 @@ function savePassphrase(pass: string) {
   try {
     console.log('[Login] Tentativo salvataggio password...');
     sessionStorage.setItem("repping:pph", pass);
+    localStorage.setItem("repping:pph", pass);  // ← AGGIUNGI QUESTA!
     console.log('[Login] Password salvata! Verifica:', sessionStorage.getItem("repping:pph") ? 'OK' : 'FALLITO');
   } catch (e) {
     console.error('[Login] ERRORE salvataggio password:', e);
