@@ -374,10 +374,25 @@ plain.push({
   }
 
   // carica dati appena la cifratura è sbloccata e c'è l'utente
-  useEffect(() => {
-    if (!actuallyReady || !crypto || !userId) return;
-    loadClients();
-  }, [actuallyReady, crypto, userId]);
+useEffect(() => {
+  if (actuallyReady) {
+    // Appena ready, spegni subito checking
+    setChecking(false);
+  } else {
+    // Controlla se c'è password in storage
+    const hasPass = !!(sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
+    
+    // Se c'è password, aspetta 5 secondi (auto-unlock in corso)
+    // Se non c'è, aspetta solo 1 secondo
+    const delay = hasPass ? 5000 : 1000;
+    
+    const timer = setTimeout(() => {
+      setChecking(false);
+    }, delay);
+    
+    return () => clearTimeout(timer);
+  }
+}, [actuallyReady]);
 
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();
