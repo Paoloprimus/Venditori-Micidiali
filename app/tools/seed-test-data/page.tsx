@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
@@ -146,41 +146,35 @@ const NOTES_TEMPLATES = [
 
 export default function SeedTestDataPage() {
   const router = useRouter();
-  const { crypto, ready } = useCrypto();
-  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
+  const { crypto, ready, unlock, prewarm } = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+
+  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
 
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState('');
   const [log, setLog] = useState<string[]>([]);
+  const [pass, setPass] = useState<string>('');
+  const [unlocking, setUnlocking] = useState(false);
 
-  // Auto-unlock crypto se disponibile in storage
-  useEffect(() => {
-    if (!crypto) return;
-    
-    const checkAndUnlock = async () => {
-      if (typeof crypto.isUnlocked !== 'function') return;
-      
-      const unlocked = crypto.isUnlocked();
-      console.log('🔍 [Seed] Crypto unlocked?', unlocked);
-      
-      if (!unlocked) {
-        const pass = sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph');
-        console.log('🔍 [Seed] Password in storage?', !!pass);
-        
-        if (pass && typeof crypto.unlockWithPassphrase === 'function') {
-          try {
-            await crypto.unlockWithPassphrase(pass);
-            console.log('✅ [Seed] Auto-unlock completato!');
-          } catch (e) {
-            console.error('❌ [Seed] Auto-unlock fallito:', e);
-          }
-        }
-      }
-    };
-    
-    checkAndUnlock();
-  }, [crypto]);
+  async function handleUnlock() {
+    if (!pass.trim()) {
+      alert('Inserisci la passphrase');
+      return;
+    }
+    setUnlocking(true);
+    try {
+      await unlock(pass);
+      await prewarm(['table:accounts']);
+      sessionStorage.setItem('repping:pph', pass);
+      localStorage.setItem('repping:pph', pass);
+    } catch (e: any) {
+      alert('Passphrase errata');
+      console.error('Unlock error:', e);
+    } finally {
+      setUnlocking(false);
+    }
+  }
 
   async function logout() {
     await supabase.auth.signOut();
@@ -217,7 +211,7 @@ export default function SeedTestDataPage() {
   }
 
   async function handleGenerate() {
-    if (!crypto || !ready) {
+    if (!crypto || !actuallyReady) {
       alert('Sistema crypto non pronto. Riprova.');
       return;
     }
@@ -531,6 +525,49 @@ export default function SeedTestDataPage() {
         onCloseRight={closeRight}
       />
 
+      {!actuallyReady || !crypto ? (
+        <div style={{ paddingTop: 70, padding: '70px 16px 16px', maxWidth: 500, margin: '0 auto' }}>
+          <div style={{ background: '#f9fafb', border: '1px solid #e5e7eb', borderRadius: 8, padding: 32, textAlign: 'center' }}>
+            <h2 style={{ margin: '0 0 8px', fontSize: 20, fontWeight: 600 }}>🔐 Sblocca i dati cifrati</h2>
+            <p style={{ margin: '0 0 24px', fontSize: 14, color: '#6b7280' }}>
+              Inserisci la passphrase per accedere al seed
+            </p>
+            <input
+              type="password"
+              value={pass}
+              onChange={(e) => setPass(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handleUnlock()}
+              placeholder="Passphrase"
+              disabled={unlocking}
+              style={{
+                width: '100%',
+                padding: '12px 16px',
+                border: '1px solid #d1d5db',
+                borderRadius: 6,
+                fontSize: 15,
+                marginBottom: 16,
+              }}
+            />
+            <button
+              onClick={handleUnlock}
+              disabled={unlocking || !pass.trim()}
+              style={{
+                width: '100%',
+                padding: '12px 20px',
+                background: unlocking || !pass.trim() ? '#9ca3af' : '#2563eb',
+                color: 'white',
+                border: 'none',
+                borderRadius: 6,
+                fontSize: 15,
+                fontWeight: 600,
+                cursor: unlocking || !pass.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              {unlocking ? '⏳ Sblocco...' : '🔓 Sblocca'}
+            </button>
+          </div>
+        </div>
+      ) : (
       <div style={{ paddingTop: 70, padding: '70px 16px 16px', maxWidth: 800, margin: '0 auto' }}>
         <div style={{ background: '#fef3c7', border: '2px solid #f59e0b', borderRadius: 8, padding: 16, marginBottom: 24 }}>
           <h3 style={{ margin: 0, color: '#92400e', fontSize: 16, fontWeight: 600 }}>⚠️ ATTENZIONE - Ambiente di Test</h3>
@@ -576,7 +613,7 @@ export default function SeedTestDataPage() {
           <div style={{ display: 'flex', gap: 12, marginTop: 24 }}>
             <button
               onClick={handleGenerate}
-              disabled={busy || !crypto || !ready}
+              disabled={busy || !crypto || !actuallyReady}
               style={{
                 flex: 1,
                 padding: '12px 20px',
@@ -628,6 +665,7 @@ export default function SeedTestDataPage() {
           </div>
         )}
       </div>
+      )}
     </>
   );
 }
