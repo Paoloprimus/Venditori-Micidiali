@@ -423,8 +423,7 @@ export default function SeedTestDataPage() {
           const esito = ['ordine_acquisito', 'ordine_acquisito', 'ordine_acquisito', 'da_richiamare', 'info_richiesta'][randomInt(0, 4)];
           const importo = tipo === 'visita' && esito === 'ordine_acquisito' ? randomImporto() : null;
           const durata = tipo === 'visita' ? randomInt(15, 45) : randomInt(5, 15);
-          const noteVisita = isLastVisit && clientData.custom?.notes ? clientData.custom.notes : 
-                            NOTES_TEMPLATES[randomInt(0, NOTES_TEMPLATES.length - 1)];
+          const noteVisita = NOTES_TEMPLATES[randomInt(0, NOTES_TEMPLATES.length - 1)];
 
           const visitPayload: any = {
             user_id: user.id,
