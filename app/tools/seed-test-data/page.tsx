@@ -218,6 +218,28 @@ export default function SeedTestDataPage() {
   }
 
   async function handleGenerate() {
+
+async function handleGenerate() {
+  console.log('🔍 handleGenerate CHIAMATO');
+  
+  if (!crypto || !ready) {
+    console.log('❌ Crypto non ready:', { crypto, ready });
+    alert('Sistema crypto non pronto. Riprova.');
+    return;
+  }
+  
+  console.log('✅ Crypto ready, mostro conferma...');
+  
+  if (!confirm('Generare 80 clienti + ~400 visite di test?\n\nATTENZIONE: Operazione irreversibile!')) {
+    console.log('❌ Utente ha annullato');
+    return;
+  }
+  
+  console.log('✅ Utente ha confermato, inizio generazione...');
+  // ... resto del codice
+
+
+    
     if (!crypto || !ready) {
       alert('Sistema crypto non pronto. Riprova.');
       return;
