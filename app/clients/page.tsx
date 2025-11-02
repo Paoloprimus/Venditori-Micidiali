@@ -76,6 +76,12 @@ export default function ClientsPage(): JSX.Element {
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
   const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
+
+  useEffect(() => {
+  const timer = setTimeout(() => setChecking(false), 2000);
+  return () => clearTimeout(timer);
+}, []);
+  
   
   // ready "reale": se il provider non ha aggiornato lo stato ma il servizio è sbloccato, considera pronto
   const [rows, setRows] = useState<PlainAccount[]>([]);
@@ -104,6 +110,8 @@ function handleSortClick(key: SortKey) {
   const unlockingRef = useRef(false);
 
   const [pass, setPass] = useState("");
+
+  const [checking, setChecking] = useState(true);
 
   // 🆕 STATO PER EDITING INLINE
   const [editingCell, setEditingCell] = useState<{rowId: string, field: string} | null>(null);
@@ -630,7 +638,7 @@ async function saveEditing() {
     );
   }
 
-  return (
+return (
     <>
       {/* TopBar */}
       <div style={{ position: "fixed", top: 0, left: 0, right: 0, zIndex: 1000, background: "white", borderBottom: "1px solid #e5e7eb" }}>
@@ -644,260 +652,170 @@ async function saveEditing() {
         />
       </div>
 
-      <div className="p-6 max-w-6xl mx-auto space-y-4">
-        {/* Spacer per TopBar */}
-        <div style={{ height: 70 }} />
-
-
-        
-        <div className="flex gap-2 items-center">
-<input
-  className="border rounded p-2 flex-1"
-  placeholder="Cerca (nome, contatto, città, tipo locale, email, telefono, P. IVA, note)"
-  value={q}
-  onChange={(e) => setQ(e.target.value)}
-/>
-  
-          <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
+      {checking ? (
+        <div className="p-6 max-w-6xl mx-auto space-y-4">
+          <div style={{ height: 70 }} />
+          <div style={{ textAlign: 'center', marginTop: 100, fontSize: 18, color: '#6b7280' }}>
+            ⏳ Caricamento clienti...
+          </div>
         </div>
+      ) : (
+        <div className="p-6 max-w-6xl mx-auto space-y-4">
+          {/* Spacer per TopBar */}
+          <div style={{ height: 70 }} />
 
-        <div className="overflow-auto border rounded">
-          <table className="min-w-full text-sm">
-            
-<thead className="bg-gray-50">
-  <tr>
-<Th label="Nome"       k="name"           sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-<Th label="Contatto"   k="contact_name"   sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-<Th label="Città"      k="city"           sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-    
-<Th label="Tipo Locale" k="tipo_locale" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-<Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-<Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-<Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
-<Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+          <div className="flex gap-2 items-center">
+            <input
+              className="border rounded p-2 flex-1"
+              placeholder="Cerca (nome, contatto, città, tipo locale, email, telefono, P. IVA, note)"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
+          </div>
 
-    
-    <th className="px-3 py-2 text-left">Note</th>
-    <th className="px-3 py-2 text-left">Azioni</th>
-  </tr>
-</thead>
-<tbody>
-  {view.map((r) => (
-    <tr key={r.id} className="border-t hover:bg-gray-50">
-      {/* Nome - NON EDITABILE */}
-      <td className="px-3 py-2 bg-gray-100">{r.name || "—"}</td>
-      
-      {/* Contatto - EDITABILE */}
-      <EditableCell
-        rowId={r.id}
-        field="contact_name"
-        value={r.contact_name}
-        editingCell={editingCell}
-        tempValue={tempValue}
-        onStartEdit={startEditing}
-        onCancel={cancelEditing}
-        onSave={saveEditing}
-        onTempChange={setTempValue}
-      />
-      
-      {/* Città - EDITABILE */}
-      <EditableCell
-        rowId={r.id}
-        field="city"
-        value={r.city}
-        editingCell={editingCell}
-        tempValue={tempValue}
-        onStartEdit={startEditing}
-        onCancel={cancelEditing}
-        onSave={saveEditing}
-        onTempChange={setTempValue}
-      />
-      
-      {/* Tipo Locale - EDITABILE */}
-      <EditableCell
-        rowId={r.id}
-        field="tipo_locale"
-        value={r.tipo_locale}
-        editingCell={editingCell}
-        tempValue={tempValue}
-        onStartEdit={startEditing}
-        onCancel={cancelEditing}
-        onSave={saveEditing}
-        onTempChange={setTempValue}
-        options={TIPO_LOCALE}
-      />
-      
-      {/* Email - EDITABILE */}
-      <EditableCell
-        rowId={r.id}
-        field="email"
-        value={r.email}
-        editingCell={editingCell}
-        tempValue={tempValue}
-        onStartEdit={startEditing}
-        onCancel={cancelEditing}
-        onSave={saveEditing}
-        onTempChange={setTempValue}
-      />
-      
-      {/* Telefono - EDITABILE */}
-      <EditableCell
-        rowId={r.id}
-        field="phone"
-        value={r.phone}
-        editingCell={editingCell}
-        tempValue={tempValue}
-        onStartEdit={startEditing}
-        onCancel={cancelEditing}
-        onSave={saveEditing}
-        onTempChange={setTempValue}
-      />
-      
-      {/* P.IVA - NON EDITABILE */}
-      <td className="px-3 py-2 bg-gray-100">{r.vat_number || "—"}</td>
-      
-      {/* Data - NON EDITABILE */}
-      <td className="px-3 py-2 bg-gray-100">{new Date(r.created_at).toLocaleString()}</td>
-      
-      {/* Note - EDITABILE */}
-      <EditableCell
-        rowId={r.id}
-        field="notes"
-        value={r.notes}
-        editingCell={editingCell}
-        tempValue={tempValue}
-        onStartEdit={startEditing}
-        onCancel={cancelEditing}
-        onSave={saveEditing}
-        onTempChange={setTempValue}
-      />
-      
-      {/* Azioni - CANCELLAZIONE */}
-      <td className="px-3 py-2">
-        <button
-          onClick={() => deleteClient(r.id)}
-          className="text-red-600 hover:text-red-800"
-          title="Elimina cliente"
-        >
-          🗑️
-        </button>
-      </td>
-    </tr>
-  ))}
-              
-{!loading && actuallyReady && view.length === 0 && (
-  <tr>
-    <td className="px-3 py-8 text-center text-gray-500" colSpan={10}>
-      Nessun cliente trovato.
-    </td>
-  </tr>
-)}
-            </tbody>
-          </table>
+          <div className="overflow-auto border rounded">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-50">
+                <tr>
+                  <Th label="Nome"       k="name"           sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="Contatto"   k="contact_name"   sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="Città"      k="city"           sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="Tipo Locale" k="tipo_locale" sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="Email"      k="email"       sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="Telefono"   k="phone"       sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="P. IVA"     k="vat_number"  sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <Th label="Creato il"  k="created_at"  sortBy={sortBy} sortDir={sortDir} onClick={handleSortClick} />
+                  <th className="px-3 py-2 text-left">Note</th>
+                  <th className="px-3 py-2 text-left">Azioni</th>
+                </tr>
+              </thead>
+              <tbody>
+                {view.map((r) => (
+                  <tr key={r.id} className="border-t hover:bg-gray-50">
+                    {/* Nome - NON EDITABILE */}
+                    <td className="px-3 py-2 bg-gray-100">{r.name || "—"}</td>
+                    
+                    {/* Contatto - EDITABILE */}
+                    <EditableCell
+                      rowId={r.id}
+                      field="contact_name"
+                      value={r.contact_name}
+                      editingCell={editingCell}
+                      tempValue={tempValue}
+                      onStartEdit={startEditing}
+                      onCancel={cancelEditing}
+                      onSave={saveEditing}
+                      onTempChange={setTempValue}
+                    />
+                    
+                    {/* Città - EDITABILE */}
+                    <EditableCell
+                      rowId={r.id}
+                      field="city"
+                      value={r.city}
+                      editingCell={editingCell}
+                      tempValue={tempValue}
+                      onStartEdit={startEditing}
+                      onCancel={cancelEditing}
+                      onSave={saveEditing}
+                      onTempChange={setTempValue}
+                    />
+                    
+                    {/* Tipo Locale - EDITABILE */}
+                    <EditableCell
+                      rowId={r.id}
+                      field="tipo_locale"
+                      value={r.tipo_locale}
+                      editingCell={editingCell}
+                      tempValue={tempValue}
+                      onStartEdit={startEditing}
+                      onCancel={cancelEditing}
+                      onSave={saveEditing}
+                      onTempChange={setTempValue}
+                      options={TIPO_LOCALE}
+                    />
+                    
+                    {/* Email - EDITABILE */}
+                    <EditableCell
+                      rowId={r.id}
+                      field="email"
+                      value={r.email}
+                      editingCell={editingCell}
+                      tempValue={tempValue}
+                      onStartEdit={startEditing}
+                      onCancel={cancelEditing}
+                      onSave={saveEditing}
+                      onTempChange={setTempValue}
+                    />
+                    
+                    {/* Telefono - EDITABILE */}
+                    <EditableCell
+                      rowId={r.id}
+                      field="phone"
+                      value={r.phone}
+                      editingCell={editingCell}
+                      tempValue={tempValue}
+                      onStartEdit={startEditing}
+                      onCancel={cancelEditing}
+                      onSave={saveEditing}
+                      onTempChange={setTempValue}
+                    />
+                    
+                    {/* P.IVA - NON EDITABILE */}
+                    <td className="px-3 py-2 bg-gray-100">{r.vat_number || "—"}</td>
+                    
+                    {/* Data - NON EDITABILE */}
+                    <td className="px-3 py-2 bg-gray-100">{new Date(r.created_at).toLocaleString()}</td>
+                    
+                    {/* Note - EDITABILE */}
+                    <EditableCell
+                      rowId={r.id}
+                      field="notes"
+                      value={r.notes}
+                      editingCell={editingCell}
+                      tempValue={tempValue}
+                      onStartEdit={startEditing}
+                      onCancel={cancelEditing}
+                      onSave={saveEditing}
+                      onTempChange={setTempValue}
+                    />
+                    
+                    {/* Azioni - CANCELLAZIONE */}
+                    <td className="px-3 py-2">
+                      <button
+                        onClick={() => deleteClient(r.id)}
+                        className="text-red-600 hover:text-red-800"
+                        title="Elimina cliente"
+                      >
+                        🗑️
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                
+                {!loading && actuallyReady && view.length === 0 && (
+                  <tr>
+                    <td className="px-3 py-8 text-center text-gray-500" colSpan={10}>
+                      Nessun cliente trovato.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
         </div>
+      )}
 
-        {loading && <div className="text-sm text-gray-500">Caricamento…</div>}
-      </div>
-
-{/* Drawer con backdrop */}
-<DrawersWithBackdrop
-  leftOpen={leftOpen}
-  rightOpen={rightOpen}
-  rightContent={rightContent}
-  onCloseLeft={closeLeft}
-  onCloseRight={closeRight}
-/>
+      {/* Drawer con backdrop */}
+      <DrawersWithBackdrop
+        leftOpen={leftOpen}
+        rightOpen={rightOpen}
+        rightContent={rightContent}
+        onCloseLeft={closeLeft}
+        onCloseRight={closeRight}
+      />
     </>
   );
-}
-
-function Th({ label, k, sortBy, sortDir, onClick }: { label: string; k: SortKey; sortBy: SortKey; sortDir: "asc" | "desc"; onClick: (k: SortKey) => void }) {
-  const active = sortBy === k;
-  return (
-    <th className="px-3 py-2 text-left cursor-pointer select-none" onClick={() => onClick(k)}>
-      <span className={active ? "font-semibold" : ""}>{label}</span>
-      {active ? <span> {sortDir === "asc" ? "▲" : "▼"}</span> : null}
-    </th>
-  );
-}
-
-// 🆕 COMPONENTE CELLA EDITABILE
-function EditableCell({
-  rowId,
-  field,
-  value,
-  editingCell,
-  tempValue,
-  onStartEdit,
-  onCancel,
-  onSave,
-  onTempChange,
-  options
-}: {
-  rowId: string;
-  field: string;
-  value: string;
-  editingCell: {rowId: string, field: string} | null;
-  tempValue: string;
-  onStartEdit: (rowId: string, field: string, value: string) => void;
-  onCancel: () => void;
-  onSave: () => void;
-  onTempChange: (value: string) => void;
-  options?: string[];
-}) {
-  const isEditing = editingCell?.rowId === rowId && editingCell?.field === field;
-  
-  if (isEditing) {
-    // Se ci sono opzioni, mostra un select
-    if (options && options.length > 0) {
-      return (
-        <td className="px-3 py-2">
-          <select
-            value={tempValue}
-            onChange={(e) => onTempChange(e.target.value)}
-            onBlur={onSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSave();
-              if (e.key === "Escape") onCancel();
-            }}
-            autoFocus
-            className="w-full px-2 py-1 border rounded"
-          >
-            <option value="">Seleziona...</option>
-            {options.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
-        </td>
-      );
-    }
-    
-    // Altrimenti mostra un input di testo normale
-    return (
-      <td className="px-3 py-2">
-        <input
-          type="text"
-          value={tempValue}
-          onChange={(e) => onTempChange(e.target.value)}
-          onBlur={onSave}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSave();
-            if (e.key === "Escape") onCancel();
-          }}
-          autoFocus
-          className="w-full px-2 py-1 border rounded"
-        />
-      </td>
-    );
-  }
-  
-  return (
-    <td 
-      className="px-3 py-2 cursor-pointer hover:bg-blue-50"
-      onClick={() => onStartEdit(rowId, field, value)}
-      title="Clicca per modificare"
-    >
-      {value || "—"}
-    </td>
-  );
-}
