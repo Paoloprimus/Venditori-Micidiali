@@ -229,9 +229,19 @@ export default function SeedTestDataPage() {
       if (!user) throw new Error('Non autenticato');
 
       addLog('✅ Utente autenticato');
+      
+      // Inizializza scope prima di cifrare
+      const scope = 'table:accounts';
+      try {
+        await (crypto as any).getOrCreateScopeKeys(scope);
+        addLog('✅ Scope crypto inizializzato');
+      } catch (e) {
+        console.error('[Seed] Errore inizializzazione scope:', e);
+        throw new Error('Errore inizializzazione crypto');
+      }
+      
       addLog(`📊 Generazione 80 clienti in provincia Verona...`);
 
-      const scope = 'table:accounts';
       const createdAccountIds: string[] = [];
 
       // ========== GENERA 80 CLIENTI ==========
