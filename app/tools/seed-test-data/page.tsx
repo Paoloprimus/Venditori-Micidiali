@@ -1,36 +1,6 @@
 'use client';
 
-/**
- * SEED TEST DATA - Pagina per generare dataset di sviluppo
- * 
- * FUNZIONE:
- * Genera 80 clienti fittizi + ~400 visite per testare le funzionalità di planning
- * 
- * ATTENZIONE: 
- * - Usa SOLO su database di test, MAI in produzione
- * - Replica esattamente la logica cifratura di quick-add-client
- * - Genera coordinate GPS reali per algoritmo distanze
- * 
- * DATASET GENERATO:
- * - 80 clienti provincia Verona (tutte le zone)
- * - ~400 visite/chiamate distribuite ultimi 90 giorni
- * - 40 clienti fedeli (visita ogni 10-15gg)
- * - 20 clienti medi (visita ogni 20-30gg)  
- * - 20 clienti nuovi/dormienti (0-2 visite)
- * - Importi vendita €200-€2.000
- * - Note prescrittive variegate per AI
- * - Giro settimana scorsa (50 visite lun-ven)
- * 
- * UTILIZZO:
- * 1. Vai su /tools/seed-test-data
- * 2. Click "Genera Dataset" (attendi ~3-5 min)
- * 3. Testa planning/algoritmi AI
- * 4. Click "Pulisci Tutto" quando finito
- * 
- * @created 2025-11-02
- */
-
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
@@ -183,6 +153,34 @@ export default function SeedTestDataPage() {
   const [progress, setProgress] = useState('');
   const [log, setLog] = useState<string[]>([]);
 
+  // Auto-unlock crypto se disponibile in storage
+  useEffect(() => {
+    if (!crypto) return;
+    
+    const checkAndUnlock = async () => {
+      if (typeof crypto.isUnlocked !== 'function') return;
+      
+      const unlocked = crypto.isUnlocked();
+      console.log('🔍 [Seed] Crypto unlocked?', unlocked);
+      
+      if (!unlocked) {
+        const pass = sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph');
+        console.log('🔍 [Seed] Password in storage?', !!pass);
+        
+        if (pass && typeof crypto.unlockWithPassphrase === 'function') {
+          try {
+            await crypto.unlockWithPassphrase(pass);
+            console.log('✅ [Seed] Auto-unlock completato!');
+          } catch (e) {
+            console.error('❌ [Seed] Auto-unlock fallito:', e);
+          }
+        }
+      }
+    };
+    
+    checkAndUnlock();
+  }, [crypto]);
+
   async function logout() {
     await supabase.auth.signOut();
     window.location.href = '/login';
@@ -217,39 +215,29 @@ export default function SeedTestDataPage() {
     return date;
   }
 
+  async function handleGenerate() {
+    if (!crypto || !ready) {
+      alert('Sistema crypto non pronto. Riprova.');
+      return;
+    }
 
-async function handleGenerate() {
-  console.log('🔍 handleGenerate CHIAMATO');
-  
-  if (!crypto || !ready) {
-    console.log('❌ Crypto non ready:', { crypto, ready });
-    alert('Sistema crypto non pronto. Riprova.');
-    return;
-  }
-  
-  console.log('✅ Crypto ready, mostro conferma...');
+    if (!confirm('Generare 80 clienti + ~400 visite di test?\n\nATTENZIONE: Operazione irreversibile!')) {
+      return;
+    }
 
-  if (!confirm('Generare 80 clienti + ~400 visite di test?\n\nATTENZIONE: Operazione irreversibile!')) {
-    console.log('❌ Utente ha annullato');
-    return;
-  }
+    setBusy(true);
+    setLog([]);
+    setProgress('Avvio generazione...');
 
-  console.log('✅ Utente ha confermato, inizio generazione...');
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non autenticato');
 
-  setBusy(true);
-  setLog([]);
-  setProgress('Avvio generazione...');
+      addLog('✅ Utente autenticato');
+      addLog(`📊 Generazione 80 clienti in provincia Verona...`);
 
-  try {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) throw new Error('Non autenticato');
-
-    addLog('✅ Utente autenticato');
-    addLog(`📊 Generazione 80 clienti in provincia Verona...`);
-
-    const scope = 'table:accounts';
-    const createdAccountIds: string[] = [];
-
+      const scope = 'table:accounts';
+      const createdAccountIds: string[] = [];
 
       // ========== GENERA 80 CLIENTI ==========
       for (let i = 0; i < CLIENTS_DATA.length; i++) {
