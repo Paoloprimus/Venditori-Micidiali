@@ -147,6 +147,7 @@ const NOTES_TEMPLATES = [
 export default function SeedTestDataPage() {
   const router = useRouter();
   const { crypto, ready } = useCrypto();
+  const actuallyReady = ready || !!(crypto as any)?.isUnlocked?.();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
   const [busy, setBusy] = useState(false);
