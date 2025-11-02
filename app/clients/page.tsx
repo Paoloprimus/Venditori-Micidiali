@@ -819,3 +819,93 @@ return (
       />
     </>
   );
+
+  }
+
+function Th({ label, k, sortBy, sortDir, onClick }: { label: string; k: SortKey; sortBy: SortKey; sortDir: "asc" | "desc"; onClick: (k: SortKey) => void }) {
+  const active = sortBy === k;
+  return (
+    <th className="px-3 py-2 text-left cursor-pointer select-none" onClick={() => onClick(k)}>
+      <span className={active ? "font-semibold" : ""}>{label}</span>
+      {active ? <span> {sortDir === "asc" ? "▲" : "▼"}</span> : null}
+    </th>
+  );
+}
+
+function EditableCell({
+  rowId,
+  field,
+  value,
+  editingCell,
+  tempValue,
+  onStartEdit,
+  onCancel,
+  onSave,
+  onTempChange,
+  options
+}: {
+  rowId: string;
+  field: string;
+  value: string;
+  editingCell: {rowId: string, field: string} | null;
+  tempValue: string;
+  onStartEdit: (rowId: string, field: string, value: string) => void;
+  onCancel: () => void;
+  onSave: () => void;
+  onTempChange: (value: string) => void;
+  options?: string[];
+}) {
+  const isEditing = editingCell?.rowId === rowId && editingCell?.field === field;
+  
+  if (isEditing) {
+    if (options && options.length > 0) {
+      return (
+        <td className="px-3 py-2">
+          <select
+            value={tempValue}
+            onChange={(e) => onTempChange(e.target.value)}
+            onBlur={onSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") onSave();
+              if (e.key === "Escape") onCancel();
+            }}
+            autoFocus
+            className="w-full px-2 py-1 border rounded"
+          >
+            <option value="">Seleziona...</option>
+            {options.map(opt => (
+              <option key={opt} value={opt}>{opt}</option>
+            ))}
+          </select>
+        </td>
+      );
+    }
+    
+    return (
+      <td className="px-3 py-2">
+        <input
+          type="text"
+          value={tempValue}
+          onChange={(e) => onTempChange(e.target.value)}
+          onBlur={onSave}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") onSave();
+            if (e.key === "Escape") onCancel();
+          }}
+          autoFocus
+          className="w-full px-2 py-1 border rounded"
+        />
+      </td>
+    );
+  }
+  
+  return (
+    <td 
+      className="px-3 py-2 cursor-pointer hover:bg-blue-50"
+      onClick={() => onStartEdit(rowId, field, value)}
+      title="Clicca per modificare"
+    >
+      {value || "—"}
+    </td>
+  );
+}
