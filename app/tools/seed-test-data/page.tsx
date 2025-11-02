@@ -217,7 +217,6 @@ export default function SeedTestDataPage() {
     return date;
   }
 
-  async function handleGenerate() {
 
 async function handleGenerate() {
   console.log('🔍 handleGenerate CHIAMATO');
@@ -229,39 +228,28 @@ async function handleGenerate() {
   }
   
   console.log('✅ Crypto ready, mostro conferma...');
-  
+
   if (!confirm('Generare 80 clienti + ~400 visite di test?\n\nATTENZIONE: Operazione irreversibile!')) {
     console.log('❌ Utente ha annullato');
     return;
   }
-  
+
   console.log('✅ Utente ha confermato, inizio generazione...');
-  // ... resto del codice
 
+  setBusy(true);
+  setLog([]);
+  setProgress('Avvio generazione...');
 
-    
-    if (!crypto || !ready) {
-      alert('Sistema crypto non pronto. Riprova.');
-      return;
-    }
+  try {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('Non autenticato');
 
-    if (!confirm('Generare 80 clienti + ~400 visite di test?\n\nATTENZIONE: Operazione irreversibile!')) {
-      return;
-    }
+    addLog('✅ Utente autenticato');
+    addLog(`📊 Generazione 80 clienti in provincia Verona...`);
 
-    setBusy(true);
-    setLog([]);
-    setProgress('Avvio generazione...');
+    const scope = 'table:accounts';
+    const createdAccountIds: string[] = [];
 
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
-
-      addLog('✅ Utente autenticato');
-      addLog(`📊 Generazione 80 clienti in provincia Verona...`);
-
-      const scope = 'table:accounts';
-      const createdAccountIds: string[] = [];
 
       // ========== GENERA 80 CLIENTI ==========
       for (let i = 0; i < CLIENTS_DATA.length; i++) {
