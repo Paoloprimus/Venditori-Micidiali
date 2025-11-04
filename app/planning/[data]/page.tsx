@@ -118,20 +118,52 @@ export default function PlanningEditorPage() {
 
       if (clientsError) throw clientsError;
 
-      // Decifra nomi clienti
+      // Decifra nomi clienti (STESSO PATTERN DI /clients/page.tsx)
       const decryptedClients: Client[] = [];
+      
+      // Helper: converti hex-string in base64
+      const hexToBase64 = (hexStr: any): string => {
+        if (!hexStr || typeof hexStr !== 'string') return '';
+        if (!hexStr.startsWith('\\x')) return hexStr;
+        
+        const hex = hexStr.slice(2);
+        const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+        return bytes;
+      };
+      
+      // Helper: converte risultato decryptFields in oggetto
+      const toObj = (x: any): Record<string, unknown> =>
+        Array.isArray(x)
+          ? x.reduce((acc: Record<string, unknown>, it: any) => {
+              if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
+              return acc;
+            }, {})
+          : ((x ?? {}) as Record<string, unknown>);
+      
       for (const c of clientsData || []) {
         try {
-          const decrypted = await crypto.decryptFields('table:accounts', 'accounts', c.id, c, ['name']);
-          const nameObj = Array.isArray(decrypted) 
-            ? decrypted.find((f: any) => f.name === 'name')
-            : decrypted;
+          // Converti hex a base64
+          const recordForDecrypt = {
+            ...c,
+            name_enc: hexToBase64(c.name_enc),
+            name_iv: hexToBase64(c.name_iv),
+          };
           
-          const name = nameObj?.value || c.name_enc || 'Cliente senza nome';
+          // Decifra
+          const decAny = await crypto.decryptFields(
+            'table:accounts',
+            'accounts',
+            '',  // ID vuoto come in /clients
+            recordForDecrypt,
+            ['name']
+          );
+          
+          // Converti in oggetto
+          const dec = toObj(decAny);
           
           decryptedClients.push({
             id: c.id,
-            name: String(name),
+            name: String(dec.name ?? 'Cliente senza nome'),
             city: c.city || '',
             tipo_locale: c.tipo_locale || '',
             latitude: parseFloat(c.latitude),
@@ -142,7 +174,20 @@ export default function PlanningEditorPage() {
             custom: c.custom || {},
           });
         } catch (e) {
-          console.error('Errore decrypt cliente:', e);
+          console.error('[Planning] Errore decrypt cliente:', e);
+          // Aggiungi comunque con ID come fallback
+          decryptedClients.push({
+            id: c.id,
+            name: `Cliente #${c.id.slice(0, 8)}`,
+            city: c.city || '',
+            tipo_locale: c.tipo_locale || '',
+            latitude: parseFloat(c.latitude),
+            longitude: parseFloat(c.longitude),
+            ultimo_esito: c.ultimo_esito,
+            ultimo_esito_at: c.ultimo_esito_at,
+            volume_attuale: c.volume_attuale ? parseFloat(c.volume_attuale) : null,
+            custom: c.custom || {},
+          });
         }
       }
 
