@@ -406,13 +406,15 @@ if (client.tipo_locale) {
 if (client.latitude) {
   const lat = parseFloat(client.latitude);
   if (!isNaN(lat)) {
-    payload.latitude = lat;
+    // Converti in stringa con max 8 decimali per numeric(10,8)
+    payload.latitude = lat.toFixed(8);
   }
 }
 if (client.longitude) {
   const lon = parseFloat(client.longitude);
   if (!isNaN(lon)) {
-    payload.longitude = lon;
+    // Converti in stringa con max 8 decimali per numeric(11,8)
+    payload.longitude = lon.toFixed(8);
   }
 }
 
