@@ -57,6 +57,8 @@ type CsvRow = {
   email?: string;
   vat_number?: string;
   notes?: string;
+  latitude?: string;
+  longitude?: string;
 };
 
 type ValidationError = {
@@ -87,6 +89,8 @@ const COLUMN_ALIASES: Record<string, string[]> = {
   email: ["email", "mail", "e-mail", "posta"],
   vat_number: ["vat_number", "p.iva", "piva", "partita iva", "vat", "tax id"],
   notes: ["notes", "note", "commenti", "comments", "memo"],
+  latitude: ["latitude", "lat", "latitudine"],
+  longitude: ["longitude", "lon", "lng", "longitudine"],
 };
 
 export default function ImportClientsPage() {
@@ -385,6 +389,20 @@ if (client.tipo_locale) {
   payload.tipo_locale = client.tipo_locale;
 }
 
+// Aggiungi coordinate GPS (in chiaro, non cifrate)
+if (client.latitude) {
+  const lat = parseFloat(client.latitude);
+  if (!isNaN(lat)) {
+    payload.latitude = lat;
+  }
+}
+if (client.longitude) {
+  const lon = parseFloat(client.longitude);
+  if (!isNaN(lon)) {
+    payload.longitude = lon;
+  }
+}
+
         // Invia al server
         const response = await fetch("/api/clients/upsert", {
           method: "POST",
@@ -557,7 +575,7 @@ if (client.tipo_locale) {
               </div>
 
               <p style={{ fontSize: 13, color: "#1e40af", fontFamily: "monospace", background: "white", padding: 8, borderRadius: 4, overflow: "auto" }}>
-                Esempio colonne: name, contact_name, city, address, tipo_locale, phone, email, vat_number, notes
+                Esempio colonne: name, contact_name, city, address, tipo_locale, phone, email, vat_number, notes, latitude, longitude
               </p>
             </div>
 
@@ -724,6 +742,7 @@ if (client.tipo_locale) {
               <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
                 <thead style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
                   <tr>
+                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb", width: 50 }}>#</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Riga</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Status</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Nome</th>
@@ -736,6 +755,7 @@ if (client.tipo_locale) {
                 <tbody>
                   {processedClients.map((client, idx) => (
                     <tr key={idx} style={{ background: client.isValid ? "white" : "#fef2f2" }}>
+                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280" }}>{idx + 1}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.rowIndex}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>
                         {client.isValid ? "✅" : "❌"}
