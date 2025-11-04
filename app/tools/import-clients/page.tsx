@@ -332,6 +332,19 @@ export default function ImportClientsPage() {
     setStep("importing");
     setImportProgress(0);
     
+    // Inizializza scope crypto prima di tutto
+    try {
+      const cryptoSvc = getCryptoService();
+      await cryptoSvc.getOrCreateScopeKeys("table:accounts");
+      console.log("✅ [Import] Scope table:accounts inizializzato");
+    } catch (e: any) {
+      const errorMsg = `Errore inizializzazione crypto: ${e.message}`;
+      console.error("❌ [Import]", errorMsg);
+      alert(errorMsg);
+      setStep("preview");
+      return;
+    }
+    
     const results = {
       success: 0,
       failed: 0,
@@ -742,7 +755,6 @@ if (client.longitude) {
               <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
                 <thead style={{ background: "#f9fafb", position: "sticky", top: 0 }}>
                   <tr>
-                    <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb", width: 50 }}>#</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Riga</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Status</th>
                     <th style={{ padding: 8, textAlign: "left", borderBottom: "1px solid #e5e7eb" }}>Nome</th>
@@ -755,7 +767,6 @@ if (client.longitude) {
                 <tbody>
                   {processedClients.map((client, idx) => (
                     <tr key={idx} style={{ background: client.isValid ? "white" : "#fef2f2" }}>
-                      <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb", fontWeight: 600, color: "#6b7280" }}>{idx + 1}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{client.rowIndex}</td>
                       <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>
                         {client.isValid ? "✅" : "❌"}
