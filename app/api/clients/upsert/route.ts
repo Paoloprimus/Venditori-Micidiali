@@ -34,6 +34,10 @@ type UpsertClientBody = {
   phone_enc?: string;
   phone_iv?: string;
   
+  // 📍 Coordinate GPS (in chiaro per calcoli distanza)
+  latitude?: string | number;
+  longitude?: string | number;
+  
   // 📝 Campi in chiaro per LLM
   custom?: CustomFields;
 };
@@ -140,6 +144,14 @@ export async function POST(req: Request) {
         updateData.phone_iv = body.phone_iv;
       }
 
+      // 📍 Aggiorna coordinate GPS se presenti
+      if (body.latitude !== undefined && body.latitude !== null) {
+        updateData.latitude = body.latitude;
+      }
+      if (body.longitude !== undefined && body.longitude !== null) {
+        updateData.longitude = body.longitude;
+      }
+
       const { data: updated, error: upErr } = await supabase
         .from("accounts")
         .update(updateData)
@@ -193,6 +205,14 @@ export async function POST(req: Request) {
       if (body.phone_enc && body.phone_iv) {
         insertData.phone_enc = body.phone_enc;
         insertData.phone_iv = body.phone_iv;
+      }
+
+      // 📍 Aggiungi coordinate GPS se presenti
+      if (body.latitude !== undefined && body.latitude !== null) {
+        insertData.latitude = body.latitude;
+      }
+      if (body.longitude !== undefined && body.longitude !== null) {
+        insertData.longitude = body.longitude;
       }
 
       const { data: inserted, error: insErr } = await supabase
