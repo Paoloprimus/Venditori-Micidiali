@@ -97,6 +97,11 @@ export default function PlanningEditorPage() {
   async function loadData() {
     setLoading(true);
     try {
+      if (!crypto) {
+        console.error('Crypto non disponibile');
+        return;
+      }
+
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
