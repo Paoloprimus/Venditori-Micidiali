@@ -97,8 +97,8 @@ export default function PlanningEditorPage() {
   async function loadData() {
     setLoading(true);
     try {
-      if (!crypto) {
-        console.error('Crypto non disponibile');
+      if (!crypto || typeof crypto.decryptFields !== 'function') {
+        console.error('Crypto non disponibile o decryptFields non presente');
         return;
       }
 
