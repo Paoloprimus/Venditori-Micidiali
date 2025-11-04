@@ -5,11 +5,9 @@
  * 
  * PERCORSO: /components/Drawers.tsx
  * 
- * MODIFICHE PER IMPORT CLIENTI:
- * - Riga ~248: Aggiunta funzione goImportClients()
- * - Riga ~329: Collegato bottone "📥 Importa lista" alla funzione
- * 
- * La funzione naviga a: /tools/import-clients
+ * MODIFICHE:
+ * - Import clienti: Aggiunto link /tools/import-clients
+ * - Planning: Aggiunto link /planning (sezione Uscite)
  * 
  * ============================================================================
  */
@@ -264,6 +262,11 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     window.location.href = "/tools/import-clients";
   }
 
+  function goPlanning() {
+    onClose();
+    window.location.href = "/planning";
+  }
+
   return (
     <>
       <div className="topbar">
@@ -327,7 +330,7 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-{tab === 'uscite' && (
+        {tab === 'uscite' && (
           <div style={{ display: 'grid', gap: 8 }}>
             <button className="btn" onClick={() => { onClose(); window.location.href = '/visits'; }}>
               📅 Visite & Chiamate
@@ -335,8 +338,8 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={() => { onClose(); window.location.href = '/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Nuova visita
             </button>
-            <button className="btn" onClick={() => alert('Planning giornaliero - in arrivo')}>
-              🗺️ Pianificazione giri
+            <button className="btn" onClick={goPlanning} style={{ background: '#10b981', color: 'white', border: 'none' }}>
+              🗺️ Planning Visite
             </button>
             <button className="btn" onClick={() => alert('Promemoria - in arrivo')}>
               ⏰ Promemoria
