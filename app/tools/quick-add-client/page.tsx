@@ -6,6 +6,7 @@ import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, LeftDrawer, RightDrawer } from '@/components/Drawers';
 import TopBar from '@/components/home/TopBar';
 import { supabase } from '@/lib/supabase/client';
+import { geocodeAddress } from '@/lib/geocoding';
 
 // Tipi di locali HoReCa predefiniti
 const TIPO_LOCALE = [
@@ -569,13 +570,33 @@ export default function QuickAddClientPage() {
         console.log('[QuickAdd] P.IVA cifrata con successo');
       }
 
+      // 🗺️ GEOCODING automatico (NON bloccante)
+      let latitude: string | undefined = undefined;
+      let longitude: string | undefined = undefined;
+      
+      try {
+        console.log('[QuickAdd] 📍 Geocoding indirizzo...');
+        const coords = await geocodeAddress(form.indirizzo.trim(), form.citta.trim());
+        
+        if (coords) {
+          latitude = coords.latitude.toFixed(8);
+          longitude = coords.longitude.toFixed(8);
+          console.log('[QuickAdd] ✅ Geocoding completato:', { latitude, longitude });
+        } else {
+          console.warn('[QuickAdd] ⚠️ Geocoding fallito: coordinate non trovate');
+        }
+      } catch (geocodeError: any) {
+        console.warn('[QuickAdd] ⚠️ Errore geocoding (non bloccante):', geocodeError.message);
+        // Non blocchiamo il salvataggio se il geocoding fallisce
+      }
+
       // Prepara i dati custom (SOLO città, tipo, note in chiaro)
       const customData = {
         notes: form.note.trim() || undefined,
       };
 
       // Prepara il payload
-      const payload = {
+      const payload: any = {
         name_enc: nameEncrypted.name_enc,
         name_iv: nameEncrypted.name_iv,
         name_bi: nameBlind,
@@ -598,6 +619,12 @@ export default function QuickAddClientPage() {
         custom: customData,
       };
 
+      // Aggiungi coordinate GPS se disponibili
+      if (latitude && longitude) {
+        payload.latitude = latitude;
+        payload.longitude = longitude;
+      }
+
       console.log('🔍 [QuickAdd] Payload da inviare all\'API:', JSON.stringify(payload, null, 2));
 
       const res = await fetch('/api/clients/upsert', {
@@ -611,7 +638,8 @@ export default function QuickAddClientPage() {
       if (!res.ok) {
         setErrorMsg(`Errore: ${data?.error ?? res.status}`);
       } else {
-        setResultMsg(`✅ Cliente salvato! ID: ${data.accountId}`);
+        const geoMsg = latitude && longitude ? ' con coordinate GPS' : '';
+        setResultMsg(`✅ Cliente salvato${geoMsg}! ID: ${data.accountId}`);
         speak('Cliente salvato con successo!');
         
         // Reset form dopo 2 secondi
