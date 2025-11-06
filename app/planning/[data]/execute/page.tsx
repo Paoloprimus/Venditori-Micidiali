@@ -1,517 +1,583 @@
+
 'use client';
 
 /**
- * PAGINA: Execute Piano Giornaliero
+ * PAGINA: Planning Calendario
  * 
- * PERCORSO: /app/planning/[data]/execute/page.tsx
- * URL: https://reping.app/planning/2025-11-05/execute
+ * PERCORSO: /app/planning/page.tsx
+ * URL: https://reping.app/planning
  * 
  * DESCRIZIONE:
- * Interfaccia per eseguire le visite del piano giornaliero.
- * Mostra un cliente alla volta con possibilità di:
- * - Saltare (salva visita con esito='skipped')
- * - Spostare in basso (riordina temporaneamente)
- * - Completare (salva visita con ordine)
+ * Vista calendario mensile per gestire i piani di visita giornalieri.
+ * Mostra i piani esistenti e permette di crearne di nuovi.
+ * 
+ * FUNZIONALITÀ:
+ * - Calendario mese corrente
+ * - Lista piani esistenti
+ * - Indicatori status per ogni giorno
+ * - Navigazione a editor piano giornaliero
+ * - Filtro per mese (prev/next)
  */
 
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useState, useEffect } from 'react';
+import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
+import TopBar from '@/components/home/TopBar';
 import { supabase } from '@/lib/supabase/client';
-import { useCrypto } from '@/lib/crypto/CryptoProvider';
-
-type Client = {
-  id: string;
-  name: string;
-  city: string;
-  tipo_locale: string;
-  ultimo_esito: string | null;
-  ultimo_esito_at: string | null;
-  volume_attuale: number | null;
-  custom: any;
-};
 
 type DailyPlan = {
   id: string;
-  data: string;
-  status: string;
+  data: string; // formato YYYY-MM-DD
+  status: 'draft' | 'active' | 'completed' | 'cancelled';
   account_ids: string[];
-  notes: string;
+  notes: string | null;
 };
 
-export default function ExecutePlanPage() {
+export default function PlanningPage() {
   const router = useRouter();
-  const params = useParams();
-  const { crypto } = useCrypto();
-  
-  const actuallyReady = crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked();
-  const dataStr = params.data as string;
+  const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
+  async function logout() {
+    try { sessionStorage.removeItem("repping:pph"); } catch {}
+    try { localStorage.removeItem("repping:pph"); } catch {}
+    await supabase.auth.signOut();
+    window.location.href = "/login";
+  }
+
+  // Stato
   const [loading, setLoading] = useState(true);
-  const [plan, setPlan] = useState<DailyPlan | null>(null);
-  const [clients, setClients] = useState<Client[]>([]);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const [orderedIds, setOrderedIds] = useState<string[]>([]);
-  
-  // Form
-  const [ordine, setOrdine] = useState('');
-  const [noteVisita, setNoteVisita] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [plans, setPlans] = useState<DailyPlan[]>([]);
+  const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
 
-  // Stats
-  const [completed, setCompleted] = useState(0);
-  const [skipped, setSkipped] = useState(0);
-
-  // Carica piano e clienti
+  // Carica piani del mese corrente
   useEffect(() => {
-    if (actuallyReady) {
-      loadData();
-    }
-  }, [actuallyReady, dataStr]);
+    loadPlans();
+  }, [currentMonth]);
 
-  async function loadData() {
+  async function loadPlans() {
     setLoading(true);
     try {
-      if (!crypto || typeof crypto.decryptFields !== 'function') {
-        console.error('Crypto non disponibile');
-        return;
-      }
-
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         router.push('/login');
         return;
       }
 
-      // Carica piano
-      const { data: planData, error: planError } = await supabase
+      // Calcola primo e ultimo giorno del mese
+      const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
+      const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
+
+      const firstDayStr = firstDay.toISOString().split('T')[0];
+      const lastDayStr = lastDay.toISOString().split('T')[0];
+
+      const { data, error } = await supabase
         .from('daily_plans')
-        .select('*')
+        .select('id, data, status, account_ids, notes')
         .eq('user_id', user.id)
-        .eq('data', dataStr)
-        .single();
+        .gte('data', firstDayStr)
+        .lte('data', lastDayStr)
+        .order('data', { ascending: true });
 
-      if (planError) throw planError;
+      if (error) throw error;
 
-      if (!planData || planData.status !== 'active') {
-        alert('Piano non attivo. Torna al planning per attivarlo.');
-        router.push(`/planning/${dataStr}`);
-        return;
-      }
-
-      setPlan(planData);
-      setOrderedIds([...planData.account_ids]);
-
-      // Carica clienti del piano
-      const { data: clientsData, error: clientsError } = await supabase
-        .from('accounts')
-        .select('id, name_enc, name_iv, city, tipo_locale, ultimo_esito, ultimo_esito_at, volume_attuale, custom')
-        .eq('user_id', user.id)
-        .in('id', planData.account_ids);
-
-      if (clientsError) throw clientsError;
-
-      // Decifra nomi (STESSO PATTERN /clients)
-      const hexToBase64 = (hexStr: any): string => {
-        if (!hexStr || typeof hexStr !== 'string') return '';
-        if (!hexStr.startsWith('\\x')) return hexStr;
-        const hex = hexStr.slice(2);
-        const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
-        return bytes;
-      };
-
-      const toObj = (x: any): Record<string, unknown> =>
-        Array.isArray(x)
-          ? x.reduce((acc: Record<string, unknown>, it: any) => {
-              if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
-              return acc;
-            }, {})
-          : ((x ?? {}) as Record<string, unknown>);
-
-      const decryptedClients: Client[] = [];
-      for (const c of clientsData || []) {
-        try {
-          const recordForDecrypt = {
-            ...c,
-            name_enc: hexToBase64(c.name_enc),
-            name_iv: hexToBase64(c.name_iv),
-          };
-
-          const decAny = await crypto.decryptFields(
-            'table:accounts',
-            'accounts',
-            '',
-            recordForDecrypt,
-            ['name']
-          );
-
-          const dec = toObj(decAny);
-
-          decryptedClients.push({
-            id: c.id,
-            name: String(dec.name ?? 'Cliente senza nome'),
-            city: c.city || '',
-            tipo_locale: c.tipo_locale || '',
-            ultimo_esito: c.ultimo_esito,
-            ultimo_esito_at: c.ultimo_esito_at,
-            volume_attuale: c.volume_attuale ? parseFloat(c.volume_attuale) : null,
-            custom: c.custom || {},
-          });
-        } catch (e) {
-          console.error('[Execute] Errore decrypt:', e);
-        }
-      }
-
-      setClients(decryptedClients);
-
+      setPlans(data || []);
     } catch (e: any) {
-      console.error('[Execute] Errore caricamento:', e);
+      console.error('Errore caricamento piani:', e);
       alert(`Errore: ${e.message}`);
     } finally {
       setLoading(false);
     }
   }
 
-  // Cliente corrente
-  const currentClient = clients.find(c => c.id === orderedIds[currentIndex]);
-  const isLast = currentIndex === orderedIds.length - 1;
-  const isComplete = currentIndex >= orderedIds.length;
-
-  // Salva visita
-  async function saveVisit(esito: string, ordineValue?: string) {
-    if (!currentClient) return;
-
-    setSaving(true);
-    try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error('Non autenticato');
-
-      const visitData = {
-        user_id: user.id,
-        account_id: currentClient.id,
-        visit_date: dataStr,
-        esito: esito,
-        ordine: ordineValue ? parseFloat(ordineValue) : null,
-        note: noteVisita || null,
-      };
-
-      const { error } = await supabase
-        .from('visits')
-        .insert(visitData);
-
-      if (error) throw error;
-
-      console.log(`✅ Visita salvata: ${esito}`);
-
-      // Stats
-      if (esito === 'skipped') setSkipped(prev => prev + 1);
-      else setCompleted(prev => prev + 1);
-
-      // Reset form
-      setOrdine('');
-      setNoteVisita('');
-
-      // Prossimo cliente
-      setCurrentIndex(prev => prev + 1);
-
-    } catch (e: any) {
-      console.error('[Execute] Errore salvataggio visita:', e);
-      alert(`Errore: ${e.message}`);
-    } finally {
-      setSaving(false);
+  // Genera giorni del mese per il calendario
+  function getCalendarDays() {
+    const year = currentMonth.getFullYear();
+    const month = currentMonth.getMonth();
+    
+    const firstDay = new Date(year, month, 1);
+    const lastDay = new Date(year, month + 1, 0);
+    
+    const days: Array<{ date: Date; isCurrentMonth: boolean }> = [];
+    
+    // Giorni del mese precedente per riempire la prima settimana
+    const firstDayOfWeek = firstDay.getDay(); // 0 = domenica, 1 = lunedì, ...
+    const startDayOfWeek = firstDayOfWeek === 0 ? 6 : firstDayOfWeek - 1; // lunedì = 0
+    
+    for (let i = startDayOfWeek; i > 0; i--) {
+      const prevDate = new Date(year, month, -i + 1);
+      days.push({ date: prevDate, isCurrentMonth: false });
     }
-  }
-
-  // AZIONI
-  async function handleSkip() {
-    await saveVisit('skipped');
-  }
-
-  function handlePostpone() {
-    if (isLast) return; // Disabilitato se ultimo
-
-    // Sposta cliente +1 nella lista
-    const newOrder = [...orderedIds];
-    const temp = newOrder[currentIndex];
-    newOrder[currentIndex] = newOrder[currentIndex + 1];
-    newOrder[currentIndex + 1] = temp;
-    setOrderedIds(newOrder);
-  }
-
-  async function handleComplete() {
-    if (!ordine.trim()) {
-      alert('Inserisci importo ordine');
-      return;
+    
+    // Giorni del mese corrente
+    for (let day = 1; day <= lastDay.getDate(); day++) {
+      days.push({ date: new Date(year, month, day), isCurrentMonth: true });
     }
-    await saveVisit('fatto', ordine);
-  }
-
-  // Fine giornata
-  useEffect(() => {
-    if (isComplete && plan) {
-      finishDay();
+    
+    // Giorni del mese successivo per riempire l'ultima settimana
+    const remainingDays = 7 - (days.length % 7);
+    if (remainingDays < 7) {
+      for (let i = 1; i <= remainingDays; i++) {
+        const nextDate = new Date(year, month + 1, i);
+        days.push({ date: nextDate, isCurrentMonth: false });
+      }
     }
-  }, [isComplete, plan]);
+    
+    return days;
+  }
 
-  async function finishDay() {
-    try {
-      // Aggiorna status piano
-      const { error } = await supabase
-        .from('daily_plans')
-        .update({ status: 'completed' })
-        .eq('id', plan!.id);
-
-      if (error) throw error;
-
-      alert(`🎉 Giornata completata!\n✅ ${completed} fatte\n⏭️ ${skipped} saltate`);
-      router.push(`/planning/${dataStr}`);
-    } catch (e: any) {
-      console.error('[Execute] Errore completamento:', e);
+  // Ottieni giorni della settimana corrente
+  function getCurrentWeekDays() {
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = domenica
+    const monday = new Date(today);
+    
+    // Calcola lunedì della settimana corrente
+    const diff = currentDay === 0 ? -6 : 1 - currentDay;
+    monday.setDate(today.getDate() + diff);
+    
+    const weekDays: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + i);
+      weekDays.push(day);
     }
+    
+    return weekDays;
   }
 
-  if (!actuallyReady) {
-    return (
-      <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>🔐 Sblocco crittografia...</h2>
-      </div>
-    );
+  // Trova piano per una data
+  function getPlanForDate(date: Date): DailyPlan | undefined {
+    const dateStr = date.toISOString().split('T')[0];
+    return plans.find(p => p.data === dateStr);
   }
 
-  if (loading) {
-    return (
-      <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600 }}>⏳ Caricamento piano...</h2>
-      </div>
-    );
+  // Badge status
+  function getStatusBadge(status: string) {
+    const badges = {
+      draft: { emoji: '📝', label: 'Bozza', color: '#9ca3af' },
+      active: { emoji: '▶️', label: 'Attivo', color: '#3b82f6' },
+      completed: { emoji: '✅', label: 'Completato', color: '#10b981' },
+      cancelled: { emoji: '❌', label: 'Annullato', color: '#ef4444' },
+    };
+    return badges[status as keyof typeof badges] || badges.draft;
   }
 
-  if (isComplete) {
-    return (
-      <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>🎉 Giornata Completata!</h2>
-        <div style={{ fontSize: 18, color: '#6b7280', marginBottom: 24 }}>
-          Reindirizzamento...
-        </div>
-      </div>
-    );
+  // Vai al mese precedente
+  function prevMonth() {
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1));
   }
 
-  if (!currentClient) {
-    return (
-      <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, color: '#ef4444' }}>❌ Cliente non trovato</h2>
-        <button
-          onClick={() => router.push(`/planning/${dataStr}`)}
-          style={{ marginTop: 16, padding: '10px 20px', borderRadius: 8, border: '1px solid #d1d5db', cursor: 'pointer' }}
-        >
-          Torna al Piano
-        </button>
-      </div>
-    );
+  // Vai al mese successivo
+  function nextMonth() {
+    setCurrentMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1));
   }
+
+  // Vai a oggi
+  function goToToday() {
+    setCurrentMonth(new Date());
+  }
+
+  // Formatta mese
+  function formatMonth(date: Date) {
+    const months = ['Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 
+                    'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'];
+    return `${months[date.getMonth()]} ${date.getFullYear()}`;
+  }
+
+  // Click su un giorno
+  function handleDayClick(date: Date) {
+    const dateStr = date.toISOString().split('T')[0];
+    router.push(`/planning/${dateStr}`);
+  }
+
+  const calendarDays = getCalendarDays();
+  const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div style={{ maxWidth: 700, margin: '0 auto', padding: '40px 24px' }}>
-      {/* Header Progress */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
-            Visita {currentIndex + 1} di {orderedIds.length}
-          </h1>
-          <button
-            onClick={() => router.push(`/planning/${dataStr}`)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: 'white',
-              cursor: 'pointer',
-              fontSize: 14,
-            }}
-          >
-            🔙 Esci
-          </button>
-        </div>
-
-        {/* Progress Bar */}
-        <div style={{ width: '100%', height: 8, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{
-            width: `${((currentIndex) / orderedIds.length) * 100}%`,
-            height: '100%',
-            background: '#10b981',
-            transition: 'width 0.3s',
-          }} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 13, color: '#6b7280' }}>
-          <span>✅ Fatte: {completed}</span>
-          <span>⏭️ Saltate: {skipped}</span>
-          <span>📍 Rimanenti: {orderedIds.length - currentIndex}</span>
-        </div>
+    <>
+      <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, background: 'white', borderBottom: '1px solid #e5e7eb' }}>
+        <TopBar
+          title="📅 Planning Visite"
+          onOpenLeft={openLeft}
+          onOpenDati={openDati}
+          onOpenDocs={openDocs}
+          onOpenImpostazioni={openImpostazioni}
+          onLogout={logout}
+        />
       </div>
 
-      {/* Card Cliente */}
-      <div style={{ background: 'white', borderRadius: 16, border: '2px solid #e5e7eb', padding: 32, marginBottom: 24 }}>
-        {/* Info Cliente */}
+      <DrawersWithBackdrop
+        leftOpen={leftOpen}
+        onCloseLeft={closeLeft}
+        rightOpen={rightOpen}
+        rightContent={rightContent}
+        onCloseRight={closeRight}
+      />
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '90px 24px 24px' }}>
+        {/* Header con navigazione mese */}
         <div style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{currentClient.name}</h2>
-          <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 16 }}>
-            📍 {currentClient.city} • {currentClient.tipo_locale}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <h1 style={{ fontSize: 28, fontWeight: 700, margin: 0 }}>
+              {formatMonth(currentMonth)}
+            </h1>
+            
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={prevMonth}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                ← Mese Prec.
+              </button>
+              
+              <button
+                onClick={goToToday}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                📍 Oggi
+              </button>
+              
+              <button
+                onClick={nextMonth}
+                style={{
+                  padding: '8px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500,
+                }}
+              >
+                Mese Succ. →
+              </button>
+            </div>
           </div>
 
-          {/* Stats Cliente */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 16, background: '#f9fafb', borderRadius: 8 }}>
-            <div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Ultima Visita</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>
-                {currentClient.ultimo_esito_at 
-                  ? new Date(currentClient.ultimo_esito_at).toLocaleDateString()
-                  : 'Mai visitato'}
-              </div>
-              {currentClient.ultimo_esito && (
-                <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
-                  Esito: {currentClient.ultimo_esito}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Fatturato YTD</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>
-                {currentClient.volume_attuale 
-                  ? `€${currentClient.volume_attuale.toFixed(2)}`
-                  : '€0.00'}
-              </div>
-            </div>
-          </div>
-
-          {/* Note Cliente */}
-          {currentClient.custom?.notes && (
-            <div style={{ marginTop: 16, padding: 12, background: '#fef3c7', borderRadius: 8, border: '1px solid #fbbf24' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>📝 Note:</div>
-              <div style={{ fontSize: 14, color: '#78350f' }}>{currentClient.custom.notes}</div>
-            </div>
-          )}
+          <p style={{ color: '#6b7280', fontSize: 14 }}>
+            Click su un giorno per pianificare o modificare le visite
+          </p>
         </div>
 
-        {/* Form Visita */}
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-              💰 Ordine (€) *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={ordine}
-              onChange={(e) => setOrdine(e.target.value)}
-              placeholder="0.00"
-              style={{
-                width: '100%',
-                padding: 12,
-                fontSize: 16,
-                borderRadius: 8,
-                border: '2px solid #d1d5db',
-              }}
-            />
+        {/* Legenda status */}
+        <div style={{ display: 'flex', gap: 16, marginBottom: 24, padding: 16, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span>📝</span>
+            <span style={{ color: '#6b7280' }}>Bozza</span>
           </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-              📝 Note Visita
-            </label>
-            <textarea
-              value={noteVisita}
-              onChange={(e) => setNoteVisita(e.target.value)}
-              placeholder="Aggiungi note sulla visita..."
-              rows={3}
-              style={{
-                width: '100%',
-                padding: 12,
-                fontSize: 14,
-                borderRadius: 8,
-                border: '2px solid #d1d5db',
-                resize: 'vertical',
-              }}
-            />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span>▶️</span>
+            <span style={{ color: '#6b7280' }}>Attivo</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span>✅</span>
+            <span style={{ color: '#6b7280' }}>Completato</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13 }}>
+            <span>⚪</span>
+            <span style={{ color: '#6b7280' }}>Nessun piano</span>
           </div>
         </div>
 
-        {/* Azioni */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
+        {/* Tabs Vista */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #e5e7eb' }}>
           <button
-            onClick={handleSkip}
-            disabled={saving}
+            onClick={() => setViewMode('month')}
             style={{
-              padding: '14px',
-              borderRadius: 8,
-              border: '2px solid #f59e0b',
-              background: 'white',
-              color: '#f59e0b',
-              fontWeight: 600,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.5 : 1,
-            }}
-          >
-            ⏭️ Saltato
-          </button>
-
-          <button
-            onClick={handlePostpone}
-            disabled={saving || isLast}
-            style={{
-              padding: '14px',
-              borderRadius: 8,
-              border: '2px solid #6b7280',
-              background: 'white',
-              color: '#6b7280',
-              fontWeight: 600,
-              cursor: (saving || isLast) ? 'not-allowed' : 'pointer',
-              opacity: (saving || isLast) ? 0.5 : 1,
-            }}
-          >
-            ⬇️ Spostato
-          </button>
-
-          <button
-            onClick={handleComplete}
-            disabled={saving || !ordine.trim()}
-            style={{
-              padding: '14px',
-              borderRadius: 8,
+              padding: '12px 24px',
               border: 'none',
-              background: (!ordine.trim() || saving) ? '#9ca3af' : '#10b981',
-              color: 'white',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 15,
               fontWeight: 600,
-              cursor: (!ordine.trim() || saving) ? 'not-allowed' : 'pointer',
+              color: viewMode === 'month' ? '#2563eb' : '#6b7280',
+              borderBottom: viewMode === 'month' ? '3px solid #2563eb' : '3px solid transparent',
+              marginBottom: -2,
             }}
           >
-            ✅ Fatto
+            📅 Vista Mese
+          </button>
+          <button
+            onClick={() => setViewMode('week')}
+            style={{
+              padding: '12px 24px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 15,
+              fontWeight: 600,
+              color: viewMode === 'week' ? '#2563eb' : '#6b7280',
+              borderBottom: viewMode === 'week' ? '3px solid #2563eb' : '3px solid transparent',
+              marginBottom: -2,
+            }}
+          >
+            📊 Vista Settimana
           </button>
         </div>
-      </div>
 
-      {/* Prossimi Clienti */}
-      {currentIndex < orderedIds.length - 1 && (
-        <div style={{ padding: 16, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#6b7280' }}>
-            📋 Prossimi Clienti:
+        {/* Calendario */}
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: 48, color: '#6b7280' }}>
+            ⏳ Caricamento piani...
           </div>
-          {orderedIds.slice(currentIndex + 1, currentIndex + 4).map((id, idx) => {
-            const client = clients.find(c => c.id === id);
-            return client ? (
-              <div key={id} style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>
-                {idx + 1}. {client.name} ({client.city})
-              </div>
-            ) : null;
-          })}
-          {orderedIds.length - currentIndex > 4 && (
-            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-              ... e altri {orderedIds.length - currentIndex - 4}
+        ) : viewMode === 'month' ? (
+          /* VISTA MESE */
+          <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
+            {/* Header giorni settimana */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
+              {['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'].map(day => (
+                <div key={day} style={{ padding: 12, textAlign: 'center', fontWeight: 600, fontSize: 13, color: '#6b7280' }}>
+                  {day}
+                </div>
+              ))}
             </div>
-          )}
-        </div>
-      )}
-    </div>
+
+            {/* Giorni del mese */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
+              {calendarDays.map((day, idx) => {
+                const plan = getPlanForDate(day.date);
+                const isToday = day.date.toISOString().split('T')[0] === today;
+                const dateStr = day.date.toISOString().split('T')[0];
+                
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => day.isCurrentMonth && handleDayClick(day.date)}
+                    style={{
+                      minHeight: 100,
+                      padding: 8,
+                      borderRight: (idx + 1) % 7 !== 0 ? '1px solid #e5e7eb' : 'none',
+                      borderBottom: idx < calendarDays.length - 7 ? '1px solid #e5e7eb' : 'none',
+                      cursor: day.isCurrentMonth ? 'pointer' : 'default',
+                      background: isToday ? '#eff6ff' : 'white',
+                      opacity: day.isCurrentMonth ? 1 : 0.4,
+                      transition: 'background 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (day.isCurrentMonth) {
+                        e.currentTarget.style.background = isToday ? '#dbeafe' : '#f9fafb';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (day.isCurrentMonth) {
+                        e.currentTarget.style.background = isToday ? '#eff6ff' : 'white';
+                      }
+                    }}
+                  >
+                    {/* Numero giorno */}
+                    <div style={{ 
+                      fontSize: 14, 
+                      fontWeight: isToday ? 700 : 500, 
+                      color: isToday ? '#2563eb' : (day.isCurrentMonth ? '#111827' : '#9ca3af'),
+                      marginBottom: 4,
+                    }}>
+                      {day.date.getDate()}
+                    </div>
+
+                    {/* Indicatore piano */}
+                    {plan && day.isCurrentMonth && (
+                      <div style={{ fontSize: 11 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                          <span>{getStatusBadge(plan.status).emoji}</span>
+                          <span style={{ fontWeight: 500, color: '#374151' }}>
+                            {plan.account_ids?.length || 0} visite
+                          </span>
+                        </div>
+                        {plan.notes && (
+                          <div style={{ 
+                            fontSize: 10, 
+                            color: '#6b7280', 
+                            overflow: 'hidden', 
+                            textOverflow: 'ellipsis', 
+                            whiteSpace: 'nowrap',
+                            marginTop: 2,
+                          }}>
+                            {plan.notes}
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Indicatore nessun piano */}
+                    {!plan && day.isCurrentMonth && (
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
+                        ⚪ Pianifica
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : (
+          /* VISTA SETTIMANA */
+          <div>
+            <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 600, color: '#374151' }}>
+              Settimana {getCurrentWeekDays()[0].toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - {getCurrentWeekDays()[6].toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </div>
+
+            <div style={{ display: 'grid', gap: 16 }}>
+              {getCurrentWeekDays().map((date) => {
+                const dateStr = date.toISOString().split('T')[0];
+                const plan = getPlanForDate(date);
+                const isToday = dateStr === today;
+                const dayNames = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+
+                return (
+                  <div
+                    key={dateStr}
+                    onClick={() => handleDayClick(date)}
+                    style={{
+                      padding: 20,
+                      background: isToday ? '#eff6ff' : 'white',
+                      borderRadius: 12,
+                      border: isToday ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: isToday ? '#2563eb' : '#111827', marginBottom: 4 }}>
+                          {dayNames[date.getDay()]} {date.getDate()}
+                        </div>
+                        <div style={{ fontSize: 13, color: '#6b7280' }}>
+                          {date.toLocaleDateString('it-IT', { month: 'long' })}
+                        </div>
+                      </div>
+
+                      {plan && (
+                        <div style={{ 
+                          padding: '4px 12px', 
+                          borderRadius: 6, 
+                          background: getStatusBadge(plan.status).color + '20',
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}>
+                          {getStatusBadge(plan.status).emoji} {getStatusBadge(plan.status).label}
+                        </div>
+                      )}
+                    </div>
+
+                    {plan ? (
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                          📍 {plan.account_ids?.length || 0} {plan.account_ids?.length === 1 ? 'visita' : 'visite'}
+                        </div>
+                        {plan.notes && (
+                          <div style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic' }}>
+                            "{plan.notes}"
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 14, color: '#9ca3af' }}>
+                        Nessun piano • <span style={{ color: '#2563eb', fontWeight: 500 }}>Clicca per pianificare</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Summary Settimana */}
+            <div style={{ marginTop: 32, padding: 24, background: '#f9fafb', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>📊 Summary Settimana</h3>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                    {getCurrentWeekDays().reduce((sum, date) => {
+                      const plan = getPlanForDate(date);
+                      return sum + (plan?.account_ids?.length || 0);
+                    }, 0)}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Visite Pianificate</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#10b981' }}>
+                    {getCurrentWeekDays().reduce((sum, date) => {
+                      const plan = getPlanForDate(date);
+                      return sum + (plan?.status === 'completed' ? plan.account_ids?.length || 0 : 0);
+                    }, 0)}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Visite Completate</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#2563eb' }}>
+                    {getCurrentWeekDays().filter(date => getPlanForDate(date)).length}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Giorni con Piano</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Riepilogo piani del mese */}
+        {!loading && plans.length > 0 && (
+          <div style={{ marginTop: 32 }}>
+            <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>📊 Riepilogo Mese</h2>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+              <div style={{ padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                  {plans.length}
+                </div>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>Piani totali</div>
+              </div>
+
+              <div style={{ padding: 16, background: '#dbeafe', borderRadius: 8 }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#1e40af' }}>
+                  {plans.filter(p => p.status === 'active').length}
+                </div>
+                <div style={{ fontSize: 13, color: '#1e40af' }}>Attivi</div>
+              </div>
+
+              <div style={{ padding: 16, background: '#dcfce7', borderRadius: 8 }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#15803d' }}>
+                  {plans.filter(p => p.status === 'completed').length}
+                </div>
+                <div style={{ fontSize: 13, color: '#15803d' }}>Completati</div>
+              </div>
+
+              <div style={{ padding: 16, background: '#f3f4f6', borderRadius: 8 }}>
+                <div style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                  {plans.reduce((sum, p) => sum + (p.account_ids?.length || 0), 0)}
+                </div>
+                <div style={{ fontSize: 13, color: '#6b7280' }}>Visite pianificate</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </>
   );
 }
