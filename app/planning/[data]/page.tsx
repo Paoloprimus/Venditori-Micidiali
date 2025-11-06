@@ -443,6 +443,37 @@ export default function PlanningEditorPage() {
     }
   }
 
+  // Attiva piano (draft → active)
+  async function activatePlan() {
+    if (!plan?.id) {
+      alert('Devi prima salvare il piano');
+      return;
+    }
+
+    if (selectedIds.length === 0) {
+      alert('Seleziona almeno un cliente per attivare il piano');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('daily_plans')
+        .update({ status: 'active' })
+        .eq('id', plan.id);
+      
+      if (error) throw error;
+
+      console.log('✅ Piano attivato!');
+      router.push(`/planning/${dataStr}/execute`);
+    } catch (e: any) {
+      console.error('Errore attivazione:', e);
+      alert(`Errore: ${e.message}`);
+    } finally {
+      setSaving(false);
+    }
+  }
+
   // Formatta data
   function formatDate(dateStr: string) {
     const date = new Date(dateStr);
@@ -828,6 +859,26 @@ export default function PlanningEditorPage() {
           >
             {saving ? '⏳ Salvataggio...' : '💾 Salva Piano'}
           </button>
+
+          {/* Bottone Avvia Giornata (solo se draft e salvato) */}
+          {plan?.status === 'draft' && plan?.id && (
+            <button
+              onClick={activatePlan}
+              disabled={saving || selectedIds.length === 0}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: 'none',
+                background: saving || selectedIds.length === 0 ? '#9ca3af' : '#2563eb',
+                color: 'white',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: saving || selectedIds.length === 0 ? 'not-allowed' : 'pointer',
+              }}
+            >
+              🟢 Avvia Giornata
+            </button>
+          )}
         </div>
       </div>
     </>
