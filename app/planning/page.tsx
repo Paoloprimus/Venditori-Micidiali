@@ -47,6 +47,7 @@ export default function PlanningPage() {
   const [loading, setLoading] = useState(true);
   const [plans, setPlans] = useState<DailyPlan[]>([]);
   const [currentMonth, setCurrentMonth] = useState(new Date());
+  const [viewMode, setViewMode] = useState<'month' | 'week'>('month');
 
   // Carica piani del mese corrente
   useEffect(() => {
@@ -122,6 +123,26 @@ export default function PlanningPage() {
     }
     
     return days;
+  }
+
+  // Ottieni giorni della settimana corrente
+  function getCurrentWeekDays() {
+    const today = new Date();
+    const currentDay = today.getDay(); // 0 = domenica
+    const monday = new Date(today);
+    
+    // Calcola lunedì della settimana corrente
+    const diff = currentDay === 0 ? -6 : 1 - currentDay;
+    monday.setDate(today.getDate() + diff);
+    
+    const weekDays: Date[] = [];
+    for (let i = 0; i < 7; i++) {
+      const day = new Date(monday);
+      day.setDate(monday.getDate() + i);
+      weekDays.push(day);
+    }
+    
+    return weekDays;
   }
 
   // Trova piano per una data
@@ -274,12 +295,49 @@ export default function PlanningPage() {
           </div>
         </div>
 
+        {/* Tabs Vista */}
+        <div style={{ display: 'flex', gap: 8, marginBottom: 24, borderBottom: '2px solid #e5e7eb' }}>
+          <button
+            onClick={() => setViewMode('month')}
+            style={{
+              padding: '12px 24px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 15,
+              fontWeight: 600,
+              color: viewMode === 'month' ? '#2563eb' : '#6b7280',
+              borderBottom: viewMode === 'month' ? '3px solid #2563eb' : '3px solid transparent',
+              marginBottom: -2,
+            }}
+          >
+            📅 Vista Mese
+          </button>
+          <button
+            onClick={() => setViewMode('week')}
+            style={{
+              padding: '12px 24px',
+              border: 'none',
+              background: 'transparent',
+              cursor: 'pointer',
+              fontSize: 15,
+              fontWeight: 600,
+              color: viewMode === 'week' ? '#2563eb' : '#6b7280',
+              borderBottom: viewMode === 'week' ? '3px solid #2563eb' : '3px solid transparent',
+              marginBottom: -2,
+            }}
+          >
+            📊 Vista Settimana
+          </button>
+        </div>
+
         {/* Calendario */}
         {loading ? (
           <div style={{ textAlign: 'center', padding: 48, color: '#6b7280' }}>
             ⏳ Caricamento piani...
           </div>
-        ) : (
+        ) : viewMode === 'month' ? (
+          /* VISTA MESE */
           <div style={{ background: 'white', borderRadius: 12, border: '1px solid #e5e7eb', overflow: 'hidden' }}>
             {/* Header giorni settimana */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', background: '#f9fafb', borderBottom: '1px solid #e5e7eb' }}>
@@ -365,6 +423,119 @@ export default function PlanningPage() {
                   </div>
                 );
               })}
+            </div>
+          </div>
+        ) : (
+          /* VISTA SETTIMANA */
+          <div>
+            <div style={{ marginBottom: 16, fontSize: 18, fontWeight: 600, color: '#374151' }}>
+              Settimana {getCurrentWeekDays()[0].toLocaleDateString('it-IT', { day: 'numeric', month: 'short' })} - {getCurrentWeekDays()[6].toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' })}
+            </div>
+
+            <div style={{ display: 'grid', gap: 16 }}>
+              {getCurrentWeekDays().map((date) => {
+                const dateStr = date.toISOString().split('T')[0];
+                const plan = getPlanForDate(date);
+                const isToday = dateStr === today;
+                const dayNames = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+
+                return (
+                  <div
+                    key={dateStr}
+                    onClick={() => handleDayClick(date)}
+                    style={{
+                      padding: 20,
+                      background: isToday ? '#eff6ff' : 'white',
+                      borderRadius: 12,
+                      border: isToday ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                      cursor: 'pointer',
+                      transition: 'all 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.transform = 'translateY(-2px)';
+                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.transform = 'translateY(0)';
+                      e.currentTarget.style.boxShadow = 'none';
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
+                      <div>
+                        <div style={{ fontSize: 16, fontWeight: 700, color: isToday ? '#2563eb' : '#111827', marginBottom: 4 }}>
+                          {dayNames[date.getDay()]} {date.getDate()}
+                        </div>
+                        <div style={{ fontSize: 13, color: '#6b7280' }}>
+                          {date.toLocaleDateString('it-IT', { month: 'long' })}
+                        </div>
+                      </div>
+
+                      {plan && (
+                        <div style={{ 
+                          padding: '4px 12px', 
+                          borderRadius: 6, 
+                          background: getStatusBadge(plan.status).color + '20',
+                          fontSize: 13,
+                          fontWeight: 600,
+                        }}>
+                          {getStatusBadge(plan.status).emoji} {getStatusBadge(plan.status).label}
+                        </div>
+                      )}
+                    </div>
+
+                    {plan ? (
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 8 }}>
+                          📍 {plan.account_ids?.length || 0} {plan.account_ids?.length === 1 ? 'visita' : 'visite'}
+                        </div>
+                        {plan.notes && (
+                          <div style={{ fontSize: 13, color: '#6b7280', fontStyle: 'italic' }}>
+                            "{plan.notes}"
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: 14, color: '#9ca3af' }}>
+                        Nessun piano • <span style={{ color: '#2563eb', fontWeight: 500 }}>Clicca per pianificare</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Summary Settimana */}
+            <div style={{ marginTop: 32, padding: 24, background: '#f9fafb', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+              <h3 style={{ fontSize: 18, fontWeight: 700, marginBottom: 16 }}>📊 Summary Settimana</h3>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16 }}>
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#111827' }}>
+                    {getCurrentWeekDays().reduce((sum, date) => {
+                      const plan = getPlanForDate(date);
+                      return sum + (plan?.account_ids?.length || 0);
+                    }, 0)}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Visite Pianificate</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#10b981' }}>
+                    {getCurrentWeekDays().reduce((sum, date) => {
+                      const plan = getPlanForDate(date);
+                      return sum + (plan?.status === 'completed' ? plan.account_ids?.length || 0 : 0);
+                    }, 0)}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Visite Completate</div>
+                </div>
+
+                <div>
+                  <div style={{ fontSize: 28, fontWeight: 700, color: '#2563eb' }}>
+                    {getCurrentWeekDays().filter(date => getPlanForDate(date)).length}
+                  </div>
+                  <div style={{ fontSize: 13, color: '#6b7280' }}>Giorni con Piano</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
