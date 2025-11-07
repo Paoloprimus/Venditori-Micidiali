@@ -201,7 +201,7 @@ export default function ExecutePlanPage() {
         visit_date: dataStr,
         esito: esito,
         ordine: ordineValue ? parseFloat(ordineValue) : null,
-        note: noteVisita || null,
+        notes: noteVisita || null,
       };
 
       const { error } = await supabase
