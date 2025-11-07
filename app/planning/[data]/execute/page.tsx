@@ -187,7 +187,7 @@ export default function ExecutePlanPage() {
   const isComplete = currentIndex >= orderedIds.length;
 
   // Salva visita
-  async function saveVisit(esito: string, ordineValue?: string) {
+  async function saveVisit(esito: 'ordine_acquisito' | 'altro', ordineValue?: string) {
     if (!currentClient) return;
 
     setSaving(true);
@@ -214,8 +214,8 @@ export default function ExecutePlanPage() {
       console.log(`✅ Visita salvata: ${esito}`);
 
       // Stats
-      if (esito === 'skipped') setSkipped(prev => prev + 1);
-      else setCompleted(prev => prev + 1);
+      if (esito === 'altro') setSkipped(prev => prev + 1);
+      else if (esito === 'ordine_acquisito') setCompleted(prev => prev + 1);
 
       // Reset form
       setOrdine('');
@@ -234,7 +234,7 @@ export default function ExecutePlanPage() {
 
   // AZIONI
   async function handleSkip() {
-    await saveVisit('skipped');
+    await saveVisit('altro');
   }
 
   function handlePostpone() {
@@ -253,7 +253,7 @@ export default function ExecutePlanPage() {
       alert('Inserisci importo vendita');
       return;
     }
-    await saveVisit('fatto', ordine);
+    await saveVisit('ordine_acquisito', ordine);
   }
 
   // Fine giornata
