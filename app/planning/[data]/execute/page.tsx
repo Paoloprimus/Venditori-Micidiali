@@ -198,9 +198,10 @@ export default function ExecutePlanPage() {
       const visitData = {
         user_id: user.id,
         account_id: currentClient.id,
-        visit_date: dataStr,
+        tipo: 'visita',  // Tipo fisso per planning giornaliero
+        data_visita: new Date(dataStr).toISOString(),
         esito: esito,
-        ordine: ordineValue ? parseFloat(ordineValue) : null,
+        importo_vendita: ordineValue ? parseFloat(ordineValue) : null,
         notes: noteVisita || null,
       };
 
@@ -249,7 +250,7 @@ export default function ExecutePlanPage() {
 
   async function handleComplete() {
     if (!ordine.trim()) {
-      alert('Inserisci importo ordine');
+      alert('Inserisci importo vendita');
       return;
     }
     await saveVisit('fatto', ordine);
@@ -513,7 +514,7 @@ export default function ExecutePlanPage() {
         <div style={{ marginBottom: 32 }}>
           <div style={{ marginBottom: 16 }}>
             <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-              💰 Ordine (€) *
+              💰 Importo Vendita (€) *
             </label>
             <input
               type="number"
