@@ -879,6 +879,25 @@ export default function PlanningEditorPage() {
               🟢 Avvia Giornata
             </button>
           )}
+
+          {/* Bottone Vai alle Visite (se piano attivo) */}
+          {plan?.status === 'active' && (
+            <button
+              onClick={() => router.push(`/planning/${dataStr}/execute`)}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#10b981',
+                color: 'white',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              ▶️ Vai alle Visite
+            </button>
+          )}
         </div>
       </div>
     </>
