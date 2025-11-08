@@ -5,9 +5,15 @@
  * 
  * PERCORSO: /components/Drawers.tsx
  * 
- * MODIFICHE:
- * - Import clienti: Aggiunto link /tools/import-clients
- * - Planning: Aggiunto link /planning (sezione Uscite)
+ * MODIFICHE PER IMPORT CLIENTI:
+ * - Riga ~248: Aggiunta funzione goImportClients()
+ * - Riga ~329: Collegato bottone "📥 Importa lista" alla funzione
+ * 
+ * MODIFICHE FASE 4 - DRAWER DOCUMENTI:
+ * - Riga ~394+: Implementato DrawerDocs completo con lista PDF
+ * - Fetch documenti dal DB
+ * - Lista raggruppata per tipo
+ * - Bottoni Apri/Elimina per ogni documento
  * 
  * ============================================================================
  */
@@ -15,6 +21,7 @@
 // components/Drawers.tsx
 "use client";
 import { useEffect, useState } from "react";
+import { fetchDocuments, deleteDocument, formatFileSize, type DocumentRecord } from '@/lib/pdf';
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
@@ -245,7 +252,7 @@ export function DrawersWithBackdrop({
 
 /* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
 function DrawerDati({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'clienti' | 'uscite'>('clienti');
+  const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('clienti');
 
   function goQuickAdd() {
     onClose();
@@ -262,9 +269,14 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     window.location.href = "/tools/import-clients";
   }
 
-  function goPlanning() {
+  function goProductsList() {
     onClose();
-    window.location.href = "/planning";
+    window.location.href = "/products";
+  }
+
+  function goQuickAddProduct() {
+    onClose();
+    window.location.href = "/tools/quick-add-product";
   }
 
   return (
@@ -292,6 +304,23 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           }}
         >
           CLIENTI
+        </button>
+        <button
+          onClick={() => setTab('prodotti')}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 500,
+            color: tab === 'prodotti' ? '#2563eb' : '#6b7280',
+            borderBottom: tab === 'prodotti' ? '2px solid #2563eb' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}
+        >
+          PRODOTTI
         </button>
         <button
           onClick={() => setTab('uscite')}
@@ -330,20 +359,36 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           </div>
         )}
 
-        {tab === 'uscite' && (
+        {tab === 'prodotti' && (
           <div style={{ display: 'grid', gap: 8 }}>
-            <button className="btn" onClick={() => { onClose(); window.location.href = '/visits'; }}>
-              📅 Visite & Chiamate
+            <button className="btn" onClick={goProductsList}>
+              📦 Lista prodotti
             </button>
-            <button className="btn" onClick={() => { onClose(); window.location.href = '/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
-              ➕ Nuova visita
+            <button className="btn" onClick={goQuickAddProduct} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+              ➕ Aggiungi singolo
             </button>
-            <button className="btn" onClick={goPlanning} style={{ background: '#10b981', color: 'white', border: 'none' }}>
-              🗺️ Planning Visite
+            <button className="btn" onClick={() => alert('Importa lista prodotti - in arrivo')}>
+              📥 Importa lista
             </button>
-            <button className="btn" onClick={() => alert('Promemoria - in arrivo')}>
-              ⏰ Promemoria
+            <button className="btn" onClick={() => alert('Template CSV prodotti - in arrivo')}>
+              📄 Scarica template CSV
             </button>
+          </div>
+        )}
+
+        {tab === 'uscite' && (
+          <div style={{ padding: 16 }}>
+            <div style={{ color: '#6b7280', fontSize: 14, marginBottom: 16 }}>
+              Qui vedrai il diario delle tue giornate lavorative.
+            </div>
+            <div style={{ padding: 16, background: '#f9fafb', borderRadius: 8, border: '1px dashed #d1d5db' }}>
+              <div style={{ fontSize: 13, color: '#6b7280', textAlign: 'center' }}>
+                📅 Coming soon...
+              </div>
+              <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8, textAlign: 'center' }}>
+                Lista cronologica delle giornate lavorative con sintesi delle attività
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -353,19 +398,276 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
 
 /* -------------------------- Contenuto: DOCS -------------------------- */
 function DrawerDocs({ onClose }: { onClose: () => void }) {
+  const [documents, setDocuments] = useState<DocumentRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Carica documenti al mount
+  useEffect(() => {
+    loadDocuments();
+  }, []);
+
+  async function loadDocuments() {
+    setLoading(true);
+    setError(null);
+    try {
+      const docs = await fetchDocuments();
+      setDocuments(docs);
+    } catch (e: any) {
+      console.error('[DrawerDocs] Errore caricamento:', e);
+      setError(e.message);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleDelete(docId: string) {
+    if (!confirm('Eliminare questo documento?\n\n⚠️ Il file PDF rimarrà sul dispositivo, verrà rimosso solo il riferimento nell\'app.')) {
+      return;
+    }
+
+    try {
+      await deleteDocument(docId);
+      setDocuments(prev => prev.filter(d => d.id !== docId));
+      alert('✅ Documento eliminato');
+    } catch (e: any) {
+      console.error('[DrawerDocs] Errore eliminazione:', e);
+      alert(`Errore: ${e.message}`);
+    }
+  }
+
+  function handleOpen(doc: DocumentRecord) {
+    // In ambiente browser non possiamo "aprire" un file locale
+    // Ma possiamo informare l'utente dove trovarlo
+    alert(
+      `📄 ${doc.title}\n\n` +
+      `File salvato come:\n${doc.filename}\n\n` +
+      `Cerca il file nei download del tuo dispositivo.`
+    );
+  }
+
+  // Raggruppa documenti per tipo
+  const reportPlanning = documents.filter(d => d.document_type === 'report_planning');
+  const listeClienti = documents.filter(d => d.document_type === 'lista_clienti');
+
   return (
     <>
       <div className="topbar">
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
         <div className="title">Documenti</div>
+        <div className="spacer" />
+        <button className="iconbtn" onClick={loadDocuments} title="Ricarica">↻</button>
       </div>
+
       <div className="list" style={{ padding: 16 }}>
-        <div style={{ color: '#6b7280', fontSize: 14 }}>
-          Qui mostreremo i tuoi documenti e report generati.
-        </div>
-        <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 13 }}>
-          📄 Coming soon...
-        </div>
+        {loading && (
+          <div style={{ textAlign: 'center', padding: 24, color: '#6b7280' }}>
+            ⏳ Caricamento...
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: 16, background: '#fee2e2', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
+            ❌ Errore: {error}
+          </div>
+        )}
+
+        {!loading && !error && documents.length === 0 && (
+          <div style={{ textAlign: 'center', padding: 24 }}>
+            <div style={{ fontSize: 48, marginBottom: 8 }}>📄</div>
+            <div style={{ color: '#6b7280', fontSize: 14 }}>
+              Nessun documento generato ancora.
+            </div>
+            <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 8 }}>
+              Genera il tuo primo report dalla pagina di esecuzione planning.
+            </div>
+          </div>
+        )}
+
+        {!loading && !error && documents.length > 0 && (
+          <>
+            {/* Report Planning */}
+            {reportPlanning.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ 
+                  fontSize: 13, 
+                  fontWeight: 600, 
+                  color: '#374151',
+                  marginBottom: 12,
+                  paddingBottom: 8,
+                  borderBottom: '2px solid #e5e7eb'
+                }}>
+                  📊 Report Planning ({reportPlanning.length})
+                </div>
+                
+                {reportPlanning.map(doc => (
+                  <div 
+                    key={doc.id}
+                    style={{
+                      padding: 12,
+                      background: '#f9fafb',
+                      borderRadius: 8,
+                      border: '1px solid #e5e7eb',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#111827' }}>
+                      {doc.title}
+                    </div>
+                    
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                      {new Date(doc.created_at).toLocaleDateString('it-IT', { 
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                      {doc.file_size && ` • ${formatFileSize(doc.file_size)}`}
+                    </div>
+
+                    {doc.metadata && (
+                      <div style={{ 
+                        fontSize: 11, 
+                        color: '#9ca3af', 
+                        marginBottom: 8,
+                        display: 'flex',
+                        gap: 12,
+                        flexWrap: 'wrap'
+                      }}>
+                        {doc.metadata.num_visite && <span>👥 {doc.metadata.num_visite} visite</span>}
+                        {doc.metadata.fatturato_tot !== undefined && (
+                          <span>💰 €{doc.metadata.fatturato_tot.toFixed(2)}</span>
+                        )}
+                        {doc.metadata.km_tot !== undefined && doc.metadata.km_tot > 0 && (
+                          <span>🚗 {doc.metadata.km_tot}km</span>
+                        )}
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => handleOpen(doc)}
+                        style={{
+                          flex: 1,
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid #2563eb',
+                          background: 'white',
+                          color: '#2563eb',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        📂 Info
+                      </button>
+                      <button
+                        onClick={() => handleDelete(doc.id)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid #ef4444',
+                          background: 'white',
+                          color: '#ef4444',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Liste Clienti */}
+            {listeClienti.length > 0 && (
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ 
+                  fontSize: 13, 
+                  fontWeight: 600, 
+                  color: '#374151',
+                  marginBottom: 12,
+                  paddingBottom: 8,
+                  borderBottom: '2px solid #e5e7eb'
+                }}>
+                  📋 Liste Clienti ({listeClienti.length})
+                </div>
+                
+                {listeClienti.map(doc => (
+                  <div 
+                    key={doc.id}
+                    style={{
+                      padding: 12,
+                      background: '#f9fafb',
+                      borderRadius: 8,
+                      border: '1px solid #e5e7eb',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#111827' }}>
+                      {doc.title}
+                    </div>
+                    
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                      {new Date(doc.created_at).toLocaleDateString('it-IT', { 
+                        day: 'numeric',
+                        month: 'short',
+                        year: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                      })}
+                      {doc.file_size && ` • ${formatFileSize(doc.file_size)}`}
+                    </div>
+
+                    {doc.metadata && doc.metadata.num_clienti && (
+                      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>
+                        👥 {doc.metadata.num_clienti} clienti
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        onClick={() => handleOpen(doc)}
+                        style={{
+                          flex: 1,
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid #2563eb',
+                          background: 'white',
+                          color: '#2563eb',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        📂 Info
+                      </button>
+                      <button
+                        onClick={() => handleDelete(doc.id)}
+                        style={{
+                          padding: '6px 12px',
+                          borderRadius: 6,
+                          border: '1px solid #ef4444',
+                          background: 'white',
+                          color: '#ef4444',
+                          fontSize: 12,
+                          fontWeight: 600,
+                          cursor: 'pointer',
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
       </div>
     </>
   );
