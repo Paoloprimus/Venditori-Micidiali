@@ -183,7 +183,7 @@ export default function GenerateReportModal({ isOpen, onClose, onSelectReport }:
                 <div>
                   <div>Numero Visite in Periodo</div>
                   <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 2 }}>
-                    Es: clienti con >5 visite nel trimestre
+                    Es: clienti con &gt;5 visite nel trimestre
                   </div>
                 </div>
               </button>
