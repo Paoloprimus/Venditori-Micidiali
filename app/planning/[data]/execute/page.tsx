@@ -9,9 +9,13 @@
  * DESCRIZIONE:
  * Interfaccia per eseguire le visite del piano giornaliero.
  * Mostra un cliente alla volta con possibilità di:
- * - Saltare (salva visita con esito='skipped')
+ * - Saltare (salva visita con esito='altro')
  * - Spostare in basso (riordina temporaneamente)
  * - Completare (salva visita con ordine)
+ * 
+ * MODIFICHE FASE 3:
+ * - Aggiunto componente GenerateReportButton nella schermata finale
+ * - Rimosso redirect automatico, ora controllato manualmente
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -20,6 +24,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
 import TopBar from '@/components/home/TopBar';
+import GenerateReportButton from '@/components/GenerateReportButton';
 
 type Client = {
   id: string;
@@ -256,7 +261,7 @@ export default function ExecutePlanPage() {
     await saveVisit('ordine_acquisito', ordine);
   }
 
-  // Fine giornata
+  // Fine giornata - MODIFICATO: non più automatico
   useEffect(() => {
     if (isComplete && plan) {
       finishDay();
@@ -273,8 +278,7 @@ export default function ExecutePlanPage() {
 
       if (error) throw error;
 
-      alert(`🎉 Giornata completata!\n✅ ${completed} fatte\n⏭️ ${skipped} saltate`);
-      router.push(`/planning/${dataStr}`);
+      console.log('✅ Piano completato');
     } catch (e: any) {
       console.error('[Execute] Errore completamento:', e);
     }
@@ -338,6 +342,7 @@ export default function ExecutePlanPage() {
     );
   }
 
+  // ============== SCHERMATA FINALE - MODIFICATA ============== 
   if (isComplete) {
     return (
       <>
@@ -361,9 +366,51 @@ export default function ExecutePlanPage() {
         />
 
         <div style={{ maxWidth: 600, margin: '0 auto', padding: '90px 24px', textAlign: 'center' }}>
-          <h2 style={{ fontSize: 24, fontWeight: 700, marginBottom: 16 }}>🎉 Giornata Completata!</h2>
-          <div style={{ fontSize: 18, color: '#6b7280', marginBottom: 24 }}>
-            Reindirizzamento...
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 16 }}>🎉 Giornata Completata!</h2>
+            
+            <div style={{ 
+              display: 'grid', 
+              gridTemplateColumns: '1fr 1fr', 
+              gap: 16, 
+              marginTop: 24,
+              marginBottom: 32,
+              padding: 24,
+              background: '#f9fafb',
+              borderRadius: 12,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>✅ Completate</div>
+                <div style={{ fontSize: 32, fontWeight: 700, color: '#10b981' }}>{completed}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>⏭️ Saltate</div>
+                <div style={{ fontSize: 32, fontWeight: 700, color: '#f59e0b' }}>{skipped}</div>
+              </div>
+            </div>
+
+            {/* NUOVO: Bottone Genera Report */}
+            <div style={{ marginBottom: 24 }}>
+              <GenerateReportButton 
+                data={dataStr}
+                accountIds={orderedIds}
+              />
+            </div>
+
+            <button
+              onClick={() => router.push(`/planning/${dataStr}`)}
+              style={{
+                padding: '12px 32px',
+                borderRadius: 8,
+                border: '1px solid #d1d5db',
+                background: 'white',
+                cursor: 'pointer',
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              🔙 Torna al Planning
+            </button>
           </div>
         </div>
       </>
