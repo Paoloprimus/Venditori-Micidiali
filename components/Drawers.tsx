@@ -396,6 +396,8 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   );
 }
 
+// SOLO LA FUNZIONE DrawerDocs AGGIORNATA
+
 /* -------------------------- Contenuto: DOCS -------------------------- */
 function DrawerDocs({ onClose }: { onClose: () => void }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
@@ -460,6 +462,20 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
       </div>
 
       <div className="list" style={{ padding: 16 }}>
+        {/* 🆕 BOTTONE GENERA NUOVO REPORT */}
+        <div style={{ marginBottom: 24 }}>
+          <GenerateListaClientiButton onSuccess={loadDocuments} />
+        </div>
+
+        {/* Separatore */}
+        {!loading && documents.length > 0 && (
+          <div style={{ 
+            height: 1, 
+            background: '#e5e7eb', 
+            margin: '16px 0',
+          }} />
+        )}
+
         {loading && (
           <div style={{ textAlign: 'center', padding: 24, color: '#6b7280' }}>
             ⏳ Caricamento...
@@ -479,7 +495,7 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
               Nessun documento generato ancora.
             </div>
             <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 8 }}>
-              Genera il tuo primo report dalla pagina di esecuzione planning.
+              Clicca il bottone sopra per generare il tuo primo report.
             </div>
           </div>
         )}
