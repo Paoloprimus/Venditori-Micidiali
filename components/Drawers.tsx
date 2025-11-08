@@ -20,8 +20,11 @@
 
 // components/Drawers.tsx
 "use client";
+// components/Drawers.tsx
+"use client";
 import { useEffect, useState } from "react";
 import { fetchDocuments, deleteDocument, formatFileSize, type DocumentRecord } from '@/lib/pdf';
+import GenerateListaClientiButton from './GenerateListaClientiButton';
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
