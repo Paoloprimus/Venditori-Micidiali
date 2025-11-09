@@ -254,7 +254,7 @@ export function DrawersWithBackdrop({
 
 /* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
 function DrawerDati({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('clienti');
+  const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('uscite');
 
   function goQuickAdd() {
     onClose();
@@ -288,8 +288,25 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
         <div className="title">Gestione</div>
       </div>
 
-      {/* Tabs */}
+{/* Tabs */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
+        <button
+          onClick={() => setTab('uscite')}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 500,
+            color: tab === 'uscite' ? '#2563eb' : '#6b7280',
+            borderBottom: tab === 'uscite' ? '2px solid #2563eb' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}
+        >
+          USCITE
+        </button>
         <button
           onClick={() => setTab('clienti')}
           style={{
@@ -323,23 +340,6 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           }}
         >
           PRODOTTI
-        </button>
-        <button
-          onClick={() => setTab('uscite')}
-          style={{
-            flex: 1,
-            padding: '12px 16px',
-            border: 'none',
-            background: 'transparent',
-            cursor: 'pointer',
-            fontSize: 14,
-            fontWeight: 500,
-            color: tab === 'uscite' ? '#2563eb' : '#6b7280',
-            borderBottom: tab === 'uscite' ? '2px solid #2563eb' : '2px solid transparent',
-            transition: 'all 0.15s',
-          }}
-        >
-          USCITE
         </button>
       </div>
 
