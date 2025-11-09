@@ -37,7 +37,6 @@ export default function TestingChecklist() {
     };
     localStorage.setItem('reping-testing-checklist', JSON.stringify(dataToSave));
   }, [state, groupNotes]);
-  const [groupNotes, setGroupNotes] = useState<Record<string, string>>({});
 
   const handleAnswer = (testId: string, answer: TestAnswer) => {
     setState(prev => ({
