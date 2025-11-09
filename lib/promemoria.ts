@@ -90,6 +90,7 @@ export async function createPromemoria(
 
   const encrypted = await crypto.encryptFields(
     'table:promemoria',
+    'promemoria',
     recordToEncrypt,
     ['nota']
   );
@@ -234,6 +235,7 @@ export async function updatePromemoria(
 
     const encrypted = await crypto.encryptFields(
       'table:promemoria',
+      'promemoria',
       recordToEncrypt,
       ['nota']
     );
