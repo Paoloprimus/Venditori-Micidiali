@@ -22,6 +22,7 @@ import { fetchDocuments, deleteDocument, formatFileSize, type DocumentRecord } f
 import GenerateListaClientiButton from './GenerateListaClientiButton';
 import ProductManager from "./products/ProductManager";
 import { ToastProvider } from "./ui/Toast";
+import PromemoriaSection from './PromemoriaSection';
 
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
@@ -397,11 +398,14 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* -------------------------- Contenuto: DOCS -------------------------- */
+/* -------------------------- Contenuto: DOCS (CON ACCORDION) -------------------------- */
 function DrawerDocs({ onClose }: { onClose: () => void }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  
+  // Stato accordion (quale sezione è aperta)
+  const [openSection, setOpenSection] = useState<'promemoria' | 'storico' | 'genera' | null>('promemoria');
 
   useEffect(() => {
     loadDocuments();
@@ -436,6 +440,10 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
     alert(`📄 ${doc.title}\n\nFile: ${doc.filename}\n\nCerca nei download del dispositivo.`);
   }
 
+  function toggleSection(section: 'promemoria' | 'storico' | 'genera') {
+    setOpenSection(openSection === section ? null : section);
+  }
+
   const reportPlanning = documents.filter(d => d.document_type === 'report_planning');
   const listeClienti = documents.filter(d => d.document_type === 'lista_clienti');
 
@@ -448,88 +456,199 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
         <button className="iconbtn" onClick={loadDocuments} title="Ricarica">↻</button>
       </div>
 
-      <div className="list" style={{ padding: 16 }}>
-        <div style={{ marginBottom: 24 }}>
-          <GenerateListaClientiButton onSuccess={loadDocuments} />
+      <div className="list" style={{ padding: 0 }}>
+        
+        {/* ========== SEZIONE 1: PROMEMORIA ========== */}
+        <div>
+          {/* Header cliccabile */}
+          <button
+            onClick={() => toggleSection('promemoria')}
+            style={{
+              width: '100%',
+              padding: '16px',
+              border: 'none',
+              borderBottom: '1px solid #e5e7eb',
+              background: openSection === 'promemoria' ? '#f9fafb' : 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: 15,
+              fontWeight: 600,
+              color: '#111827',
+              transition: 'background 0.15s',
+            }}
+          >
+            <span>📌 PROMEMORIA</span>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>
+              {openSection === 'promemoria' ? '▼' : '▶'}
+            </span>
+          </button>
+
+          {/* Contenuto */}
+          {openSection === 'promemoria' && (
+            <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+              <PromemoriaSection />
+            </div>
+          )}
         </div>
 
-        {!loading && documents.length > 0 && (
-          <div style={{ height: 1, background: '#e5e7eb', margin: '16px 0' }} />
-        )}
+        {/* ========== SEZIONE 2: STORICO REPORT ========== */}
+        <div>
+          {/* Header cliccabile */}
+          <button
+            onClick={() => toggleSection('storico')}
+            style={{
+              width: '100%',
+              padding: '16px',
+              border: 'none',
+              borderBottom: '1px solid #e5e7eb',
+              background: openSection === 'storico' ? '#f9fafb' : 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: 15,
+              fontWeight: 600,
+              color: '#111827',
+              transition: 'background 0.15s',
+            }}
+          >
+            <span>📊 STORICO REPORT</span>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>
+              {openSection === 'storico' ? '▼' : '▶'}
+            </span>
+          </button>
 
-        {loading && <div style={{ textAlign: 'center', padding: 24, color: '#6b7280' }}>⏳ Caricamento...</div>}
-        {error && <div style={{ padding: 16, background: '#fee2e2', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>❌ Errore: {error}</div>}
-        
-        {!loading && !error && documents.length === 0 && (
-          <div style={{ textAlign: 'center', padding: 24 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>📄</div>
-            <div style={{ color: '#6b7280', fontSize: 14 }}>Nessun documento generato ancora.</div>
-            <div style={{ color: '#9ca3af', fontSize: 12, marginTop: 8 }}>Clicca il bottone sopra per generare il tuo primo report.</div>
-          </div>
-        )}
-
-        {!loading && !error && documents.length > 0 && (
-          <>
-            {reportPlanning.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #e5e7eb' }}>
-                  📊 Report Planning ({reportPlanning.length})
+          {/* Contenuto */}
+          {openSection === 'storico' && (
+            <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
+              {loading && (
+                <div style={{ textAlign: 'center', padding: 24, color: '#6b7280' }}>
+                  ⏳ Caricamento...
                 </div>
-                {reportPlanning.map(doc => (
-                  <div key={doc.id} style={{ padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#111827' }}>{doc.title}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      {new Date(doc.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      {doc.file_size && ` • ${formatFileSize(doc.file_size)}`}
-                    </div>
-                    {doc.metadata && (
-                      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-                        {doc.metadata.num_visite && <span>👥 {doc.metadata.num_visite} visite</span>}
-                        {doc.metadata.fatturato_tot !== undefined && <span>💰 €{doc.metadata.fatturato_tot.toFixed(2)}</span>}
+              )}
+
+              {error && (
+                <div style={{ padding: 16, background: '#fee2e2', borderRadius: 8, color: '#991b1b', fontSize: 13 }}>
+                  ❌ Errore: {error}
+                </div>
+              )}
+              
+              {!loading && !error && documents.length === 0 && (
+                <div style={{ textAlign: 'center', padding: 24 }}>
+                  <div style={{ fontSize: 48, marginBottom: 8 }}>📄</div>
+                  <div style={{ color: '#6b7280', fontSize: 14 }}>
+                    Nessun report generato ancora.
+                  </div>
+                </div>
+              )}
+
+              {!loading && !error && documents.length > 0 && (
+                <>
+                  {/* Report Planning */}
+                  {reportPlanning.length > 0 && (
+                    <div style={{ marginBottom: 24 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #e5e7eb' }}>
+                        📊 Report Planning ({reportPlanning.length})
                       </div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => handleOpen(doc)} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: '1px solid #2563eb', background: 'white', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        📂 Info
-                      </button>
-                      <button onClick={() => handleDelete(doc.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ef4444', background: 'white', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        🗑️
-                      </button>
+                      {reportPlanning.map(doc => (
+                        <div key={doc.id} style={{ padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#111827' }}>{doc.title}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                            {new Date(doc.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {doc.file_size && ` • ${formatFileSize(doc.file_size)}`}
+                          </div>
+                          {doc.metadata && (
+                            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+                              {doc.metadata.num_visite && <span>👥 {doc.metadata.num_visite} visite</span>}
+                              {doc.metadata.fatturato_tot !== undefined && <span>💰 €{doc.metadata.fatturato_tot.toFixed(2)}</span>}
+                            </div>
+                          )}
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => handleOpen(doc)} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: '1px solid #2563eb', background: 'white', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              📂 Info
+                            </button>
+                            <button onClick={() => handleDelete(doc.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ef4444', background: 'white', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
+                  )}
 
-            {listeClienti.length > 0 && (
-              <div style={{ marginBottom: 24 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #e5e7eb' }}>
-                  📋 Liste Clienti ({listeClienti.length})
-                </div>
-                {listeClienti.map(doc => (
-                  <div key={doc.id} style={{ padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 8 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#111827' }}>{doc.title}</div>
-                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                      {new Date(doc.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                      {doc.file_size && ` • ${formatFileSize(doc.file_size)}`}
+                  {/* Liste Clienti */}
+                  {listeClienti.length > 0 && (
+                    <div style={{ marginBottom: 24 }}>
+                      <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #e5e7eb' }}>
+                        📋 Liste Clienti ({listeClienti.length})
+                      </div>
+                      {listeClienti.map(doc => (
+                        <div key={doc.id} style={{ padding: 12, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb', marginBottom: 8 }}>
+                          <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4, color: '#111827' }}>{doc.title}</div>
+                          <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                            {new Date(doc.created_at).toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                            {doc.file_size && ` • ${formatFileSize(doc.file_size)}`}
+                          </div>
+                          {doc.metadata && doc.metadata.num_clienti && (
+                            <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>👥 {doc.metadata.num_clienti} clienti</div>
+                          )}
+                          <div style={{ display: 'flex', gap: 8 }}>
+                            <button onClick={() => handleOpen(doc)} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: '1px solid #2563eb', background: 'white', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              📂 Info
+                            </button>
+                            <button onClick={() => handleDelete(doc.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ef4444', background: 'white', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
+                              🗑️
+                            </button>
+                          </div>
+                        </div>
+                      ))}
                     </div>
-                    {doc.metadata && doc.metadata.num_clienti && (
-                      <div style={{ fontSize: 11, color: '#9ca3af', marginBottom: 8 }}>👥 {doc.metadata.num_clienti} clienti</div>
-                    )}
-                    <div style={{ display: 'flex', gap: 8 }}>
-                      <button onClick={() => handleOpen(doc)} style={{ flex: 1, padding: '6px 12px', borderRadius: 6, border: '1px solid #2563eb', background: 'white', color: '#2563eb', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        📂 Info
-                      </button>
-                      <button onClick={() => handleDelete(doc.id)} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #ef4444', background: 'white', color: '#ef4444', fontSize: 12, fontWeight: 600, cursor: 'pointer' }}>
-                        🗑️
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </>
-        )}
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* ========== SEZIONE 3: GENERA REPORT ========== */}
+        <div>
+          {/* Header cliccabile */}
+          <button
+            onClick={() => toggleSection('genera')}
+            style={{
+              width: '100%',
+              padding: '16px',
+              border: 'none',
+              background: openSection === 'genera' ? '#f9fafb' : 'white',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              fontSize: 15,
+              fontWeight: 600,
+              color: '#111827',
+              transition: 'background 0.15s',
+            }}
+          >
+            <span>➕ GENERA REPORT</span>
+            <span style={{ fontSize: 12, color: '#6b7280' }}>
+              {openSection === 'genera' ? '▼' : '▶'}
+            </span>
+          </button>
+
+          {/* Contenuto */}
+          {openSection === 'genera' && (
+            <div style={{ padding: 16 }}>
+              <GenerateListaClientiButton onSuccess={() => {
+                loadDocuments();
+                setOpenSection('storico'); // Apri storico dopo generazione
+              }} />
+            </div>
+          )}
+        </div>
+
       </div>
     </>
   );
