@@ -8,6 +8,8 @@
  * MODIFICHE:
  * - Import clienti: Aggiunto link /tools/import-clients
  * - Planning: Aggiunto link /planning (sezione Uscite)
+ * - Prodotti: Aggiunta sezione completa con ProductManager
+ * - Documenti: Sistema completo generazione PDF liste
  * 
  * ============================================================================
  */
@@ -18,6 +20,8 @@ import { useEffect, useState } from "react";
 
 import { fetchDocuments, deleteDocument, formatFileSize, type DocumentRecord } from '@/lib/pdf';
 import GenerateListaClientiButton from './GenerateListaClientiButton';
+import ProductManager from "./products/ProductManager";
+import { ToastProvider } from "./ui/Toast";
 
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
@@ -249,7 +253,7 @@ export function DrawersWithBackdrop({
 
 /* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
 function DrawerDati({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<'clienti' | 'uscite'>('clienti');
+  const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('clienti');
 
   function goQuickAdd() {
     onClose();
@@ -269,6 +273,11 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   function goPlanning() {
     onClose();
     window.location.href = "/planning";
+  }
+
+  function goProductsList() {
+    // TODO: quando avremo la pagina lista prodotti
+    alert("Lista prodotti - in arrivo");
   }
 
   return (
@@ -296,6 +305,23 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
           }}
         >
           CLIENTI
+        </button>
+        <button
+          onClick={() => setTab('prodotti')}
+          style={{
+            flex: 1,
+            padding: '12px 16px',
+            border: 'none',
+            background: 'transparent',
+            cursor: 'pointer',
+            fontSize: 14,
+            fontWeight: 500,
+            color: tab === 'prodotti' ? '#2563eb' : '#6b7280',
+            borderBottom: tab === 'prodotti' ? '2px solid #2563eb' : '2px solid transparent',
+            transition: 'all 0.15s',
+          }}
+        >
+          PRODOTTI
         </button>
         <button
           onClick={() => setTab('uscite')}
@@ -331,6 +357,22 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={() => alert('Template CSV clienti - in arrivo')}>
               📄 Scarica template CSV
             </button>
+          </div>
+        )}
+
+        {tab === 'prodotti' && (
+          <div style={{ display: 'grid', gap: 8 }}>
+            <button className="btn" onClick={goProductsList}>
+              📦 Lista prodotti
+            </button>
+            <button className="btn" onClick={() => alert('Aggiungi prodotto - in arrivo')} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+              ➕ Aggiungi singolo
+            </button>
+            <ToastProvider>
+              <div style={{ marginTop: 8 }}>
+                <ProductManager onCloseDrawer={onClose} />
+              </div>
+            </ToastProvider>
           </div>
         )}
 
