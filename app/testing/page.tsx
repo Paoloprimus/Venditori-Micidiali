@@ -1,13 +1,43 @@
 // TestingChecklist.tsx
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 type TestAnswer = 'yes' | 'no' | null;
 type TestState = Record<string, { answer: TestAnswer; problem?: string }>;
 
 export default function TestingChecklist() {
   const [state, setState] = useState<TestState>({});
+  const [groupNotes, setGroupNotes] = useState<Record<string, string>>({});
+
+  // ============================================================================
+  // LOCALSTORAGE: Carica all'avvio
+  // ============================================================================
+  useEffect(() => {
+    const saved = localStorage.getItem('reping-testing-checklist');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed.state) setState(parsed.state);
+        if (parsed.groupNotes) setGroupNotes(parsed.groupNotes);
+      } catch (e) {
+        console.error('Errore caricamento localStorage:', e);
+      }
+    }
+  }, []);
+
+  // ============================================================================
+  // LOCALSTORAGE: Salva automaticamente ad ogni modifica
+  // ============================================================================
+  useEffect(() => {
+    const dataToSave = {
+      state,
+      groupNotes,
+      lastSaved: new Date().toISOString(),
+    };
+    localStorage.setItem('reping-testing-checklist', JSON.stringify(dataToSave));
+  }, [state, groupNotes]);
+  const [groupNotes, setGroupNotes] = useState<Record<string, string>>({});
 
   const handleAnswer = (testId: string, answer: TestAnswer) => {
     setState(prev => ({
@@ -31,6 +61,78 @@ export default function TestingChecklist() {
     });
   };
 
+  const handleGroupNote = (groupId: string, note: string) => {
+    setGroupNotes(prev => ({
+      ...prev,
+      [groupId]: note
+    }));
+  };
+
+  // ============================================================================
+  // EXPORT JSON: Scarica file con tutti i dati
+  // ============================================================================
+  const exportJSON = () => {
+    const dataToExport = {
+      state,
+      groupNotes,
+      exportDate: new Date().toISOString(),
+      version: '1.0',
+    };
+    
+    const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reping-testing-${new Date().toISOString().split('T')[0]}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    
+    alert('✅ Sessione esportata!');
+  };
+
+  // ============================================================================
+  // IMPORT JSON: Carica file salvato
+  // ============================================================================
+  const importJSON = () => {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = '.json';
+    
+    input.onchange = (e: any) => {
+      const file = e.target.files[0];
+      if (!file) return;
+      
+      const reader = new FileReader();
+      reader.onload = (event: any) => {
+        try {
+          const parsed = JSON.parse(event.target.result);
+          if (parsed.state) setState(parsed.state);
+          if (parsed.groupNotes) setGroupNotes(parsed.groupNotes);
+          alert('✅ Sessione importata!');
+        } catch (error) {
+          alert('❌ Errore: file non valido');
+        }
+      };
+      reader.readAsText(file);
+    };
+    
+    input.click();
+  };
+
+  // ============================================================================
+  // RESET ALL: Ricomincia da zero
+  // ============================================================================
+  const resetAll = () => {
+    if (!confirm('⚠️ Eliminare TUTTI i dati della checklist?\n\nQuesta azione è irreversibile!')) return;
+    
+    setState({});
+    setGroupNotes({});
+    localStorage.removeItem('reping-testing-checklist');
+    alert('✅ Checklist resettata!');
+  };
+
   const getStats = () => {
     const answers = Object.values(state);
     const ok = answers.filter(a => a.answer === 'yes').length;
@@ -50,30 +152,46 @@ export default function TestingChecklist() {
     output += `- ⏳ Da testare: ${stats.pending}\n\n`;
     output += `---\n\n`;
 
-    // Export layout checks
-    layoutChecks.forEach(check => {
-      const result = state[check.id];
-      if (result) {
-        const symbol = result.answer === 'yes' ? '✅' : '❌';
-        output += `${symbol} **LAYOUT ${check.group}**: ${check.question}\n`;
-        if (result.answer === 'no' && result.problem) {
-          output += `   PROBLEMA: ${result.problem}\n`;
+    // Export per gruppo
+    groups.forEach(group => {
+      output += `## ${group.icon} ${group.title}\n\n`;
+      
+      // Layout check
+      const layoutCheck = layoutChecks.find(c => c.group === group.id);
+      if (layoutCheck) {
+        const result = state[layoutCheck.id];
+        if (result) {
+          const symbol = result.answer === 'yes' ? '✅' : '❌';
+          output += `${symbol} **LAYOUT**: ${layoutCheck.question}\n`;
+          if (result.answer === 'no' && result.problem) {
+            output += `   PROBLEMA: ${result.problem}\n`;
+          }
+          output += '\n';
         }
-        output += '\n';
       }
-    });
-
-    // Export test items
-    testItems.forEach(test => {
-      const result = state[test.id];
-      if (result) {
-        const symbol = result.answer === 'yes' ? '✅' : '❌';
-        output += `${symbol} ${test.label}\n`;
-        if (result.answer === 'no' && result.problem) {
-          output += `   PROBLEMA: ${result.problem}\n`;
-        }
-        output += '\n';
+      
+      // Test items
+      testItems
+        .filter(test => test.group === group.id)
+        .forEach(test => {
+          const result = state[test.id];
+          if (result) {
+            const symbol = result.answer === 'yes' ? '✅' : '❌';
+            output += `${symbol} ${test.label}\n`;
+            if (result.answer === 'no' && result.problem) {
+              output += `   PROBLEMA: ${result.problem}\n`;
+            }
+            output += '\n';
+          }
+        });
+      
+      // Note generali gruppo
+      if (groupNotes[group.id]?.trim()) {
+        output += `### 📝 Note Generali ${group.id}\n`;
+        output += `${groupNotes[group.id]}\n\n`;
       }
+      
+      output += `---\n\n`;
     });
 
     navigator.clipboard.writeText(output);
@@ -90,7 +208,7 @@ export default function TestingChecklist() {
 
       {/* Statistiche */}
       <div style={{ background: 'white', borderRadius: 8, padding: 20, marginBottom: 20 }}>
-        <div style={{ display: 'flex', gap: 20, justifyContent: 'center' }}>
+        <div style={{ display: 'flex', gap: 20, justifyContent: 'center', marginBottom: 20 }}>
           <div style={{ padding: '8px 16px', borderRadius: 6, background: '#d1fae5', color: '#065f46', fontWeight: 600 }}>
             ✅ OK: {stats.ok}
           </div>
@@ -101,14 +219,15 @@ export default function TestingChecklist() {
             ⏳ Da testare: {stats.pending}
           </div>
         </div>
-        <div style={{ textAlign: 'center', marginTop: 15 }}>
+        
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', flexWrap: 'wrap' }}>
           <button
             onClick={exportResults}
             style={{
               background: '#2563eb',
               color: 'white',
               padding: '12px 24px',
-              fontSize: 16,
+              fontSize: 15,
               borderRadius: 8,
               border: 'none',
               cursor: 'pointer',
@@ -117,6 +236,58 @@ export default function TestingChecklist() {
           >
             📋 Copia Risultati
           </button>
+          
+          <button
+            onClick={exportJSON}
+            style={{
+              background: '#10b981',
+              color: 'white',
+              padding: '12px 24px',
+              fontSize: 15,
+              borderRadius: 8,
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            💾 Esporta Sessione
+          </button>
+          
+          <button
+            onClick={importJSON}
+            style={{
+              background: '#f59e0b',
+              color: 'white',
+              padding: '12px 24px',
+              fontSize: 15,
+              borderRadius: 8,
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            📂 Importa Sessione
+          </button>
+          
+          <button
+            onClick={resetAll}
+            style={{
+              background: '#ef4444',
+              color: 'white',
+              padding: '12px 24px',
+              fontSize: 15,
+              borderRadius: 8,
+              border: 'none',
+              cursor: 'pointer',
+              fontWeight: 600,
+            }}
+          >
+            🗑️ Reset All
+          </button>
+        </div>
+        
+        <div style={{ textAlign: 'center', marginTop: 12, fontSize: 12, color: '#6b7280' }}>
+          💾 Salvataggio automatico attivo
         </div>
       </div>
 
@@ -154,6 +325,40 @@ export default function TestingChecklist() {
                 onReset={() => resetAnswer(test.id)}
               />
             ))}
+
+          {/* Note Generali Gruppo */}
+          <div style={{
+            marginTop: 20,
+            paddingTop: 20,
+            borderTop: '2px solid #e5e7eb',
+          }}>
+            <div style={{
+              fontSize: 14,
+              fontWeight: 600,
+              color: '#374151',
+              marginBottom: 8,
+            }}>
+              📝 Note Generali - Miglioramenti & Osservazioni
+            </div>
+            <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+              Qui puoi annotare suggerimenti, modifiche desiderate o osservazioni generali su questo gruppo (anche se non sono errori)
+            </div>
+            <textarea
+              value={groupNotes[group.id] || ''}
+              onChange={(e) => handleGroupNote(group.id, e.target.value)}
+              placeholder="Es: L'ordine dei bottoni potrebbe essere migliorato, aggiungerei un filtro per..., la sezione è poco visibile..."
+              style={{
+                width: '100%',
+                minHeight: 100,
+                padding: 12,
+                border: '2px solid #d1d5db',
+                borderRadius: 8,
+                fontSize: 13,
+                fontFamily: 'inherit',
+                resize: 'vertical',
+              }}
+            />
+          </div>
         </div>
       ))}
     </div>
