@@ -430,6 +430,7 @@ async function submitFromComposer() {
             serverError={conv.serverError}
             threadRef={conv.threadRef}
             endRef={conv.endRef}
+            onOpenDrawer={openDocs}
           />
           <Composer
             value={conv.input}
