@@ -1,7 +1,7 @@
 // TestingChecklist.tsx
 'use client';
 
-import { useState } from 'react';
+import React, { useState } from 'react';
 
 type TestAnswer = 'yes' | 'no' | null;
 type TestState = Record<string, { answer: TestAnswer; problem?: string }>;
@@ -164,7 +164,15 @@ export default function TestingChecklist() {
 // COMPONENTI UI
 // ============================================================================
 
-function LayoutCheck({ check, state, onAnswer, onProblem, onReset }: any) {
+type LayoutCheckProps = {
+  check: { id: string; group: string; question: string };
+  state?: { answer: TestAnswer; problem?: string };
+  onAnswer: (answer: TestAnswer) => void;
+  onProblem: (problem: string) => void;
+  onReset: () => void;
+};
+
+function LayoutCheck({ check, state, onAnswer, onProblem, onReset }: LayoutCheckProps) {
   return (
     <div style={{
       background: '#fffbeb',
@@ -212,7 +220,15 @@ function LayoutCheck({ check, state, onAnswer, onProblem, onReset }: any) {
   );
 }
 
-function TestItem({ test, state, onAnswer, onProblem, onReset }: any) {
+type TestItemProps = {
+  test: { id: string; group: string; label: string };
+  state?: { answer: TestAnswer; problem?: string };
+  onAnswer: (answer: TestAnswer) => void;
+  onProblem: (problem: string) => void;
+  onReset: () => void;
+};
+
+function TestItem({ test, state, onAnswer, onProblem, onReset }: TestItemProps) {
   return (
     <div style={{ borderBottom: '1px solid #e5e7eb', padding: '12px 0' }}>
       <div style={{ fontSize: 14, color: '#374151', marginBottom: 8 }}>
@@ -254,8 +270,14 @@ function TestItem({ test, state, onAnswer, onProblem, onReset }: any) {
   );
 }
 
-function Button({ variant, onClick, children }: any) {
-  const styles: Record<string, any> = {
+type ButtonProps = {
+  variant: 'yes' | 'yes-active' | 'no' | 'no-active' | 'reset';
+  onClick: () => void;
+  children: React.ReactNode;
+};
+
+function Button({ variant, onClick, children }: ButtonProps) {
+  const styles: Record<ButtonProps['variant'], React.CSSProperties> = {
     yes: { background: '#10b981', color: 'white' },
     'yes-active': { background: '#059669', color: 'white', boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.2)' },
     no: { background: '#ef4444', color: 'white' },
