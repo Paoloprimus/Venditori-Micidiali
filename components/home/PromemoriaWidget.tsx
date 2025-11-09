@@ -29,11 +29,52 @@ export default function PromemoriaWidget({ onOpenDrawer }: Props) {
     }
   }
 
-  // Se loading o nessun promemoria, mostra frase originale
-  if (loading || promemoria.length === 0) {
+  // Se loading, mostra frase originale
+  if (loading) {
     return (
       <div className="helper">
         Nessun messaggio ancora. Scrivi qui sotto per iniziare.
+      </div>
+    );
+  }
+
+  // Se nessun promemoria, mostra "Nessun promemoria [➕]" + helper chat
+  if (promemoria.length === 0) {
+    return (
+      <div style={{ textAlign: 'center', padding: '24px 16px' }}>
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          gap: 8,
+          marginBottom: 16 
+        }}>
+          <span style={{ color: '#6b7280', fontSize: 14 }}>
+            Nessun promemoria
+          </span>
+          <button
+            onClick={onOpenDrawer}
+            title="Crea promemoria"
+            style={{
+              width: 32,
+              height: 32,
+              borderRadius: 6,
+              border: '1px solid #d1d5db',
+              background: 'white',
+              cursor: 'pointer',
+              fontSize: 16,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            ➕
+          </button>
+        </div>
+        
+        <div className="helper">
+          Nessun messaggio ancora. Scrivi qui sotto per iniziare.
+        </div>
       </div>
     );
   }
