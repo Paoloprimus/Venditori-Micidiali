@@ -243,18 +243,44 @@ async function submitFromComposer() {
   conv.setInput(""); // ✅ FIX 2: Svuota input SUBITO
 
   // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
-  if (pendingIntent) {
+if (pendingIntent) {
     if (YES.test(txt)) {
+      // Aggiungi la risposta "sì" alle bolle locali
+      appendUserLocal(txt);
+      
+      // Esegui l'azione
       await handleIntent(pendingIntent);
+      
+      // Aggiungi "Fatto" alle bolle locali
+      appendAssistantLocal("✅ Fatto.");
+      
       setPendingIntent(null);
       return;
     }
     if (NO.test(txt)) {
-      speakIfEnabled("Ok, annullato.");
+      // Aggiungi il "no" alle bolle locali
+      appendUserLocal(txt);
+      
+      const cancelMsg = "Ok, annullato.";
+      appendAssistantLocal(cancelMsg);
+      speakIfEnabled(cancelMsg);
+      
       setPendingIntent(null);
       return;
     }
   }
+```
+
+---
+
+## ✅ COPIA E SOSTITUISCI!
+
+Adesso nella chat vedrai:
+```
+Tu: cerca cliente test
+AI: Confermi: cerco il cliente test?
+Tu: sì
+AI: ✅ Fatto.
 
   // ========== ✅ FIX VOICE INTENTS: PRIORITÀ MASSIMA ==========
   const voiceIntent = matchIntent(txt);
