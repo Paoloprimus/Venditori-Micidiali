@@ -285,6 +285,49 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     alert("Lista prodotti - in arrivo");
   }
 
+  function downloadCSVTemplate() {
+    const headers = [
+      'name',
+      'contact_name',
+      'city',
+      'address',
+      'tipo_locale',
+      'phone',
+      'email',
+      'vat_number',
+      'notes'
+    ];
+    
+    const exampleRow = [
+      'Bar Centrale',
+      'Mario Rossi',
+      'Milano',
+      'Via Roma 123',
+      'Bar',
+      '0212345678',
+      'info@barcentrale.it',
+      '12345678901',
+      'Cliente storico, preferisce consegne al mattino'
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      exampleRow.join(',')
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'template-clienti.csv');
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   return (
     <>
       <div className="topbar">
@@ -359,7 +402,7 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goImportClients}>
               📥 Importa lista
             </button>
-            <button className="btn" onClick={() => alert('Template CSV clienti - in arrivo')}>
+            <button className="btn" onClick={downloadCSVTemplate}>
               📄 Scarica template CSV
             </button>
           </div>
