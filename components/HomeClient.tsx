@@ -400,11 +400,6 @@ async function submitFromComposer() {
   return;
 }
 
-  // ---------- Fallback finale: modello generico ----------
-  console.error("[fallback:model] no standard intent, no planner match");
-  await conv.send(txt);
-  return;
-}
 
   return (
     <>
