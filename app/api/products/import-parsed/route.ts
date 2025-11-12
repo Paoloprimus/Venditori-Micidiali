@@ -6,16 +6,16 @@ export const runtime = "nodejs";
 export const maxDuration = 60;
 
 type ProductRow = {
-  codice: string;
-  descrizione_articolo: string;
-  title?: string;
+  codice: string;           // OBBLIGATORIO
+  descrizione_articolo: string;  // OBBLIGATORIO
+  title: string;            // OBBLIGATORIO
+  giacenza: number;         // OBBLIGATORIO (default 0)
+  is_active: boolean;       // OBBLIGATORIO (default true)
   sku?: string;
   unita_misura?: string;
-  giacenza?: number;
   base_price?: number;
   sconto_merce?: string;
   sconto_fattura?: number;
-  is_active?: boolean;
 };
 
 export async function POST(req: NextRequest) {
@@ -44,18 +44,18 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // Normalizza i dati
+      // Normalizza i dati - TITLE è obbligatorio!
       const product: ProductRow = {
         codice: String(row.codice).trim(),
         descrizione_articolo: String(row.descrizione_articolo).trim(),
-        title: row.title?.trim() || row.descrizione_articolo?.trim() || row.codice?.trim(),
+        title: row.title ? String(row.title).trim() : String(row.descrizione_articolo).trim(), // Usa descrizione se title manca
         sku: row.sku ? String(row.sku).trim() : undefined,
         unita_misura: row.unita_misura ? String(row.unita_misura).trim() : undefined,
-        giacenza: row.giacenza ? parseInt(String(row.giacenza)) : 0,
-        base_price: row.base_price ? parseFloat(String(row.base_price)) : undefined,
+        giacenza: row.giacenza !== undefined && row.giacenza !== null && row.giacenza !== "" ? parseInt(String(row.giacenza)) : 0, // Default 0
+        base_price: row.base_price !== undefined && row.base_price !== null && row.base_price !== "" ? parseFloat(String(row.base_price)) : undefined,
         sconto_merce: row.sconto_merce ? String(row.sconto_merce).trim() : undefined,
-        sconto_fattura: row.sconto_fattura ? parseFloat(String(row.sconto_fattura)) : undefined,
-        is_active: row.is_active !== undefined ? Boolean(row.is_active) : true,
+        sconto_fattura: row.sconto_fattura !== undefined && row.sconto_fattura !== null && row.sconto_fattura !== "" ? parseFloat(String(row.sconto_fattura)) : undefined,
+        is_active: row.is_active !== undefined ? Boolean(row.is_active) : true, // Default true
       };
 
       // Valida sconto_fattura (0-100)
