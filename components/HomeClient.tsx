@@ -231,18 +231,18 @@ async function submitFromComposer() {
   const txt = conv.input.trim();
   if (!txt) return;
 
+    conv.setInput(""); // ⬅️ AGGIUNGI QUESTA RIGA
+
   // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
   if (pendingIntent) {
     if (YES.test(txt)) {
       await handleIntent(pendingIntent);
       setPendingIntent(null);
-      conv.setInput("");
       return;
     }
     if (NO.test(txt)) {
       speakIfEnabled("Ok, annullato.");
       setPendingIntent(null);
-      conv.setInput("");
       return;
     }
   } else {
@@ -319,7 +319,6 @@ async function submitFromComposer() {
             setLocalAssistant([]);
           }
 
-          conv.setInput("");
           return; // ⬅️ STOP: abbiamo risposto con lo standard flow
         }
       }
@@ -380,7 +379,6 @@ async function submitFromComposer() {
           setLocalAssistant([]);
         }
 
-        conv.setInput("");
         return;
       }
     } catch (e) {
@@ -391,7 +389,6 @@ async function submitFromComposer() {
     const intent = matchIntent(txt);
     if (intent.type !== "NONE") {
       askConfirm(intent);
-      conv.setInput("");
       return;
     }
   }
@@ -399,7 +396,6 @@ async function submitFromComposer() {
   // ---------- Fallback finale: modello generico ----------
   console.error("[fallback:model] no standard intent, no planner match");
   await conv.send(txt);
-  conv.setInput("");
   return;
 }
 
