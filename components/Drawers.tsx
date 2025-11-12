@@ -288,6 +288,11 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     window.location.href = "/tools/quick-add-product";
   }
 
+  function goImportProducts() {
+    onClose();
+    window.location.href = "/tools/import-products";
+  }
+
   function downloadCSVTemplate() {
     const headers = [
       'name',
@@ -324,6 +329,51 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     
     link.setAttribute('href', url);
     link.setAttribute('download', 'template-clienti.csv');
+    link.style.visibility = 'hidden';
+    
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  function downloadProductsCSVTemplate() {
+    const headers = [
+      'codice',
+      'descrizione_articolo',
+      'title',
+      'sku',
+      'unita_misura',
+      'giacenza',
+      'base_price',
+      'sconto_merce',
+      'sconto_fattura',
+      'is_active'
+    ];
+    
+    const exampleRow = [
+      'ART001',
+      'Vino Rosso DOC 75cl',
+      'Vino Rosso',
+      '8001234567890',
+      'BT',
+      '100',
+      '12.50',
+      '1+1 gratis',
+      '10',
+      'true'
+    ];
+    
+    const csvContent = [
+      headers.join(','),
+      exampleRow.join(',')
+    ].join('\n');
+    
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'template-prodotti.csv');
     link.style.visibility = 'hidden';
     
     document.body.appendChild(link);
@@ -419,10 +469,10 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goQuickAddProduct} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Aggiungi singolo
             </button>
-            <button className="btn" onClick={() => alert('Importa lista prodotti - in arrivo')}>
+            <button className="btn" onClick={goImportProducts}>
               📥 Importa lista
             </button>
-            <button className="btn" onClick={() => alert('Template CSV prodotti - in arrivo')}>
+            <button className="btn" onClick={downloadProductsCSVTemplate}>
               📄 Scarica template CSV
             </button>
           </div>
