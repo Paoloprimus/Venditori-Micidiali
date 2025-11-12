@@ -398,17 +398,24 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* -------------------------- Contenuto: DOCS (ACCORDION CORRETTO) -------------------------- */
+/* -------------------------- Contenuto: DOCS (STRUTTURA CORRETTA) -------------------------- */
 function DrawerDocs({ onClose }: { onClose: () => void }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Stato accordion (quale sezione è aperta) - DEFAULT NULL
+  // Stato accordion
   const [openSection, setOpenSection] = useState<'promemoria' | 'storico' | null>(null);
+  
+  // Stato promemoria
+  const [promemoria, setPromemoria] = useState<Promemoria[]>([]);
+  const [loadingPromemoria, setLoadingPromemoria] = useState(true);
+  const [showPromemoriaForm, setShowPromemoriaForm] = useState(false);
+  const [editingPromemoria, setEditingPromemoria] = useState<Promemoria | undefined>(undefined);
 
   useEffect(() => {
     loadDocuments();
+    loadPromemoria();
   }, []);
 
   async function loadDocuments() {
@@ -422,6 +429,19 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
       setError(e.message);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPromemoria() {
+    setLoadingPromemoria(true);
+    try {
+      const data = await fetchPromemoria();
+      setPromemoria(data);
+    } catch (e: any) {
+      console.error('[DrawerDocs] Errore promemoria:', e);
+      setPromemoria([]);
+    } finally {
+      setLoadingPromemoria(false);
     }
   }
 
@@ -444,6 +464,46 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
     setOpenSection(openSection === section ? null : section);
   }
 
+  // Gestione promemoria
+  function handleNewPromemoria() {
+    setEditingPromemoria(undefined);
+    setShowPromemoriaForm(true);
+  }
+
+  function handleEditPromemoria(p: Promemoria) {
+    setEditingPromemoria(p);
+    setShowPromemoriaForm(true);
+  }
+
+  async function handleSavePromemoria(input: PromemoriaInput) {
+    if (editingPromemoria) {
+      await updatePromemoria(editingPromemoria.id, input);
+    } else {
+      await createPromemoria(input);
+    }
+    
+    setShowPromemoriaForm(false);
+    setEditingPromemoria(undefined);
+    await loadPromemoria();
+    
+    // Notifica widget home
+    window.dispatchEvent(new CustomEvent('promemoria-updated'));
+  }
+
+  async function handleDeletePromemoria(id: string) {
+    try {
+      await deletePromemoria(id);
+      setPromemoria(prev => prev.filter(p => p.id !== id));
+      alert('✅ Promemoria eliminato');
+      
+      // Notifica widget home
+      window.dispatchEvent(new CustomEvent('promemoria-updated'));
+    } catch (e: any) {
+      console.error('[DrawerDocs] Errore eliminazione promemoria:', e);
+      alert(`Errore: ${e.message}`);
+    }
+  }
+
   const reportPlanning = documents.filter(d => d.document_type === 'report_planning');
   const listeClienti = documents.filter(d => d.document_type === 'lista_clienti');
 
@@ -453,14 +513,13 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
         <button className="iconbtn" onClick={onClose}>Chiudi</button>
         <div className="title">Documenti</div>
         <div className="spacer" />
-        <button className="iconbtn" onClick={loadDocuments} title="Ricarica">↻</button>
+        <button className="iconbtn" onClick={() => { loadDocuments(); loadPromemoria(); }} title="Ricarica">↻</button>
       </div>
 
       <div className="list" style={{ padding: 0 }}>
         
-        {/* ========== SEZIONE 1: PROMEMORIA ========== */}
+        {/* ========== ACCORDION 1: LISTA PROMEMORIA ========== */}
         <div>
-          {/* Header cliccabile */}
           <button
             onClick={() => toggleSection('promemoria')}
             style={{
@@ -479,23 +538,33 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
               transition: 'background 0.15s',
             }}
           >
-            <span>📌 PROMEMORIA</span>
+            <span>📌 LISTA PROMEMORIA</span>
             <span style={{ fontSize: 12, color: '#6b7280' }}>
               {openSection === 'promemoria' ? '▼' : '▶'}
             </span>
           </button>
 
-          {/* Contenuto */}
           {openSection === 'promemoria' && (
             <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
-              <PromemoriaSection />
+              {loadingPromemoria && (
+                <div style={{ textAlign: 'center', padding: 24, color: '#6b7280' }}>
+                  ⏳ Caricamento...
+                </div>
+              )}
+              
+              {!loadingPromemoria && (
+                <PromemoriaList
+                  promemoria={promemoria}
+                  onEdit={handleEditPromemoria}
+                  onDelete={handleDeletePromemoria}
+                />
+              )}
             </div>
           )}
         </div>
 
-        {/* ========== SEZIONE 2: STORICO REPORT ========== */}
+        {/* ========== ACCORDION 2: STORICO REPORT ========== */}
         <div>
-          {/* Header cliccabile */}
           <button
             onClick={() => toggleSection('storico')}
             style={{
@@ -520,7 +589,6 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
             </span>
           </button>
 
-          {/* Contenuto */}
           {openSection === 'storico' && (
             <div style={{ padding: 16, borderBottom: '1px solid #e5e7eb' }}>
               {loading && (
@@ -546,7 +614,6 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
 
               {!loading && !error && documents.length > 0 && (
                 <>
-                  {/* Report Planning */}
                   {reportPlanning.length > 0 && (
                     <div style={{ marginBottom: 24 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #e5e7eb' }}>
@@ -578,7 +645,6 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
                     </div>
                   )}
 
-                  {/* Liste Clienti */}
                   {listeClienti.length > 0 && (
                     <div style={{ marginBottom: 24 }}>
                       <div style={{ fontSize: 13, fontWeight: 600, color: '#374151', marginBottom: 12, paddingBottom: 8, borderBottom: '2px solid #e5e7eb' }}>
@@ -612,15 +678,50 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* ========== BOTTONE GENERA REPORT (FISSO SEMPRE VISIBILE) ========== */}
-        <div style={{ padding: 16, borderTop: '2px solid #e5e7eb' }}>
+        {/* ========== BOTTONI FISSI ========== */}
+        <div style={{ padding: 16, borderTop: '2px solid #e5e7eb', display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {/* Bottone Nuovo Promemoria */}
+          <button
+            onClick={handleNewPromemoria}
+            style={{
+              width: '100%',
+              padding: '14px 16px',
+              borderRadius: 8,
+              border: 'none',
+              background: '#2563eb',
+              color: 'white',
+              fontWeight: 600,
+              cursor: 'pointer',
+              fontSize: 15,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+            }}
+          >
+            ➕ NUOVO PROMEMORIA
+          </button>
+
+          {/* Bottone Nuovo Report */}
           <GenerateListaClientiButton onSuccess={() => {
             loadDocuments();
-            setOpenSection('storico'); // Apri storico dopo generazione
+            setOpenSection('storico');
           }} />
         </div>
 
       </div>
+
+      {/* Form Promemoria (modale) */}
+      {showPromemoriaForm && (
+        <PromemoriaForm
+          promemoria={editingPromemoria}
+          onSave={handleSavePromemoria}
+          onCancel={() => {
+            setShowPromemoriaForm(false);
+            setEditingPromemoria(undefined);
+          }}
+        />
+      )}
     </>
   );
 }
