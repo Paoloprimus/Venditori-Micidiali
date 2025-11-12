@@ -11,6 +11,7 @@ type ProductRow = {
   title: string;            // OBBLIGATORIO
   giacenza: number;         // OBBLIGATORIO (default 0)
   is_active: boolean;       // OBBLIGATORIO (default true)
+  user_id: string;          // OBBLIGATORIO (aggiunto per RLS)
   sku?: string;
   unita_misura?: string;
   base_price?: number;
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
         sconto_merce: row.sconto_merce ? String(row.sconto_merce).trim() : undefined,
         sconto_fattura: row.sconto_fattura !== undefined && row.sconto_fattura !== null && row.sconto_fattura !== "" ? parseFloat(String(row.sconto_fattura)) : undefined,
         is_active: row.is_active !== undefined ? Boolean(row.is_active) : true, // Default true
+        user_id: user.id, // AGGIUNTO: Ogni prodotto appartiene all'utente
       };
 
       // Valida sconto_fattura (0-100)
@@ -82,7 +84,7 @@ export async function POST(req: NextRequest) {
     const deduped = Array.from(map.values());
     const duplicatesDropped = validRows.length - deduped.length;
 
-    // 5. Upsert in blocchi
+    // 5. Upsert in blocchi (RLS automatico con user_id)
     const CHUNK = 500;
     let imported = 0;
     let failed = 0;
@@ -92,9 +94,10 @@ export async function POST(req: NextRequest) {
       const slice = deduped.slice(i, i + CHUNK);
       
       // Configurazione upsert basata su overwrite
+      // IMPORTANTE: conflict su user_id,codice (ogni utente ha i suoi codici)
       const upsertConfig: any = overwrite
-        ? { onConflict: "codice" }
-        : { onConflict: "codice", ignoreDuplicates: true };
+        ? { onConflict: "user_id,codice" }
+        : { onConflict: "user_id,codice", ignoreDuplicates: true };
 
       const { error } = await supabase
         .from("products")
