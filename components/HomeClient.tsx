@@ -245,26 +245,120 @@ async function submitFromComposer() {
   // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
 if (pendingIntent) {
     if (YES.test(txt)) {
-      // Aggiungi la risposta "sì" alle bolle locali
-      appendUserLocal(txt);
+      const convId = conv.currentConv?.id;
       
-      // Esegui l'azione
+      // Costruisci i messaggi da salvare
+      let originalCommand = "";
+      let confirmMessage = "";
+      
+      switch (pendingIntent.type) {
+        case "CLIENT_SEARCH":
+          originalCommand = `cerca cliente ${pendingIntent.query}`;
+          confirmMessage = `Confermi: cerco il cliente ${pendingIntent.query}?`;
+          break;
+        case "CLIENT_CREATE":
+          originalCommand = `nuovo cliente ${pendingIntent.name || ""}`;
+          confirmMessage = `Confermi: creo il cliente ${pendingIntent.name ?? "senza nome"}?`;
+          break;
+        case "CLIENT_UPDATE":
+          originalCommand = `modifica cliente ${pendingIntent.name}`;
+          confirmMessage = `Confermi: modifico il cliente ${pendingIntent.name}?`;
+          break;
+        case "NOTES_SEARCH":
+          originalCommand = `cerca note di ${pendingIntent.accountHint} su ${pendingIntent.topic}`;
+          confirmMessage = `Vuoi che cerchi nelle note di ${pendingIntent.accountHint} se c'è qualcosa su ${pendingIntent.topic}?`;
+          break;
+      }
+      
+      // Salva nel DB: comando originale + conferma
+      if (convId) {
+        await fetch("/api/messages/append", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ 
+            conversationId: convId, 
+            userText: originalCommand, 
+            assistantText: confirmMessage 
+          }),
+        });
+        
+        // Salva nel DB: risposta "sì" + risultato
+        await fetch("/api/messages/append", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ 
+            conversationId: convId, 
+            userText: txt, 
+            assistantText: "✅ Fatto." 
+          }),
+        });
+        
+        // Ricarica messaggi dal DB
+        const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+        const j = await r.json();
+        conv.setBubbles?.((j.items ?? []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+      }
+      
       await handleIntent(pendingIntent);
-      
-      // Aggiungi "Fatto" alle bolle locali
-      appendAssistantLocal("✅ Fatto.");
-      
       setPendingIntent(null);
       return;
     }
+    
     if (NO.test(txt)) {
-      // Aggiungi il "no" alle bolle locali
-      appendUserLocal(txt);
+      const convId = conv.currentConv?.id;
       
-      const cancelMsg = "Ok, annullato.";
-      appendAssistantLocal(cancelMsg);
-      speakIfEnabled(cancelMsg);
+      // Costruisci i messaggi
+      let originalCommand = "";
+      let confirmMessage = "";
       
+      switch (pendingIntent.type) {
+        case "CLIENT_SEARCH":
+          originalCommand = `cerca cliente ${pendingIntent.query}`;
+          confirmMessage = `Confermi: cerco il cliente ${pendingIntent.query}?`;
+          break;
+        case "CLIENT_CREATE":
+          originalCommand = `nuovo cliente ${pendingIntent.name || ""}`;
+          confirmMessage = `Confermi: creo il cliente ${pendingIntent.name ?? "senza nome"}?`;
+          break;
+        case "CLIENT_UPDATE":
+          originalCommand = `modifica cliente ${pendingIntent.name}`;
+          confirmMessage = `Confermi: modifico il cliente ${pendingIntent.name}?`;
+          break;
+        case "NOTES_SEARCH":
+          originalCommand = `cerca note di ${pendingIntent.accountHint} su ${pendingIntent.topic}`;
+          confirmMessage = `Vuoi che cerchi nelle note di ${pendingIntent.accountHint} se c'è qualcosa su ${pendingIntent.topic}?`;
+          break;
+      }
+      
+      // Salva nel DB: comando + conferma + annullamento
+      if (convId) {
+        await fetch("/api/messages/append", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ 
+            conversationId: convId, 
+            userText: originalCommand, 
+            assistantText: confirmMessage 
+          }),
+        });
+        
+        await fetch("/api/messages/append", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ 
+            conversationId: convId, 
+            userText: txt, 
+            assistantText: "Ok, annullato." 
+          }),
+        });
+        
+        // Ricarica messaggi dal DB
+        const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+        const j = await r.json();
+        conv.setBubbles?.((j.items ?? []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+      }
+      
+      speakIfEnabled("Ok, annullato.");
       setPendingIntent(null);
       return;
     }
