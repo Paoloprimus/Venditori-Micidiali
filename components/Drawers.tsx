@@ -352,8 +352,8 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
     
     const exampleRow = [
       'ART001',
-      'Vino Rosso DOC 75cl',
-      'Vino Rosso',
+      'Vino Rosso DOC Superiore 75cl',
+      'Vino Rosso DOC',
       '8001234567890',
       'BT',
       '100',
