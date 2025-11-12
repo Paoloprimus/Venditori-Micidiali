@@ -14,6 +14,18 @@ export default function PromemoriaWidget({ onOpenDrawer }: Props) {
 
   useEffect(() => {
     loadPromemoria();
+    
+    // Listener per aggiornamenti da drawer
+    const handleUpdate = () => {
+      console.log('[PromemoriaWidget] Evento ricevuto, ricarico...');
+      loadPromemoria();
+    };
+    
+    window.addEventListener('promemoria-updated', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('promemoria-updated', handleUpdate);
+    };
   }, []);
 
   async function loadPromemoria() {
