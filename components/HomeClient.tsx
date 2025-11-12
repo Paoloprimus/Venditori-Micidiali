@@ -129,25 +129,34 @@ if (!(window as any).__TRACE_WRAP_SEND) {
     }
   }
 
-  function askConfirm(i: Intent) {
-    setPendingIntent(i);
-    switch (i.type) {
-      case "CLIENT_CREATE":
-        speakIfEnabled(`Confermi: creo il cliente ${i.name ?? "senza nome"}?`);
-        break;
-      case "CLIENT_SEARCH":
-        speakIfEnabled(`Confermi: cerco il cliente ${i.query}?`);
-        break;
-      case "CLIENT_UPDATE":
-        speakIfEnabled(`Confermi: modifico il cliente ${i.name}?`);
-        break;
-      case "NOTES_SEARCH":
-        speakIfEnabled(`Vuoi che cerchi nelle note di ${i.accountHint} se c'è qualcosa su ${i.topic}?`);
-        break;
-      default:
-        speakIfEnabled("Confermi l'azione?");
-    }
+function askConfirm(i: Intent) {
+  setPendingIntent(i);
+  let confirmMessage = "";
+  
+  switch (i.type) {
+    case "CLIENT_CREATE":
+      confirmMessage = `Confermi: creo il cliente ${i.name ?? "senza nome"}?`;
+      break;
+    case "CLIENT_SEARCH":
+      confirmMessage = `Confermi: cerco il cliente ${i.query}?`;
+      break;
+    case "CLIENT_UPDATE":
+      confirmMessage = `Confermi: modifico il cliente ${i.name}?`;
+      break;
+    case "NOTES_SEARCH":
+      confirmMessage = `Vuoi che cerchi nelle note di ${i.accountHint} se c'è qualcosa su ${i.topic}?`;
+      break;
+    default:
+      confirmMessage = "Confermi l'azione?";
   }
+  
+  // Scrivi nella chat
+  appendAssistantLocal(confirmMessage);
+  
+  // E anche parla (se TTS attivo)
+  speakIfEnabled(confirmMessage);
+}
+
 
   // ---- Voce (SR nativa)
   const voice = useVoice({
