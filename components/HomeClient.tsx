@@ -269,18 +269,7 @@ if (pendingIntent) {
       return;
     }
   }
-```
 
----
-
-## ✅ COPIA E SOSTITUISCI!
-
-Adesso nella chat vedrai:
-```
-Tu: cerca cliente test
-AI: Confermi: cerco il cliente test?
-Tu: sì
-AI: ✅ Fatto.
 
   // ========== ✅ FIX VOICE INTENTS: PRIORITÀ MASSIMA ==========
   const voiceIntent = matchIntent(txt);
