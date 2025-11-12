@@ -41,6 +41,11 @@ export default function PromemoriaSection() {
     }
   }
 
+  // Emetti evento per notificare widget home
+  function emitPromemoriaUpdated() {
+    window.dispatchEvent(new CustomEvent('promemoria-updated'));
+  }
+
   // Apri form per nuovo promemoria
   function handleNew() {
     setEditingPromemoria(undefined);
@@ -70,6 +75,9 @@ export default function PromemoriaSection() {
     
     // Ricarica per avere ordine corretto
     await loadPromemoria();
+    
+    // Notifica widget home
+    emitPromemoriaUpdated();
   }
 
   // Elimina
@@ -78,6 +86,9 @@ export default function PromemoriaSection() {
       await deletePromemoria(id);
       setPromemoria(prev => prev.filter(p => p.id !== id));
       alert('✅ Promemoria eliminato');
+      
+      // Notifica widget home
+      emitPromemoriaUpdated();
     } catch (e: any) {
       console.error('[PromemoriaSection] Errore eliminazione:', e);
       alert(`Errore: ${e.message}`);
