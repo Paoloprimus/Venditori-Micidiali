@@ -20,8 +20,6 @@ import { useEffect, useState } from "react";
 
 import { fetchDocuments, deleteDocument, formatFileSize, type DocumentRecord } from '@/lib/pdf';
 import GenerateListaClientiButton from './GenerateListaClientiButton';
-import ProductManager from "./products/ProductManager";
-import { ToastProvider } from "./ui/Toast";
 import PromemoriaSection from './PromemoriaSection';
 
 import { fetchPromemoria, createPromemoria, updatePromemoria, deletePromemoria, type Promemoria, type PromemoriaInput } from '@/lib/promemoria';
@@ -281,8 +279,13 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   }
 
   function goProductsList() {
-    // TODO: quando avremo la pagina lista prodotti
-    alert("Lista prodotti - in arrivo");
+    onClose();
+    window.location.href = "/products";
+  }
+
+  function goQuickAddProduct() {
+    onClose();
+    window.location.href = "/tools/quick-add-product";
   }
 
   function downloadCSVTemplate() {
@@ -413,14 +416,15 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goProductsList}>
               📦 Lista prodotti
             </button>
-            <button className="btn" onClick={() => alert('Aggiungi prodotto - in arrivo')} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+            <button className="btn" onClick={goQuickAddProduct} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Aggiungi singolo
             </button>
-            <ToastProvider>
-              <div style={{ marginTop: 8 }}>
-                <ProductManager onCloseDrawer={onClose} />
-              </div>
-            </ToastProvider>
+            <button className="btn" onClick={() => alert('Importa lista prodotti - in arrivo')}>
+              📥 Importa lista
+            </button>
+            <button className="btn" onClick={() => alert('Template CSV prodotti - in arrivo')}>
+              📄 Scarica template CSV
+            </button>
           </div>
         )}
 
