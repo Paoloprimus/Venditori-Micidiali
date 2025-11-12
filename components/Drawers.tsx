@@ -392,9 +392,6 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goPlanning} style={{ background: '#10b981', color: 'white', border: 'none' }}>
               🗺️ Planning Visite
             </button>
-            <button className="btn" onClick={() => alert('Promemoria - in arrivo')}>
-              ⏰ Promemoria
-            </button>
           </div>
         )}
       </div>
