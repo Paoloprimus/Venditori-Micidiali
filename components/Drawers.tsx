@@ -696,7 +696,7 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
               color: 'white',
               fontWeight: 600,
               cursor: 'pointer',
-              fontSize: 17,
+              fontSize: 15,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
