@@ -397,72 +397,16 @@ export default function ImportProductsPage() {
     <>
       <TopBar
         title="Import Prodotti"
-        onBack={() => router.push("/products")}
-        showLogout
+        onOpenLeft={openLeft}
+        onOpenDati={openDati}
+        onOpenDocs={openDocs}
+        onOpenImpostazioni={openImpostazioni}
         onLogout={logout}
-        onMenuClick={openLeft}
       />
 
-      <LeftDrawer isOpen={leftOpen} onClose={closeLeft}>
-        <div className="p-6 space-y-4">
-          <h2 className="text-xl font-semibold mb-4">Menu</h2>
-          <button
-            onClick={() => { closeLeft(); openDati(); }}
-            className="w-full text-left px-4 py-2 rounded hover:bg-gray-100"
-          >
-            📊 Dati
-          </button>
-          <button
-            onClick={() => { closeLeft(); openDocs(); }}
-            className="w-full text-left px-4 py-2 rounded hover:bg-gray-100"
-          >
-            📄 Docs
-          </button>
-          <button
-            onClick={() => { closeLeft(); openImpostazioni(); }}
-            className="w-full text-left px-4 py-2 rounded hover:bg-gray-100"
-          >
-            ⚙️ Impostazioni
-          </button>
-        </div>
-      </LeftDrawer>
+      <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
 
-      <RightDrawer isOpen={rightOpen} onClose={closeRight}>
-        {rightContent === "dati" && (
-          <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">📊 Dati</h2>
-            <button
-              onClick={() => { closeRight(); router.push("/products"); }}
-              className="w-full text-left px-4 py-2 rounded hover:bg-gray-100"
-            >
-              📦 Prodotti
-            </button>
-            <button
-              onClick={() => { closeRight(); router.push("/clients"); }}
-              className="w-full text-left px-4 py-2 rounded hover:bg-gray-100"
-            >
-              👥 Clienti
-            </button>
-          </div>
-        )}
-        {rightContent === "docs" && (
-          <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">📄 Docs</h2>
-            <p className="text-gray-600">Documentazione in arrivo...</p>
-          </div>
-        )}
-        {rightContent === "impostazioni" && (
-          <div className="p-6">
-            <h2 className="text-xl font-semibold mb-4">⚙️ Impostazioni</h2>
-            <button
-              onClick={logout}
-              className="w-full px-4 py-2 bg-red-500 text-white rounded hover:bg-red-600"
-            >
-              Logout
-            </button>
-          </div>
-        )}
-      </RightDrawer>
+      <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
 
       <main className="container mx-auto px-4 py-8 max-w-6xl">
         {/* Progress Indicator */}
