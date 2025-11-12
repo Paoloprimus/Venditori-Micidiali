@@ -38,11 +38,12 @@ export async function POST(req: Request) {
     const codice = body.codice.trim();
     const descrizione = body.descrizione_articolo.trim();
 
-    // 3) Cerca prodotto esistente per codice
+    // 3) Cerca prodotto esistente per codice (solo tra i prodotti dell'utente)
     const { data: existingList, error: findErr } = await supabase
       .from("products")
       .select("id, giacenza")
       .eq("codice", codice)
+      .eq("user_id", user.id)
       .limit(1);
 
     if (findErr) {
@@ -110,6 +111,7 @@ export async function POST(req: Request) {
         title: body.title || descrizione,
         giacenza: body.giacenza !== undefined ? Math.max(0, Math.floor(body.giacenza)) : 0,
         is_active: body.is_active !== undefined ? body.is_active : true,
+        user_id: user.id, // AGGIUNTO: Ogni prodotto appartiene all'utente
       };
 
       // Campi opzionali
