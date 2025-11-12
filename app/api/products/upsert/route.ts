@@ -43,7 +43,7 @@ export async function POST(req: Request) {
       .from("products")
       .select("id, giacenza")
       .eq("codice", codice)
-      .eq("user_id", user.id)
+      .eq("owner_id", user.id)
       .limit(1);
 
     if (findErr) {
@@ -111,7 +111,7 @@ export async function POST(req: Request) {
         title: body.title || descrizione,
         giacenza: body.giacenza !== undefined ? Math.max(0, Math.floor(body.giacenza)) : 0,
         is_active: body.is_active !== undefined ? body.is_active : true,
-        user_id: user.id, // AGGIUNTO: Ogni prodotto appartiene all'utente
+        owner_id: user.id, // AGGIUNTO: Ogni prodotto appartiene all'utente
       };
 
       // Campi opzionali
