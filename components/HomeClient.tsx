@@ -231,7 +231,7 @@ async function submitFromComposer() {
   const txt = conv.input.trim();
   if (!txt) return;
 
-    conv.setInput(""); // ⬅️ AGGIUNGI QUESTA RIGA
+  conv.setInput(""); // ✅ FIX 2: Svuota input SUBITO
 
   // (Legacy) sì/no barra — lasciata per compatibilità ma senza UI extra
   if (pendingIntent) {
@@ -240,15 +240,14 @@ async function submitFromComposer() {
       setPendingIntent(null);
       return;
     }
-
-if (NO.test(txt)) {
+    if (NO.test(txt)) {
       speakIfEnabled("Ok, annullato.");
       setPendingIntent(null);
       return;
     }
   }
 
-  // ---------- Voice Intents (PRIORITÀ) ----------
+  // ========== ✅ FIX VOICE INTENTS: PRIORITÀ MASSIMA ==========
   const voiceIntent = matchIntent(txt);
   if (voiceIntent.type !== "NONE") {
     console.error("[voice-intent] Riconosciuto:", voiceIntent.type);
@@ -258,130 +257,69 @@ if (NO.test(txt)) {
 
   // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
   try {
-    
-      // 1) normalizza
-      const norm = await postJSON(`/api/standard/normalize`, { text: txt });
-      const normalized: string = norm?.normalized || txt;
+    // 1) normalizza
+    const norm = await postJSON(`/api/standard/normalize`, { text: txt });
+    const normalized: string = norm?.normalized || txt;
 
-      // 2) shortlist topK
-      const sl = await postJSON(`/api/standard/shortlist`, { q: normalized, topK: 5 });
-      const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
+    // 2) shortlist topK
+    const sl = await postJSON(`/api/standard/shortlist`, { q: normalized, topK: 5 });
+    const items: Array<{ intent_key: string; text: string; score: number }> = sl?.items || [];
 
-      // 3) top-1 → se esiste, esegui direttamente
-      const top = items[0];
-      if (top && top.intent_key) {
-        const intentKey = top.intent_key;
+    // 3) top-1 → se esiste, esegui direttamente
+    const top = items[0];
+    if (top && top.intent_key) {
+      const intentKey = top.intent_key;
 
-        // 4) estrai {prodotto} con fallback all'ultimo valido per "e quanti …"
-        let prodotto = extractProductTerm(unaccentLower(normalized));
-        if (!prodotto || /\s/.test(prodotto)) {
-          if (lastProduct) prodotto = lastProduct;
-        }
-
-        // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
-        appendUserLocal(txt);
-
-        // 5) execute
-        const execJson = await postJSON(`/api/standard/execute`, {
-          intent_key: intentKey,
-          slots: { prodotto }
-        });
-
-        // Se non gestito → prosegui (non inviare nulla qui; passeremo al planner sotto)
-        if (!execJson?.ok) {
-          console.error("[standard→planner] exec non gestito, passo al planner");
-        } else {
-          // 6) compila template risposta (con fallback prezzo/sconto se 0)
-          const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
-          if (intentKey === "prod_prezzo_sconti") {
-            const price = Number(execJson?.data?.price) || 0;
-            const discount = Number(execJson?.data?.discount) || 0;
-            dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
-            dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
-          }
-
-          const responseTpl =
-            LOCAL_TEMPLATES[intentKey]?.response ||
-            "Fatto.";
-
-          const answer = fillTemplateSimple(responseTpl, dataForTemplate);
-
-          // 7) scrivi la risposta (assistente)
-          appendAssistantLocal(answer);
-
-          // 8) memorizza ultimo prodotto valido
-          if (prodotto && !/\s/.test(prodotto)) setLastProduct(prodotto);
-
-          // TTS (se altoparlante attivo)
-          speakIfEnabled(answer);
-
-          // 9) persisti in DB
-          const convId = conv.currentConv?.id;
-          if (convId) {
-            await fetch("/api/messages/append", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: answer }),
-            });
-            const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-            const j = await r.json();
-            conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-            setLocalUser([]);
-            setLocalAssistant([]);
-          }
-
-          return; // ⬅️ STOP: abbiamo risposto con lo standard flow
-        }
+      // 4) estrai {prodotto} con fallback all'ultimo valido per "e quanti …"
+      let prodotto = extractProductTerm(unaccentLower(normalized));
+      if (!prodotto || /\s/.test(prodotto)) {
+        if (lastProduct) prodotto = lastProduct;
       }
-    } catch (e) {
-      console.error("[standard → planner fallback]", e);
-    }
 
-    // Se lo standard non ha dato esito, proviamo il planner
-    try {
-      const res = await runPlanner(
-        txt,
-        {
-          scope: convCtx.state.scope === "prodotti" ? "products" :
-              convCtx.state.scope === "ordini"   ? "orders"   :
-              convCtx.state.scope === "vendite"  ? "sales"    :
-              convCtx.state.scope,
-          topic_attivo:
-            convCtx.state.topic_attivo === "prodotti" ? "products" :
-            convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-            convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-            convCtx.state.topic_attivo,
-        } as any,
-        {
-          state: {
-            scope: convCtx.state.scope === "prodotti" ? "products" :
-              convCtx.state.scope === "ordini"   ? "orders"   :
-              convCtx.state.scope === "vendite"  ? "sales"    :
-              convCtx.state.scope,
-            topic_attivo:
-              convCtx.state.topic_attivo === "prodotti" ? "products" :
-              convCtx.state.topic_attivo === "ordini"   ? "orders"   :
-              convCtx.state.topic_attivo === "vendite"  ? "sales"    :
-              convCtx.state.topic_attivo,
-          } as any,
-          expired: convCtx.expired,
-          setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
-          remember: convCtx.remember,
-          reset: convCtx.reset,
-        } as any
-      );
+      // 👉 4.1: scrivi SUBITO la domanda in chat (come tutte le altre)
+      appendUserLocal(txt);
 
-      if (res?.text) {
-        appendUserLocal(txt);
-        appendAssistantLocal(`[planner] ${res.text}`);
-        console.error("[planner_v2:text_hit]", res);
+      // 5) execute
+      const execJson = await postJSON(`/api/standard/execute`, {
+        intent_key: intentKey,
+        slots: { prodotto }
+      });
 
+      // Se non gestito → prosegui (non inviare nulla qui; passeremo al planner sotto)
+      if (!execJson?.ok) {
+        console.error("[standard→planner] exec non gestito, passo al planner");
+      } else {
+        // 6) compila template risposta (con fallback prezzo/sconto se 0)
+        const dataForTemplate: Record<string, any> = { prodotto, ...(execJson.data || {}) };
+        if (intentKey === "prod_prezzo_sconti") {
+          const price = Number(execJson?.data?.price) || 0;
+          const discount = Number(execJson?.data?.discount) || 0;
+          dataForTemplate.price = price > 0 ? price : "non disponibile a catalogo";
+          dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
+        }
+
+        const responseTpl =
+          LOCAL_TEMPLATES[intentKey]?.response ||
+          "Fatto.";
+
+        const answer = fillTemplateSimple(responseTpl, dataForTemplate);
+
+        // 7) scrivi la risposta (assistente)
+        appendAssistantLocal(answer);
+
+        // 8) memorizza ultimo prodotto valido
+        if (prodotto && !/\s/.test(prodotto)) setLastProduct(prodotto);
+
+        // TTS (se altoparlante attivo)
+        speakIfEnabled(answer);
+
+        // 9) persisti in DB
         const convId = conv.currentConv?.id;
         if (convId) {
           await fetch("/api/messages/append", {
             method: "POST",
             headers: { "content-type": "application/json" },
-            body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
+            body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: answer }),
           });
           const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
           const j = await r.json();
@@ -390,13 +328,77 @@ if (NO.test(txt)) {
           setLocalAssistant([]);
         }
 
-        return;
+        return; // ⬅️ STOP: abbiamo risposto con lo standard flow
       }
-    } catch (e) {
-      console.error("[planner text fallback → model]", e);
     }
-
+  } catch (e) {
+    console.error("[standard → planner fallback]", e);
   }
+
+  // Se lo standard non ha dato esito, proviamo il planner
+  try {
+    const res = await runPlanner(
+      txt,
+      {
+        scope: convCtx.state.scope === "prodotti" ? "products" :
+            convCtx.state.scope === "ordini"   ? "orders"   :
+            convCtx.state.scope === "vendite"  ? "sales"    :
+            convCtx.state.scope,
+        topic_attivo:
+          convCtx.state.topic_attivo === "prodotti" ? "products" :
+          convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+          convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+          convCtx.state.topic_attivo,
+      } as any,
+      {
+        state: {
+          scope: convCtx.state.scope === "prodotti" ? "products" :
+            convCtx.state.scope === "ordini"   ? "orders"   :
+            convCtx.state.scope === "vendite"  ? "sales"    :
+            convCtx.state.scope,
+          topic_attivo:
+            convCtx.state.topic_attivo === "prodotti" ? "products" :
+            convCtx.state.topic_attivo === "ordini"   ? "orders"   :
+            convCtx.state.topic_attivo === "vendite"  ? "sales"    :
+            convCtx.state.topic_attivo,
+        } as any,
+        expired: convCtx.expired,
+        setScope: (s:any)=>convCtx.setScope(s==="products"?"prodotti":s==="orders"?"ordini":s==="sales"?"vendite":s),
+        remember: convCtx.remember,
+        reset: convCtx.reset,
+      } as any
+    );
+
+    if (res?.text) {
+      appendUserLocal(txt);
+      appendAssistantLocal(`[planner] ${res.text}`);
+      console.error("[planner_v2:text_hit]", res);
+
+      const convId = conv.currentConv?.id;
+      if (convId) {
+        await fetch("/api/messages/append", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: res.text }),
+        });
+        const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+        const j = await r.json();
+        conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+        setLocalUser([]);
+        setLocalAssistant([]);
+      }
+
+      return;
+    }
+  } catch (e) {
+    console.error("[planner text fallback → model]", e);
+  }
+
+  // ---------- Fallback finale: modello generico ----------
+  console.error("[fallback:model] no standard intent, no planner match");
+  await conv.send(txt);
+  return;
+}
 
   // ---------- Fallback finale: modello generico ----------
   console.error("[fallback:model] no standard intent, no planner match");
