@@ -240,14 +240,25 @@ async function submitFromComposer() {
       setPendingIntent(null);
       return;
     }
-    if (NO.test(txt)) {
+
+if (NO.test(txt)) {
       speakIfEnabled("Ok, annullato.");
       setPendingIntent(null);
       return;
     }
-  } else {
-    // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
-    try {
+  }
+
+  // ---------- Voice Intents (PRIORITÀ) ----------
+  const voiceIntent = matchIntent(txt);
+  if (voiceIntent.type !== "NONE") {
+    console.error("[voice-intent] Riconosciuto:", voiceIntent.type);
+    askConfirm(voiceIntent);
+    return;
+  }
+
+  // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
+  try {
+    
       // 1) normalizza
       const norm = await postJSON(`/api/standard/normalize`, { text: txt });
       const normalized: string = norm?.normalized || txt;
@@ -385,12 +396,6 @@ async function submitFromComposer() {
       console.error("[planner text fallback → model]", e);
     }
 
-    // ---------- Legacy voice-intents (solo se proprio serve) ----------
-    const intent = matchIntent(txt);
-    if (intent.type !== "NONE") {
-      askConfirm(intent);
-      return;
-    }
   }
 
   // ---------- Fallback finale: modello generico ----------
