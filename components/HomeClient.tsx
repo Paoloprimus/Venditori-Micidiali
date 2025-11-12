@@ -122,6 +122,7 @@ if (!(window as any).__TRACE_WRAP_SEND) {
 
   // ---- Stato conferma intent (legacy voce)
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
+  const [originalVoiceCommand, setOriginalVoiceCommand] = useState<string>("");
 
   function speakIfEnabled(msg: string) {
     if (voice.speakerEnabled) {
@@ -247,37 +248,34 @@ if (pendingIntent) {
     if (YES.test(txt)) {
       const convId = conv.currentConv?.id;
       
-      // Costruisci i messaggi da salvare
-      let originalCommand = "";
+      // Costruisci messaggio conferma
       let confirmMessage = "";
       
       switch (pendingIntent.type) {
         case "CLIENT_SEARCH":
-          originalCommand = `cerca cliente ${pendingIntent.query}`;
           confirmMessage = `Confermi: cerco il cliente ${pendingIntent.query}?`;
           break;
         case "CLIENT_CREATE":
-          originalCommand = `nuovo cliente ${pendingIntent.name || ""}`;
           confirmMessage = `Confermi: creo il cliente ${pendingIntent.name ?? "senza nome"}?`;
           break;
         case "CLIENT_UPDATE":
-          originalCommand = `modifica cliente ${pendingIntent.name}`;
           confirmMessage = `Confermi: modifico il cliente ${pendingIntent.name}?`;
           break;
         case "NOTES_SEARCH":
-          originalCommand = `cerca note di ${pendingIntent.accountHint} su ${pendingIntent.topic}`;
           confirmMessage = `Vuoi che cerchi nelle note di ${pendingIntent.accountHint} se c'è qualcosa su ${pendingIntent.topic}?`;
           break;
+        default:
+          confirmMessage = "Confermi l'azione?";
       }
       
-      // Salva nel DB: comando originale + conferma
-      if (convId) {
+      // Salva nel DB: usa il comando originale dell'utente
+      if (convId && originalVoiceCommand) {
         await fetch("/api/messages/append", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ 
             conversationId: convId, 
-            userText: originalCommand, 
+            userText: originalVoiceCommand, 
             assistantText: confirmMessage 
           }),
         });
@@ -297,47 +295,47 @@ if (pendingIntent) {
         const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
         const j = await r.json();
         conv.setBubbles?.((j.items ?? []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+        setLocalUser([]);
+        setLocalAssistant([]);
       }
       
       await handleIntent(pendingIntent);
       setPendingIntent(null);
+      setOriginalVoiceCommand(""); // Reset
       return;
     }
     
     if (NO.test(txt)) {
       const convId = conv.currentConv?.id;
       
-      // Costruisci i messaggi
-      let originalCommand = "";
+      // Costruisci messaggio conferma
       let confirmMessage = "";
       
       switch (pendingIntent.type) {
         case "CLIENT_SEARCH":
-          originalCommand = `cerca cliente ${pendingIntent.query}`;
           confirmMessage = `Confermi: cerco il cliente ${pendingIntent.query}?`;
           break;
         case "CLIENT_CREATE":
-          originalCommand = `nuovo cliente ${pendingIntent.name || ""}`;
           confirmMessage = `Confermi: creo il cliente ${pendingIntent.name ?? "senza nome"}?`;
           break;
         case "CLIENT_UPDATE":
-          originalCommand = `modifica cliente ${pendingIntent.name}`;
           confirmMessage = `Confermi: modifico il cliente ${pendingIntent.name}?`;
           break;
         case "NOTES_SEARCH":
-          originalCommand = `cerca note di ${pendingIntent.accountHint} su ${pendingIntent.topic}`;
           confirmMessage = `Vuoi che cerchi nelle note di ${pendingIntent.accountHint} se c'è qualcosa su ${pendingIntent.topic}?`;
           break;
+        default:
+          confirmMessage = "Confermi l'azione?";
       }
       
-      // Salva nel DB: comando + conferma + annullamento
-      if (convId) {
+      // Salva nel DB: usa il comando originale dell'utente
+      if (convId && originalVoiceCommand) {
         await fetch("/api/messages/append", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ 
             conversationId: convId, 
-            userText: originalCommand, 
+            userText: originalVoiceCommand, 
             assistantText: confirmMessage 
           }),
         });
@@ -356,10 +354,13 @@ if (pendingIntent) {
         const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
         const j = await r.json();
         conv.setBubbles?.((j.items ?? []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
+        setLocalUser([]);
+        setLocalAssistant([]);
       }
       
       speakIfEnabled("Ok, annullato.");
       setPendingIntent(null);
+      setOriginalVoiceCommand(""); // Reset
       return;
     }
   }
@@ -369,6 +370,7 @@ if (pendingIntent) {
   const voiceIntent = matchIntent(txt);
   if (voiceIntent.type !== "NONE") {
     console.error("[voice-intent] Riconosciuto:", voiceIntent.type);
+    setOriginalVoiceCommand(txt); // Salva comando originale
     askConfirm(voiceIntent);
     return;
   }
