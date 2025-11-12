@@ -398,14 +398,14 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
   );
 }
 
-/* -------------------------- Contenuto: DOCS (CON ACCORDION) -------------------------- */
+/* -------------------------- Contenuto: DOCS (ACCORDION CORRETTO) -------------------------- */
 function DrawerDocs({ onClose }: { onClose: () => void }) {
   const [documents, setDocuments] = useState<DocumentRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
-  // Stato accordion (quale sezione è aperta)
-  const [openSection, setOpenSection] = useState<'promemoria' | 'storico' | 'genera' | null>('promemoria');
+  // Stato accordion (quale sezione è aperta) - DEFAULT NULL
+  const [openSection, setOpenSection] = useState<'promemoria' | 'storico' | null>(null);
 
   useEffect(() => {
     loadDocuments();
@@ -440,7 +440,7 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
     alert(`📄 ${doc.title}\n\nFile: ${doc.filename}\n\nCerca nei download del dispositivo.`);
   }
 
-  function toggleSection(section: 'promemoria' | 'storico' | 'genera') {
+  function toggleSection(section: 'promemoria' | 'storico') {
     setOpenSection(openSection === section ? null : section);
   }
 
@@ -612,41 +612,12 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
           )}
         </div>
 
-        {/* ========== SEZIONE 3: GENERA REPORT ========== */}
-        <div>
-          {/* Header cliccabile */}
-          <button
-            onClick={() => toggleSection('genera')}
-            style={{
-              width: '100%',
-              padding: '16px',
-              border: 'none',
-              background: openSection === 'genera' ? '#f9fafb' : 'white',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              fontSize: 15,
-              fontWeight: 600,
-              color: '#111827',
-              transition: 'background 0.15s',
-            }}
-          >
-            <span>➕ GENERA REPORT</span>
-            <span style={{ fontSize: 12, color: '#6b7280' }}>
-              {openSection === 'genera' ? '▼' : '▶'}
-            </span>
-          </button>
-
-          {/* Contenuto */}
-          {openSection === 'genera' && (
-            <div style={{ padding: 16 }}>
-              <GenerateListaClientiButton onSuccess={() => {
-                loadDocuments();
-                setOpenSection('storico'); // Apri storico dopo generazione
-              }} />
-            </div>
-          )}
+        {/* ========== BOTTONE GENERA REPORT (FISSO SEMPRE VISIBILE) ========== */}
+        <div style={{ padding: 16, borderTop: '2px solid #e5e7eb' }}>
+          <GenerateListaClientiButton onSuccess={() => {
+            loadDocuments();
+            setOpenSection('storico'); // Apri storico dopo generazione
+          }} />
         </div>
 
       </div>
