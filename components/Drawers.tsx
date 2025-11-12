@@ -24,6 +24,10 @@ import ProductManager from "./products/ProductManager";
 import { ToastProvider } from "./ui/Toast";
 import PromemoriaSection from './PromemoriaSection';
 
+import { fetchPromemoria, createPromemoria, updatePromemoria, deletePromemoria, type Promemoria, type PromemoriaInput } from '@/lib/promemoria';
+import PromemoriaList from './PromemoriaList';
+import PromemoriaForm from './PromemoriaForm';
+
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
