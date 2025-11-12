@@ -323,14 +323,14 @@ export default function ImportProductsPage() {
         .map(p => ({
           codice: String(p.codice).trim(),
           descrizione_articolo: String(p.descrizione_articolo).trim(),
-          title: p.title ? String(p.title).trim() : undefined,
+          title: p.title ? String(p.title).trim() : String(p.descrizione_articolo).trim(), // Usa descrizione se title manca
           sku: p.sku ? String(p.sku).trim() : undefined,
           unita_misura: p.unita_misura ? String(p.unita_misura).trim() : undefined,
-          giacenza: p.giacenza ? parseInt(String(p.giacenza)) : 0,
-          base_price: p.base_price ? parseFloat(String(p.base_price)) : undefined,
+          giacenza: p.giacenza !== undefined && p.giacenza !== null && p.giacenza !== "" ? parseInt(String(p.giacenza)) : 0,
+          base_price: p.base_price !== undefined && p.base_price !== null && p.base_price !== "" ? parseFloat(String(p.base_price)) : undefined,
           sconto_merce: p.sconto_merce ? String(p.sconto_merce).trim() : undefined,
-          sconto_fattura: p.sconto_fattura ? parseFloat(String(p.sconto_fattura)) : undefined,
-          is_active: p.is_active !== undefined ? Boolean(p.is_active) : true,
+          sconto_fattura: p.sconto_fattura !== undefined && p.sconto_fattura !== null && p.sconto_fattura !== "" ? parseFloat(String(p.sconto_fattura)) : undefined,
+          is_active: p.is_active !== undefined && p.is_active !== null && p.is_active !== "" ? Boolean(p.is_active) : true,
         }));
 
       if (validProducts.length === 0) {
