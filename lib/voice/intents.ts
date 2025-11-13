@@ -24,16 +24,34 @@ function findTopic(t: string) {
 
 // ⬇️ NUOVO: riconosce domande brevi tipo "Rossi ha figli?"
 function matchShortQuestion(raw: string): { accountHint: string; topic: string } | null {
+  // Lista pronomi interrogativi da escludere (non sono nomi clienti)
+  const interrogativePronouns = /^(chi|cosa|che|quando|dove|come|perch[eé]|quanto|quale)/i;
+  
   const r1 = raw.match(/^\s*([\wÀ-ÿ'&.\s-]{2,})\s+ha\s+([a-zà-ÿ'&.\s-]{2,})\??\s*$/i);
-  if (r1) return { accountHint: CLEAN(r1[1]), topic: CLEAN(r1[2]) };
+  if (r1) {
+    const accountHint = CLEAN(r1[1]);
+    // Escludi se inizia con pronome interrogativo
+    if (interrogativePronouns.test(accountHint)) return null;
+    return { accountHint, topic: CLEAN(r1[2]) };
+  }
 
   // es. "su Rossi ci sono info su figli?", "di Rossi informazioni su pagamento?"
   const r2 = raw.match(/^\s*(?:su|di|del|della)\s+([\wÀ-ÿ'&.\s-]{2,})\s+(?:c'?\s?è|ci sono|info|informazioni|dettagli|note|appunti)\s+(.+?)\??\s*$/i);
-  if (r2) return { accountHint: CLEAN(r2[1]), topic: CLEAN(r2[2]) };
+  if (r2) {
+    const accountHint = CLEAN(r2[1]);
+    // Escludi se inizia con pronome interrogativo
+    if (interrogativePronouns.test(accountHint)) return null;
+    return { accountHint, topic: CLEAN(r2[2]) };
+  }
 
   // es. "sai se di Rossi ci sono note sui figli?"
   const r3 = raw.match(/(?:di|del|della)\s+([\wÀ-ÿ'&.\s-]{2,}).*\b(figli|telefono|email|pagamento|indirizzo|ordini|volumi|interessi|note)\b/i);
-  if (r3) return { accountHint: CLEAN(r3[1]), topic: CLEAN(r3[2]) };
+  if (r3) {
+    const accountHint = CLEAN(r3[1]);
+    // Escludi se inizia con pronome interrogativo
+    if (interrogativePronouns.test(accountHint)) return null;
+    return { accountHint, topic: CLEAN(r3[2]) };
+  }
 
   return null;
 }
