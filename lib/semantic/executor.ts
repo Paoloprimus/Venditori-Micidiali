@@ -91,9 +91,17 @@ function applyFilter(query: any, filter: FieldFilter, tableName: string): any {
     value = resolveRelativeDate(value);
   }
   
+  // Determina se il campo è stringa (per case-insensitive)
+  const stringFields = ['city', 'tipo_locale', 'esito', 'ultimo_esito', 'tipo', 'note', 'nota'];
+  const isStringField = stringFields.some(sf => field.includes(sf));
+  
   // Applica operatore appropriato
   switch (filter.operator) {
     case 'eq':
+      // Per campi stringa, usa ilike per case-insensitive
+      if (isStringField && typeof value === 'string') {
+        return query.ilike(field, value);
+      }
       return query.eq(field, value);
     case 'neq':
       return query.neq(field, value);
