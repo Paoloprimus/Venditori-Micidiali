@@ -7,6 +7,27 @@ import { QueryResult, ResponseContext } from './types';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 /**
+ * Determina se la query richiede una risposta sintetica o dettagliata
+ */
+function needsDetailedResponse(query: string): boolean {
+  const normalized = query.toLowerCase().trim();
+  
+  // Pattern che richiedono dettagli
+  const detailPatterns = [
+    /dettagli/i,
+    /lista completa/i,
+    /elenca/i,
+    /mostra tutt/i,
+    /dimmi tutto/i,
+    /quali sono/i,
+    /descrivi/i,
+    /informazioni su/i
+  ];
+  
+  return detailPatterns.some(pattern => pattern.test(normalized));
+}
+
+/**
  * Compone risposta naturale da risultati query
  */
 export async function composeResponse(
@@ -28,6 +49,28 @@ export async function composeResponse(
     return 'Non ho trovato risultati corrispondenti ai criteri specificati.';
   }
   
+  // NUOVO: Risposte sintetiche per query semplici
+  const wantsDetails = needsDetailedResponse(userQuery);
+  const hasMultipleResults = queryResult.data && queryResult.data.length > 1;
+  
+  // Se query semplice e più risultati → risposta breve con count
+  if (!wantsDetails && hasMultipleResults && !queryResult.aggregated) {
+    const count = queryResult.data!.length;
+    
+    // Estrai info base per risposta sintetica
+    const firstItem = queryResult.data![0];
+    let entityType = 'risultati';
+    
+    if (firstItem.tipo_locale) entityType = firstItem.tipo_locale.toLowerCase() + (count > 1 ? '' : '');
+    if (firstItem.tipo) entityType = 'contatti'; // visits
+    if (firstItem.nota) entityType = 'promemoria';
+    
+    let location = '';
+    if (firstItem.city) location = ` a ${firstItem.city}`;
+    
+    return `Ho trovato ${count} ${entityType}${location}. 📊\n\nVuoi vedere i dettagli? Chiedi "mostra dettagli" o "elenca tutti".`;
+  }
+  
   // Prepara context per LLM
   let contextText = '';
   
@@ -37,13 +80,13 @@ export async function composeResponse(
     contextText += JSON.stringify(queryResult.aggregated, null, 2) + '\n\n';
   }
   
-  // Dati dettaglio (se presenti e non troppi)
+  // Dati dettaglio
   if (queryResult.data && queryResult.data.length > 0) {
     const rowCount = queryResult.data.length;
     contextText += `=== DATI (${rowCount} risultat${rowCount === 1 ? 'o' : 'i'}) ===\n`;
     
-    // Limita dati per non superare context window
-    const maxRows = 20;
+    // Se vuole dettagli, mostra più dati
+    const maxRows = wantsDetails ? 20 : 5;
     const dataToShow = queryResult.data.slice(0, maxRows);
     
     contextText += JSON.stringify(dataToShow, null, 2);
