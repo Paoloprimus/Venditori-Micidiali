@@ -88,11 +88,15 @@ export function matchIntent(raw: string) {
     if (acc && topic) return { type: 'NOTES_SEARCH', accountHint: acc, topic, needsConfirm: true } as const;
   }
 
-  // --- NUOVO: domande brevi "Rossi ha figli?"
+  // --- DISABILITATO: domande brevi "Rossi ha figli?"
+  // PROBLEMA: Questo pattern causa flusso rotto (chiede conferma, poi non cerca)
+  // TODO: Fixare frontend per completare flusso, oppure passare al sistema semantico
+  /*
   const short = matchShortQuestion(raw);
   if (short) {
     return { type: 'NOTES_SEARCH', accountHint: short.accountHint, topic: short.topic, needsConfirm: true } as const;
   }
+  */
 
   return { type: 'NONE' } as const;
 }
