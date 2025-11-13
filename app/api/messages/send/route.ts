@@ -4,6 +4,13 @@ import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { encryptText } from "@/lib/crypto/serverEncryption";
 
+// ===== IMPORT SISTEMA SEMANTICO =====
+import { planQuery } from "@/lib/semantic/planner";
+import { executeQueryPlan } from "@/lib/semantic/executor";
+import { composeResponse, isOutOfScope, getOutOfScopeResponse } from "@/lib/semantic/composer";
+import { validateQueryPlan } from "@/lib/semantic/validator";
+// ===== FINE IMPORT =====
+
 export const runtime = "nodejs";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
@@ -112,8 +119,111 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply }, { status: 200 });
     }
 
-    // 2) Chiama OpenAI (il testo è in chiaro QUI per permettere l'elaborazione)
-    const sys = SYSTEM + (terse ? " Rispondi molto brevemente." : "");
+    // ========== INIZIO SISTEMA SEMANTICO ==========
+    // Verifica se query è out of scope (non business-related)
+    if (isOutOfScope(content)) {
+      const reply = getOutOfScopeResponse();
+      
+      // 🔐 Cifra risposta
+      const replyEnc = encryptText(reply);
+      
+      await supabase
+        .from(MESSAGES_TABLE)
+        .insert({
+          conversation_id: conversationId,
+          user_id: ownerUserId,
+          role: "assistant",
+          body_enc: replyEnc.ciphertext,
+          body_iv: replyEnc.iv,
+          body_tag: replyEnc.tag,
+          content: null,
+        });
+      
+      return NextResponse.json({ reply }, { status: 200 });
+    }
+
+    // Prova sistema semantico
+    try {
+      console.log('[send] Attempting semantic system for query:', content);
+      
+      // 1. Genera Query Plan
+      const queryPlan = await planQuery(content, ownerUserId);
+      console.log('[send] Query plan generated:', JSON.stringify(queryPlan, null, 2));
+      
+      // 2. Valida Query Plan
+      const validation = validateQueryPlan(queryPlan);
+      if (!validation.valid) {
+        throw new Error(`Query plan validation failed: ${validation.error}`);
+      }
+      
+      if (validation.warnings && validation.warnings.length > 0) {
+        console.warn('[send] Query plan warnings:', validation.warnings);
+      }
+      
+      // 3. Esegui Query
+      const queryResult = await executeQueryPlan(queryPlan);
+      console.log('[send] Query executed, success:', queryResult.success);
+      
+      if (!queryResult.success) {
+        throw new Error(`Query execution failed: ${queryResult.error}`);
+      }
+      
+      // 4. Componi risposta
+      const semanticReply = await composeResponse(content, queryResult);
+      console.log('[send] Semantic reply composed, length:', semanticReply.length);
+      
+      // 🔐 Cifra risposta semantica
+      const semanticEnc = encryptText(semanticReply);
+      
+      // Salva messaggio assistant
+      const insAsstSemantic = await supabase
+        .from(MESSAGES_TABLE)
+        .insert({
+          conversation_id: conversationId,
+          user_id: ownerUserId,
+          role: "assistant",
+          body_enc: semanticEnc.ciphertext,
+          body_iv: semanticEnc.iv,
+          body_tag: semanticEnc.tag,
+          content: null,
+        })
+        .select("id")
+        .single();
+      
+      if (insAsstSemantic.error) {
+        console.error('[send] insert assistant semantic msg error:', insAsstSemantic.error);
+      }
+      
+      console.log('[send] ✅ Semantic system succeeded');
+      return NextResponse.json({ reply: semanticReply }, { status: 200 });
+      
+    } catch (semanticError: any) {
+      // Log errore ma continua con fallback OpenAI
+      console.error('[send] ⚠️ Semantic system error, falling back to OpenAI:', semanticError.message);
+      // Prosegue al blocco OpenAI standard sotto
+    }
+    // ========== FINE SISTEMA SEMANTICO ==========
+
+    // 2) Fallback: Chiama OpenAI standard (come prima)
+    // SYSTEM PROMPT MODIFICATO per limitare AI
+    const sys = `${SYSTEM}
+
+IMPORTANTE: Sei l'assistente REPING per la gestione commerciale nel settore HoReCa.
+
+Rispondi SOLO se la domanda riguarda:
+- Clienti e portafoglio
+- Visite e chiamate
+- Promemoria e task
+- Note commerciali
+- Prodotti del catalogo
+- Pianificazione vendite
+- Statistiche business
+
+Se l'utente chiede informazioni generali (meteo, sport, notizie, politica, ricette, ecc.):
+Rispondi educatamente: "Non posso aiutarti con questa richiesta. Sono specializzato nella gestione del tuo portafoglio commerciale HoReCa. Posso assisterti con clienti, visite, promemoria, statistiche e pianificazione. Come posso aiutarti?"
+
+${terse ? "Rispondi molto brevemente." : ""}`;
+
     const completion = await openai.chat.completions.create({
       model: MODEL,
       messages: [
