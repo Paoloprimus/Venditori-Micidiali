@@ -459,6 +459,11 @@ if (pendingIntent) {
 
   // Se lo standard non ha dato esito, proviamo il planner
   try {
+    // ⚠️ FIX: Assicurati che convCtx.state esista prima di usarlo
+    if (!convCtx.state) {
+      convCtx.state = { scope: null, scope_stack: [], topic_attivo: null };
+    }
+    
     const res = await runPlanner(
       txt,
       {
