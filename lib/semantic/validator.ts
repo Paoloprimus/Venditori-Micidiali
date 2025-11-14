@@ -316,12 +316,33 @@ function validateAggregation(agg: Aggregation): ValidationResult {
 
   // Valida having se presente
   if (agg.having) {
-    const havingValidation = validateFilter(agg.having);
-    if (!havingValidation.valid) {
-      return { 
-        valid: false, 
-        error: `Having clause non valida: ${havingValidation.error}` 
-      };
+    // Having su aggregati può avere field senza table prefix (es. "count", "sum")
+    const aggregateFunctions = ['count', 'sum', 'avg', 'min', 'max'];
+    const isAggregateField = aggregateFunctions.includes(agg.having.field.toLowerCase());
+    
+    if (!isAggregateField) {
+      // Se non è un aggregato, usa validazione normale
+      const havingValidation = validateFilter(agg.having);
+      if (!havingValidation.valid) {
+        return { 
+          valid: false, 
+          error: `Having clause non valida: ${havingValidation.error}` 
+        };
+      }
+    } else {
+      // Valida solo operatore e valore per aggregati
+      if (!VALID_OPERATORS.includes(agg.having.operator)) {
+        return {
+          valid: false,
+          error: `Having operator non valido: "${agg.having.operator}"`
+        };
+      }
+      if (typeof agg.having.value !== 'number') {
+        return {
+          valid: false,
+          error: 'Having value su aggregato deve essere numerico'
+        };
+      }
     }
   }
 
