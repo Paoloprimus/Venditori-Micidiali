@@ -198,8 +198,18 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ reply: semanticReply }, { status: 200 });
       
     } catch (semanticError: any) {
-      // Log errore ma continua con fallback OpenAI
-      console.error('[send] ⚠️ Semantic system error, falling back to OpenAI:', semanticError.message);
+      // Log dettagliato dell'errore
+      console.error('[send] ❌ Semantic system error:');
+      console.error('  Error type:', semanticError.constructor.name);
+      console.error('  Error message:', semanticError.message);
+      console.error('  Error stack:', semanticError.stack);
+      console.error('  Query was:', content);
+      
+      // Se è un errore di validazione, restituiscilo invece di fallback
+      if (semanticError.message?.includes('validation')) {
+        console.error('[send] Validation error - should not happen!');
+      }
+      
       // Prosegue al blocco OpenAI standard sotto
     }
     // ========== FINE SISTEMA SEMANTICO ==========
