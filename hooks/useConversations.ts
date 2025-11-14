@@ -9,11 +9,11 @@ import { supabase } from "../lib/supabase/client";
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
 
 /**
- * Decifra i placeholder [CLIENT:uuid] nella risposta dell'assistente
+ * Decifra i placeholder [CLIENT:uuid] o [CLIENT:uuid|enc|iv|tag] nella risposta dell'assistente
  */
 async function decryptClientPlaceholders(text: string): Promise<string> {
-  // Trova tutti i placeholder [CLIENT:uuid]
-  const clientPattern = /\[CLIENT:([a-f0-9-]+)\]/g;
+  // Pattern esteso: [CLIENT:uuid] o [CLIENT:uuid|name_enc|name_iv|name_tag]
+  const clientPattern = /\[CLIENT:([a-f0-9-]+)(?:\|([^|\]]+)\|([^|\]]+)\|([^|\]]+))?\]/g;
   const matches = [...text.matchAll(clientPattern)];
   
   if (matches.length === 0) return text;
@@ -29,44 +29,64 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
   
   // Decifra ogni placeholder
   for (const match of matches) {
-    const placeholder = match[0]; // es: [CLIENT:abc-123-def]
-    const accountId = match[1];   // es: abc-123-def
+    const placeholder = match[0];     // es: [CLIENT:abc-123|enc|iv|tag]
+    const accountId = match[1];       // es: abc-123-def
+    const nameEnc = match[2];         // dati cifrati inline (opzionale)
+    const nameIv = match[3];
+    const nameTag = match[4];
     
     try {
-      // Fetch account dal DB
-      const { data: account, error } = await supabase
-        .from('accounts')
-        .select('id, name_enc, name_iv, name_tag')
-        .eq('id', accountId)
-        .single();
+      let clientName: string;
       
-      if (error || !account) {
-        console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato`);
-        continue;
+      // ✅ NUOVO: Se ci sono dati cifrati inline, usali direttamente
+      if (nameEnc && nameIv && nameTag) {
+        const encryptedData = {
+          id: accountId,
+          name_enc: nameEnc,
+          name_iv: nameIv,
+          name_tag: nameTag
+        };
+        
+        const decrypted = await crypto.decryptFields(
+          'table:accounts',
+          'accounts',
+          '',
+          encryptedData,
+          ['name']
+        );
+        
+        clientName = decrypted.name || 'Cliente sconosciuto';
+        
+      } else {
+        // ⚠️ FALLBACK: Query DB (compatibilità vecchie risposte)
+        const { data: account, error } = await supabase
+          .from('accounts')
+          .select('id, name_enc, name_iv, name_tag')
+          .eq('id', accountId)
+          .single();
+        
+        if (error || !account || !account.name_enc) {
+          console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato o senza dati`);
+          clientName = 'Cliente sconosciuto';
+        } else {
+          const decrypted = await crypto.decryptFields(
+            'table:accounts',
+            'accounts',
+            '',
+            account,
+            ['name']
+          );
+          
+          clientName = decrypted.name || 'Cliente sconosciuto';
+        }
       }
-      
-      if (!account.name_enc) {
-        result = result.replace(placeholder, 'Cliente senza nome');
-        continue;
-      }
-      
-      // Decifra il nome
-      const decrypted = await crypto.decryptFields(
-        'table:accounts',
-        'accounts',
-        '',
-        account,
-        ['name']
-      );
-      
-      const clientName = decrypted.name || 'Cliente sconosciuto';
       
       // Sostituisci placeholder con nome reale
       result = result.replace(placeholder, clientName);
       
     } catch (error) {
       console.error(`[decryptClientPlaceholders] Errore decifratura ${accountId}:`, error);
-      // Lascia il placeholder se fallisce
+      result = result.replace(placeholder, 'Cliente sconosciuto');
     }
   }
   
