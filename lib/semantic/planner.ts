@@ -210,7 +210,8 @@ User ID contesto: ${userId}
 
     // SECURITY: Aggiungi filtro user_id per ogni tabella che lo richiede
     for (const table of plan.tables) {
-      if (['accounts', 'visits', 'promemoria', 'notes'].includes(table)) {
+      if (['accounts', 'visits', 'promemoria'].includes(table)) {
+        // NOTA: 'notes' NON ha user_id - ha solo account_id
         // Verifica se non esiste già
         const hasUserFilter = plan.filters.some(
           f => f.field === `${table}.user_id` && f.operator === 'eq'
