@@ -151,17 +151,16 @@ function calculateAggregation(data: any[], agg: Aggregation): any {
       }
       
       // Applica having se presente
+      let results = Object.values(grouped);
       if (agg.having) {
-        const filtered: Record<string, any> = {};
-        for (const [key, group] of Object.entries(grouped)) {
-          if (applyHavingFilter(group.count, agg.having)) {
-            filtered[key] = group;
-          }
-        }
-        return Object.values(filtered);
+        results = results.filter(group => applyHavingFilter(group.count, agg.having!));
       }
       
-      return Object.values(grouped);
+      // Ordina per count DESC e limita a top 10
+      results.sort((a, b) => (b.count || 0) - (a.count || 0));
+      const limitedResults = results.slice(0, 10);
+      
+      return limitedResults;
     }
     
     // Simple count
@@ -205,7 +204,14 @@ function calculateAggregation(data: any[], agg: Aggregation): any {
         grouped[key].sum += value;
       }
       
-      return Object.values(grouped);
+      // Converti in array e ordina per somma DESC
+      const results = Object.values(grouped);
+      results.sort((a, b) => (b.sum || 0) - (a.sum || 0));
+      
+      // Applica limit automatico (default top 10 per ranking queries)
+      const limitedResults = results.slice(0, 10);
+      
+      return limitedResults;
     }
     
     const sum = values.reduce((a, b) => a + b, 0);
