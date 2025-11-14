@@ -461,7 +461,16 @@ if (pendingIntent) {
   try {
     // ⚠️ FIX: Assicurati che convCtx.state esista prima di usarlo
     if (!convCtx.state) {
-      convCtx.state = { scope: "clients", scope_stack: [], topic_attivo: null };
+      convCtx.state = { 
+        scope: "clients", 
+        scope_stack: [], 
+        topic_attivo: null,
+        ultimo_intent: null,
+        entita_correnti: {},
+        ultimo_risultato: null,
+        updated_at: Date.now(),
+        lastUpdateTs: Date.now()
+      };
     }
     
     const res = await runPlanner(
