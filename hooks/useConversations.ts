@@ -4,8 +4,74 @@ import { useEffect, useRef, useState } from "react";
 import { listConversations, createConversation as apiCreate, type Conv } from "../lib/api/conversations";
 import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
 import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
+import { supabase } from "../lib/supabase/client";
 
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
+
+/**
+ * Decifra i placeholder [CLIENT:uuid] nella risposta dell'assistente
+ */
+async function decryptClientPlaceholders(text: string): Promise<string> {
+  // Trova tutti i placeholder [CLIENT:uuid]
+  const clientPattern = /\[CLIENT:([a-f0-9-]+)\]/g;
+  const matches = [...text.matchAll(clientPattern)];
+  
+  if (matches.length === 0) return text;
+  
+  // Ottieni crypto service
+  const crypto = (window as any).cryptoSvc;
+  if (!crypto || typeof crypto.decryptFields !== 'function') {
+    console.warn('[decryptClientPlaceholders] CryptoService non disponibile');
+    return text;
+  }
+  
+  let result = text;
+  
+  // Decifra ogni placeholder
+  for (const match of matches) {
+    const placeholder = match[0]; // es: [CLIENT:abc-123-def]
+    const accountId = match[1];   // es: abc-123-def
+    
+    try {
+      // Fetch account dal DB
+      const { data: account, error } = await supabase
+        .from('accounts')
+        .select('id, name_enc, name_iv, name_tag')
+        .eq('id', accountId)
+        .single();
+      
+      if (error || !account) {
+        console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato`);
+        continue;
+      }
+      
+      if (!account.name_enc) {
+        result = result.replace(placeholder, 'Cliente senza nome');
+        continue;
+      }
+      
+      // Decifra il nome
+      const decrypted = await crypto.decryptFields(
+        'table:accounts',
+        'accounts',
+        '',
+        account,
+        ['name']
+      );
+      
+      const clientName = decrypted.name || 'Cliente sconosciuto';
+      
+      // Sostituisci placeholder con nome reale
+      result = result.replace(placeholder, clientName);
+      
+    } catch (error) {
+      console.error(`[decryptClientPlaceholders] Errore decifratura ${accountId}:`, error);
+      // Lascia il placeholder se fallisce
+    }
+  }
+  
+  return result;
+}
 
 type Options = {
   onAssistantReply?: (text: string) => void; // es: TTS o side-effects
@@ -62,7 +128,19 @@ export function useConversations(opts: Options = {}) {
 
   async function loadMessages(convId: string) {
     const items = await getMessagesByConversation(convId, 200);
-    setBubbles(items);
+    
+    // ✅ Decifra placeholder nei messaggi assistant
+    const decryptedItems = await Promise.all(
+      items.map(async (item) => {
+        if (item.role === 'assistant' && item.content) {
+          const decrypted = await decryptClientPlaceholders(item.content);
+          return { ...item, content: decrypted };
+        }
+        return item;
+      })
+    );
+    
+    setBubbles(decryptedItems);
   }
 
   async function ensureConversation(): Promise<Conv> {
@@ -119,8 +197,11 @@ export function useConversations(opts: Options = {}) {
         terse: false 
       });
       
-      setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
-      onAssistantReply?.(replyText);
+      // ✅ Decifra eventuali placeholder [CLIENT:uuid] prima di mostrare
+      const decryptedReply = await decryptClientPlaceholders(replyText);
+      
+      setBubbles((b) => [...b, { role: "assistant", content: decryptedReply }]);
+      onAssistantReply?.(decryptedReply);
       await refreshUsage(conv.id);
       
     } catch (e: any) {
