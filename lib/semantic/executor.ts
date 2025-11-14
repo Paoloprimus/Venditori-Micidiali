@@ -297,9 +297,48 @@ export async function executeQueryPlan(
       for (const join of plan.joins) {
         const joinFilters = plan.filters.filter(f => f.field.startsWith(`${join.to}.`));
         for (const filter of joinFilters) {
-          // In Supabase, filtri su joined table vanno con prefisso
-          const field = filter.field.split('.')[1];
-          query = applyFilter(query, { ...filter, field: `${join.to}.${field}` }, join.to);
+          // Per joined tables, Supabase vuole prefisso completo: "accounts.tipo_locale"
+          // NON passare per applyFilter che rimuove il prefisso
+          const fullField = filter.field; // es. "accounts.tipo_locale"
+          let value = filter.value;
+          
+          // Risolvi date relative se necessario
+          const fieldName = fullField.split('.')[1];
+          if (typeof value === 'string' && (
+            fieldName.includes('date') || 
+            fieldName.includes('data_') ||
+            fieldName.includes('_at')
+          )) {
+            value = resolveRelativeDate(value);
+          }
+          
+          // Applica operatore direttamente
+          switch (filter.operator) {
+            case 'eq':
+              query = query.eq(fullField, value);
+              break;
+            case 'neq':
+              query = query.neq(fullField, value);
+              break;
+            case 'gt':
+              query = query.gt(fullField, value);
+              break;
+            case 'gte':
+              query = query.gte(fullField, value);
+              break;
+            case 'lt':
+              query = query.lt(fullField, value);
+              break;
+            case 'lte':
+              query = query.lte(fullField, value);
+              break;
+            case 'like':
+              query = query.ilike(fullField, `%${value}%`);
+              break;
+            case 'in':
+              query = query.in(fullField, value as any[]);
+              break;
+          }
         }
       }
     }
