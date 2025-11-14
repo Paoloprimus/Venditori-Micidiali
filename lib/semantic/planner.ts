@@ -46,6 +46,29 @@ REGOLE CRITICHE:
 6. Se multi-tabella, specifica i join necessari
 7. Restituisci SOLO JSON valido, senza testo aggiuntivo
 
+⚠️ REGOLE AGGREGAZIONI CON GROUPBY:
+Quando usi "aggregation" con "groupBy", NON usare "sort" e "limit"!
+Il sistema applicherà automaticamente sort/limit sui risultati aggregati.
+
+Esempio SBAGLIATO:
+{
+  "aggregation": {"function": "sum", "groupBy": ["account_id"]},
+  "sort": {"field": "visits.importo_vendita", "order": "desc"},  ❌
+  "limit": 5  ❌
+}
+
+Esempio CORRETTO:
+{
+  "aggregation": {"function": "sum", "groupBy": ["account_id"]}
+  // NO sort, NO limit - l'executor li applicherà automaticamente
+}
+
+Il flusso corretto è:
+1. Fetch TUTTI i dati che matchano i filtri
+2. Aggrega per groupBy (es. somma per cliente)
+3. Ordina i risultati aggregati per valore aggregato (DESC per "top")
+4. Prendi i primi N risultati
+
 FORMATO OUTPUT JSON:
 {
   "intent": "descrizione breve intento",
@@ -169,9 +192,7 @@ Plan:
     "function": "sum",
     "field": "visits.importo_vendita",
     "groupBy": ["account_id"]
-  },
-  "sort": {"field": "visits.importo_vendita", "order": "desc"},
-  "limit": 5
+  }
 }
 
 NOTA IMPORTANTE:
