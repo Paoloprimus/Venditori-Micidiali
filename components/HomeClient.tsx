@@ -461,7 +461,7 @@ if (pendingIntent) {
   try {
     // ⚠️ FIX: Assicurati che convCtx.state esista prima di usarlo
     if (!convCtx.state) {
-      convCtx.state = { scope: null, scope_stack: [], topic_attivo: null };
+      convCtx.state = { scope: "clients", scope_stack: [], topic_attivo: null };
     }
     
     const res = await runPlanner(
