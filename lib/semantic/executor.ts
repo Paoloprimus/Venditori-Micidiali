@@ -146,6 +146,17 @@ function calculateAggregation(data: any[], agg: Aggregation): any {
             ...agg.groupBy.reduce((acc, field) => ({ ...acc, [field]: row[field] }), {}),
             count: 0
           };
+          
+          // ✅ Se groupBy per account_id e ci sono dati cifrati, includili
+          if (agg.groupBy.includes('account_id') && row.accounts) {
+            grouped[key].account_encrypted = {
+              name_enc: row.accounts.name_enc,
+              name_iv: row.accounts.name_iv,
+              name_tag: row.accounts.name_tag,
+              city: row.accounts.city,
+              tipo_locale: row.accounts.tipo_locale
+            };
+          }
         }
         grouped[key].count++;
       }
@@ -200,6 +211,17 @@ function calculateAggregation(data: any[], agg: Aggregation): any {
             ...agg.groupBy.reduce((acc, field) => ({ ...acc, [field]: row[field] }), {}),
             sum: 0
           };
+          
+          // ✅ Se groupBy per account_id e ci sono dati cifrati, includili
+          if (agg.groupBy.includes('account_id') && row.accounts) {
+            grouped[key].account_encrypted = {
+              name_enc: row.accounts.name_enc,
+              name_iv: row.accounts.name_iv,
+              name_tag: row.accounts.name_tag,
+              city: row.accounts.city,
+              tipo_locale: row.accounts.tipo_locale
+            };
+          }
         }
         grouped[key].sum += value;
       }
@@ -280,8 +302,19 @@ export async function executeQueryPlan(
     // Costruisci SELECT clause
     let selectClause = '*';
     
-    // Se ci sono join, includiamo le tabelle correlate
-    if (plan.joins && plan.joins.length > 0) {
+    // ✅ Se aggregazione per account_id, aggiungi JOIN con accounts per nomi cifrati
+    const needsAccountJoin = plan.aggregation?.groupBy?.includes('account_id') && 
+                             mainTable !== 'accounts';
+    
+    if (needsAccountJoin) {
+      // Aggiungi campi cifrati di accounts al select
+      selectClause = '*,accounts!inner(id,name_enc,name_iv,name_tag,city,tipo_locale)';
+      
+      if (cfg.enableLogging) {
+        console.log('[executor] Auto-joining accounts table for encrypted names');
+      }
+    } else if (plan.joins && plan.joins.length > 0) {
+      // Join esistenti dal plan
       const joinSelects = plan.joins.map(j => `${j.to}!inner(*)`).join(',');
       selectClause = `*,${joinSelects}`;
     }
