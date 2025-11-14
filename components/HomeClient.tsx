@@ -459,18 +459,11 @@ if (pendingIntent) {
 
   // Se lo standard non ha dato esito, proviamo il planner
   try {
-    // ⚠️ FIX: Assicurati che convCtx.state esista prima di usarlo
-    if (!convCtx.state) {
-      convCtx.state = { 
-        scope: "clients", 
-        scope_stack: [], 
-        topic_attivo: null,
-        ultimo_intent: null,
-        entita_correnti: {},
-        ultimo_risultato: null,
-        updated_at: Date.now(),
-        lastUpdateTs: Date.now()
-      };
+    // ⚠️ FIX: Controllo sicuro che convCtx e state esistano
+    if (!convCtx || !convCtx.state) {
+      console.error("[planner fallback] convCtx o state non disponibili, uso modello generico");
+      await conv.send(txt);
+      return;
     }
     
     const res = await runPlanner(
