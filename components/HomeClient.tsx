@@ -420,37 +420,41 @@ if (pendingIntent) {
           dataForTemplate.discount = discount > 0 ? `${discount}%` : "nessuno";
         }
 
-        const responseTpl =
-          LOCAL_TEMPLATES[intentKey]?.response ||
-          "Fatto.";
+        const responseTpl = LOCAL_TEMPLATES[intentKey]?.response;
+        
+        // ✅ FIX: Se non c'è template, passa al planner invece di rispondere "Fatto."
+        if (!responseTpl) {
+          console.error("[standard→planner] no template for intent", intentKey, "→ passo al planner");
+          // Non fare return, prosegui al planner
+        } else {
+          const answer = fillTemplateSimple(responseTpl, dataForTemplate);
 
-        const answer = fillTemplateSimple(responseTpl, dataForTemplate);
+          // 7) scrivi la risposta (assistente)
+          appendAssistantLocal(answer);
 
-        // 7) scrivi la risposta (assistente)
-        appendAssistantLocal(answer);
+          // 8) memorizza ultimo prodotto valido
+          if (prodotto && !/\s/.test(prodotto)) setLastProduct(prodotto);
 
-        // 8) memorizza ultimo prodotto valido
-        if (prodotto && !/\s/.test(prodotto)) setLastProduct(prodotto);
+          // TTS (se altoparlante attivo)
+          speakIfEnabled(answer);
 
-        // TTS (se altoparlante attivo)
-        speakIfEnabled(answer);
+          // 9) persisti in DB
+          const convId = conv.currentConv?.id;
+          if (convId) {
+            await fetch("/api/messages/append", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: answer }),
+            });
+            const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
+            const j = await r.json();
+            conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
+            setLocalUser([]);
+            setLocalAssistant([]);
+          }
 
-        // 9) persisti in DB
-        const convId = conv.currentConv?.id;
-        if (convId) {
-          await fetch("/api/messages/append", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ conversationId: convId, userText: txt, assistantText: answer }),
-          });
-          const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
-          const j = await r.json();
-          conv.setBubbles?.((j.items ?? []).map((r: any) => ({ id: r.id, role: r.role, content: r.content })));
-          setLocalUser([]);
-          setLocalAssistant([]);
+          return; // ⬅️ STOP: abbiamo risposto con lo standard flow
         }
-
-        return; // ⬅️ STOP: abbiamo risposto con lo standard flow
       }
     }
   } catch (e) {
