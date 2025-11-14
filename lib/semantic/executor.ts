@@ -84,6 +84,7 @@ function applyFilter(query: any, filter: FieldFilter, tableName: string): any {
   // Risolvi date relative se il campo è timestamp
   if (typeof value === 'string' && (
     field.includes('date') || 
+    field.includes('data_') ||  // Per data_visita
     field.includes('_at') || 
     field === 'created_at' || 
     field === 'updated_at'
