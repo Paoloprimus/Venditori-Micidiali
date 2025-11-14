@@ -66,11 +66,26 @@ export async function handleIntent(intent: Intent): Promise<HandleResult> {
           const message = `Errore nella ricerca note: ${data?.error ?? "sconosciuto"}.`;
           return { ok: false, message, data };
         }
-        const hits: Array<{ snippet: string }> = data?.items ?? [];
-        const message =
-          hits.length === 0
-            ? `Nessuna nota su ${intent.topic} per ${intent.accountHint}.`
-            : `Risulta: ${hits[0].snippet}`;
+        const hits: Array<{ snippet: string; context?: string }> = data?.items ?? [];
+        
+        // ✅ NUOVO: Messaggio più user-friendly con contesto
+        let message = '';
+        if (hits.length === 0) {
+          message = `Non ho trovato informazioni su "${intent.topic}" nelle note.`;
+        } else if (hits.length === 1) {
+          const contextInfo = hits[0].context ? ` (${hits[0].context})` : '';
+          message = `Ho trovato questo${contextInfo}:\n\n"${hits[0].snippet}"`;
+        } else {
+          message = `Ho trovato ${hits.length} note su "${intent.topic}":\n\n`;
+          hits.slice(0, 3).forEach((hit, i) => {
+            const contextInfo = hit.context ? ` (${hit.context})` : '';
+            message += `${i + 1}. ${contextInfo}\n"${hit.snippet}"\n\n`;
+          });
+          if (hits.length > 3) {
+            message += `...e altre ${hits.length - 3} note.`;
+          }
+        }
+        
         return { ok: true, message, data: { hits } };
       }
 
