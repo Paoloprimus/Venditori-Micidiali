@@ -112,6 +112,34 @@ Plan:
   }
 }
 
+Query: "Quanti clienti ho visitato questo mese?"
+Plan:
+{
+  "intent": "Count clienti visitati mese corrente",
+  "tables": ["visits"],
+  "filters": [
+    {"field": "visits.data_visita", "operator": "gte", "value": "this_month"}
+  ],
+  "aggregation": {
+    "function": "count",
+    "groupBy": ["account_id"]
+  }
+}
+
+Query: "Quanto ho venduto negli ultimi 30 giorni?"
+Plan:
+{
+  "intent": "Somma vendite ultimi 30 giorni",
+  "tables": ["visits"],
+  "filters": [
+    {"field": "visits.data_visita", "operator": "gte", "value": "30_days_ago"}
+  ],
+  "aggregation": {
+    "function": "sum",
+    "field": "visits.importo_vendita"
+  }
+}
+
 Query: "Totale vendite di bar a Milano questo mese"
 Plan:
 {
