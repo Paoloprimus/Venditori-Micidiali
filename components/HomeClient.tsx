@@ -280,14 +280,18 @@ if (pendingIntent) {
           }),
         });
         
-        // Salva nel DB: risposta "sì" + risultato
+        // ✅ Prima esegui l'azione e ottieni il risultato
+        const result = await handleIntent(pendingIntent);
+        const resultMessage = result.message || "✅ Fatto.";
+        
+        // Salva nel DB: risposta "sì" + risultato VERO
         await fetch("/api/messages/append", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ 
             conversationId: convId, 
             userText: txt, 
-            assistantText: "✅ Fatto." 
+            assistantText: resultMessage 
           }),
         });
         
@@ -298,8 +302,6 @@ if (pendingIntent) {
         setLocalUser([]);
         setLocalAssistant([]);
       }
-      
-      await handleIntent(pendingIntent);
       setPendingIntent(null);
       setOriginalVoiceCommand(""); // Reset
       return;
