@@ -307,8 +307,8 @@ export async function executeQueryPlan(
                              mainTable !== 'accounts';
     
     if (needsAccountJoin) {
-      // Aggiungi campi cifrati di accounts al select
-      selectClause = '*,accounts!inner(id,name_enc,name_iv,name_tag,city,tipo_locale)';
+      // JOIN automatico con accounts (Supabase risolve la FK automaticamente)
+      selectClause = '*,accounts(id,name_enc,name_iv,name_tag,city,tipo_locale)';
       
       if (cfg.enableLogging) {
         console.log('[executor] Auto-joining accounts table for encrypted names');
