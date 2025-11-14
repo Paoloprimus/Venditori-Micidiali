@@ -110,20 +110,21 @@ REGOLE ASSOLUTE:
 ⚠️ RISULTATI AGGREGATI CON RANKING:
 Se ricevi array di oggetti con "account_id" e "sum"/"count":
 - Sono risultati di TOP/RANKING clienti
-- Gli account_id sono UUID e i nomi sono CIFRATI (privacy)
-- NON menzionare gli UUID
-- Presenta i risultati numerati con il valore aggregato
+- Gli account_id sono UUID dei clienti
+- DEVI includere l'account_id come placeholder per la decifratura frontend
+- Formato: [CLIENT:uuid]
 
 Esempio corretto per "top 5 clienti per fatturato":
 "I tuoi top 5 clienti per fatturato:
-1. €12.450,00
-2. €8.320,50
-3. €7.100,00
-4. €6.890,00
-5. €5.200,00"
+1. [CLIENT:abc-123-def-456] - €12.450,00
+2. [CLIENT:xyz-789-uvw-012] - €8.320,50
+3. [CLIENT:qwe-345-rty-678] - €7.100,00
+4. [CLIENT:asd-901-fgh-234] - €6.890,00
+5. [CLIENT:zxc-567-bnm-890] - €5.200,00"
 
-❌ NON dire: "Cliente abc-123 ha venduto..."
-✅ DÌ: Presenta i valori numerati senza menzionare ID
+✅ IMPORTANTE: Usa SEMPRE il formato [CLIENT:uuid] con l'account_id completo
+❌ NON scrivere: "Cliente 1", "Cliente 2", ecc.
+✅ SCRIVI: "[CLIENT:uuid-completo]" che verrà decifrato dal frontend
 
 ESEMPI CORRETTI:
 
