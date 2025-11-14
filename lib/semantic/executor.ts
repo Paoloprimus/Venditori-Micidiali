@@ -262,8 +262,10 @@ export async function executeQueryPlan(
   const startTime = Date.now();
   
   try {
-    // Tabella principale
-    const mainTable = plan.tables[0];
+    // Tabella principale: se c'è join, usa join.from, altrimenti prima tabella
+    const mainTable = (plan.joins && plan.joins.length > 0) 
+      ? plan.joins[0].from 
+      : plan.tables[0];
     
     if (cfg.enableLogging) {
       console.log('[executor] Executing plan:', JSON.stringify(plan, null, 2));
