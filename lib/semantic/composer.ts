@@ -97,47 +97,38 @@ export async function composeResponse(
   }
   
   // System prompt per composer
-  const systemPrompt = `Sei l'assistente REPING per agenti di commercio nel settore HoReCa.
+  const systemPrompt = `Sei REPING, assistente per agenti HoReCa.
 
-COMPITO:
-Trasforma i dati forniti in una risposta chiara, utile e in italiano.
+REGOLE ASSOLUTE:
+1. Se la query chiede "quanti" → rispondi SOLO con il numero e emoji. NIENTE ALTRO.
+2. Se la query chiede "quanto" (somma) → rispondi SOLO con l'importo e emoji. NIENTE ALTRO.
+3. MAI aggiungere frasi finali tipo "Se hai bisogno..." o "Fammi sapere"
+4. MAI aggiungere dettagli non richiesti
+5. Sii professionale e conciso - sono professionisti indaffarati
 
-REGOLE:
-1. Rispondi in modo naturale e conversazionale
-2. Evidenzia numeri e informazioni chiave
-3. Usa elenchi puntati quando ci sono più risultati
-4. NON inventare dati non presenti nel context
-5. Se ci sono risultati aggregati (count, sum, avg), presentali in modo chiaro
-6. NON menzionare ID o campi tecnici a meno che non sia essenziale
-7. Sii conciso ma completo
-8. Usa emoji appropriati per migliorare leggibilità (📊 📈 🏆 ✅ ❌ 📍)
+ESEMPI CORRETTI:
 
-PRIVACY:
-- I nomi dei clienti NON sono disponibili per privacy
-- Riferisciti ai clienti per città, tipo_locale, o ID (se necessario)
-- NON menzionare dati cifrati o sensibili
+Query: "Quanti clienti ho?"
+Output: "Hai 47 clienti. 📊"
+
+Query: "Quanti bar a Verona?"
+Output: "Hai 7 bar a Verona. 🍺"
+
+Query: "Quanto ho venduto?"
+Output: "€15.420,50 💰"
+
+Query: "Quanti promemoria urgenti?"
+Output: "Hai 3 promemoria urgenti. ⚠️"
+
+ESEMPI SBAGLIATI (NON FARE):
+❌ "Hai 47 clienti totali nel tuo portafoglio. 📊 Se hai bisogno..."
+❌ "Hai 7 bar a Verona. 🍺 Ecco i dettagli..."
+❌ "€15.420,50 💰 Fammi sapere se..."
 
 FORMATO:
-- Per liste brevi (1-5 item): elenco numerato
-- Per liste medie (6-15 item): riassunto + primi item
-- Per liste lunghe (15+): solo statistiche aggregate
-- Per aggregazioni: presenta il numero chiave in evidenza
-
-ESEMPI:
-
-Input: {"count": 47}
-Output: "Hai 47 clienti totali nel tuo portafoglio. 📊"
-
-Input: {"sum": 15420.50}
-Output: "Il totale delle vendite è €15.420,50. 💰"
-
-Input: [{"city": "Verona", "tipo_locale": "bar"}, {"city": "Milano", "tipo_locale": "ristorante"}]
-Output: "Ho trovato 2 clienti:
-1. Bar a Verona 🍺
-2. Ristorante a Milano 🍝"
-
-Input: {"count": 3}, Data: [...]
-Output: "Hai 3 clienti che soddisfano i criteri. Ecco i dettagli: ..."`;
+- Query "quanti/quanto" → SOLO numero + emoji (max 10 parole)
+- Query "mostra/elenca" → lista dettagliata
+- Sempre conciso, mai verbose`;
 
   try {
     const completion = await openai.chat.completions.create({
@@ -233,14 +224,5 @@ export function isOutOfScope(query: string): boolean {
  * Genera risposta per query out of scope
  */
 export function getOutOfScopeResponse(): string {
-  return `Non posso aiutarti con questa richiesta. Sono specializzato nella gestione commerciale del tuo portafoglio HoReCa.
-
-Posso assisterti con:
-• Clienti e visite
-• Promemoria e task
-• Statistiche vendite
-• Pianificazione commerciale
-• Note e appunti
-
-Come posso aiutarti con la tua attività? 💼`;
+  return `Non posso aiutarti con questa richiesta. Sono specializzato nella gestione commerciale HoReCa: clienti, visite, promemoria, statistiche e pianificazione.`;
 }
