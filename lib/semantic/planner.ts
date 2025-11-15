@@ -93,6 +93,42 @@ Piano corretto:
   ]
 }
 
+ESEMPIO QUERY SPECIFICA - "mostra ultima visita con ordine":
+Query corrente: "mostra ultima visita con ordine"
+Contesto precedente: {resultIds: ["uuid1", "uuid2", ...], resultCount: 38}
+
+Piano corretto (JOIN con visits per ottenere data_visita e importo_vendita):
+{
+  "intent": "Dettagli clienti con ultima visita e importo",
+  "tables": ["accounts", "visits"],
+  "filters": [
+    {"field": "accounts.id", "operator": "in", "value": ["uuid1", "uuid2", ...]}
+  ],
+  "joins": [
+    {"from": "accounts", "to": "visits", "fromField": "id", "toField": "account_id", "type": "left"}
+  ],
+  "sort": {"field": "visits.data_visita", "order": "desc"},
+  "limit": 38
+}
+
+ESEMPIO QUERY SPECIFICA - "mostra con fatturato":
+Query corrente: "mostra con fatturato"
+Contesto precedente: {resultIds: ["uuid1", "uuid2", ...]}
+
+Piano corretto (aggregazione fatturato):
+{
+  "intent": "Clienti con fatturato totale",
+  "tables": ["visits"],
+  "filters": [
+    {"field": "visits.account_id", "operator": "in", "value": ["uuid1", "uuid2", ...]}
+  ],
+  "aggregation": {
+    "function": "sum",
+    "field": "visits.importo_vendita",
+    "groupBy": ["account_id"]
+  }
+}
+
 ⚠️ Se NON c'è contesto precedente e la query è vaga ("mostra dettagli" senza contesto):
 Genera un piano generico ma SEMPRE VALIDO - evita di fare JOIN a tutte le tabelle senza senso.
 
