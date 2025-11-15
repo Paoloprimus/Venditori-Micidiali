@@ -9,7 +9,8 @@ import {
   Aggregation,
   ExecutorConfig,
   SemanticError,
-  SemanticErrorCode 
+  SemanticErrorCode,
+  Subquery
 } from './types';
 
 const DEFAULT_CONFIG: ExecutorConfig = {
@@ -118,10 +119,109 @@ function applyFilter(query: any, filter: FieldFilter, tableName: string): any {
       return query.ilike(field, `%${value}%`);
     case 'in':
       return query.in(field, value as any[]);
+    case 'not_in':
+      // NOT IN = usa .not().in()
+      return query.not(field, 'in', value as any[]);
     default:
       console.warn(`[executor] Operatore non supportato: ${filter.operator}`);
       return query;
   }
+}
+
+/**
+ * Risolve le subquery nei filtri NOT IN
+ * Esegue le subquery e sostituisce i value con array di ID
+ */
+async function resolveSubqueries(plan: QueryPlan, config: ExecutorConfig): Promise<QueryPlan> {
+  const resolvedFilters: FieldFilter[] = [];
+  
+  for (const filter of plan.filters) {
+    // Controlla se questo filtro ha una subquery
+    if (
+      filter.operator === 'not_in' && 
+      typeof filter.value === 'object' && 
+      filter.value !== null && 
+      !Array.isArray(filter.value) &&
+      'subquery' in filter.value
+    ) {
+      const subqueryValue = filter.value as Subquery;
+      const subqueryPlan = subqueryValue.subquery;
+      
+      if (config.enableLogging) {
+        console.log('[executor] Esecuzione subquery per not_in:', JSON.stringify(subqueryPlan, null, 2));
+      }
+      
+      // Esegui ricorsivamente la subquery
+      const subqueryResult = await executeQueryPlan(subqueryPlan, config);
+      
+      if (!subqueryResult.success || !subqueryResult.data) {
+        throw new SemanticError(
+          `Subquery fallita: ${subqueryResult.error || 'Nessun dato'}`,
+          SemanticErrorCode.QUERY_EXECUTION_FAILED,
+          { subqueryPlan, subqueryResult }
+        );
+      }
+      
+      // Estrai il campo rilevante dai risultati
+      // Se la subquery ha groupBy (es. account_id), usa quello
+      // Altrimenti cerca un campo che termina con _id
+      let fieldToExtract: string;
+      
+      if (subqueryPlan.aggregation?.groupBy && subqueryPlan.aggregation.groupBy.length > 0) {
+        // Usa il primo campo del groupBy
+        fieldToExtract = subqueryPlan.aggregation.groupBy[0];
+      } else {
+        // Cerca un campo ID nei risultati
+        const firstRow = subqueryResult.data[0];
+        const idFields = Object.keys(firstRow).filter(k => k.endsWith('_id') || k === 'id');
+        
+        if (idFields.length === 0) {
+          throw new SemanticError(
+            'Subquery non ha restituito un campo ID da usare per NOT IN',
+            SemanticErrorCode.INVALID_FILTER,
+            { subqueryResult }
+          );
+        }
+        
+        fieldToExtract = idFields[0];
+      }
+      
+      // Estrai array di ID
+      const ids = subqueryResult.data
+        .map(row => row[fieldToExtract])
+        .filter(id => id !== null && id !== undefined);
+      
+      if (config.enableLogging) {
+        console.log(`[executor] Subquery restituita ${ids.length} ID da escludere`);
+      }
+      
+      // Se la subquery non ha restituito nessun ID, NOT IN [] = tutti i record
+      // In questo caso, possiamo semplicemente non applicare il filtro
+      if (ids.length === 0) {
+        if (config.enableLogging) {
+          console.log('[executor] Subquery vuota - il filtro NOT IN non escluderà nulla');
+        }
+        // Non aggiungere il filtro (NOT IN [] = nessuna esclusione)
+        continue;
+      }
+      
+      // Sostituisci il filtro con un NOT IN con array di ID
+      resolvedFilters.push({
+        field: filter.field,
+        operator: 'not_in',
+        value: ids
+      });
+      
+    } else {
+      // Filtro normale, mantieni com'è
+      resolvedFilters.push(filter);
+    }
+  }
+  
+  return {
+    ...plan,
+    filters: resolvedFilters
+  };
 }
 
 /**
@@ -293,21 +393,24 @@ export async function executeQueryPlan(
   const startTime = Date.now();
   
   try {
+    // ✅ STEP 1: Risolvi subquery nei filtri NOT IN
+    const resolvedPlan = await resolveSubqueries(plan, cfg);
+    
     // Tabella principale: se c'è join, usa join.from, altrimenti prima tabella
-    const mainTable = (plan.joins && plan.joins.length > 0) 
-      ? plan.joins[0].from 
-      : plan.tables[0];
+    const mainTable = (resolvedPlan.joins && resolvedPlan.joins.length > 0) 
+      ? resolvedPlan.joins[0].from 
+      : resolvedPlan.tables[0];
     
     if (cfg.enableLogging) {
-      console.log('[executor] Executing plan:', JSON.stringify(plan, null, 2));
+      console.log('[executor] Executing resolved plan:', JSON.stringify(resolvedPlan, null, 2));
     }
     
     // Costruisci SELECT clause
     let selectClause = '*';
     
     // Se ci sono join espliciti dal plan, includiamoli
-    if (plan.joins && plan.joins.length > 0) {
-      const joinSelects = plan.joins.map(j => `${j.to}!inner(*)`).join(',');
+    if (resolvedPlan.joins && resolvedPlan.joins.length > 0) {
+      const joinSelects = resolvedPlan.joins.map(j => `${j.to}!inner(*)`).join(',');
       selectClause = `*,${joinSelects}`;
     }
     
@@ -315,7 +418,7 @@ export async function executeQueryPlan(
     let query = supabase.from(mainTable).select(selectClause);
     
     // Applica filtri per tabella principale
-    const mainTableFilters = plan.filters.filter(f => 
+    const mainTableFilters = resolvedPlan.filters.filter(f => 
       f.field.startsWith(`${mainTable}.`) || !f.field.includes('.')
     );
     
@@ -324,9 +427,9 @@ export async function executeQueryPlan(
     }
     
     // Applica filtri per tabelle join (sintassi Supabase)
-    if (plan.joins) {
-      for (const join of plan.joins) {
-        const joinFilters = plan.filters.filter(f => f.field.startsWith(`${join.to}.`));
+    if (resolvedPlan.joins) {
+      for (const join of resolvedPlan.joins) {
+        const joinFilters = resolvedPlan.filters.filter(f => f.field.startsWith(`${join.to}.`));
         for (const filter of joinFilters) {
           // Per joined tables, Supabase vuole prefisso completo: "accounts.tipo_locale"
           // NON passare per applyFilter che rimuove il prefisso
@@ -369,20 +472,23 @@ export async function executeQueryPlan(
             case 'in':
               query = query.in(fullField, value as any[]);
               break;
+            case 'not_in':
+              query = query.not(fullField, 'in', value as any[]);
+              break;
           }
         }
       }
     }
     
     // Applica sort
-    if (plan.sort) {
-      const [, field] = plan.sort.field.split('.');
-      query = query.order(field, { ascending: plan.sort.order === 'asc' });
+    if (resolvedPlan.sort) {
+      const [, field] = resolvedPlan.sort.field.split('.');
+      query = query.order(field, { ascending: resolvedPlan.sort.order === 'asc' });
     }
     
     // Applica limit (con cap massimo)
-    const limit = plan.limit 
-      ? Math.min(plan.limit, cfg.maxRows!) 
+    const limit = resolvedPlan.limit 
+      ? Math.min(resolvedPlan.limit, cfg.maxRows!) 
       : cfg.maxRows!;
     query = query.limit(limit);
     
@@ -398,7 +504,7 @@ export async function executeQueryPlan(
       throw new SemanticError(
         `Errore esecuzione query: ${error.message}`,
         SemanticErrorCode.QUERY_EXECUTION_FAILED,
-        { error, plan }
+        { error, plan: resolvedPlan }
       );
     }
     
@@ -409,12 +515,12 @@ export async function executeQueryPlan(
     }
     
     // Se c'è aggregazione, calcola client-side
-    if (plan.aggregation && data) {
+    if (resolvedPlan.aggregation && data) {
       const aggregated = calculateAggregation(
         data, 
-        plan.aggregation,
-        plan.sort,
-        plan.limit
+        resolvedPlan.aggregation,
+        resolvedPlan.sort,
+        resolvedPlan.limit
       );
       
       return {
