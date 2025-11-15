@@ -69,6 +69,61 @@ Il flusso corretto è:
 3. Ordina i risultati aggregati per valore aggregato (DESC per "top")
 4. Prendi i primi N risultati
 
+🔥 OPERATORE NOT_IN CON SUBQUERY:
+Per query tipo "clienti NON visitati da X giorni" o "clienti che NON hanno...", usa l'operatore "not_in" con subquery.
+
+SINTASSI:
+{
+  "field": "accounts.id",
+  "operator": "not_in",
+  "value": {
+    "subquery": {
+      "intent": "descrizione subquery",
+      "tables": ["visits"],
+      "filters": [...],
+      "aggregation": {
+        "function": "count",
+        "groupBy": ["account_id"]
+      }
+    }
+  }
+}
+
+Il sistema:
+1. Eseguirà prima la subquery per trovare gli ID da escludere
+2. Estrarrà automaticamente il campo groupBy (es. account_id)
+3. Userà quell'array per fare NOT IN sulla query principale
+
+ESEMPIO COMPLETO - "Clienti non visitati da più di 60 giorni":
+{
+  "intent": "Clienti non visitati da più di 60 giorni",
+  "tables": ["accounts"],
+  "filters": [
+    {
+      "field": "accounts.id",
+      "operator": "not_in",
+      "value": {
+        "subquery": {
+          "intent": "Account ID visitati negli ultimi 60 giorni",
+          "tables": ["visits"],
+          "filters": [
+            {
+              "field": "visits.data_visita",
+              "operator": "gte",
+              "value": "60_days_ago"
+            }
+          ],
+          "aggregation": {
+            "function": "count",
+            "groupBy": ["account_id"]
+          }
+        }
+      }
+    }
+  ],
+  "limit": 50
+}
+
 FORMATO OUTPUT JSON:
 {
   "intent": "descrizione breve intento",
@@ -76,8 +131,8 @@ FORMATO OUTPUT JSON:
   "filters": [
     {
       "field": "table.field",
-      "operator": "eq|neq|gt|gte|lt|lte|like|in",
-      "value": "valore" | numero | boolean | ["array"]
+      "operator": "eq|neq|gt|gte|lt|lte|like|in|not_in",
+      "value": "valore" | numero | boolean | ["array"] | {"subquery": {...}}
     }
   ],
   "joins": [
@@ -193,6 +248,60 @@ Plan:
     "field": "visits.importo_vendita",
     "groupBy": ["account_id"]
   }
+}
+
+Query: "Clienti mai visitati"
+Plan:
+{
+  "intent": "Clienti mai visitati",
+  "tables": ["accounts"],
+  "filters": [
+    {
+      "field": "accounts.id",
+      "operator": "not_in",
+      "value": {
+        "subquery": {
+          "intent": "ID di tutti gli account visitati",
+          "tables": ["visits"],
+          "filters": [],
+          "aggregation": {
+            "function": "count",
+            "groupBy": ["account_id"]
+          }
+        }
+      }
+    }
+  ],
+  "limit": 50
+}
+
+Query: "Bar di Verona che non visito da 90 giorni"
+Plan:
+{
+  "intent": "Bar Verona non visitati da 90 giorni",
+  "tables": ["accounts"],
+  "filters": [
+    {"field": "accounts.city", "operator": "eq", "value": "Verona"},
+    {"field": "accounts.tipo_locale", "operator": "eq", "value": "bar"},
+    {
+      "field": "accounts.id",
+      "operator": "not_in",
+      "value": {
+        "subquery": {
+          "intent": "Account ID visitati negli ultimi 90 giorni",
+          "tables": ["visits"],
+          "filters": [
+            {"field": "visits.data_visita", "operator": "gte", "value": "90_days_ago"}
+          ],
+          "aggregation": {
+            "function": "count",
+            "groupBy": ["account_id"]
+          }
+        }
+      }
+    }
+  ],
+  "limit": 50
 }
 
 NOTA IMPORTANTE:
