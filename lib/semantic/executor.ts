@@ -127,7 +127,12 @@ function applyFilter(query: any, filter: FieldFilter, tableName: string): any {
 /**
  * Calcola aggregazioni client-side sui dati
  */
-function calculateAggregation(data: any[], agg: Aggregation): any {
+function calculateAggregation(
+  data: any[], 
+  agg: Aggregation,
+  sortConfig?: { field: string; order: 'asc' | 'desc' },
+  limitValue?: number
+): any {
   if (!data || data.length === 0) {
     return null;
   }
@@ -156,9 +161,19 @@ function calculateAggregation(data: any[], agg: Aggregation): any {
         results = results.filter(group => applyHavingFilter(group.count, agg.having!));
       }
       
-      // Ordina per count DESC e limita a top 10
-      results.sort((a, b) => (b.count || 0) - (a.count || 0));
-      const limitedResults = results.slice(0, 10);
+      // ✅ Applica sort dal plan (default: count DESC)
+      const sortField = sortConfig?.field || 'count';
+      const sortOrder = sortConfig?.order || 'desc';
+      
+      results.sort((a, b) => {
+        const aVal = a[sortField] || 0;
+        const bVal = b[sortField] || 0;
+        return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+      });
+      
+      // ✅ Applica limit dal plan (default: 10)
+      const limit = limitValue || 10;
+      const limitedResults = results.slice(0, limit);
       
       return limitedResults;
     }
@@ -204,12 +219,22 @@ function calculateAggregation(data: any[], agg: Aggregation): any {
         grouped[key].sum += value;
       }
       
-      // Converti in array e ordina per somma DESC
+      // Converti in array e applica sort dal plan
       const results = Object.values(grouped);
-      results.sort((a, b) => (b.sum || 0) - (a.sum || 0));
       
-      // Applica limit automatico (default top 10 per ranking queries)
-      const limitedResults = results.slice(0, 10);
+      // ✅ Applica sort dal plan (default: sum DESC)
+      const sortField = sortConfig?.field || 'sum';
+      const sortOrder = sortConfig?.order || 'desc';
+      
+      results.sort((a, b) => {
+        const aVal = a[sortField] || 0;
+        const bVal = b[sortField] || 0;
+        return sortOrder === 'desc' ? bVal - aVal : aVal - bVal;
+      });
+      
+      // ✅ Applica limit dal plan (default: 10)
+      const limit = limitValue || 10;
+      const limitedResults = results.slice(0, limit);
       
       return limitedResults;
     }
@@ -385,7 +410,12 @@ export async function executeQueryPlan(
     
     // Se c'è aggregazione, calcola client-side
     if (plan.aggregation && data) {
-      const aggregated = calculateAggregation(data, plan.aggregation);
+      const aggregated = calculateAggregation(
+        data, 
+        plan.aggregation,
+        plan.sort,
+        plan.limit
+      );
       
       return {
         success: true,
