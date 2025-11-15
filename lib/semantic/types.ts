@@ -12,7 +12,8 @@ export type FilterOperator =
   | 'lt'      // minore
   | 'lte'     // minore o uguale
   | 'like'    // contiene (case-insensitive)
-  | 'in';     // in lista
+  | 'in'      // in lista
+  | 'not_in'; // non in lista
 
 /**
  * Funzioni di aggregazione supportate
@@ -45,12 +46,19 @@ export type JoinType = 'inner' | 'left';
 export type SortOrder = 'asc' | 'desc';
 
 /**
+ * Subquery per operatori NOT IN
+ */
+export interface Subquery {
+  subquery: QueryPlan;
+}
+
+/**
  * Filtro su un campo
  */
 export interface FieldFilter {
   field: string;                // formato: "table.field" (es. "accounts.city")
   operator: FilterOperator;     // operatore da applicare
-  value: string | number | boolean | (string | number)[];  // valore di confronto
+  value: string | number | boolean | (string | number)[] | Subquery;  // valore di confronto o subquery
 }
 
 /**
