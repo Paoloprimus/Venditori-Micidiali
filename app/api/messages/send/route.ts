@@ -43,13 +43,13 @@ function createContextMarker(context: PreviousContext): string {
 /**
  * Estrae contesto dall'ultimo messaggio con marker
  */
-function extractContextFromMessage(messageBody: string): PreviousContext | null {
+function extractContextFromMessage(messageBody: string): PreviousContext | undefined {
   try {
     const startIdx = messageBody.lastIndexOf(CONTEXT_MARKER_START);
-    if (startIdx === -1) return null;
+    if (startIdx === -1) return undefined;
     
     const endIdx = messageBody.indexOf(CONTEXT_MARKER_END, startIdx);
-    if (endIdx === -1) return null;
+    if (endIdx === -1) return undefined;
     
     const contextJson = messageBody.substring(
       startIdx + CONTEXT_MARKER_START.length, 
@@ -59,7 +59,7 @@ function extractContextFromMessage(messageBody: string): PreviousContext | null 
     return JSON.parse(contextJson);
   } catch (error) {
     console.error('[extractContext] Parse error:', error);
-    return null;
+    return undefined;
   }
 }
 
@@ -69,7 +69,7 @@ function extractContextFromMessage(messageBody: string): PreviousContext | null 
 async function getPreviousContext(
   conversationId: string, 
   supabase: any
-): Promise<PreviousContext | null> {
+): Promise<PreviousContext | undefined> {
   try {
     // Prendi ultimi 5 messaggi assistant
     const { data: messages, error } = await supabase
@@ -81,7 +81,7 @@ async function getPreviousContext(
       .limit(5);
     
     if (error || !messages || messages.length === 0) {
-      return null;
+      return undefined;
     }
     
     // Cerca marker nell'ultimo messaggio assistant
@@ -99,10 +99,10 @@ async function getPreviousContext(
       }
     }
     
-    return null;
+    return undefined;
   } catch (error) {
     console.error('[getPreviousContext] Error:', error);
-    return null;
+    return undefined;
   }
 }
 
