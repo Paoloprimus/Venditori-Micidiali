@@ -2,7 +2,7 @@
 // Query Planner - Trasforma query utente in Query Plan strutturato usando LLM
 
 import OpenAI from 'openai';
-import { QueryPlan, PlannerConfig, SemanticError, SemanticErrorCode } from './types';
+import { QueryPlan, PlannerConfig, SemanticError, SemanticErrorCode, PreviousContext } from './types';
 import { SCHEMA_KNOWLEDGE } from './schema-knowledge';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
@@ -20,12 +20,14 @@ const DEFAULT_CONFIG: PlannerConfig = {
  * @param userQuery - Query in linguaggio naturale
  * @param userId - ID utente per security filter
  * @param config - Configurazione opzionale
+ * @param previousContext - Contesto query precedente per follow-up intelligenti
  * @returns Query Plan strutturato
  */
 export async function planQuery(
   userQuery: string,
   userId: string,
-  config: Partial<PlannerConfig> = {}
+  config: Partial<PlannerConfig> = {},
+  previousContext?: PreviousContext
 ): Promise<QueryPlan> {
   const cfg = { ...DEFAULT_CONFIG, ...config };
 
@@ -36,6 +38,63 @@ Sei un Query Planner per REPING, sistema gestione commerciale HoReCa.
 
 COMPITO:
 Analizza la query dell'utente e genera un Query Plan JSON valido per interrogare il database.
+
+🔄 GESTIONE FOLLOW-UP E CONTESTO:
+Se ricevi informazioni su una query precedente, la query attuale potrebbe essere un follow-up.
+
+PATTERN FOLLOW-UP COMUNI:
+- "mostra dettagli" / "elenca tutti" / "mostrami" → Mostra dettagli dei risultati precedenti
+- "solo [città]" / "filtra per [criterio]" → Aggiungi filtri ai risultati precedenti
+- "ordina per [campo]" → Riordina risultati precedenti
+- "i primi 10" / "top 5" → Limita risultati precedenti
+- "con [campo aggiuntivo]" → Aggiungi campi alla query precedente
+
+COME GESTIRE FOLLOW-UP:
+1. Se la query è vaga ("mostra dettagli", "elenca") E hai contesto precedente:
+   - Usa i resultIds dal contesto come filtro: {"field": "accounts.id", "operator": "in", "value": [resultIds]}
+   - Mantieni lo stesso intent della query precedente
+   - Genera un piano che mostra i dettagli degli stessi risultati
+
+2. Se la query aggiunge filtri ("solo Verona", "bar di Milano"):
+   - Usa i resultIds dal contesto come filtro base
+   - Aggiungi i nuovi filtri richiesti
+   
+3. Se la query chiede ordinamento/limite:
+   - Usa i resultIds dal contesto
+   - Applica sort/limit richiesti
+
+ESEMPIO FOLLOW-UP:
+Contesto precedente: {
+  "userQuery": "Clienti non visitati da 60 giorni",
+  "resultIds": ["uuid1", "uuid2", "uuid3", ...],
+  "resultCount": 38
+}
+
+Query corrente: "mostra dettagli"
+
+Piano corretto:
+{
+  "intent": "Dettagli dei 38 clienti non visitati da 60 giorni",
+  "tables": ["accounts"],
+  "filters": [
+    {"field": "accounts.id", "operator": "in", "value": ["uuid1", "uuid2", "uuid3", ...]}
+  ]
+}
+
+Query corrente: "solo quelli di Verona"
+
+Piano corretto:
+{
+  "intent": "Clienti non visitati da 60 giorni a Verona",
+  "tables": ["accounts"],
+  "filters": [
+    {"field": "accounts.id", "operator": "in", "value": ["uuid1", "uuid2", "uuid3", ...]},
+    {"field": "accounts.city", "operator": "eq", "value": "Verona"}
+  ]
+}
+
+⚠️ Se NON c'è contesto precedente e la query è vaga ("mostra dettagli" senza contesto):
+Genera un piano generico ma SEMPRE VALIDO - evita di fare JOIN a tutte le tabelle senza senso.
 
 REGOLE CRITICHE:
 1. Usa SOLO tabelle e campi presenti nello schema sopra
@@ -311,12 +370,28 @@ User ID contesto: ${userId}
 `;
 
   try {
+    // Prepara messaggio user con contesto se disponibile
+    let userMessage = userQuery;
+    
+    if (previousContext) {
+      userMessage = `CONTESTO QUERY PRECEDENTE:
+Query: "${previousContext.userQuery}"
+Risultati trovati: ${previousContext.resultCount || 0}
+${previousContext.resultIds && previousContext.resultIds.length > 0 
+  ? `ID risultati: ${JSON.stringify(previousContext.resultIds.slice(0, 50))}${previousContext.resultIds.length > 50 ? ' ...(primi 50)' : ''}`
+  : ''}
+
+QUERY CORRENTE: "${userQuery}"
+
+Genera un Query Plan che tenga conto del contesto precedente se la query corrente è un follow-up.`;
+    }
+    
     // Timeout wrapper
     const planPromise = openai.chat.completions.create({
       model: cfg.model!,
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user', content: userQuery }
+        { role: 'user', content: userMessage }
       ],
       temperature: cfg.temperature!,
       max_tokens: cfg.maxTokens,
