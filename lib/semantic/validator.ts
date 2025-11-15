@@ -1,7 +1,7 @@
 
 // lib/semantic/validator.ts
 // Sistema di validazione Query Plan
-
+ 
 import { 
   QueryPlan, 
   FieldFilter, 
