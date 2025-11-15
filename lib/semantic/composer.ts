@@ -78,7 +78,6 @@ export async function composeResponse(
   if (queryResult.aggregated) {
     contextText += '=== RISULTATO AGGREGATO ===\n';
     contextText += JSON.stringify(queryResult.aggregated, null, 2) + '\n\n';
-    
   }
   
   // Dati dettaglio
@@ -123,11 +122,27 @@ Esempio corretto per "top 5 clienti per fatturato":
 4. [CLIENT:asd-901-fgh-234] - €6.890,00
 5. [CLIENT:zxc-567-bnm-890] - €5.200,00"
 
-✅ IMPORTANTE: 
+✅ IMPORTANTE per CLIENTI: 
 - Usa SEMPRE il formato [CLIENT:uuid] con l'account_id completo
 - Il frontend lo decifrerà automaticamente e mostrerà il nome reale
 - NON scrivere "Cliente 1", "Cliente 2", ecc.
 - NON inventare nomi fittizi
+
+⚠️ PROMEMORIA:
+Se ricevi dati dalla tabella "promemoria" con campo "nota":
+- Il campo "nota" è GIÀ in chiaro (non cifrato)
+- USA DIRETTAMENTE il testo del campo "nota" nella risposta
+- NON usare placeholder [PROMEMORIA:uuid]
+- Presenta i promemoria numerati con il loro testo completo
+
+Esempio corretto per "promemoria urgenti":
+"I tuoi promemoria urgenti:
+1. Richiamare fornitore per ordine cornetti
+2. Preparare offerta speciale weekend
+3. Controllare giacenza gelati"
+
+❌ SBAGLIATO: "[PROMEMORIA:uuid] - testo..."
+✅ CORRETTO: "1. testo del promemoria"
 
 ESEMPI CORRETTI:
 
