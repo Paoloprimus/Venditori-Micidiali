@@ -468,7 +468,9 @@ if (pendingIntent) {
   */
   // ========== FINE BLOCCO STANDARD DISABILITATO ==========
 
-
+  // ========== ⚠️ ANCHE IL PLANNER LOCALE DISABILITATO ==========
+  // Vai DIRETTAMENTE al sistema semantico via conv.send() → /api/messages/send
+  /*
   // Se lo standard non ha dato esito, proviamo il planner
   try {
     // ⚠️ FIX: Controllo sicuro che convCtx e state esistano
@@ -534,9 +536,11 @@ if (pendingIntent) {
   } catch (e) {
     console.error("[planner text fallback → model]", e);
   }
+  */
+  // ========== FINE BLOCCO PLANNER DISABILITATO ==========
 
-  // ---------- Fallback finale: modello generico ----------
-  console.error("[fallback:model] no standard intent, no planner match");
+  // ✅ Vai DIRETTAMENTE al sistema semantico via API
+  console.error("[semantic-direct] Invio query direttamente al sistema semantico");
   await conv.send(txt);
   return;
 }
