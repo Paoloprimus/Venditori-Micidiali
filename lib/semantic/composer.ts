@@ -7,18 +7,74 @@ import { QueryResult, ResponseContext } from './types';
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 /**
+ * Determina se la query è VAGA (chiede dettagli generici senza specificare cosa)
+ */
+function isVagueDetailsQuery(query: string): boolean {
+  const normalized = query.toLowerCase().trim();
+  
+  // Pattern VAGHI - non specificano COSA mostrare
+  const vaguePatterns = [
+    /^mostra dettagli?$/i,
+    /^elenca( tutti)?$/i,
+    /^mostra( tutto)?$/i,
+    /^dimmi tutto$/i,
+    /^lista completa$/i,
+    /^vedi( tutto)?$/i,
+    /^fammi vedere$/i
+  ];
+  
+  // Se matcha pattern vago E NON contiene campi specifici → è VAGA
+  const hasVaguePattern = vaguePatterns.some(pattern => pattern.test(normalized));
+  
+  if (!hasVaguePattern) return false;
+  
+  // Verifica che NON contenga campi specifici
+  const specificFields = [
+    'fatturato', 'vendita', 'ordine', 'importo', 'euro', '€',
+    'nota', 'note', 'commento', 'annotazione',
+    'visita', 'chiamata', 'contatto', 'ultima',
+    'telefono', 'email', 'indirizzo',
+    'prodotto', 'articolo', 'ordini'
+  ];
+  
+  const hasSpecificField = specificFields.some(field => 
+    normalized.includes(field)
+  );
+  
+  return !hasSpecificField; // È VAGA solo se non ha campi specifici
+}
+
+/**
+ * Determina se la query è SPECIFICA (chiede campi precisi)
+ */
+function isSpecificDetailsQuery(query: string): boolean {
+  const normalized = query.toLowerCase().trim();
+  
+  // Pattern SPECIFICI - indicano COSA mostrare
+  const specificPatterns = [
+    /con (fatturato|vendita|ordine|importo|note|visita|ultima)/i,
+    /(mostra|elenca|dammi).*(fatturato|vendita|ordine|importo|note|visita|ultima)/i,
+    /(fatturato|vendita|ordine|importo|note|visita|ultima).*(e|con)/i,
+    /solo (il |i )?(fatturato|vendita|ordine|importo|note|visita|ultima)/i
+  ];
+  
+  return specificPatterns.some(pattern => pattern.test(normalized));
+}
+
+/**
  * Determina se la query richiede una risposta sintetica o dettagliata
  */
 function needsDetailedResponse(query: string): boolean {
+  // Se è specifica → mostra dettagli richiesti
+  if (isSpecificDetailsQuery(query)) return true;
+  
+  // Se è vaga → NON mostrare tutto (chiederemo cosa vuole)
+  if (isVagueDetailsQuery(query)) return false;
+  
   const normalized = query.toLowerCase().trim();
   
-  // Pattern che richiedono dettagli
+  // Altri pattern che richiedono dettagli
   const detailPatterns = [
-    /dettagli/i,
-    /lista completa/i,
-    /elenca/i,
-    /mostra tutt/i,
-    /dimmi tutto/i,
     /quali sono/i,
     /descrivi/i,
     /informazioni su/i
@@ -49,12 +105,49 @@ export async function composeResponse(
     return 'Non ho trovato risultati corrispondenti ai criteri specificati.';
   }
   
-  // NUOVO: Risposte sintetiche per query semplici
+  // NUOVO: Gestione query VAGHE vs SPECIFICHE
+  const isVague = isVagueDetailsQuery(userQuery);
+  const isSpecific = isSpecificDetailsQuery(userQuery);
   const wantsDetails = needsDetailedResponse(userQuery);
   const hasMultipleResults = queryResult.data && queryResult.data.length > 1;
   
-  // Se query semplice e più risultati → risposta breve con count
-  if (!wantsDetails && hasMultipleResults && !queryResult.aggregated) {
+  // 🎯 CASO 1: Query VAGA ("mostra dettagli" generico)
+  if (isVague && hasMultipleResults && !queryResult.aggregated) {
+    const count = queryResult.data!.length;
+    const maxShow = Math.min(count, 10); // Mostra max 10 come preview
+    
+    // Crea lista minima con solo [CLIENT:uuid] - Tipo - Città
+    let response = `Ecco i ${count} clienti:\n`;
+    
+    for (let i = 0; i < maxShow; i++) {
+      const item = queryResult.data![i];
+      const clientId = item.id || item.account_id || 'unknown';
+      const tipo = item.tipo_locale || item.tipo || '';
+      const city = item.city || '';
+      
+      response += `${i + 1}. [CLIENT:${clientId}]`;
+      if (tipo) response += ` - ${tipo}`;
+      if (city) response += ` - ${city}`;
+      response += '\n';
+    }
+    
+    if (count > maxShow) {
+      response += `\n... e altri ${count - maxShow} clienti\n`;
+    }
+    
+    // Chiedi quali dettagli vuole
+    response += `\n💡 Cosa vuoi sapere? Posso mostrarti:\n`;
+    response += `• Fatturato totale\n`;
+    response += `• Note commerciali\n`;
+    response += `• Ultima visita con ordine\n`;
+    response += `• Tutto insieme\n\n`;
+    response += `Chiedi ad esempio: "mostra con fatturato" oppure "ultima visita con ordine"`;
+    
+    return response;
+  }
+  
+  // 🎯 CASO 2: Query semplice (non dettagli) → risposta sintetica con count
+  if (!wantsDetails && !isVague && hasMultipleResults && !queryResult.aggregated) {
     const count = queryResult.data!.length;
     
     // Estrai info base per risposta sintetica
@@ -68,7 +161,7 @@ export async function composeResponse(
     let location = '';
     if (firstItem.city) location = ` a ${firstItem.city}`;
     
-    return `Ho trovato ${count} ${entityType}${location}. 📊\n\nVuoi vedere i dettagli? Chiedi "mostra dettagli" o "elenca tutti".`;
+    return `Ho trovato ${count} ${entityType}${location}. 📊\n\nVuoi vedere i dettagli? Chiedi "mostra dettagli" o specifica cosa vuoi vedere.`;
   }
   
   // Prepara context per LLM
@@ -86,7 +179,8 @@ export async function composeResponse(
     contextText += `=== DATI (${rowCount} risultat${rowCount === 1 ? 'o' : 'i'}) ===\n`;
     
     // Se vuole dettagli, mostra più dati
-    const maxRows = wantsDetails ? 20 : 5;
+    // Per query specifiche mostra fino a 100, per dettagli generici 20
+    const maxRows = (wantsDetails || isSpecific) ? Math.min(rowCount, 100) : 5;
     const dataToShow = queryResult.data.slice(0, maxRows);
     
     contextText += JSON.stringify(dataToShow, null, 2);
@@ -136,18 +230,26 @@ Quando ricevi array di oggetti dalla tabella "accounts" con campi: id, city, tip
 - NON usare MAI "note" come identificativo del cliente
 - SEMPRE mettere [CLIENT:id] come PRIMO elemento della riga
 
-Esempio CORRETTO per "clienti non visitati da 60 giorni":
+⚠️ MOSTRA SOLO I CAMPI PRESENTI NEI DATI:
+- Controlla quali campi sono presenti nel JSON dei dati
+- Mostra SOLO quei campi, NON inventare o aggiungere campi extra
+- Se i dati hanno solo: id, city, tipo_locale → mostra SOLO quelli
+- Se i dati hanno anche: note, fatturato, ultima_visita → mostra anche quelli
+- NON aggiungere campi che non ci sono nei dati!
+
+Esempio CORRETTO base (dati hanno solo: id, tipo_locale, city):
 "Ecco i 38 clienti:
 1. [CLIENT:uuid-1] - Bar - Verona
 2. [CLIENT:uuid-2] - Ristorante - Milano  
 3. [CLIENT:uuid-3] - Pizzeria - Padova"
 
-Esempio SBAGLIATO:
-❌ "1. Nome: Cliente vuole sconti maggiori - Bar - Verona"
-❌ "1. Cliente sensibile al prezzo - Pizzeria - Verona"
+Esempio CORRETTO con campi aggiuntivi (dati hanno: id, tipo_locale, city, note, importo_vendita):
+"1. [CLIENT:uuid-1] - Bar - Verona - Note: Cliente vuole sconti - Fatturato: €1.200"
 
-Se chiede dettagli aggiuntivi (note, fatturato, ecc), includi [CLIENT:id] + i dettagli:
-"1. [CLIENT:uuid-1] - Bar - Verona - Note: Cliente vuole sconti maggiori"
+Esempio SBAGLIATO:
+❌ "1. Cliente vuole sconti maggiori - Bar - Verona" (note come nome)
+❌ "1. [CLIENT:uuid-1] - Bar - Verona - Note: ..." (se 'note' NON è nei dati)
+❌ Aggiungere campi che non esistono nei dati forniti
 
 ⚠️ PROMEMORIA:
 Se ricevi dati dalla tabella "promemoria" con campo "nota":
@@ -201,7 +303,7 @@ FORMATO:
         }
       ],
       temperature: 0.3,
-      max_tokens: 500
+      max_tokens: 2000
     });
     
     const response = completion.choices[0].message.content?.trim();
