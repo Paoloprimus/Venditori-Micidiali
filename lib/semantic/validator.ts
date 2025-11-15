@@ -170,7 +170,7 @@ export function validateQueryPlan(plan: QueryPlan): ValidationResult {
 
   // 7. Valida sort se presente
   if (plan.sort) {
-    const sortValidation = validateSort(plan.sort);
+    const sortValidation = validateSort(plan.sort, !!plan.aggregation);
     if (!sortValidation.valid) {
       return sortValidation;
     }
@@ -412,13 +412,28 @@ function validateJoin(join: TableJoin, queryTables: string[]): ValidationResult 
 /**
  * Valida sort
  */
-function validateSort(sort: { field: string; order: string }): ValidationResult {
-  // Verifica formato field
+function validateSort(
+  sort: { field: string; order: string },
+  hasAggregation: boolean = false
+): ValidationResult {
+  // ✅ Se c'è aggregazione, accetta anche campi aggregati semplici (sum, count, avg, min, max)
+  if (hasAggregation && ['sum', 'count', 'avg', 'min', 'max'].includes(sort.field)) {
+    // Sort su campo aggregato - valido!
+    if (!['asc', 'desc'].includes(sort.order)) {
+      return { 
+        valid: false, 
+        error: `Sort order deve essere "asc" o "desc"` 
+      };
+    }
+    return { valid: true };
+  }
+  
+  // Verifica formato field standard (table.field)
   const parts = sort.field.split('.');
   if (parts.length !== 2) {
     return { 
       valid: false, 
-      error: 'Sort field deve essere formato "table.field"' 
+      error: 'Sort field deve essere formato "table.field" o un campo aggregato (sum, count, avg)' 
     };
   }
 
