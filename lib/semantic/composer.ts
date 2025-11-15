@@ -78,6 +78,10 @@ export async function composeResponse(
   if (queryResult.aggregated) {
     contextText += '=== RISULTATO AGGREGATO ===\n';
     contextText += JSON.stringify(queryResult.aggregated, null, 2) + '\n\n';
+ 
+    // ✅ AGGIUNGI QUESTO:
+  console.log('[composer] DEBUG context sent to AI:', contextText.substring(0, 500));
+    
   }
   
   // Dati dettaglio
@@ -168,6 +172,9 @@ FORMATO:
     });
     
     const response = completion.choices[0].message.content?.trim();
+
+    // ✅ AGGIUNGI QUESTO:
+console.log('[composer] DEBUG AI response:', response);
     
     if (!response) {
       return 'Ho elaborato i dati ma non riesco a formulare una risposta.';
