@@ -1,3 +1,4 @@
+
 // lib/semantic/validator.ts
 // Sistema di validazione Query Plan
 
@@ -92,7 +93,7 @@ const VALID_FIELDS: Record<string, string[]> = {
  * Operatori validi
  */
 const VALID_OPERATORS: FilterOperator[] = [
-  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'in'
+  'eq', 'neq', 'gt', 'gte', 'lt', 'lte', 'like', 'in', 'not_in'
 ];
 
 /**
@@ -242,11 +243,18 @@ function validateFilter(filter: FieldFilter): ValidationResult {
   }
 
   // Verifica coerenza valore con operatore
-  if (filter.operator === 'in') {
-    if (!Array.isArray(filter.value)) {
+  if (filter.operator === 'in' || filter.operator === 'not_in') {
+    // Può essere array diretto o oggetto con subquery
+    const isArray = Array.isArray(filter.value);
+    const isSubquery = typeof filter.value === 'object' && 
+                       filter.value !== null && 
+                       !Array.isArray(filter.value) &&
+                       'subquery' in filter.value;
+    
+    if (!isArray && !isSubquery) {
       return { 
         valid: false, 
-        error: 'Operatore "in" richiede un array come value' 
+        error: `Operatore "${filter.operator}" richiede un array o un oggetto subquery come value` 
       };
     }
   } else {
