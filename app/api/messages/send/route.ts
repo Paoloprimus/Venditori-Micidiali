@@ -2,13 +2,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { encryptText } from "@/lib/crypto/serverEncryption";
+import { encryptText, decryptText } from "@/lib/crypto/serverEncryption";
 
 // ===== IMPORT SISTEMA SEMANTICO =====
 import { planQuery } from "@/lib/semantic/planner";
 import { executeQueryPlan } from "@/lib/semantic/executor";
 import { composeResponse, isOutOfScope, getOutOfScopeResponse } from "@/lib/semantic/composer";
 import { validateQueryPlan } from "@/lib/semantic/validator";
+import { PreviousContext } from "@/lib/semantic/types";
 // ===== FINE IMPORT =====
 
 export const runtime = "nodejs";
@@ -22,6 +23,103 @@ const SYSTEM = process.env.OPENAI_SYSTEM_PROMPT || "Rispondi in italiano in modo
 // Tabelle
 const CONVERSATIONS_TABLE = process.env.DB_CONVERSATIONS_TABLE || "conversations";
 const MESSAGES_TABLE      = process.env.DB_MESSAGES_TABLE || "messages";
+
+// ===== FUNZIONI HELPER PER CONTESTO =====
+
+/**
+ * Marker invisibile per salvare contesto nel messaggio
+ */
+const CONTEXT_MARKER_START = '\n\n<!--SEMANTIC_CONTEXT:';
+const CONTEXT_MARKER_END = '-->';
+
+/**
+ * Crea marker contesto da aggiungere al messaggio assistant
+ */
+function createContextMarker(context: PreviousContext): string {
+  const contextJson = JSON.stringify(context);
+  return `${CONTEXT_MARKER_START}${contextJson}${CONTEXT_MARKER_END}`;
+}
+
+/**
+ * Estrae contesto dall'ultimo messaggio con marker
+ */
+function extractContextFromMessage(messageBody: string): PreviousContext | null {
+  try {
+    const startIdx = messageBody.lastIndexOf(CONTEXT_MARKER_START);
+    if (startIdx === -1) return null;
+    
+    const endIdx = messageBody.indexOf(CONTEXT_MARKER_END, startIdx);
+    if (endIdx === -1) return null;
+    
+    const contextJson = messageBody.substring(
+      startIdx + CONTEXT_MARKER_START.length, 
+      endIdx
+    );
+    
+    return JSON.parse(contextJson);
+  } catch (error) {
+    console.error('[extractContext] Parse error:', error);
+    return null;
+  }
+}
+
+/**
+ * Recupera contesto dalla conversazione recente
+ */
+async function getPreviousContext(
+  conversationId: string, 
+  supabase: any
+): Promise<PreviousContext | null> {
+  try {
+    // Prendi ultimi 5 messaggi assistant
+    const { data: messages, error } = await supabase
+      .from(MESSAGES_TABLE)
+      .select('body_enc, body_iv, body_tag, created_at')
+      .eq('conversation_id', conversationId)
+      .eq('role', 'assistant')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    if (error || !messages || messages.length === 0) {
+      return null;
+    }
+    
+    // Cerca marker nell'ultimo messaggio assistant
+    for (const msg of messages) {
+      try {
+        const decrypted = decryptText(msg.body_enc, msg.body_iv, msg.body_tag);
+        const context = extractContextFromMessage(decrypted);
+        if (context) {
+          console.log('[getPreviousContext] Found context from:', context.userQuery);
+          return context;
+        }
+      } catch (decryptError) {
+        // Ignora errori di decriptazione, passa al messaggio successivo
+        continue;
+      }
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[getPreviousContext] Error:', error);
+    return null;
+  }
+}
+
+/**
+ * Estrae ID risultati dalla query result
+ */
+function extractResultIds(data: any[]): string[] {
+  if (!data || data.length === 0) return [];
+  
+  // Cerca campo "id" o "account_id"
+  return data
+    .map(row => row.id || row.account_id)
+    .filter(id => id && typeof id === 'string')
+    .slice(0, 100); // Max 100 ID per evitare marker troppo lunghi
+}
+
+// ===== FINE FUNZIONI HELPER =====
 
 export async function POST(req: NextRequest) {
   try {
@@ -146,8 +244,17 @@ export async function POST(req: NextRequest) {
     try {
       console.log('[send] Attempting semantic system for query:', content);
       
-      // 1. Genera Query Plan
-      const queryPlan = await planQuery(content, ownerUserId);
+      // 🔄 RECUPERA CONTESTO PRECEDENTE
+      const previousContext = await getPreviousContext(conversationId, supabase);
+      if (previousContext) {
+        console.log('[send] Found previous context:', {
+          query: previousContext.userQuery,
+          resultCount: previousContext.resultCount
+        });
+      }
+      
+      // 1. Genera Query Plan (con contesto se disponibile)
+      const queryPlan = await planQuery(content, ownerUserId, {}, previousContext);
       console.log('[send] Query plan generated:', JSON.stringify(queryPlan, null, 2));
       
       // 2. Valida Query Plan
@@ -172,8 +279,20 @@ export async function POST(req: NextRequest) {
       const semanticReply = await composeResponse(content, queryResult);
       console.log('[send] Semantic reply composed, length:', semanticReply.length);
       
-      // 🔐 Cifra risposta semantica
-      const semanticEnc = encryptText(semanticReply);
+      // 🔄 CREA CONTESTO PER PROSSIMA QUERY
+      const newContext: PreviousContext = {
+        userQuery: content,
+        queryPlan,
+        resultIds: queryResult.data ? extractResultIds(queryResult.data) : undefined,
+        resultCount: queryResult.data?.length || queryResult.aggregated ? 1 : 0,
+        timestamp: new Date().toISOString()
+      };
+      
+      // Aggiungi marker invisibile alla risposta
+      const replyWithContext = semanticReply + createContextMarker(newContext);
+      
+      // 🔐 Cifra risposta semantica CON contesto
+      const semanticEnc = encryptText(replyWithContext);
       
       // Salva messaggio assistant
       const insAsstSemantic = await supabase
@@ -195,6 +314,7 @@ export async function POST(req: NextRequest) {
       }
       
       console.log('[send] ✅ Semantic system succeeded');
+      // Ritorna risposta SENZA marker (invisibile al frontend)
       return NextResponse.json({ reply: semanticReply }, { status: 200 });
       
     } catch (semanticError: any) {
