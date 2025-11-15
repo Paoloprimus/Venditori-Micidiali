@@ -377,6 +377,11 @@ if (pendingIntent) {
     return;
   }
 
+  // ========== ⚠️ SISTEMA STANDARD DISABILITATO ==========
+  // Tutte le query vanno DIRETTAMENTE al sistema semantico per intelligenza massima
+  // Il blocco standard (normalize → shortlist → execute) è stato disabilitato
+  // perché intercettava le query prima del sistema semantico AI-powered
+  /*
   // --- Flusso standard (senza popup, con bolla domanda+risposta locali) ---
   try {
     // 1) normalizza
@@ -460,6 +465,9 @@ if (pendingIntent) {
   } catch (e) {
     console.error("[standard → planner fallback]", e);
   }
+  */
+  // ========== FINE BLOCCO STANDARD DISABILITATO ==========
+
 
   // Se lo standard non ha dato esito, proviamo il planner
   try {
