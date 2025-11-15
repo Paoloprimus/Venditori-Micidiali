@@ -136,6 +136,17 @@ export interface ResponseContext {
 }
 
 /**
+ * Contesto query precedente per follow-up intelligenti
+ */
+export interface PreviousContext {
+  userQuery: string;            // query utente precedente
+  queryPlan: QueryPlan;         // piano eseguito precedentemente
+  resultIds?: string[];         // ID risultati (se disponibili)
+  resultCount?: number;         // numero risultati
+  timestamp: string;            // timestamp query precedente
+}
+
+/**
  * Configurazione Query Planner
  */
 export interface PlannerConfig {
