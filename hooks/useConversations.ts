@@ -25,20 +25,58 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
     return text;
   }
   
+  // Raggruppa UUID da recuperare (quelli senza dati inline)
+  const uuidsToFetch: string[] = [];
+  const matchesMap = new Map<string, RegExpMatchArray>();
+  
+  for (const match of matches) {
+    const accountId = match[1];
+    const hasInlineData = match[2] && match[3] && match[4];
+    
+    matchesMap.set(accountId, match);
+    
+    if (!hasInlineData) {
+      uuidsToFetch.push(accountId);
+    }
+  }
+  
+  // ✅ NUOVO: Recupera dati cifrati in batch tramite API
+  let accountsData = new Map<string, any>();
+  
+  if (uuidsToFetch.length > 0) {
+    try {
+      const response = await fetch('/api/accounts/decrypt-batch', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountIds: uuidsToFetch })
+      });
+      
+      if (!response.ok) {
+        console.error('[decryptClientPlaceholders] Batch fetch failed:', response.status);
+      } else {
+        const { accounts } = await response.json();
+        for (const acc of accounts || []) {
+          accountsData.set(acc.id, acc);
+        }
+      }
+    } catch (error) {
+      console.error('[decryptClientPlaceholders] Batch fetch error:', error);
+    }
+  }
+  
   let result = text;
   
   // Decifra ogni placeholder
-  for (const match of matches) {
-    const placeholder = match[0];     // es: [CLIENT:abc-123|enc|iv|tag]
-    const accountId = match[1];       // es: abc-123-def
-    const nameEnc = match[2];         // dati cifrati inline (opzionale)
+  for (const [accountId, match] of matchesMap) {
+    const placeholder = match[0];
+    const nameEnc = match[2];
     const nameIv = match[3];
     const nameTag = match[4];
     
     try {
       let clientName: string;
       
-      // ✅ NUOVO: Se ci sono dati cifrati inline, usali direttamente
+      // Se ci sono dati cifrati inline, usali direttamente
       if (nameEnc && nameIv && nameTag) {
         const encryptedData = {
           id: accountId,
@@ -58,14 +96,10 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
         clientName = decrypted.name || 'Cliente sconosciuto';
         
       } else {
-        // ⚠️ FALLBACK: Query DB (compatibilità vecchie risposte)
-        const { data: account, error } = await supabase
-          .from('accounts')
-          .select('id, name_enc, name_iv, name_tag')
-          .eq('id', accountId)
-          .single();
+        // Usa dati recuperati in batch
+        const account = accountsData.get(accountId);
         
-        if (error || !account || !account.name_enc) {
+        if (!account || !account.name_enc) {
           console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato o senza dati`);
           clientName = 'Cliente sconosciuto';
         } else {
