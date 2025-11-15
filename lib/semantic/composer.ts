@@ -110,24 +110,23 @@ REGOLE ASSOLUTE:
 ⚠️ RISULTATI AGGREGATI CON RANKING:
 Se ricevi array di oggetti con "account_id" e "sum"/"count":
 - Sono risultati di TOP/RANKING clienti
-- Gli oggetti possono contenere "account_encrypted" con dati cifrati del cliente
-- DEVI includere TUTTI i dati nel placeholder per la decifratura frontend
+- Gli account_id sono UUID dei clienti
+- DEVI includere l'account_id come placeholder per la decifratura frontend
+- Formato: [CLIENT:uuid]
 
-Formato placeholder:
-- Se c'è account_encrypted: [CLIENT:uuid|name_enc|name_iv|name_tag]
-- Altrimenti: [CLIENT:uuid]
-
-Esempio corretto per "top 5 clienti per fatturato" con dati cifrati:
+Esempio corretto per "top 5 clienti per fatturato":
 "I tuoi top 5 clienti per fatturato:
-1. [CLIENT:abc-123|ZW5jcnlwdGVk|aXZkYXRh|dGFn] - €12.450,00
-2. [CLIENT:xyz-789|YW5vdGhlcg==|aXYy|dGFnMg==] - €8.320,50
-..."
+1. [CLIENT:abc-123-def-456] - €12.450,00
+2. [CLIENT:xyz-789-uvw-012] - €8.320,50
+3. [CLIENT:qwe-345-rty-678] - €7.100,00
+4. [CLIENT:asd-901-fgh-234] - €6.890,00
+5. [CLIENT:zxc-567-bnm-890] - €5.200,00"
 
 ✅ IMPORTANTE: 
-- Separa i campi con "|" (pipe)
-- Includi name_enc, name_iv, name_tag nell'ordine
-- Il frontend li decifrerà localmente
-- NON menzionare i dati cifrati nel testo, solo nel placeholder
+- Usa SEMPRE il formato [CLIENT:uuid] con l'account_id completo
+- Il frontend lo decifrerà automaticamente e mostrerà il nome reale
+- NON scrivere "Cliente 1", "Cliente 2", ecc.
+- NON inventare nomi fittizi
 
 ESEMPI CORRETTI:
 
