@@ -163,6 +163,11 @@ export async function POST(req: NextRequest) {
       // 3. Esegui Query
       const queryResult = await executeQueryPlan(queryPlan);
       console.log('[send] Query executed, success:', queryResult.success);
+
+// ✅ AGGIUNGI QUESTO LOG TEMPORANEO:
+if (queryResult.aggregated) {
+  console.log('[send] DEBUG aggregated data:', JSON.stringify(queryResult.aggregated, null, 2));
+}
       
       if (!queryResult.success) {
         throw new Error(`Query execution failed: ${queryResult.error}`);
