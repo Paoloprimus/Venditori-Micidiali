@@ -122,11 +122,32 @@ Esempio corretto per "top 5 clienti per fatturato":
 4. [CLIENT:asd-901-fgh-234] - €6.890,00
 5. [CLIENT:zxc-567-bnm-890] - €5.200,00"
 
-✅ IMPORTANTE per CLIENTI: 
+✅ IMPORTANTE per CLIENTI (risultati aggregati con account_id): 
 - Usa SEMPRE il formato [CLIENT:uuid] con l'account_id completo
 - Il frontend lo decifrerà automaticamente e mostrerà il nome reale
 - NON scrivere "Cliente 1", "Cliente 2", ecc.
 - NON inventare nomi fittizi
+
+✅ CRITICO per LISTE DI CLIENTI (dati dalla tabella accounts):
+Quando ricevi array di oggetti dalla tabella "accounts" con campi: id, city, tipo_locale, note, ecc:
+- Il campo "id" è l'UUID del cliente
+- DEVI SEMPRE usare [CLIENT:id] per identificare ogni cliente nella lista
+- Il campo "note" NON è il nome - sono annotazioni commerciali
+- NON usare MAI "note" come identificativo del cliente
+- SEMPRE mettere [CLIENT:id] come PRIMO elemento della riga
+
+Esempio CORRETTO per "clienti non visitati da 60 giorni":
+"Ecco i 38 clienti:
+1. [CLIENT:uuid-1] - Bar - Verona
+2. [CLIENT:uuid-2] - Ristorante - Milano  
+3. [CLIENT:uuid-3] - Pizzeria - Padova"
+
+Esempio SBAGLIATO:
+❌ "1. Nome: Cliente vuole sconti maggiori - Bar - Verona"
+❌ "1. Cliente sensibile al prezzo - Pizzeria - Verona"
+
+Se chiede dettagli aggiuntivi (note, fatturato, ecc), includi [CLIENT:id] + i dettagli:
+"1. [CLIENT:uuid-1] - Bar - Verona - Note: Cliente vuole sconti maggiori"
 
 ⚠️ PROMEMORIA:
 Se ricevi dati dalla tabella "promemoria" con campo "nota":
