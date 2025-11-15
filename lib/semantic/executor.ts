@@ -120,8 +120,11 @@ function applyFilter(query: any, filter: FieldFilter, tableName: string): any {
     case 'in':
       return query.in(field, value as any[]);
     case 'not_in':
-      // NOT IN = usa .not().in()
-      return query.not(field, 'in', value as any[]);
+      // NOT IN con Supabase PostgREST: formato (val1,val2,val3)
+      // Per UUID/stringhe, ogni valore deve essere quoted
+      const arrayValue = value as any[];
+      const formattedIds = arrayValue.map(id => JSON.stringify(id)).join(',');
+      return query.not(field, 'in', `(${formattedIds})`);
     default:
       console.warn(`[executor] Operatore non supportato: ${filter.operator}`);
       return query;
@@ -473,7 +476,10 @@ export async function executeQueryPlan(
               query = query.in(fullField, value as any[]);
               break;
             case 'not_in':
-              query = query.not(fullField, 'in', value as any[]);
+              // NOT IN con Supabase PostgREST: formato (val1,val2,val3)
+              const arrayValue = value as any[];
+              const formattedIds = arrayValue.map(id => JSON.stringify(id)).join(',');
+              query = query.not(fullField, 'in', `(${formattedIds})`);
               break;
           }
         }
