@@ -204,34 +204,164 @@ function askConfirm(i: Intent) {
     window.location.href = "/login";
   }
 
-  // ✅ Patch solo in render: trasformo eventuali 0/0% nell'output assistant remoto
-  const patchedBubbles = useMemo(() => {
-    return (conv.bubbles || []).map((b: any) => {
-      if (b?.role !== "assistant" || !b?.content) return b;
-      return { ...b, content: patchPriceReply(String(b.content)) };
-    });
-  }, [conv.bubbles]);
+  // PATCH per HomeClient.tsx
+// Sostituire righe 207-234 con questo codice:
 
-  // --- Stato per bolle locali (domanda e risposta) ---
-  const [localUser, setLocalUser] = useState<string[]>([]);
-  const [localAssistant, setLocalAssistant] = useState<string[]>([]);
+// ✅ Step 1: Patch prezzi
+const patchedBubbles = useMemo(() => {
+  return (conv.bubbles || []).map((b: any) => {
+    if (b?.role !== "assistant" || !b?.content) return b;
+    return { ...b, content: patchPriceReply(String(b.content)) };
+  });
+}, [conv.bubbles]);
 
-  // 🆕 Memorizzo ultimo prodotto valido per "e quanti in …"
-  const [lastProduct, setLastProduct] = useState<string | null>(null);
+// ✅ Step 2: Decripta placeholder [CLIENT:uuid] (asincrono)
+const [decryptedBubbles, setDecryptedBubbles] = useState<Bubble[]>([]);
 
-  function appendUserLocal(text: string) {
-    setLocalUser(prev => [...prev, text]);
+useEffect(() => {
+  async function processPlaceholders() {
+    // Importa la funzione dal file useConversations (stesso codice)
+    const decryptClientPlaceholders = async (text: string): Promise<string> => {
+      const clientPattern = /\[CLIENT:([a-f0-9-]+)(?:\|([^|\]]+)\|([^|\]]+)\|([^|\]]+))?\]/g;
+      const matches = [...text.matchAll(clientPattern)];
+      
+      if (matches.length === 0) return text;
+      
+      const crypto = (window as any).cryptoSvc;
+      if (!crypto || typeof crypto.decryptFields !== 'function') {
+        console.warn('[decryptClientPlaceholders] CryptoService non disponibile');
+        return text;
+      }
+      
+      const uuidsToFetch: string[] = [];
+      const matchesMap = new Map<string, RegExpMatchArray>();
+      
+      for (const match of matches) {
+        const accountId = match[1];
+        const hasInlineData = match[2] && match[3] && match[4];
+        matchesMap.set(accountId, match);
+        if (!hasInlineData) {
+          uuidsToFetch.push(accountId);
+        }
+      }
+      
+      let accountsData = new Map<string, any>();
+      
+      if (uuidsToFetch.length > 0) {
+        try {
+          const response = await fetch('/api/accounts/decrypt-batch', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ accountIds: uuidsToFetch })
+          });
+          
+          if (!response.ok) {
+            console.error('[decryptClientPlaceholders] Batch fetch failed:', response.status);
+          } else {
+            const { accounts } = await response.json();
+            for (const acc of accounts || []) {
+              accountsData.set(acc.id, acc);
+            }
+          }
+        } catch (error) {
+          console.error('[decryptClientPlaceholders] Batch fetch error:', error);
+        }
+      }
+      
+      let result = text;
+      
+      for (const [accountId, match] of matchesMap) {
+        const placeholder = match[0];
+        const nameEnc = match[2];
+        const nameIv = match[3];
+        const nameBi = match[4];  // ✅ name_bi (tag)
+        
+        try {
+          let clientName: string;
+          
+          if (nameEnc && nameIv && nameBi) {
+            const encryptedData = {
+              id: accountId,
+              name_enc: nameEnc,
+              name_iv: nameIv,
+              name_bi: nameBi  // ✅ Usa name_bi
+            };
+            
+            const decrypted = await crypto.decryptFields(
+              'table:accounts',
+              'accounts',
+              '',
+              encryptedData,
+              ['name']
+            );
+            
+            clientName = decrypted.name || 'Cliente sconosciuto';
+          } else {
+            const account = accountsData.get(accountId);
+            
+            if (!account || !account.name_enc) {
+              console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato`);
+              clientName = 'Cliente sconosciuto';
+            } else {
+              const decrypted = await crypto.decryptFields(
+                'table:accounts',
+                'accounts',
+                '',
+                account,
+                ['name']
+              );
+              
+              clientName = decrypted.name || 'Cliente sconosciuto';
+            }
+          }
+          
+          result = result.replace(placeholder, clientName);
+        } catch (error) {
+          console.error(`[decryptClientPlaceholders] Errore decifratura ${accountId}:`, error);
+          result = result.replace(placeholder, 'Cliente sconosciuto');
+        }
+      }
+      
+      return result;
+    };
+    
+    // Processa tutti i bubble assistant
+    const processed = await Promise.all(
+      patchedBubbles.map(async (b: any) => {
+        if (b?.role === 'assistant' && b?.content) {
+          const decrypted = await decryptClientPlaceholders(b.content);
+          return { ...b, content: decrypted };
+        }
+        return b;
+      })
+    );
+    
+    setDecryptedBubbles(processed);
   }
-  function appendAssistantLocal(text: string) {
-    setLocalAssistant(prev => [...prev, patchPriceReply(text)]);
-  }
+  
+  processPlaceholders();
+}, [patchedBubbles]);
 
-  // Unione bolle: prima remote (model), poi locali (standard flow)
-  const mergedBubbles = useMemo(() => {
-    const localsUser = localUser.map((t) => ({ role: "user", content: t }));
-    const localsAssistant = localAssistant.map((t) => ({ role: "assistant", content: t }));
-    return [...patchedBubbles, ...localsUser, ...localsAssistant];
-  }, [patchedBubbles, localUser, localAssistant]);
+// --- Stato per bolle locali (domanda e risposta) ---
+const [localUser, setLocalUser] = useState<string[]>([]);
+const [localAssistant, setLocalAssistant] = useState<string[]>([]);
+
+// 🆕 Memorizzo ultimo prodotto valido per "e quanti in …"
+const [lastProduct, setLastProduct] = useState<string | null>(null);
+
+function appendUserLocal(text: string) {
+  setLocalUser(prev => [...prev, text]);
+}
+function appendAssistantLocal(text: string) {
+  setLocalAssistant(prev => [...prev, patchPriceReply(text)]);
+}
+
+// ✅ Unione bolle: usa decryptedBubbles invece di patchedBubbles
+const mergedBubbles = useMemo(() => {
+  const localsUser = localUser.map((t) => ({ role: "user", content: t }));
+  const localsAssistant = localAssistant.map((t) => ({ role: "assistant", content: t }));
+  return [...decryptedBubbles, ...localsUser, ...localsAssistant];
+}, [decryptedBubbles, localUser, localAssistant]);
 
 // invio da Composer (uso testuale) — NIENTE popup; domanda e risposta come in una chat normale
 async function submitFromComposer() {
