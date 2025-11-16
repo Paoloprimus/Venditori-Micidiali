@@ -51,7 +51,7 @@ export function formatResponse(sqlResult: any[], userQuery: string): string {
     return response.trim();
   }
   
-  // 🎯 CASO 4: Lista clienti standard (id, city, tipo_locale)
+  // 🎯 CASO 4: Lista clienti standard (id, city, tipo_locale, notes)
   if (firstRow.id) {
     const count = sqlResult.length;
     let response = '';
@@ -61,14 +61,30 @@ export function formatResponse(sqlResult: any[], userQuery: string): string {
       
       response += `${i + 1}. [CLIENT:${row.id}]`;
       
+      // Mostra solo campi richiesti nella query (intelligente)
+      const queryLower = userQuery.toLowerCase();
+      const wantsDetails = queryLower.includes('dettagli') || queryLower.includes('completo');
+      const wantsNotes = queryLower.includes('note');
+      
+      // Sempre mostra tipo e città se presenti (info base)
       if (row.tipo_locale) response += ` - ${row.tipo_locale}`;
       if (row.city) response += ` - ${row.city}`;
       
-      // Aggiungi eventuali campi extra se presenti
-      if (row.sum !== undefined) response += ` - €${Number(row.sum).toFixed(2)}`;
-      if (row.count !== undefined) response += ` - ${row.count} visite`;
-      if (row.data_visita) response += ` - ${new Date(row.data_visita).toLocaleDateString('it-IT')}`;
-      if (row.importo_vendita !== undefined) response += ` - €${Number(row.importo_vendita).toFixed(2)}`;
+      // Mostra campi aggiuntivi solo se richiesti o se è richiesta dettagliata
+      if (wantsDetails || queryLower.includes('fatturato') || queryLower.includes('vendita')) {
+        if (row.sum !== undefined) response += ` - €${Number(row.sum).toFixed(2)}`;
+        if (row.importo_vendita !== undefined) response += ` - €${Number(row.importo_vendita).toFixed(2)}`;
+      }
+      
+      if (wantsDetails || queryLower.includes('visite') || queryLower.includes('visit')) {
+        if (row.count !== undefined) response += ` - ${row.count} visite`;
+        if (row.data_visita) response += ` - ${new Date(row.data_visita).toLocaleDateString('it-IT')}`;
+      }
+      
+      // ✅ Mostra notes solo se richieste esplicitamente
+      if (wantsNotes && row.notes) {
+        response += `\n   Note: ${row.notes}`;
+      }
       
       response += '\n';
     }
