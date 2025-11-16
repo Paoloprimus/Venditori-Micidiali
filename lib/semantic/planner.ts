@@ -259,48 +259,16 @@ FORMATO OUTPUT JSON:
 ESEMPI QUERY → PLAN:
 
 Query: "Mostra bar di Verona"
-Plan:
 {
   "intent": "Lista bar a Verona",
   "tables": ["accounts"],
   "filters": [
     {"field": "accounts.tipo_locale", "operator": "eq", "value": "bar"},
     {"field": "accounts.city", "operator": "eq", "value": "Verona"}
-  ],
-  "limit": 20
-}
-
-Query: "Quanti clienti ho visitato più di 3 volte negli ultimi 30 giorni?"
-Plan:
-{
-  "intent": "Count clienti con 3+ visite in 30 giorni",
-  "tables": ["visits"],
-  "filters": [
-    {"field": "visits.data_visita", "operator": "gte", "value": "30_days_ago"}
-  ],
-  "aggregation": {
-    "function": "count",
-    "groupBy": ["account_id"],
-    "having": {"field": "count", "operator": "gt", "value": 3}
-  }
-}
-
-Query: "Quanti clienti ho visitato questo mese?"
-Plan:
-{
-  "intent": "Count clienti visitati mese corrente",
-  "tables": ["visits"],
-  "filters": [
-    {"field": "visits.data_visita", "operator": "gte", "value": "this_month"}
-  ],
-  "aggregation": {
-    "function": "count",
-    "groupBy": ["account_id"]
-  }
+  ]
 }
 
 Query: "Quanto ho venduto negli ultimi 30 giorni?"
-Plan:
 {
   "intent": "Somma vendite ultimi 30 giorni",
   "tables": ["visits"],
@@ -313,31 +281,10 @@ Plan:
   }
 }
 
-Query: "Totale vendite di bar a Milano questo mese"
-Plan:
-{
-  "intent": "Somma vendite bar Milano mese corrente",
-  "tables": ["visits", "accounts"],
-  "filters": [
-    {"field": "visits.data_visita", "operator": "gte", "value": "this_month"},
-    {"field": "accounts.city", "operator": "eq", "value": "Milano"},
-    {"field": "accounts.tipo_locale", "operator": "eq", "value": "bar"}
-  ],
-  "joins": [
-    {"from": "visits", "to": "accounts", "fromField": "account_id", "toField": "id", "type": "inner"}
-  ],
-  "aggregation": {
-    "function": "sum",
-    "field": "visits.importo_vendita"
-  }
-}
-
-Query: "I miei top 5 clienti per fatturato"
-Plan:
+Query: "Top 5 clienti per fatturato"
 {
   "intent": "Top 5 clienti per fatturato",
   "tables": ["visits"],
-  "filters": [],
   "aggregation": {
     "function": "sum",
     "field": "visits.importo_vendita",
@@ -345,9 +292,35 @@ Plan:
   }
 }
 
-Query: "Clienti mai visitati"
-Plan:
+Query: "Clienti non visitati da 60 giorni"
 {
+  "intent": "Clienti non visitati da 60 giorni",
+  "tables": ["accounts"],
+  "filters": [
+    {
+      "field": "accounts.id",
+      "operator": "not_in",
+      "value": {
+        "subquery": {
+          "intent": "Account ID visitati negli ultimi 60 giorni",
+          "tables": ["visits"],
+          "filters": [
+            {"field": "visits.data_visita", "operator": "gte", "value": "60_days_ago"}
+          ],
+          "aggregation": {
+            "function": "count",
+            "groupBy": ["account_id"]
+          }
+        }
+      }
+    }
+  ]
+}
+
+NOTA: NON includere user_id nei filtri - viene aggiunto automaticamente.
+
+User ID contesto: ${userId}
+`;
   "intent": "Clienti mai visitati",
   "tables": ["accounts"],
   "filters": [
@@ -366,43 +339,8 @@ Plan:
         }
       }
     }
-  ],
-  "limit": 50
+  ]
 }
-
-Query: "Bar di Verona che non visito da 90 giorni"
-Plan:
-{
-  "intent": "Bar Verona non visitati da 90 giorni",
-  "tables": ["accounts"],
-  "filters": [
-    {"field": "accounts.city", "operator": "eq", "value": "Verona"},
-    {"field": "accounts.tipo_locale", "operator": "eq", "value": "bar"},
-    {
-      "field": "accounts.id",
-      "operator": "not_in",
-      "value": {
-        "subquery": {
-          "intent": "Account ID visitati negli ultimi 90 giorni",
-          "tables": ["visits"],
-          "filters": [
-            {"field": "visits.data_visita", "operator": "gte", "value": "90_days_ago"}
-          ],
-          "aggregation": {
-            "function": "count",
-            "groupBy": ["account_id"]
-          }
-        }
-      }
-    }
-  ],
-  "limit": 50
-}
-
-NOTA IMPORTANTE:
-NON includere il filtro user_id nel plan - verrà aggiunto automaticamente per security.
-
-User ID contesto: ${userId}
 `;
 
   try {
