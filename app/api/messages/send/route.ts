@@ -23,6 +23,16 @@ const SYSTEM = process.env.OPENAI_SYSTEM_PROMPT || "Rispondi in italiano in modo
 const CONVERSATIONS_TABLE = process.env.DB_CONVERSATIONS_TABLE || "conversations";
 const MESSAGES_TABLE      = process.env.DB_MESSAGES_TABLE || "messages";
 
+// ===== TYPES =====
+
+interface PreviousContext {
+  userQuery: string;
+  queryPlan: any;
+  resultIds?: string[];
+  resultCount: number;
+  timestamp: string;
+}
+
 // ===== FUNZIONI HELPER PER CONTESTO =====
 
 /**
