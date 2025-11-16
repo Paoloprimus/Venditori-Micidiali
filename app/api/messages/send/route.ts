@@ -36,6 +36,36 @@ interface PreviousContext {
 // ===== FUNZIONI HELPER PER CONTESTO =====
 
 /**
+ * Verifica se query è fuori ambito business (out of scope)
+ */
+function isOutOfScope(query: string): boolean {
+  const normalized = query.toLowerCase();
+  
+  // Pattern out-of-scope (non business)
+  const outOfScopePatterns = [
+    /\b(meteo|tempo|previsioni)\b/,
+    /\b(ricetta|cucina|ingredienti)\b/,
+    /\b(sport|calcio|partita)\b/,
+    /\b(notizie|news|politica)\b/,
+    /\b(film|cinema|serie tv)\b/,
+    /\b(musica|canzone|artista)\b/,
+    /\b(viaggio|volo|hotel|vacanza)\b/,
+    /\b(salute|malattia|sintomi|medico)\b/
+  ];
+  
+  return outOfScopePatterns.some(pattern => pattern.test(normalized));
+}
+
+/**
+ * Risposta per query out of scope
+ */
+function getOutOfScopeResponse(): string {
+  return 'Non posso aiutarti con questa richiesta. Sono specializzato nella gestione del tuo portafoglio commerciale HoReCa. Posso assisterti con clienti, visite, promemoria, statistiche e pianificazione. Come posso aiutarti?';
+}
+
+// ===== FINE FUNZIONI HELPER =====
+
+/**
  * Marker invisibile per salvare contesto nel messaggio
  */
 const CONTEXT_MARKER_START = '\n\n<!--SEMANTIC_CONTEXT:';
