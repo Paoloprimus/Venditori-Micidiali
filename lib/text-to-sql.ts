@@ -1,14 +1,13 @@
 // lib/text-to-sql.ts
 // Text-to-SQL - LLM genera SQL diretto da natural language
-
 import OpenAI from 'openai';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 // Schema minimale (riduce token)
 const SCHEMA_SNIPPET = `
-accounts(id UUID, city TEXT, tipo_locale TEXT, user_id UUID)
-visits(id UUID, account_id UUID, data_visita DATE, importo_vendita DECIMAL, user_id UUID)
+accounts(id UUID, city TEXT, tipo_locale TEXT, notes TEXT, user_id UUID)
+visits(id UUID, account_id UUID, data_visita DATE, importo_vendita DECIMAL, notes TEXT, user_id UUID)
 `;
 
 /**
@@ -27,7 +26,8 @@ Sei un generatore SQL per database PostgreSQL.
 REGOLE CRITICHE:
 - SOLO query SELECT
 - SEMPRE filtra per user_id = $1 (primo parametro)
-- Campi cifrati (nome, note): NON disponibili - usa solo id, city, tipo_locale, data_visita, importo_vendita
+- Campi DISPONIBILI: id, city, tipo_locale, notes (accounts) | data_visita, importo_vendita, notes (visits)
+- Campi CIFRATI (NON usare): nome, email, phone, address
 - Usa placeholder $1, $2, $3... per parametri (prepared statements)
 - Forza LIMIT ≤ 500 se non specificato
 - Follow-up: se previous_ids fornito → WHERE id = ANY($2)
@@ -36,6 +36,10 @@ ESEMPI:
 
 Query: "Clienti non visitati da 60 giorni"
 SQL: SELECT id, city, tipo_locale FROM accounts WHERE user_id = $1 AND id NOT IN (SELECT account_id FROM visits WHERE data_visita >= NOW() - INTERVAL '60 days' AND user_id = $1) LIMIT 500
+Params: ["${userId}"]
+
+Query: "Clienti con note"
+SQL: SELECT id, city, tipo_locale, notes FROM accounts WHERE user_id = $1 AND notes IS NOT NULL LIMIT 50
 Params: ["${userId}"]
 
 Query: "Quanti clienti ho"
