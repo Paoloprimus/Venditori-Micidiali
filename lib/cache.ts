@@ -34,7 +34,7 @@ export async function findSimilarQuery(
     // Query pgvector con cosine similarity
     // Threshold: 0.85 (più alto = più simile)
     const { data, error } = await supabase.rpc('match_query_cache', {
-      query_embedding: embedding,
+      search_embedding: embedding,  // ✅ FIX: era query_embedding
       match_threshold: 0.85,
       match_count: 1,
       target_user_id: userId
