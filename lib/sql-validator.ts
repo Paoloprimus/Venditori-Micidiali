@@ -1,6 +1,5 @@
 // lib/sql-validator.ts
 // 🔒 Security layer - Validazione SQL con AST parsing
-
 import { Parser } from 'node-sql-parser';
 
 // Allowlist tabelle consentite
@@ -26,12 +25,13 @@ export function validateSQL(sql: string): void {
     throw new Error('SQL troppo lungo');
   }
   
-  // 2. Parse AST
+  // 2. Parse AST con PostgreSQL syntax
   const parser = new Parser();
+  const opt = { database: 'postgresql' };  // ✅ FIX: usa PostgreSQL invece di MySQL
   let ast;
   
   try {
-    ast = parser.astify(sql);
+    ast = parser.astify(sql, opt);
   } catch (e) {
     throw new Error('SQL non valido');
   }
@@ -47,11 +47,11 @@ export function validateSQL(sql: string): void {
   
   // 4. Verifica tabelle usate (allowlist)
   const tables = new Set<string>();
-  parser.tableList(sql).forEach((t: string) => tables.add(t));
+  parser.tableList(sql, opt).forEach((t: string) => tables.add(t));
   
   for (const table of tables) {
     if (!ALLOWED_TABLES.includes(table)) {
-      throw new Error(`Tabella non consentita: ${table}`);
+      throw new Error(`Tabella non consentita: ${table}`);  // ✅ FIX: backtick
     }
   }
   
@@ -63,7 +63,7 @@ export function validateSQL(sql: string): void {
   // 6. Verifica LIMIT <= MAX_ROWS
   const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
   if (limitMatch && parseInt(limitMatch[1]) > MAX_ROWS) {
-    throw new Error(`LIMIT massimo: ${MAX_ROWS}`);
+    throw new Error(`LIMIT massimo: ${MAX_ROWS}`);  // ✅ FIX: backtick
   }
 }
 
