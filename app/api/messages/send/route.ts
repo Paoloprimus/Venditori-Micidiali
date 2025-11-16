@@ -414,8 +414,14 @@ export async function POST(req: NextRequest) {
             const sqlResult = await generateSQL(content, ownerUserId, previousContext);
             console.log('[cache] SQL generated in', Date.now() - startSQL, 'ms');
             
+            // 🔍 LOG SQL GENERATO (prima della validazione)
+            console.log('[SQL-RAW] Generated SQL:', sqlResult.sql);
+            console.log('[SQL-RAW] Params:', JSON.stringify(sqlResult.params));
+            
             sql = sanitizeSQL(sqlResult.sql); // Aggiunge LIMIT + valida
             params = sqlResult.params;
+            
+            console.log('[SQL-SANITIZED] After sanitize:', sql);
             
             // Salva in cache (async)
             saveCacheEntry(content, embedding, { sql, params }, ownerUserId, supabase).catch(err => {
@@ -426,14 +432,28 @@ export async function POST(req: NextRequest) {
           // Fallback: se cache fallisce, genera SQL diretto
           console.error('[cache] Error, falling back to direct SQL generation:', cacheError);
           const sqlResult = await generateSQL(content, ownerUserId, previousContext);
+          
+          // 🔍 LOG SQL GENERATO (fallback)
+          console.log('[SQL-FALLBACK] Generated SQL:', sqlResult.sql);
+          console.log('[SQL-FALLBACK] Params:', JSON.stringify(sqlResult.params));
+          
           sql = sanitizeSQL(sqlResult.sql);
           params = sqlResult.params;
+          
+          console.log('[SQL-FALLBACK-SANITIZED] After sanitize:', sql);
         }
       } else {
         // Query FOLLOW-UP: non cacheable, genera SQL con contesto
         const sqlResult = await generateSQL(content, ownerUserId, previousContext);
+        
+        // 🔍 LOG SQL GENERATO (follow-up)
+        console.log('[SQL-FOLLOWUP] Generated SQL:', sqlResult.sql);
+        console.log('[SQL-FOLLOWUP] Params:', JSON.stringify(sqlResult.params));
+        
         sql = sanitizeSQL(sqlResult.sql);
         params = sqlResult.params;
+        
+        console.log('[SQL-FOLLOWUP-SANITIZED] After sanitize:', sql);
       }
       
       console.log('[send] SQL ready:', sql);
