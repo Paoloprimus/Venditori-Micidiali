@@ -219,9 +219,14 @@ const patchedBubbles = useMemo(() => {
 const [decryptedBubbles, setDecryptedBubbles] = useState<Bubble[]>([]);
 
 useEffect(() => {
+    console.log('🔍 [DEBUG] Processing placeholders, bubbles count:', patchedBubbles.length);
+
   async function processPlaceholders() {
     // Importa la funzione dal file useConversations (stesso codice)
     const decryptClientPlaceholders = async (text: string): Promise<string> => {
+      
+    console.log('🔍 [DEBUG] decryptClientPlaceholders chiamata con:', text.substring(0, 100));
+
       const clientPattern = /\[CLIENT:([a-f0-9-]+)(?:\|([^|\]]+)\|([^|\]]+)\|([^|\]]+))?\]/g;
       const matches = [...text.matchAll(clientPattern)];
       
