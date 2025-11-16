@@ -114,7 +114,13 @@ export async function composeResponse(
   // 🎯 CASO 1: Query VAGA ("mostra dettagli" generico)
   if (isVague && hasMultipleResults && !queryResult.aggregated) {
     const count = queryResult.data!.length;
-    const maxShow = Math.min(count, 10); // Mostra max 10 come preview
+    
+    // Se >10 record → proponi PDF
+    if (count > 10) {
+      return `Ho trovato ${count} clienti. Se vuoi creo il PDF e lo salvo sul tuo dispositivo. Dimmi quali dati mostrare.`;
+    }
+    
+    const maxShow = Math.min(count, 10);
     
     // Crea lista minima con solo [CLIENT:uuid] - Tipo - Città
     let response = `Ecco i ${count} clienti:\n`;
@@ -131,25 +137,20 @@ export async function composeResponse(
       response += '\n';
     }
     
-    if (count > maxShow) {
-      response += `\n... e altri ${count - maxShow} clienti\n`;
-    }
-    
-    // Chiedi quali dettagli vuole
-    response += `\n💡 Cosa vuoi sapere? Posso mostrarti:\n`;
-    response += `• Fatturato totale\n`;
-    response += `• Note commerciali\n`;
-    response += `• Ultima visita con ordine\n`;
-    response += `• Tutto insieme\n\n`;
-    response += `Chiedi ad esempio: "mostra con fatturato" oppure "ultima visita con ordine"`;
-    
     return response;
   }
   
-  // 🎯 CASO 2: Query semplice (non dettagli) → risposta sintetica con count
+  // 🎯 CASO 2: Query semplice (non dettagli) → risposta asciutta con solo numero
   if (!wantsDetails && !isVague && hasMultipleResults && !queryResult.aggregated) {
     const count = queryResult.data!.length;
-    return `Ho trovato ${count} clienti. 📊\n\nVuoi vedere i dettagli? Chiedi "mostra dettagli" o specifica cosa vuoi vedere.`;
+    
+    // Se >10 record → proponi PDF
+    if (count > 10) {
+      return `Ho trovato ${count} clienti. Se vuoi creo il PDF e lo salvo sul tuo dispositivo. Dimmi quali dati mostrare.`;
+    }
+    
+    // Altrimenti solo numero
+    return `${count}`;
   }
   
   // 🎯 CASO 3: Aggregazioni SEMPLICI → Template fisso (NO LLM)
@@ -204,7 +205,7 @@ export async function composeResponse(
   }
   
   // 🎯 CASO 5: Liste semplici senza dettagli extra → NO LLM
-  if (queryResult.data && queryResult.data.length <= 20 && !queryResult.aggregated) {
+  if (queryResult.data && queryResult.data.length > 0 && !queryResult.aggregated) {
     const hasOnlyBasicFields = queryResult.data.every(item => {
       const fields = Object.keys(item);
       return fields.length <= 5; // Solo id, tipo_locale, city, etc
@@ -212,6 +213,12 @@ export async function composeResponse(
     
     if (hasOnlyBasicFields) {
       const count = queryResult.data.length;
+      
+      // Se >10 record → proponi PDF
+      if (count > 10) {
+        return `Ho trovato ${count} clienti. Se vuoi creo il PDF e lo salvo sul tuo dispositivo. Dimmi quali dati mostrare.`;
+      }
+      
       let response = `Ecco i ${count} ${count === 1 ? 'risultato' : 'risultati'}:\n`;
       
       for (let i = 0; i < count; i++) {
