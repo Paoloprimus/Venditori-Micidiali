@@ -1,4 +1,14 @@
 // hooks/useConversations.ts
+"use client";
+import { useEffect, useRef, useState } from "react";
+import { listConversations, createConversation as apiCreate, type Conv } from "../lib/api/conversations";
+import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
+import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
+import { supabase } from "../lib/supabase/client";
+
+export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
+
+// hooks/useConversations.ts
 // PATCH: Sostituire la funzione decryptClientPlaceholders (righe 12-127) con questa versione corretta:
 
 /**
@@ -118,4 +128,234 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
   }
   
   return result;
+}
+
+type Options = {
+  onAssistantReply?: (text: string) => void; // es: TTS o side-effects
+};
+
+export function useConversations(opts: Options = {}) {
+  const { onAssistantReply } = opts;
+
+  // ---- Stato
+  const [bubbles, setBubbles] = useState<Bubble[]>([]);
+  const [input, setInput] = useState("");
+  const [usage, setUsage] = useState<Usage | null>(null);
+  const [serverError, setServerError] = useState<string | null>(null);
+  const [modelBadge, setModelBadge] = useState<string>("…");
+  const [currentConv, setCurrentConv] = useState<Conv | null>(null);
+
+  // ---- Refs UI
+  const taRef = useRef<HTMLTextAreaElement | null>(null);
+  const threadRef = useRef<HTMLDivElement>(null);
+  const endRef = useRef<HTMLDivElement>(null);
+  const firstPaintRef = useRef(true);
+
+  // ---- Utils
+  function autoTitleRome() {
+    const fmt = new Intl.DateTimeFormat("it-IT", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit",
+      year: "2-digit",
+      timeZone: "Europe/Rome",
+    });
+    return fmt.format(new Date()).toLowerCase().replace(/\./g, "");
+  }
+
+  function autoResize() {
+    const el = taRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    const max = 164;
+    el.style.height = Math.min(el.scrollHeight, max) + "px";
+    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
+  }
+
+  // ---- API wrappers
+  async function refreshUsage(convId?: string) {
+    try {
+      const hasTraffic = bubbles.length > 0;
+      const u = await getCurrentChatUsage(hasTraffic ? convId : undefined);
+      setUsage(u);
+    } catch {
+      // usage è best-effort
+    }
+  }
+
+  async function loadMessages(convId: string) {
+    const items = await getMessagesByConversation(convId, 200);
+    
+    // ✅ Decifra placeholder nei messaggi assistant
+    const decryptedItems = await Promise.all(
+      items.map(async (item) => {
+        if (item.role === 'assistant' && item.content) {
+          const decrypted = await decryptClientPlaceholders(item.content);
+          return { ...item, content: decrypted };
+        }
+        return item;
+      })
+    );
+    
+    setBubbles(decryptedItems);
+  }
+
+  async function ensureConversation(): Promise<Conv> {
+    if (currentConv?.id) return currentConv;
+    const autoTitle = autoTitleRome();
+
+    try {
+      const list = await listConversations(50);
+      const today = list.find((c) => c.title === autoTitle || c.title.includes(autoTitle));
+      if (today) {
+        setCurrentConv(today);
+        await loadMessages(today.id);
+        await refreshUsage(today.id);
+        return today;
+      }
+    } catch {
+      // silenzio
+    }
+
+    const created = await apiCreate(autoTitle);
+    setCurrentConv(created);
+    setBubbles([]);
+    await refreshUsage(created.id);
+    return created;
+  }
+
+  async function createConversation(title: string) {
+    const created = await apiCreate(title.trim());
+    setCurrentConv(created);
+    setBubbles([]);
+    await refreshUsage(created.id);
+  }
+
+  /**
+   * send - SOLO modello generico
+   * Il planner è gestito da submitFromComposer in HomeClient
+   */
+  async function send(content: string) {
+    console.error("[useConversations.send] HIT - chiamata al modello generico", content);
+    
+    setServerError(null);
+    const txt = content.trim();
+    if (!txt) return;
+
+    const conv = await ensureConversation();
+
+    // Bubble utente ottimistica
+    setBubbles((b) => [...b, { role: "user", content: txt }]);
+
+    try {
+      const replyText = await sendMessage({ 
+        content: txt, 
+        conversationId: conv.id, 
+        terse: false 
+      });
+      
+      // ✅ Decifra eventuali placeholder [CLIENT:uuid] prima di mostrare
+      const decryptedReply = await decryptClientPlaceholders(replyText);
+      
+      setBubbles((b) => [...b, { role: "assistant", content: decryptedReply }]);
+      onAssistantReply?.(decryptedReply);
+      await refreshUsage(conv.id);
+      
+    } catch (e: any) {
+      // Gestione errori 429
+      if (e?.status === 429) {
+        const retry = Number(e?.details?.retryAfter) || 0;
+        const hint = retry > 0
+          ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
+          : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
+        setServerError(hint);
+        setBubbles((b) => [...b, { role: "assistant", content: "⚠️ " + hint }]);
+        return;
+      }
+
+      setServerError(e?.message || "Errore server");
+      setBubbles((b) => [
+        ...b,
+        { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
+      ]);
+    }
+  }
+
+  // ---- Bootstrap
+  useEffect(() => {
+    const loadTodaySession = async () => {
+      const todayTitle = autoTitleRome();
+      try {
+        const list = await listConversations(50);
+        const today = list.find((c) => c.title === todayTitle);
+        if (today) {
+          setCurrentConv(today);
+          await loadMessages(today.id);
+          await refreshUsage(today.id);
+        }
+      } catch {
+        // silenzio
+      }
+    };
+
+    fetch("/api/model")
+      .then((r) => r.json())
+      .then((d) => setModelBadge(d?.model ?? "n/d"))
+      .catch(() => setModelBadge("n/d"));
+
+    loadTodaySession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ---- Autoscroll
+  useEffect(() => {
+    const sentinel = endRef.current;
+    if (!sentinel) return;
+    const behavior: ScrollBehavior = firstPaintRef.current ? "auto" : "smooth";
+    firstPaintRef.current = false;
+    requestAnimationFrame(() => {
+      try {
+        sentinel.scrollIntoView({ behavior, block: "end" });
+      } catch {
+        if (threadRef.current) {
+          threadRef.current.scrollTop = threadRef.current.scrollHeight;
+        }
+      }
+    });
+  }, [bubbles]);
+
+  // ---- Selezione conversazione
+  async function handleSelectConv(c: Conv) {
+    setCurrentConv({ id: c.id, title: c.title });
+    await loadMessages(c.id);
+    await refreshUsage(c.id);
+  }
+
+  return {
+    // stato
+    bubbles,
+    setBubbles,
+    input,
+    setInput,
+    usage,
+    serverError,
+    modelBadge,
+    currentConv,
+    setCurrentConv,
+
+    // refs/util
+    taRef,
+    threadRef,
+    endRef,
+    autoResize,
+    autoTitleRome,
+
+    // azioni
+    ensureConversation,
+    createConversation,
+    loadMessages,
+    refreshUsage,
+    send, // ⬅️ ora chiama SOLO il modello generico
+    handleSelectConv,
+  };
 }
