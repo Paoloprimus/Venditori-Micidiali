@@ -462,11 +462,11 @@ export async function POST(req: NextRequest) {
       // 🔒 ESEGUI SQL (RPC sicuro)
       const startExec = Date.now();
       
-      const { data, error: queryError } = await supabase
-        .rpc('execute_safe_select', {
-          query_sql: sql,
-          query_params: JSON.stringify(params)
-        });
+const { data, error: queryError } = await supabase
+  .rpc('execute_safe_select', {
+    query_sql: sql,
+    query_params: params  // ✅ TOGLI JSON.stringify
+  });
       
       console.log('[send] Query executed in', Date.now() - startExec, 'ms');
       
