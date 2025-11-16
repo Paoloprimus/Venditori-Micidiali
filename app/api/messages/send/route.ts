@@ -4,12 +4,10 @@ import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 import { encryptText, decryptText } from "@/lib/crypto/serverEncryption";
 
-// ===== IMPORT SISTEMA SEMANTICO =====
-import { planQuery } from "@/lib/semantic/planner";
-import { executeQueryPlan } from "@/lib/semantic/executor";
-import { composeResponse, isOutOfScope, getOutOfScopeResponse } from "@/lib/semantic/composer";
-import { validateQueryPlan } from "@/lib/semantic/validator";
-import { PreviousContext } from "@/lib/semantic/types";
+// ===== IMPORT SISTEMA TEXT-TO-SQL =====
+import { generateSQL } from "@/lib/text-to-sql";
+import { validateSQL, sanitizeSQL } from "@/lib/sql-validator";
+import { formatResponse } from "@/lib/response-templates";
 import { generateEmbedding, findSimilarQuery, saveCacheEntry } from "@/lib/cache";
 // ===== FINE IMPORT =====
 
@@ -318,21 +316,25 @@ export async function POST(req: NextRequest) {
 
     // Prova sistema semantico
     try {
-      console.log('[send] Attempting semantic system for query:', content);
+      console.log('[send] Attempting Text-to-SQL system for query:', content);
       
       // 🎯 DETERMINA SE QUERY È NUOVA O FOLLOW-UP
       const queryIsNew = isNewQuery(content);
       console.log('[send] Query type:', queryIsNew ? 'NEW (standalone)' : 'FOLLOW-UP (uses context)');
       
       // 🔄 RECUPERA CONTESTO PRECEDENTE (solo se è follow-up)
-      let previousContext: PreviousContext | undefined = undefined;
+      let previousContext: { query: string; resultIds: string[] } | undefined = undefined;
       
       if (!queryIsNew) {
-        previousContext = await getPreviousContext(conversationId, supabase);
-        if (previousContext) {
+        const ctx = await getPreviousContext(conversationId, supabase);
+        if (ctx) {
+          previousContext = {
+            query: ctx.userQuery,
+            resultIds: ctx.resultIds || []
+          };
           console.log('[send] Found previous context:', {
-            query: previousContext.userQuery,
-            resultCount: previousContext.resultCount
+            query: previousContext.query,
+            resultCount: previousContext.resultIds.length
           });
         } else {
           console.log('[send] Follow-up query but no context found');
@@ -341,8 +343,9 @@ export async function POST(req: NextRequest) {
         console.log('[send] New query - ignoring any previous context');
       }
       
-      // 💾 CACHE SEMANTICA (solo per query NUOVE, non follow-up)
-      let queryPlan;
+      // 💾 CACHE SEMANTICA + SQL GENERATION
+      let sql: string;
+      let params: any[];
       
       if (queryIsNew) {
         try {
@@ -358,67 +361,79 @@ export async function POST(req: NextRequest) {
           
           if (cached && cached.similarity >= 0.85) {
             // CACHE HIT
-            queryPlan = cached.plan;
-            console.log('[cache] ✅ HIT - similarity:', cached.similarity.toFixed(3), '- reusing plan');
-          } else {
-            // CACHE MISS
-            console.log('[cache] ❌ MISS - calling Planner LLM');
-            const startPlan = Date.now();
-            queryPlan = await planQuery(content, ownerUserId, {}, undefined);
-            console.log('[cache] Plan generated in', Date.now() - startPlan, 'ms');
+            sql = cached.plan.sql;
+            params = cached.plan.params;
+            console.log('[cache] ✅ HIT - similarity:', cached.similarity.toFixed(3));
             
-            // Salva in cache (async, non bloccare)
-            saveCacheEntry(content, embedding, queryPlan, ownerUserId, supabase).catch(err => {
+            // 🔒 Ri-valida SQL cached (defense in depth)
+            validateSQL(sql);
+          } else {
+            // CACHE MISS → LLM genera SQL
+            console.log('[cache] ❌ MISS - calling Text-to-SQL LLM');
+            const startSQL = Date.now();
+            const sqlResult = await generateSQL(content, ownerUserId, previousContext);
+            console.log('[cache] SQL generated in', Date.now() - startSQL, 'ms');
+            
+            sql = sanitizeSQL(sqlResult.sql); // Aggiunge LIMIT + valida
+            params = sqlResult.params;
+            
+            // Salva in cache (async)
+            saveCacheEntry(content, embedding, { sql, params }, ownerUserId, supabase).catch(err => {
               console.error('[cache] Save failed:', err);
             });
           }
         } catch (cacheError) {
-          // Fallback: se cache fallisce, usa Planner normale
-          console.error('[cache] Error, falling back to Planner:', cacheError);
-          queryPlan = await planQuery(content, ownerUserId, {}, undefined);
+          // Fallback: se cache fallisce, genera SQL diretto
+          console.error('[cache] Error, falling back to direct SQL generation:', cacheError);
+          const sqlResult = await generateSQL(content, ownerUserId, previousContext);
+          sql = sanitizeSQL(sqlResult.sql);
+          params = sqlResult.params;
         }
       } else {
-        // Query FOLLOW-UP: non cacheable, usa contesto
-        queryPlan = await planQuery(content, ownerUserId, {}, previousContext);
+        // Query FOLLOW-UP: non cacheable, genera SQL con contesto
+        const sqlResult = await generateSQL(content, ownerUserId, previousContext);
+        sql = sanitizeSQL(sqlResult.sql);
+        params = sqlResult.params;
       }
       
-      console.log('[send] Query plan ready:', JSON.stringify(queryPlan, null, 2));
+      console.log('[send] SQL ready:', sql);
+      console.log('[send] Params:', params);
       
-      // 2. Valida Query Plan
-      const validation = validateQueryPlan(queryPlan);
-      if (!validation.valid) {
-        throw new Error(`Query plan validation failed: ${validation.error}`);
+      // 🔒 ESEGUI SQL (RPC sicuro)
+      const startExec = Date.now();
+      
+      const { data, error: queryError } = await supabase
+        .rpc('execute_safe_select', {
+          query_sql: sql,
+          query_params: JSON.stringify(params)
+        });
+      
+      console.log('[send] Query executed in', Date.now() - startExec, 'ms');
+      
+      if (queryError) {
+        throw new Error(`Query execution failed: ${queryError.message}`);
       }
       
-      if (validation.warnings && validation.warnings.length > 0) {
-        console.warn('[send] Query plan warnings:', validation.warnings);
-      }
+      // Parse risultato JSON
+      const queryResult = typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
       
-      // 3. Esegui Query
-      const queryResult = await executeQueryPlan(queryPlan);
-      console.log('[send] Query executed, success:', queryResult.success);
-      
-      if (!queryResult.success) {
-        throw new Error(`Query execution failed: ${queryResult.error}`);
-      }
-      
-      // 4. Componi risposta
-      const semanticReply = await composeResponse(content, queryResult);
-      console.log('[send] Semantic reply composed, length:', semanticReply.length);
+      // ⚡ TEMPLATE RISPOSTA (NO LLM Composer)
+      const semanticReply = formatResponse(queryResult, content);
+      console.log('[send] Response formatted, length:', semanticReply.length);
       
       // 🔄 CREA CONTESTO PER PROSSIMA QUERY
-      const newContext: PreviousContext = {
+      const newContext = {
         userQuery: content,
-        queryPlan,
-        resultIds: queryResult.data ? extractResultIds(queryResult.data) : undefined,
-        resultCount: queryResult.data?.length || queryResult.aggregated ? 1 : 0,
+        queryPlan: { sql, params }, // Salva SQL invece di QueryPlan
+        resultIds: queryResult ? extractResultIds(queryResult) : undefined,
+        resultCount: queryResult?.length || 0,
         timestamp: new Date().toISOString()
       };
       
       // Aggiungi marker invisibile alla risposta
       const replyWithContext = semanticReply + createContextMarker(newContext);
       
-      // 🔐 Cifra risposta semantica CON contesto
+      // 🔐 Cifra risposta CON contesto
       const semanticEnc = encryptText(replyWithContext);
       
       // Salva messaggio assistant
@@ -440,26 +455,36 @@ export async function POST(req: NextRequest) {
         console.error('[send] insert assistant semantic msg error:', insAsstSemantic.error);
       }
       
-      console.log('[send] ✅ Semantic system succeeded');
+      console.log('[send] ✅ Text-to-SQL system succeeded');
       // Ritorna risposta SENZA marker (invisibile al frontend)
       return NextResponse.json({ reply: semanticReply }, { status: 200 });
       
     } catch (semanticError: any) {
       // Log dettagliato dell'errore
-      console.error('[send] ❌ Semantic system error:');
+      console.error('[send] ❌ Text-to-SQL system error:');
       console.error('  Error type:', semanticError.constructor.name);
       console.error('  Error message:', semanticError.message);
       console.error('  Error stack:', semanticError.stack);
       console.error('  Query was:', content);
       
-      // Se è un errore di validazione, restituiscilo invece di fallback
-      if (semanticError.message?.includes('validation')) {
-        console.error('[send] Validation error - should not happen!');
+      // Se è errore di validazione SQL, non fare fallback
+      if (semanticError.message?.includes('SQL') || semanticError.message?.includes('validat')) {
+        const errorEnc = encryptText('La query non è valida. Riprova con una richiesta diversa.');
+        await supabase.from(MESSAGES_TABLE).insert({
+          conversation_id: conversationId,
+          user_id: ownerUserId,
+          role: "assistant",
+          body_enc: errorEnc.ciphertext,
+          body_iv: errorEnc.iv,
+          body_tag: errorEnc.tag,
+          content: null,
+        });
+        return NextResponse.json({ reply: 'La query non è valida. Riprova con una richiesta diversa.' }, { status: 200 });
       }
       
       // Prosegue al blocco OpenAI standard sotto
     }
-    // ========== FINE SISTEMA SEMANTICO ==========
+    // ========== FINE SISTEMA TEXT-TO-SQL ==========
 
     // 2) Fallback: Chiama OpenAI standard (come prima)
     // SYSTEM PROMPT MODIFICATO per limitare AI
