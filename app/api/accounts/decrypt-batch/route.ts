@@ -29,10 +29,10 @@ export async function POST(req: NextRequest) {
     const supabase = getSupabaseAdmin();
     
     // ✅ Query con service_role_key → bypassa RLS
-    // ✅ SOLO name_enc e name_iv (NO name_tag - non esiste!)
+    // ✅ Include name_bi (il campo tag per la decriptazione)
     const { data, error } = await supabase
       .from('accounts')
-      .select('id, name_enc, name_iv, city, tipo_locale')
+      .select('id, name_enc, name_iv, name_bi, city, tipo_locale')
       .in('id', accountIds);
     
     if (error) {
