@@ -90,7 +90,7 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
         const decrypted = await crypto.decryptFields(
           'table:accounts',
           'accounts',
-          '',
+          accountId,  // ✅ FIX: passa ID invece di stringa vuota
           encryptedData,
           ['name']
         );
@@ -112,7 +112,7 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
             const decrypted = await crypto.decryptFields(
               'table:accounts',
               'accounts',
-              '',
+              account.id,  // ✅ FIX: passa ID invece di stringa vuota
               account,
               ['name']
             );
