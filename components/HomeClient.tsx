@@ -357,9 +357,9 @@ function appendAssistantLocal(text: string) {
 }
 
 // ✅ Unione bolle: usa decryptedBubbles invece di patchedBubbles
-const mergedBubbles = useMemo(() => {
-  const localsUser = localUser.map((t) => ({ role: "user", content: t }));
-  const localsAssistant = localAssistant.map((t) => ({ role: "assistant", content: t }));
+const mergedBubbles = useMemo((): Bubble[] => {
+  const localsUser = localUser.map((t): Bubble => ({ role: "user", content: t }));
+  const localsAssistant = localAssistant.map((t): Bubble => ({ role: "assistant", content: t }));
   return [...decryptedBubbles, ...localsUser, ...localsAssistant];
 }, [decryptedBubbles, localUser, localAssistant]);
 
