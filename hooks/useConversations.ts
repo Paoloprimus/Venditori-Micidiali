@@ -8,9 +8,6 @@ import { supabase } from "../lib/supabase/client";
 
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
 
-// hooks/useConversations.ts
-// PATCH: Sostituire la funzione decryptClientPlaceholders (righe 12-127) con questa versione corretta:
-
 /**
  * Decifra i placeholder [CLIENT:uuid] o [CLIENT:uuid|enc|iv|bi] nella risposta dell'assistente
  */
@@ -58,9 +55,8 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
         console.error('[decryptClientPlaceholders] Batch fetch failed:', response.status);
       } else {
         const { accounts } = await response.json();
-
-          console.log('🔍 [API] Fetched accounts:', accounts?.length, accounts); // ✅ AGGIUNGI QUESTO
-
+        console.log('🔍 [API] Fetched accounts:', accounts?.length, accounts);
+        
         for (const acc of accounts || []) {
           accountsData.set(acc.id, acc);
         }
@@ -104,25 +100,30 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
       } else {
         // Usa dati recuperati in batch
         const account = accountsData.get(accountId);
-
-        console.log('🔍 [DECRYPT] Account data:', accountId, account); // ✅ AGGIUNGI QUESTO
-
+        console.log('🔍 [DECRYPT] Account data:', accountId, account);
+        
         if (!account || !account.name_enc) {
           console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato o senza dati`);
           clientName = 'Cliente sconosciuto';
         } else {
+          console.log('🔍 [DECRYPT] Calling decryptFields...');
           
-              console.log('🔍 [DECRYPT] Calling decryptFields...'); // ✅ AGGIUNGI
-
-          const decrypted = await crypto.decryptFields(
-            'table:accounts',
-            'accounts',
-            '',
-            account,
-            ['name']
-          );
-          
-          clientName = decrypted.name || 'Cliente sconosciuto';
+          try {
+            const decrypted = await crypto.decryptFields(
+              'table:accounts',
+              'accounts',
+              '',
+              account,
+              ['name']
+            );
+            
+            console.log('🔍 [DECRYPT] Result:', decrypted);
+            clientName = decrypted.name || 'Cliente sconosciuto';
+            
+          } catch (error) {
+            console.error('🔴 [DECRYPT] ERROR:', error);
+            clientName = 'Cliente sconosciuto';
+          }
         }
       }
       
