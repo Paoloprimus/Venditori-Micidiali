@@ -111,6 +111,9 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
           console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato o senza dati`);
           clientName = 'Cliente sconosciuto';
         } else {
+          
+              console.log('🔍 [DECRYPT] Calling decryptFields...'); // ✅ AGGIUNGI
+
           const decrypted = await crypto.decryptFields(
             'table:accounts',
             'accounts',
