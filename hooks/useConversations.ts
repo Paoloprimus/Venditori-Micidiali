@@ -58,6 +58,9 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
         console.error('[decryptClientPlaceholders] Batch fetch failed:', response.status);
       } else {
         const { accounts } = await response.json();
+
+          console.log('🔍 [API] Fetched accounts:', accounts?.length, accounts); // ✅ AGGIUNGI QUESTO
+
         for (const acc of accounts || []) {
           accountsData.set(acc.id, acc);
         }
@@ -101,7 +104,9 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
       } else {
         // Usa dati recuperati in batch
         const account = accountsData.get(accountId);
-        
+
+        console.log('🔍 [DECRYPT] Account data:', accountId, account); // ✅ AGGIUNGI QUESTO
+
         if (!account || !account.name_enc) {
           console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato o senza dati`);
           clientName = 'Cliente sconosciuto';
