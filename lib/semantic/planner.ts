@@ -321,27 +321,6 @@ NOTA: NON includere user_id nei filtri - viene aggiunto automaticamente.
 
 User ID contesto: ${userId}
 `;
-  "intent": "Clienti mai visitati",
-  "tables": ["accounts"],
-  "filters": [
-    {
-      "field": "accounts.id",
-      "operator": "not_in",
-      "value": {
-        "subquery": {
-          "intent": "ID di tutti gli account visitati",
-          "tables": ["visits"],
-          "filters": [],
-          "aggregation": {
-            "function": "count",
-            "groupBy": ["account_id"]
-          }
-        }
-      }
-    }
-  ]
-}
-`;
 
   try {
     // Prepara messaggio user con contesto se disponibile
