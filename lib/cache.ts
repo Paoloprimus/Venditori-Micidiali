@@ -1,7 +1,6 @@
 // lib/cache.ts
 import OpenAI from 'openai';
 import { createClient } from '@supabase/supabase-js';
-import type { QueryPlan } from './semantic/types';
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
@@ -24,12 +23,13 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
 /**
  * Cerca query simili nella cache usando cosine similarity
+ * AGGIORNATO: ritorna { sql, params } invece di QueryPlan
  */
 export async function findSimilarQuery(
   embedding: number[],
   userId: string,
   supabase: any
-): Promise<{ plan: QueryPlan; similarity: number; cacheId: string } | null> {
+): Promise<{ plan: { sql: string; params: any[] }; similarity: number; cacheId: string } | null> {
   try {
     // Query pgvector con cosine similarity
     // Threshold: 0.85 (più alto = più simile)
@@ -61,7 +61,7 @@ export async function findSimilarQuery(
       .eq('id', match.id);
     
     return {
-      plan: match.query_plan,
+      plan: match.query_plan, // Ora è { sql, params }
       similarity: match.similarity,
       cacheId: match.id
     };
@@ -73,11 +73,12 @@ export async function findSimilarQuery(
 
 /**
  * Salva nuova entry nella cache
+ * AGGIORNATO: salva { sql, params } invece di QueryPlan
  */
 export async function saveCacheEntry(
   queryText: string,
   embedding: number[],
-  plan: QueryPlan,
+  plan: { sql: string; params: any[] },
   userId: string,
   supabase: any
 ): Promise<void> {
@@ -88,7 +89,7 @@ export async function saveCacheEntry(
         user_id: userId,
         query_text: queryText,
         query_embedding: embedding,
-        query_plan: plan,
+        query_plan: plan, // { sql, params }
         hit_count: 0
       });
     
