@@ -11,7 +11,7 @@ import Composer from "./home/Composer";
 import { runChatTurn_v2 as runPlanner } from "../app/chat/planner";
 import { useConversation } from "../app/context/ConversationContext";
 
-import { useConversations } from "../hooks/useConversations";
+import { useConversations, type Bubble } from "../hooks/useConversations";
 import { useTTS } from "../hooks/useTTS";
 import { useVoice } from "../hooks/useVoice";
 import { useAutoResize } from "../hooks/useAutoResize";
