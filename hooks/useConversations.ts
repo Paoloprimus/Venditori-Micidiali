@@ -17,6 +17,9 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
   const matches = [...text.matchAll(clientPattern)];
   
   if (matches.length === 0) return text;
+
+    // ✅ Protezione SSR
+  if (typeof window === 'undefined') return text;
   
   // Ottieni crypto service
   const crypto = (window as any).cryptoSvc;
