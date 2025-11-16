@@ -119,6 +119,81 @@ function extractResultIds(data: any[]): string[] {
     .slice(0, 100); // Max 100 ID per evitare marker troppo lunghi
 }
 
+/**
+ * Determina se la query è NUOVA (standalone) o FOLLOW-UP (dipende da contesto)
+ * 
+ * @param query - Query utente
+ * @returns true se è nuova (ignora contesto), false se è follow-up (usa contesto)
+ */
+function isNewQuery(query: string): boolean {
+  const normalized = query.toLowerCase().trim();
+  
+  // 🎯 PATTERN FOLLOW-UP (dipendono da contesto precedente)
+  const followUpPatterns = [
+    /^mostra dettagli?$/i,
+    /^elenca( tutti)?$/i,
+    /^mostra( tutto)?$/i,
+    /^solo (quelli|quegli|quei|bar|ristoranti|pizzerie|clienti)/i,
+    /^filtra per/i,
+    /^ordina per/i,
+    /^(i )?primi? \d+$/i,
+    /^ultim[io] \d+$/i,
+    /^con (fatturato|note|ordine|visita|importo)/i,
+    /^aggiungi (fatturato|note|ordine|visita)/i,
+    /^anche (fatturato|note|ordine|visita)/i,
+    /^dimmi (il|i|le) (fatturato|note|ordine|visita)/i,
+    /^mostrami (anche|pure)/i
+  ];
+  
+  // Se matcha pattern follow-up → NON è nuova
+  if (followUpPatterns.some(pattern => pattern.test(normalized))) {
+    return false;
+  }
+  
+  // 🎯 PATTERN QUERY NUOVE (standalone, complete)
+  // Query che iniziano con interrogativi o verbi "informativi"
+  const newQueryStarters = [
+    /^quant[aeio]/i,        // "quanti clienti", "quanto ho venduto"
+    /^qual[ei]/i,           // "quali clienti", "quale bar"
+    /^chi/i,                // "chi sono i top clienti"
+    /^dove/i,               // "dove sono i bar"
+    /^quando/i,             // "quando ho visitato"
+    /^come/i,               // "come stanno i clienti"
+    /^dimmi (i|le|tutti)/i, // "dimmi i clienti", "dimmi tutti i bar"
+    /^(trova|cerca|mostra) (i|le|tutti|tutte|clienti|bar|ristoranti)/i,
+    /^elenca (i|le|tutti|tutte|clienti|bar|ristoranti)/i,
+    /^lista (di )?clienti/i,
+    /^top \d+/i,            // "top 5 clienti"
+    /^clienti (che|non|con|senza|a|di|da)/i,  // "clienti non visitati", "clienti di Verona"
+    /^bar (a|di|che|con|senza)/i,
+    /^ristoranti? (a|di|che|con|senza)/i,
+    /^pizzerie (a|di|che|con|senza)/i
+  ];
+  
+  // Se matcha pattern nuova → È NUOVA
+  if (newQueryStarters.some(pattern => pattern.test(normalized))) {
+    return true;
+  }
+  
+  // 🤔 EURISTICHE AGGIUNTIVE
+  // Se la query è molto corta (<4 parole) E non ha verbi completi → probabile follow-up
+  const wordCount = normalized.split(/\s+/).length;
+  const hasCompleteVerb = /\b(sono|hanno|voglio|dammi|mostra|elenca|trova|cerca)\b/i.test(normalized);
+  
+  if (wordCount <= 3 && !hasCompleteVerb) {
+    return false; // Probabile follow-up tipo "solo Verona", "con note"
+  }
+  
+  // Default: se ha >4 parole e contiene sostantivi business → È NUOVA
+  const hasBusinessNouns = /\b(clienti|bar|ristoranti?|pizzerie|hotel|gelateri[ae]|visite?|vendite?|fatturato)\b/i.test(normalized);
+  if (wordCount > 4 && hasBusinessNouns) {
+    return true;
+  }
+  
+  // Default conservativo: tratta come follow-up se ambiguo
+  return false;
+}
+
 // ===== FINE FUNZIONI HELPER =====
 
 export async function POST(req: NextRequest) {
@@ -244,16 +319,28 @@ export async function POST(req: NextRequest) {
     try {
       console.log('[send] Attempting semantic system for query:', content);
       
-      // 🔄 RECUPERA CONTESTO PRECEDENTE
-      const previousContext = await getPreviousContext(conversationId, supabase);
-      if (previousContext) {
-        console.log('[send] Found previous context:', {
-          query: previousContext.userQuery,
-          resultCount: previousContext.resultCount
-        });
+      // 🎯 DETERMINA SE QUERY È NUOVA O FOLLOW-UP
+      const queryIsNew = isNewQuery(content);
+      console.log('[send] Query type:', queryIsNew ? 'NEW (standalone)' : 'FOLLOW-UP (uses context)');
+      
+      // 🔄 RECUPERA CONTESTO PRECEDENTE (solo se è follow-up)
+      let previousContext: PreviousContext | undefined = undefined;
+      
+      if (!queryIsNew) {
+        previousContext = await getPreviousContext(conversationId, supabase);
+        if (previousContext) {
+          console.log('[send] Found previous context:', {
+            query: previousContext.userQuery,
+            resultCount: previousContext.resultCount
+          });
+        } else {
+          console.log('[send] Follow-up query but no context found');
+        }
+      } else {
+        console.log('[send] New query - ignoring any previous context');
       }
       
-      // 1. Genera Query Plan (con contesto se disponibile)
+      // 1. Genera Query Plan (con contesto SOLO se follow-up E trovato)
       const queryPlan = await planQuery(content, ownerUserId, {}, previousContext);
       console.log('[send] Query plan generated:', JSON.stringify(queryPlan, null, 2));
       
