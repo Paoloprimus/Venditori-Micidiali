@@ -10,6 +10,7 @@ import { executeQueryPlan } from "@/lib/semantic/executor";
 import { composeResponse, isOutOfScope, getOutOfScopeResponse } from "@/lib/semantic/composer";
 import { validateQueryPlan } from "@/lib/semantic/validator";
 import { PreviousContext } from "@/lib/semantic/types";
+import { generateEmbedding, findSimilarQuery, saveCacheEntry } from "@/lib/cache";
 // ===== FINE IMPORT =====
 
 export const runtime = "nodejs";
@@ -340,9 +341,48 @@ export async function POST(req: NextRequest) {
         console.log('[send] New query - ignoring any previous context');
       }
       
-      // 1. Genera Query Plan (con contesto SOLO se follow-up E trovato)
-      const queryPlan = await planQuery(content, ownerUserId, {}, previousContext);
-      console.log('[send] Query plan generated:', JSON.stringify(queryPlan, null, 2));
+      // 💾 CACHE SEMANTICA (solo per query NUOVE, non follow-up)
+      let queryPlan;
+      
+      if (queryIsNew) {
+        try {
+          // Genera embedding
+          const startEmbed = Date.now();
+          const embedding = await generateEmbedding(content);
+          console.log('[cache] Embedding generated in', Date.now() - startEmbed, 'ms');
+          
+          // Cerca in cache
+          const startSearch = Date.now();
+          const cached = await findSimilarQuery(embedding, ownerUserId, supabase);
+          console.log('[cache] Search completed in', Date.now() - startSearch, 'ms');
+          
+          if (cached && cached.similarity >= 0.85) {
+            // CACHE HIT
+            queryPlan = cached.plan;
+            console.log('[cache] ✅ HIT - similarity:', cached.similarity.toFixed(3), '- reusing plan');
+          } else {
+            // CACHE MISS
+            console.log('[cache] ❌ MISS - calling Planner LLM');
+            const startPlan = Date.now();
+            queryPlan = await planQuery(content, ownerUserId, {}, undefined);
+            console.log('[cache] Plan generated in', Date.now() - startPlan, 'ms');
+            
+            // Salva in cache (async, non bloccare)
+            saveCacheEntry(content, embedding, queryPlan, ownerUserId, supabase).catch(err => {
+              console.error('[cache] Save failed:', err);
+            });
+          }
+        } catch (cacheError) {
+          // Fallback: se cache fallisce, usa Planner normale
+          console.error('[cache] Error, falling back to Planner:', cacheError);
+          queryPlan = await planQuery(content, ownerUserId, {}, undefined);
+        }
+      } else {
+        // Query FOLLOW-UP: non cacheable, usa contesto
+        queryPlan = await planQuery(content, ownerUserId, {}, previousContext);
+      }
+      
+      console.log('[send] Query plan ready:', JSON.stringify(queryPlan, null, 2));
       
       // 2. Valida Query Plan
       const validation = validateQueryPlan(queryPlan);
