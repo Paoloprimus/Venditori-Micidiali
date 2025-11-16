@@ -149,19 +149,85 @@ export async function composeResponse(
   // 🎯 CASO 2: Query semplice (non dettagli) → risposta sintetica con count
   if (!wantsDetails && !isVague && hasMultipleResults && !queryResult.aggregated) {
     const count = queryResult.data!.length;
+    return `Ho trovato ${count} clienti. 📊\n\nVuoi vedere i dettagli? Chiedi "mostra dettagli" o specifica cosa vuoi vedere.`;
+  }
+  
+  // 🎯 CASO 3: Aggregazioni SEMPLICI → Template fisso (NO LLM)
+  if (queryResult.aggregated && !queryResult.data) {
+    const agg = queryResult.aggregated;
     
-    // Estrai info base per risposta sintetica
-    const firstItem = queryResult.data![0];
-    let entityType = 'risultati';
+    // COUNT semplice
+    if ('count' in agg && Object.keys(agg).length === 1) {
+      return `${agg.count}`;
+    }
     
-    if (firstItem.tipo_locale) entityType = firstItem.tipo_locale.toLowerCase() + (count > 1 ? '' : '');
-    if (firstItem.tipo) entityType = 'contatti'; // visits
-    if (firstItem.nota) entityType = 'promemoria';
+    // SUM semplice
+    if ('sum' in agg && Object.keys(agg).length === 1) {
+      return `€${Number(agg.sum).toFixed(2)}`;
+    }
     
-    let location = '';
-    if (firstItem.city) location = ` a ${firstItem.city}`;
+    // AVG semplice
+    if ('avg' in agg && Object.keys(agg).length === 1) {
+      return `€${Number(agg.avg).toFixed(2)}`;
+    }
     
-    return `Ho trovato ${count} ${entityType}${location}. 📊\n\nVuoi vedere i dettagli? Chiedi "mostra dettagli" o specifica cosa vuoi vedere.`;
+    // MIN/MAX
+    if ('min' in agg || 'max' in agg) {
+      if ('min' in agg && 'max' in agg) {
+        return `Min: €${Number(agg.min).toFixed(2)}, Max: €${Number(agg.max).toFixed(2)}`;
+      }
+      if ('min' in agg) return `€${Number(agg.min).toFixed(2)}`;
+      if ('max' in agg) return `€${Number(agg.max).toFixed(2)}`;
+    }
+  }
+  
+  // 🎯 CASO 4: TOP/RANKING con groupBy → Template con placeholder
+  if (queryResult.data && queryResult.data.length > 0 && queryResult.data[0].account_id && 
+      ('sum' in queryResult.data[0] || 'count' in queryResult.data[0])) {
+    
+    const isSum = 'sum' in queryResult.data[0];
+    const data = queryResult.data;
+    
+    let response = isSum ? 'Top clienti per fatturato:\n' : 'Top clienti per numero visite:\n';
+    
+    for (let i = 0; i < Math.min(data.length, 10); i++) {
+      const item = data[i];
+      const value = isSum ? `€${Number(item.sum).toFixed(2)}` : `${item.count} visite`;
+      response += `${i + 1}. [CLIENT:${item.account_id}] - ${value}\n`;
+    }
+    
+    if (data.length > 10) {
+      response += `\n... e altri ${data.length - 10} clienti`;
+    }
+    
+    return response;
+  }
+  
+  // 🎯 CASO 5: Liste semplici senza dettagli extra → NO LLM
+  if (queryResult.data && queryResult.data.length <= 20 && !queryResult.aggregated) {
+    const hasOnlyBasicFields = queryResult.data.every(item => {
+      const fields = Object.keys(item);
+      return fields.length <= 5; // Solo id, tipo_locale, city, etc
+    });
+    
+    if (hasOnlyBasicFields) {
+      const count = queryResult.data.length;
+      let response = `Ecco i ${count} ${count === 1 ? 'risultato' : 'risultati'}:\n`;
+      
+      for (let i = 0; i < count; i++) {
+        const item = queryResult.data[i];
+        const clientId = item.id || item.account_id || 'unknown';
+        const tipo = item.tipo_locale || item.tipo || '';
+        const city = item.city || '';
+        
+        response += `${i + 1}. [CLIENT:${clientId}]`;
+        if (tipo) response += ` - ${tipo}`;
+        if (city) response += ` - ${city}`;
+        response += '\n';
+      }
+      
+      return response;
+    }
   }
   
   // Prepara context per LLM
