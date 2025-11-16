@@ -231,7 +231,9 @@ useEffect(() => {
       const matches = [...text.matchAll(clientPattern)];
       
       if (matches.length === 0) return text;
-      
+
+      // Ottieni crypto service
+      if (typeof window === 'undefined') return text; // ✅ Protezione SSR
       const crypto = (window as any).cryptoSvc;
       if (!crypto || typeof crypto.decryptFields !== 'function') {
         console.warn('[decryptClientPlaceholders] CryptoService non disponibile');
