@@ -5,6 +5,26 @@ import { NextResponse } from "next/server";
 import { createSupabaseServer } from "../../../../lib/supabase/server";
 import { decryptText } from "../../../../lib/crypto/serverEncryption";
 
+/**
+ * Rimuove il marker SEMANTIC_CONTEXT dal testo prima di mostrarlo al frontend
+ */
+function removeContextMarker(text: string): string {
+  if (!text) return text;
+  
+  // Rimuovi marker HTML comment: <!--SEMANTIC_CONTEXT:...-->
+  const markerStart = '<!--SEMANTIC_CONTEXT:';
+  const markerEnd = '-->';
+  
+  const startIdx = text.lastIndexOf(markerStart);
+  if (startIdx === -1) return text;
+  
+  const endIdx = text.indexOf(markerEnd, startIdx);
+  if (endIdx === -1) return text;
+  
+  // Rimuovi marker e spazi/newline prima di esso
+  return text.substring(0, startIdx).trimEnd();
+}
+
 export async function GET(req: Request) {
   const supabase = createSupabaseServer();
   const { data: u } = await supabase.auth.getUser();
@@ -32,16 +52,18 @@ export async function GET(req: Request) {
 
   if (error) return NextResponse.json({ error: "DB_LIST_MSG", details: error.message }, { status: 500 });
 
-  // ✅ Decifra i messaggi cifrati
+  // ✅ Decifra i messaggi cifrati e RIMUOVI MARKER
   const items = (data ?? []).map(msg => {
     // Se il messaggio è cifrato, prova a decifrarlo
     if (msg.body_enc && msg.body_iv && msg.body_tag) {
       try {
         const decrypted = decryptText(msg.body_enc, msg.body_iv, msg.body_tag);
+        // 🔧 RIMUOVI marker prima di ritornare al frontend
+        const cleanText = removeContextMarker(decrypted);
         return {
           id: msg.id,
           role: msg.role,
-          content: decrypted,
+          content: cleanText,
           created_at: msg.created_at
         };
       } catch (err) {
