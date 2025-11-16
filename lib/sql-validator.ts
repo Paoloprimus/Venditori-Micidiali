@@ -27,7 +27,7 @@ export function validateSQL(sql: string): void {
   
   // 2. Parse AST con PostgreSQL syntax
   const parser = new Parser();
-  const opt = { database: 'postgresql' };  // ✅ FIX: usa PostgreSQL invece di MySQL
+  const opt = { database: 'postgresql' };
   let ast;
   
   try {
@@ -47,11 +47,18 @@ export function validateSQL(sql: string): void {
   
   // 4. Verifica tabelle usate (allowlist)
   const tables = new Set<string>();
-  parser.tableList(sql, opt).forEach((t: string) => tables.add(t));
+  const rawTables = parser.tableList(sql, opt);
+  
+  // ✅ FIX: Pulisci nomi tabelle da subquery
+  // PostgreSQL parser restituisce "select::null::visits" per subquery
+  rawTables.forEach((t: string) => {
+    const cleanTable = t.split('::').pop() || t; // Prende ultima parte dopo ::
+    tables.add(cleanTable);
+  });
   
   for (const table of tables) {
     if (!ALLOWED_TABLES.includes(table)) {
-      throw new Error(`Tabella non consentita: ${table}`);  // ✅ FIX: backtick
+      throw new Error(`Tabella non consentita: ${table}`);
     }
   }
   
@@ -63,7 +70,7 @@ export function validateSQL(sql: string): void {
   // 6. Verifica LIMIT <= MAX_ROWS
   const limitMatch = sql.match(/LIMIT\s+(\d+)/i);
   if (limitMatch && parseInt(limitMatch[1]) > MAX_ROWS) {
-    throw new Error(`LIMIT massimo: ${MAX_ROWS}`);  // ✅ FIX: backtick
+    throw new Error(`LIMIT massimo: ${MAX_ROWS}`);
   }
 }
 
