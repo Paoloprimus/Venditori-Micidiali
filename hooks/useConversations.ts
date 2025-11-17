@@ -298,19 +298,10 @@ export function useConversations(opts: Options = {}) {
     const items = await getMessagesByConversation(convId, 200);
     console.log('📨 [LOAD-MSG] Messaggi caricati:', items.length);
     
-    const decryptedItems = await Promise.all(
-      items.map(async (item, index) => {
-        if (item.role === 'assistant' && item.content) {
-          console.log(`📨 [LOAD-MSG] Decripto messaggio ${index + 1}/${items.length}`);
-          const decrypted = await decryptClientPlaceholders(item.content);
-          return { ...item, content: decrypted };
-        }
-        return item;
-      })
-    );
-    
-    console.log('📨 [LOAD-MSG] Fine decriptazione, aggiorno bubbles');
-    setBubbles(decryptedItems);
+    // ✅ NON decriptare qui - lascia i placeholder intatti
+    // HomeClient si occuperà della decriptazione quando crypto sarà pronto
+    console.log('📨 [LOAD-MSG] Salvo messaggi RAW (con placeholder), HomeClient decripterà');
+    setBubbles(items);
   }
 
   async function ensureConversation(): Promise<Conv> {
