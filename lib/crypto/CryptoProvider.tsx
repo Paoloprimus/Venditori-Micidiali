@@ -172,6 +172,17 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
       console.log("[CryptoProvider] unlock() chiamato");
       await cryptoService.unlockWithPassphrase(passphrase);
       console.log("[CryptoProvider] unlockWithPassphrase completato, setReady(true)");
+      
+      // ✅ FIX: Salva passphrase in sessionStorage per auto-unlock successivi
+      if (typeof window !== "undefined") {
+        try {
+          sessionStorage.setItem("repping:pph", passphrase);
+          console.log("[CryptoProvider] ✅ Passphrase salvata in sessionStorage per auto-unlock");
+        } catch (e) {
+          console.error("[CryptoProvider] ❌ Errore salvataggio passphrase:", e);
+        }
+      }
+      
       setReady(true);
     },
     [cryptoService]
