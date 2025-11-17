@@ -14,7 +14,7 @@ export type Bubble = { role: "user" | "assistant"; content: string; created_at?:
  */
 export async function decryptClientPlaceholders(text: string): Promise<string> {
   console.log('🔍 [DECRYPT-START] ======================');
-  console.log('🔍 [DECRYPT-START] Testo ricevuto:', text.substring(0, 200));
+  console.log('🔍 [DECRYPT-START] Testo ricevuto (primi 200 char):', text.substring(0, 200));
   
   // Pattern esteso: [CLIENT:uuid] o [CLIENT:uuid|name_enc|name_iv|name_bi]
   const clientPattern = /\[CLIENT:([a-f0-9-]+)(?:\|([^|\]]+)\|([^|\]]+)\|([^|\]]+))?\]/g;
@@ -121,7 +121,6 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
       } else {
         const { accounts } = await response.json();
         console.log('✅ [DECRYPT-API] Fetched accounts:', accounts?.length);
-        console.log('🔍 [DECRYPT-API] Accounts data:', accounts);
         
         for (const acc of accounts || []) {
           accountsData.set(acc.id, acc);
@@ -151,7 +150,7 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
     const placeholder = match[0];
     const nameEnc = match[2];
     const nameIv = match[3];
-    const nameBi = match[4];  // ✅ name_bi (tag per GCM)
+    const nameBi = match[4];
     
     console.log('🔍 [DECRYPT-LOOP] Processando:', {
       accountId: accountId.substring(0, 8) + '...',
@@ -170,22 +169,15 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
           id: accountId,
           name_enc: nameEnc,
           name_iv: nameIv,
-          name_bi: nameBi  // ✅ Usa name_bi
+          name_bi: nameBi
         };
-        
-        console.log('🔍 [DECRYPT-INLINE] encryptedData:', {
-          id: encryptedData.id.substring(0, 8) + '...',
-          name_enc: encryptedData.name_enc.substring(0, 20) + '...',
-          name_iv: encryptedData.name_iv.substring(0, 20) + '...',
-          name_bi: encryptedData.name_bi.substring(0, 20) + '...'
-        });
         
         console.log('🔍 [DECRYPT-INLINE] Chiamo decryptFields...');
         
         const decrypted = await crypto.decryptFields(
           'table:accounts',
           'accounts',
-          accountId,  // ✅ FIX: passa ID invece di stringa vuota
+          accountId,
           encryptedData,
           ['name']
         );
@@ -218,7 +210,7 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
             const decrypted = await crypto.decryptFields(
               'table:accounts',
               'accounts',
-              account.id,  // ✅ FIX: passa ID invece di stringa vuota
+              account.id,
               account,
               ['name']
             );
@@ -246,20 +238,19 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
   }
   
   console.log('🔍 [DECRYPT-END] ======================');
-  console.log('🔍 [DECRYPT-END] Risultato:', result.substring(0, 200));
+  console.log('🔍 [DECRYPT-END] Risultato (primi 200 char):', result.substring(0, 200));
   
   return result;
 }
 
 type Options = {
-  onAssistantReply?: (text: string) => void; // es: TTS o side-effects
+  onAssistantReply?: (text: string) => void;
 };
 
 export function useConversations(opts: Options = {}) {
   const { onAssistantReply } = opts;
   const { ready } = useCrypto();
 
-  // ---- Stato
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
   const [input, setInput] = useState("");
   const [usage, setUsage] = useState<Usage | null>(null);
@@ -267,13 +258,11 @@ export function useConversations(opts: Options = {}) {
   const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
 
-  // ---- Refs UI
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
   const firstPaintRef = useRef(true);
 
-  // ---- Utils
   function autoTitleRome() {
     const fmt = new Intl.DateTimeFormat("it-IT", {
       weekday: "short",
@@ -294,7 +283,6 @@ export function useConversations(opts: Options = {}) {
     el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
   }
 
-  // ---- API wrappers
   async function refreshUsage(convId?: string) {
     try {
       const hasTraffic = bubbles.length > 0;
@@ -310,7 +298,6 @@ export function useConversations(opts: Options = {}) {
     const items = await getMessagesByConversation(convId, 200);
     console.log('📨 [LOAD-MSG] Messaggi caricati:', items.length);
     
-    // ✅ Decifra placeholder nei messaggi assistant
     const decryptedItems = await Promise.all(
       items.map(async (item, index) => {
         if (item.role === 'assistant' && item.content) {
@@ -357,10 +344,6 @@ export function useConversations(opts: Options = {}) {
     await refreshUsage(created.id);
   }
 
-  /**
-   * send - SOLO modello generico
-   * Il planner è gestito da submitFromComposer in HomeClient
-   */
   async function send(content: string) {
     console.error("[useConversations.send] HIT - chiamata al modello generico", content);
     
@@ -370,7 +353,6 @@ export function useConversations(opts: Options = {}) {
 
     const conv = await ensureConversation();
 
-    // Bubble utente ottimistica
     setBubbles((b) => [...b, { role: "user", content: txt }]);
 
     try {
@@ -380,7 +362,6 @@ export function useConversations(opts: Options = {}) {
         terse: false 
       });
       
-      // ✅ Decifra eventuali placeholder [CLIENT:uuid] prima di mostrare
       const decryptedReply = await decryptClientPlaceholders(replyText);
       
       setBubbles((b) => [...b, { role: "assistant", content: decryptedReply }]);
@@ -388,515 +369,90 @@ export function useConversations(opts: Options = {}) {
       await refreshUsage(conv.id);
       
     } catch (e: any) {
-      // Gestione errori 429
       if (e?.status === 429) {
         const retry = Number(e?.details?.retryAfter) || 0;
         const hint = retry > 0
           ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
           : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
         setServerError(hint);
-        setBubbles((b) => [...b, { role: "assistant", content: "⚠️ " + hint }]);
+        setBubbles((b) => b.filter((m) => m.role !== "user" || m.content !== txt));
         return;
       }
-
-      setServerError(e?.message || "Errore server");
-      setBubbles((b) => [
-        ...b,
-        { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
-      ]);
+      setServerError(e?.message || "Errore invio messaggio");
+      setBubbles((b) => b.filter((m) => m.role !== "user" || m.content !== txt));
     }
   }
 
-  // ---- Bootstrap
+  async function sendDirectly(text: string) {
+    await send(text);
+  }
+
+  async function switchConversation(convId: string) {
+    const c = (await listConversations(100)).find((x) => x.id === convId);
+    if (!c) return;
+    setCurrentConv(c);
+    await loadMessages(convId);
+    await refreshUsage(convId);
+  }
+
+  async function deleteConversation(convId: string) {
+    await supabase.from("conversations").delete().eq("id", convId);
+    if (currentConv?.id === convId) {
+      await ensureConversation();
+    }
+  }
+
+  async function updateConversationTitle(convId: string, newTitle: string) {
+    await supabase
+      .from("conversations")
+      .update({ title: newTitle })
+      .eq("id", convId);
+
+    if (currentConv?.id === convId) {
+      setCurrentConv({ ...currentConv, title: newTitle });
+    }
+  }
+
   useEffect(() => {
-    // ✅ ASPETTA che crypto sia pronto prima di caricare messaggi
-    if (!ready) {
-      console.log('[useConversations] ⏳ Crypto non ancora pronto, aspetto...');
+    (async () => {
+      try {
+        const r = await fetch("/api/model");
+        const { model } = await r.json();
+        setModelBadge(model || "gpt-4o-mini");
+      } catch {
+        setModelBadge("?");
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (firstPaintRef.current) {
+      firstPaintRef.current = false;
       return;
     }
-    
-    console.log('[useConversations] ✅ Crypto pronto, carico messaggi');
-    
-    const loadTodaySession = async () => {
-      const todayTitle = autoTitleRome();
-      try {
-        const list = await listConversations(50);
-        const today = list.find((c) => c.title === todayTitle);
-        if (today) {
-          setCurrentConv(today);
-          await loadMessages(today.id);
-          await refreshUsage(today.id);
-        }
-      } catch {
-        // silenzio
-      }
-    };
-
-    fetch("/api/model")
-      .then((r) => r.json())
-      .then((d) => setModelBadge(d?.model ?? "n/d"))
-      .catch(() => setModelBadge("n/d"));
-
-    loadTodaySession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
-
-  // ---- Autoscroll
-  useEffect(() => {
-    const sentinel = endRef.current;
-    if (!sentinel) return;
-    const behavior: ScrollBehavior = firstPaintRef.current ? "auto" : "smooth";
-    firstPaintRef.current = false;
-    requestAnimationFrame(() => {
-      try {
-        sentinel.scrollIntoView({ behavior, block: "end" });
-      } catch {
-        if (threadRef.current) {
-          threadRef.current.scrollTop = threadRef.current.scrollHeight;
-        }
-      }
-    });
+    endRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
   }, [bubbles]);
 
-  // ---- Selezione conversazione
-  async function handleSelectConv(c: Conv) {
-    setCurrentConv({ id: c.id, title: c.title });
-    await loadMessages(c.id);
-    await refreshUsage(c.id);
-  }
-
   return {
-    // stato
     bubbles,
-    setBubbles,
     input,
     setInput,
     usage,
     serverError,
+    setServerError,
     modelBadge,
     currentConv,
-    setCurrentConv,
-
-    // refs/util
     taRef,
     threadRef,
     endRef,
     autoResize,
-    autoTitleRome,
-
-    // azioni
     ensureConversation,
     createConversation,
-    loadMessages,
+    send,
+    sendDirectly,
+    switchConversation,
+    deleteConversation,
+    updateConversationTitle,
     refreshUsage,
-    send, // ⬅️ ora chiama SOLO il modello generico
-    handleSelectConv,
-  };
-}// hooks/useConversations.ts
-"use client";
-import { useEffect, useRef, useState } from "react";
-import { listConversations, createConversation as apiCreate, type Conv } from "../lib/api/conversations";
-import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
-import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
-import { supabase } from "../lib/supabase/client";
-import { useCrypto } from "@/lib/crypto/CryptoProvider";
-
-export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
-
-/**
- * Decifra i placeholder [CLIENT:uuid] o [CLIENT:uuid|enc|iv|bi] nella risposta dell'assistente
- */
-export async function decryptClientPlaceholders(text: string): Promise<string> {
-  // Pattern esteso: [CLIENT:uuid] o [CLIENT:uuid|name_enc|name_iv|name_bi]
-  const clientPattern = /\[CLIENT:([a-f0-9-]+)(?:\|([^|\]]+)\|([^|\]]+)\|([^|\]]+))?\]/g;
-  const matches = [...text.matchAll(clientPattern)];
-  
-  if (matches.length === 0) return text;
-  
-  // ✅ Protezione SSR
-  if (typeof window === 'undefined') return text;
-  
-  // Ottieni crypto service
-  const crypto = (window as any).cryptoSvc;
-  if (!crypto || typeof crypto.decryptFields !== 'function') {
-    console.warn('[decryptClientPlaceholders] CryptoService non disponibile');
-    return text;
-  }
-  
-  // ✅ WAIT: Aspetta che crypto sia unlocked (max 5 secondi)
-  if (typeof crypto.isUnlocked === 'function' && !crypto.isUnlocked()) {
-    console.warn('[decryptClientPlaceholders] ⏳ CryptoService non ancora sbloccato, attendo...');
-    for (let i = 0; i < 50; i++) {
-      await new Promise(r => setTimeout(r, 100));
-      if (crypto.isUnlocked()) {
-        console.log('[decryptClientPlaceholders] ✅ CryptoService sbloccato dopo', i * 100, 'ms');
-        break;
-      }
-    }
-    if (!crypto.isUnlocked()) {
-      console.error('[decryptClientPlaceholders] ❌ Timeout: crypto non sbloccato dopo 5s');
-      return text;
-    }
-  }
-  
-  // ✅ WAIT: Assicurati che lo scope 'table:accounts' sia inizializzato
-  try {
-    if (typeof crypto.getOrCreateScopeKeys === 'function') {
-      await crypto.getOrCreateScopeKeys('table:accounts');
-    }
-  } catch (error) {
-    console.error('[decryptClientPlaceholders] Errore inizializzazione scope:', error);
-  }
-  
-  // Raggruppa UUID da recuperare (quelli senza dati inline)
-  const uuidsToFetch: string[] = [];
-  const matchesMap = new Map<string, RegExpMatchArray>();
-  
-  for (const match of matches) {
-    const accountId = match[1];
-    const hasInlineData = match[2] && match[3] && match[4];
-    
-    matchesMap.set(accountId, match);
-    
-    if (!hasInlineData) {
-      uuidsToFetch.push(accountId);
-    }
-  }
-  
-  // ✅ Recupera dati cifrati in batch tramite API
-  let accountsData = new Map<string, any>();
-  
-  if (uuidsToFetch.length > 0) {
-    try {
-      const response = await fetch('/api/accounts/decrypt-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountIds: uuidsToFetch })
-      });
-      
-      if (!response.ok) {
-        console.error('[decryptClientPlaceholders] Batch fetch failed:', response.status);
-      } else {
-        const { accounts } = await response.json();
-        console.log('🔍 [API] Fetched accounts:', accounts?.length, accounts);
-        
-        for (const acc of accounts || []) {
-          accountsData.set(acc.id, acc);
-        }
-      }
-    } catch (error) {
-      console.error('[decryptClientPlaceholders] Batch fetch error:', error);
-    }
-  }
-  
-  let result = text;
-  
-  // Decifra ogni placeholder
-  for (const [accountId, match] of matchesMap) {
-    const placeholder = match[0];
-    const nameEnc = match[2];
-    const nameIv = match[3];
-    const nameBi = match[4];  // ✅ name_bi (tag per GCM)
-    
-    try {
-      let clientName: string;
-      
-      // Se ci sono dati cifrati inline, usali direttamente
-      if (nameEnc && nameIv && nameBi) {
-        const encryptedData = {
-          id: accountId,
-          name_enc: nameEnc,
-          name_iv: nameIv,
-          name_bi: nameBi  // ✅ Usa name_bi
-        };
-        
-        const decrypted = await crypto.decryptFields(
-          'table:accounts',
-          'accounts',
-          accountId,  // ✅ FIX: passa ID invece di stringa vuota
-          encryptedData,
-          ['name']
-        );
-        
-        clientName = decrypted.name || 'Cliente sconosciuto';
-        
-      } else {
-        // Usa dati recuperati in batch
-        const account = accountsData.get(accountId);
-        console.log('🔍 [DECRYPT] Account data:', accountId, account);
-        
-        if (!account || !account.name_enc) {
-          console.warn(`[decryptClientPlaceholders] Account ${accountId} non trovato o senza dati`);
-          clientName = 'Cliente sconosciuto';
-        } else {
-          console.log('🔍 [DECRYPT] Calling decryptFields...');
-          
-          try {
-            const decrypted = await crypto.decryptFields(
-              'table:accounts',
-              'accounts',
-              account.id,  // ✅ FIX: passa ID invece di stringa vuota
-              account,
-              ['name']
-            );
-            
-            console.log('🔍 [DECRYPT] Result:', decrypted);
-            clientName = decrypted.name || 'Cliente sconosciuto';
-            
-          } catch (error) {
-            console.error('🔴 [DECRYPT] ERROR:', error);
-            clientName = 'Cliente sconosciuto';
-          }
-        }
-      }
-      
-      // Sostituisci placeholder con nome reale
-      result = result.replace(placeholder, clientName);
-      
-    } catch (error) {
-      console.error(`[decryptClientPlaceholders] Errore decifratura ${accountId}:`, error);
-      result = result.replace(placeholder, 'Cliente sconosciuto');
-    }
-  }
-  
-  return result;
-}
-
-type Options = {
-  onAssistantReply?: (text: string) => void; // es: TTS o side-effects
-};
-
-export function useConversations(opts: Options = {}) {
-  const { onAssistantReply } = opts;
-  const { ready } = useCrypto();
-
-  // ---- Stato
-  const [bubbles, setBubbles] = useState<Bubble[]>([]);
-  const [input, setInput] = useState("");
-  const [usage, setUsage] = useState<Usage | null>(null);
-  const [serverError, setServerError] = useState<string | null>(null);
-  const [modelBadge, setModelBadge] = useState<string>("…");
-  const [currentConv, setCurrentConv] = useState<Conv | null>(null);
-
-  // ---- Refs UI
-  const taRef = useRef<HTMLTextAreaElement | null>(null);
-  const threadRef = useRef<HTMLDivElement>(null);
-  const endRef = useRef<HTMLDivElement>(null);
-  const firstPaintRef = useRef(true);
-
-  // ---- Utils
-  function autoTitleRome() {
-    const fmt = new Intl.DateTimeFormat("it-IT", {
-      weekday: "short",
-      day: "2-digit",
-      month: "2-digit",
-      year: "2-digit",
-      timeZone: "Europe/Rome",
-    });
-    return fmt.format(new Date()).toLowerCase().replace(/\./g, "");
-  }
-
-  function autoResize() {
-    const el = taRef.current;
-    if (!el) return;
-    el.style.height = "auto";
-    const max = 164;
-    el.style.height = Math.min(el.scrollHeight, max) + "px";
-    el.style.overflowY = el.scrollHeight > max ? "auto" : "hidden";
-  }
-
-  // ---- API wrappers
-  async function refreshUsage(convId?: string) {
-    try {
-      const hasTraffic = bubbles.length > 0;
-      const u = await getCurrentChatUsage(hasTraffic ? convId : undefined);
-      setUsage(u);
-    } catch {
-      // usage è best-effort
-    }
-  }
-
-  async function loadMessages(convId: string) {
-    const items = await getMessagesByConversation(convId, 200);
-    
-    // ✅ Decifra placeholder nei messaggi assistant
-    const decryptedItems = await Promise.all(
-      items.map(async (item) => {
-        if (item.role === 'assistant' && item.content) {
-          const decrypted = await decryptClientPlaceholders(item.content);
-          return { ...item, content: decrypted };
-        }
-        return item;
-      })
-    );
-    
-    setBubbles(decryptedItems);
-  }
-
-  async function ensureConversation(): Promise<Conv> {
-    if (currentConv?.id) return currentConv;
-    const autoTitle = autoTitleRome();
-
-    try {
-      const list = await listConversations(50);
-      const today = list.find((c) => c.title === autoTitle || c.title.includes(autoTitle));
-      if (today) {
-        setCurrentConv(today);
-        await loadMessages(today.id);
-        await refreshUsage(today.id);
-        return today;
-      }
-    } catch {
-      // silenzio
-    }
-
-    const created = await apiCreate(autoTitle);
-    setCurrentConv(created);
-    setBubbles([]);
-    await refreshUsage(created.id);
-    return created;
-  }
-
-  async function createConversation(title: string) {
-    const created = await apiCreate(title.trim());
-    setCurrentConv(created);
-    setBubbles([]);
-    await refreshUsage(created.id);
-  }
-
-  /**
-   * send - SOLO modello generico
-   * Il planner è gestito da submitFromComposer in HomeClient
-   */
-  async function send(content: string) {
-    console.error("[useConversations.send] HIT - chiamata al modello generico", content);
-    
-    setServerError(null);
-    const txt = content.trim();
-    if (!txt) return;
-
-    const conv = await ensureConversation();
-
-    // Bubble utente ottimistica
-    setBubbles((b) => [...b, { role: "user", content: txt }]);
-
-    try {
-      const replyText = await sendMessage({ 
-        content: txt, 
-        conversationId: conv.id, 
-        terse: false 
-      });
-      
-      // ✅ Decifra eventuali placeholder [CLIENT:uuid] prima di mostrare
-      const decryptedReply = await decryptClientPlaceholders(replyText);
-      
-      setBubbles((b) => [...b, { role: "assistant", content: decryptedReply }]);
-      onAssistantReply?.(decryptedReply);
-      await refreshUsage(conv.id);
-      
-    } catch (e: any) {
-      // Gestione errori 429
-      if (e?.status === 429) {
-        const retry = Number(e?.details?.retryAfter) || 0;
-        const hint = retry > 0
-          ? `Quota OpenAI esaurita. Riprova tra ~${retry}s oppure controlla Billing.`
-          : "Quota OpenAI esaurita. Controlla il piano/chiave (Billing).";
-        setServerError(hint);
-        setBubbles((b) => [...b, { role: "assistant", content: "⚠️ " + hint }]);
-        return;
-      }
-
-      setServerError(e?.message || "Errore server");
-      setBubbles((b) => [
-        ...b,
-        { role: "assistant", content: "⚠️ Errore nel modello. Apri il pannello in alto per dettagli." },
-      ]);
-    }
-  }
-
-  // ---- Bootstrap
-  useEffect(() => {
-    // ✅ ASPETTA che crypto sia pronto prima di caricare messaggi
-    if (!ready) {
-      console.log('[useConversations] ⏳ Crypto non ancora pronto, aspetto...');
-      return;
-    }
-    
-    console.log('[useConversations] ✅ Crypto pronto, carico messaggi');
-    
-    const loadTodaySession = async () => {
-      const todayTitle = autoTitleRome();
-      try {
-        const list = await listConversations(50);
-        const today = list.find((c) => c.title === todayTitle);
-        if (today) {
-          setCurrentConv(today);
-          await loadMessages(today.id);
-          await refreshUsage(today.id);
-        }
-      } catch {
-        // silenzio
-      }
-    };
-
-    fetch("/api/model")
-      .then((r) => r.json())
-      .then((d) => setModelBadge(d?.model ?? "n/d"))
-      .catch(() => setModelBadge("n/d"));
-
-    loadTodaySession();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ready]);
-
-  // ---- Autoscroll
-  useEffect(() => {
-    const sentinel = endRef.current;
-    if (!sentinel) return;
-    const behavior: ScrollBehavior = firstPaintRef.current ? "auto" : "smooth";
-    firstPaintRef.current = false;
-    requestAnimationFrame(() => {
-      try {
-        sentinel.scrollIntoView({ behavior, block: "end" });
-      } catch {
-        if (threadRef.current) {
-          threadRef.current.scrollTop = threadRef.current.scrollHeight;
-        }
-      }
-    });
-  }, [bubbles]);
-
-  // ---- Selezione conversazione
-  async function handleSelectConv(c: Conv) {
-    setCurrentConv({ id: c.id, title: c.title });
-    await loadMessages(c.id);
-    await refreshUsage(c.id);
-  }
-
-  return {
-    // stato
-    bubbles,
-    setBubbles,
-    input,
-    setInput,
-    usage,
-    serverError,
-    modelBadge,
-    currentConv,
-    setCurrentConv,
-
-    // refs/util
-    taRef,
-    threadRef,
-    endRef,
-    autoResize,
-    autoTitleRome,
-
-    // azioni
-    ensureConversation,
-    createConversation,
-    loadMessages,
-    refreshUsage,
-    send, // ⬅️ ora chiama SOLO il modello generico
-    handleSelectConv,
   };
 }
