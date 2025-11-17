@@ -5,6 +5,7 @@ import { listConversations, createConversation as apiCreate, type Conv } from ".
 import { getMessagesByConversation, sendMessage } from "../lib/api/messages";
 import { getCurrentChatUsage, type Usage } from "../lib/api/usage";
 import { supabase } from "../lib/supabase/client";
+import { useCrypto } from "@/lib/crypto/CryptoProvider";
 
 export type Bubble = { role: "user" | "assistant"; content: string; created_at?: string };
 
@@ -173,6 +174,7 @@ type Options = {
 
 export function useConversations(opts: Options = {}) {
   const { onAssistantReply } = opts;
+  const { ready } = useCrypto();
 
   // ---- Stato
   const [bubbles, setBubbles] = useState<Bubble[]>([]);
@@ -320,6 +322,14 @@ export function useConversations(opts: Options = {}) {
 
   // ---- Bootstrap
   useEffect(() => {
+    // ✅ ASPETTA che crypto sia pronto prima di caricare messaggi
+    if (!ready) {
+      console.log('[useConversations] ⏳ Crypto non ancora pronto, aspetto...');
+      return;
+    }
+    
+    console.log('[useConversations] ✅ Crypto pronto, carico messaggi');
+    
     const loadTodaySession = async () => {
       const todayTitle = autoTitleRome();
       try {
@@ -342,7 +352,7 @@ export function useConversations(opts: Options = {}) {
 
     loadTodaySession();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [ready]);
 
   // ---- Autoscroll
   useEffect(() => {
