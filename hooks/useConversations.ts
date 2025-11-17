@@ -362,10 +362,12 @@ export function useConversations(opts: Options = {}) {
         terse: false 
       });
       
-      const decryptedReply = await decryptClientPlaceholders(replyText);
+      // ❌ RIMOSSO: non decriptare qui - lascia che sia HomeClient a gestirlo
+      // const decryptedReply = await decryptClientPlaceholders(replyText);
       
-      setBubbles((b) => [...b, { role: "assistant", content: decryptedReply }]);
-      onAssistantReply?.(decryptedReply);
+      // ✅ Aggiungi messaggio RAW con placeholder intatti
+      setBubbles((b) => [...b, { role: "assistant", content: replyText }]);
+      onAssistantReply?.(replyText);
       await refreshUsage(conv.id);
       
     } catch (e: any) {
