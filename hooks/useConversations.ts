@@ -17,8 +17,8 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
   const matches = [...text.matchAll(clientPattern)];
   
   if (matches.length === 0) return text;
-
-    // ✅ Protezione SSR
+  
+  // ✅ Protezione SSR
   if (typeof window === 'undefined') return text;
   
   // Ottieni crypto service
@@ -26,6 +26,31 @@ async function decryptClientPlaceholders(text: string): Promise<string> {
   if (!crypto || typeof crypto.decryptFields !== 'function') {
     console.warn('[decryptClientPlaceholders] CryptoService non disponibile');
     return text;
+  }
+  
+  // ✅ WAIT: Aspetta che crypto sia unlocked (max 5 secondi)
+  if (typeof crypto.isUnlocked === 'function' && !crypto.isUnlocked()) {
+    console.warn('[decryptClientPlaceholders] ⏳ CryptoService non ancora sbloccato, attendo...');
+    for (let i = 0; i < 50; i++) {
+      await new Promise(r => setTimeout(r, 100));
+      if (crypto.isUnlocked()) {
+        console.log('[decryptClientPlaceholders] ✅ CryptoService sbloccato dopo', i * 100, 'ms');
+        break;
+      }
+    }
+    if (!crypto.isUnlocked()) {
+      console.error('[decryptClientPlaceholders] ❌ Timeout: crypto non sbloccato dopo 5s');
+      return text;
+    }
+  }
+  
+  // ✅ WAIT: Assicurati che lo scope 'table:accounts' sia inizializzato
+  try {
+    if (typeof crypto.getOrCreateScopeKeys === 'function') {
+      await crypto.getOrCreateScopeKeys('table:accounts');
+    }
+  } catch (error) {
+    console.error('[decryptClientPlaceholders] Errore inizializzazione scope:', error);
   }
   
   // Raggruppa UUID da recuperare (quelli senza dati inline)
