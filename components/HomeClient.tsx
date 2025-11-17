@@ -223,9 +223,11 @@ const patchedBubbles = useMemo(() => {
 const [decryptedBubbles, setDecryptedBubbles] = useState<Bubble[]>([]);
 
 useEffect(() => {
-  // ✅ ASPETTA che crypto sia pronto prima di processare placeholder
+  // ✅ Se crypto non è pronto, mostra i messaggi CON i placeholder (non nasconderli)
   if (!cryptoReady) {
-    console.log('[HomeClient] ⏳ Crypto non ancora pronto, skip placeholder processing...');
+    console.log('[HomeClient] ⏳ Crypto non ancora pronto, mostro placeholder grezzi');
+    // ✅ Mostra bubbles senza decriptazione (con placeholder)
+    setDecryptedBubbles(patchedBubbles);
     return;
   }
   
