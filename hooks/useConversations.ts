@@ -216,6 +216,9 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
             );
             
             console.log('✅ [DECRYPT-BATCH] Decriptato:', decrypted);
+            console.log('🔍 [DECRYPT-BATCH] Keys dell\'oggetto:', Object.keys(decrypted));
+            console.log('🔍 [DECRYPT-BATCH] decrypted.name =', decrypted.name);
+            console.log('🔍 [DECRYPT-BATCH] typeof decrypted.name =', typeof decrypted.name);
             clientName = decrypted.name || 'Cliente sconosciuto';
             
           } catch (error) {
