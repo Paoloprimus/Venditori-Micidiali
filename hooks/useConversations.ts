@@ -204,6 +204,12 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
           console.warn(`❌ [DECRYPT-BATCH] Account ${accountId.substring(0, 8)}... non trovato o senza dati`);
           clientName = 'Cliente sconosciuto';
         } else {
+          console.log('🔍 [DECRYPT-BATCH] Account RAW prima di decryptFields:');
+          console.log('🔍 [DECRYPT-BATCH] - account.id:', account.id);
+          console.log('🔍 [DECRYPT-BATCH] - account.name_enc:', account.name_enc);
+          console.log('🔍 [DECRYPT-BATCH] - account.name_iv:', account.name_iv);
+          console.log('🔍 [DECRYPT-BATCH] - typeof name_enc:', typeof account.name_enc);
+          console.log('🔍 [DECRYPT-BATCH] - typeof name_iv:', typeof account.name_iv);
           console.log('🔍 [DECRYPT-BATCH] Chiamo decryptFields...');
           
           try {
