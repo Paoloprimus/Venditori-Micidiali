@@ -6,16 +6,24 @@
  * NO emoji, NO suggerimenti, NO domande
  */
 export function formatResponse(sqlResult: any[], userQuery: string): string {
+  console.log('🔍 [TEMPLATE] ========== INIZIO ==========');
+  console.log('🔍 [TEMPLATE] sqlResult.length:', sqlResult?.length);
+  
   // Nessun risultato
   if (!sqlResult || sqlResult.length === 0) {
+    console.log('🔍 [TEMPLATE] CASO: Nessun risultato');
     return 'Nessun risultato trovato.';
   }
   
   const firstRow = sqlResult[0];
   const keys = Object.keys(firstRow);
   
+  console.log('🔍 [TEMPLATE] firstRow keys:', keys);
+  console.log('🔍 [TEMPLATE] firstRow data:', firstRow);
+  
   // 🎯 CASO 1: Aggregazione semplice (COUNT/SUM/AVG) → solo numero
   if (sqlResult.length === 1 && keys.length === 1) {
+    console.log('🔍 [TEMPLATE] CASO 1: Aggregazione semplice');
     const value = Object.values(firstRow)[0];
     
     // Se è un numero con decimali (fatturato)
@@ -29,11 +37,13 @@ export function formatResponse(sqlResult: any[], userQuery: string): string {
   
   // 🎯 CASO 2: Liste >10 → avviso senza suggerimenti
   if (sqlResult.length > 10) {
+    console.log('🔍 [TEMPLATE] CASO 2: Lista >10 elementi');
     return `Ho trovato ${sqlResult.length} risultati. In chat ti posso elencare solo i primi 10.`;
   }
   
   // 🎯 CASO 3: Top/Ranking con aggregazioni (account_id + sum/count)
   if (firstRow.account_id && (firstRow.sum !== undefined || firstRow.count !== undefined)) {
+    console.log('🔍 [TEMPLATE] CASO 3: Top/Ranking con account_id');
     const count = sqlResult.length;
     const isSum = firstRow.sum !== undefined;
     
@@ -53,12 +63,14 @@ export function formatResponse(sqlResult: any[], userQuery: string): string {
   
   // 🎯 CASO 4: Lista clienti standard (id, city, tipo_locale, notes)
   if (firstRow.id) {
+    console.log('🔍 [TEMPLATE] CASO 4: Lista clienti con id');
     const count = sqlResult.length;
     let response = '';
     
     for (let i = 0; i < Math.min(count, 10); i++) {
       const row = sqlResult[i];
       
+      console.log(`🔍 [TEMPLATE] Row ${i + 1} id:`, row.id);
       response += `${i + 1}. [CLIENT:${row.id}]`;
       
       // Mostra solo campi richiesti nella query (intelligente)
@@ -89,10 +101,12 @@ export function formatResponse(sqlResult: any[], userQuery: string): string {
       response += '\n';
     }
     
+    console.log('🔍 [TEMPLATE] Response preview:', response.substring(0, 100));
     return response.trim();
   }
   
   // 🎯 CASO 5: Dati generici (fallback)
+  console.log('🔍 [TEMPLATE] CASO 5: Fallback generico');
   const count = sqlResult.length;
   let response = '';
   
@@ -102,5 +116,6 @@ export function formatResponse(sqlResult: any[], userQuery: string): string {
     response += `${i + 1}. ${values}\n`;
   }
   
+  console.log('🔍 [TEMPLATE] ========== FINE ==========');
   return response.trim();
 }
