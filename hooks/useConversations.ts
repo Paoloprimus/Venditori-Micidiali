@@ -236,6 +236,7 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
             
           } catch (error) {
             console.error('❌ [DECRYPT-BATCH] ERROR decryptFields:', error);
+            console.error('❌ [DECRYPT-BATCH] Error message:', (error as Error).message);
             console.error('❌ [DECRYPT-BATCH] Stack:', (error as Error).stack);
             clientName = 'Cliente sconosciuto';
           }
