@@ -413,6 +413,12 @@ export function useConversations(opts: Options = {}) {
     }
   }
 
+  async function handleSelectConv(c: Conv) {
+    setCurrentConv({ id: c.id, title: c.title });
+    await loadMessages(c.id);
+    await refreshUsage(c.id);
+  }
+
   useEffect(() => {
     (async () => {
       try {
@@ -435,6 +441,7 @@ export function useConversations(opts: Options = {}) {
 
   return {
     bubbles,
+    setBubbles,
     input,
     setInput,
     usage,
@@ -442,17 +449,21 @@ export function useConversations(opts: Options = {}) {
     setServerError,
     modelBadge,
     currentConv,
+    setCurrentConv,
     taRef,
     threadRef,
     endRef,
     autoResize,
+    autoTitleRome,
     ensureConversation,
     createConversation,
+    loadMessages,
     send,
     sendDirectly,
     switchConversation,
     deleteConversation,
     updateConversationTitle,
     refreshUsage,
+    handleSelectConv,
   };
 }
