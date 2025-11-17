@@ -477,9 +477,18 @@ const { data, error: queryError } = await supabase
       // Parse risultato JSON
       const queryResult = typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
       
+      console.log('[send] 🔍 Query result count:', queryResult.length);
+      if (queryResult.length > 0) {
+        console.log('[send] 🔍 First row keys:', Object.keys(queryResult[0]));
+        console.log('[send] 🔍 First row data:', queryResult[0]);
+        console.log('[send] 🔍 Has id field?', 'id' in queryResult[0]);
+        console.log('[send] 🔍 Has account_id field?', 'account_id' in queryResult[0]);
+      }
+      
       // ⚡ TEMPLATE RISPOSTA (NO LLM Composer)
       const semanticReply = formatResponse(queryResult, content);
       console.log('[send] Response formatted, length:', semanticReply.length);
+      console.log('[send] 🔍 Response preview:', semanticReply.substring(0, 200));
       
       // 🔄 CREA CONTESTO PER PROSSIMA QUERY
       const newContext = {
