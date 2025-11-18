@@ -277,6 +277,27 @@ try {
     }
   }, [cryptoService]);
 
+  // 🔄 FORCE AUTO-UNLOCK: se ready è false ma la passphrase esiste, sblocca
+  useEffect(() => {
+    if (ready) return; // già sbloccato
+    if (typeof window === "undefined") return;
+
+    const pass = sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph");
+    if (!pass) return; // nessuna passphrase salvata
+
+    console.log("[CryptoProvider] 🔄 FORCE AUTO-UNLOCK: passphrase trovata ma crypto non ready");
+    
+    (async () => {
+      try {
+        await unlock(pass);
+        await prewarm(DEFAULT_SCOPES);
+        console.log("[CryptoProvider] ✅ FORCE AUTO-UNLOCK completato");
+      } catch (e) {
+        console.error("[CryptoProvider] ❌ FORCE AUTO-UNLOCK failed:", e);
+      }
+    })();
+  }, [ready, unlock, prewarm]);
+
   // 🧰 Gancio esplicito per sbloccare/prewarmare dal browser (senza toccare /clients)
   useEffect(() => {
     if (typeof window === "undefined") return;
