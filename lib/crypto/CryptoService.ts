@@ -414,17 +414,43 @@ public async decryptJSON(
     // ignora: se fallisce, prosegui con il percorso normale AES-GCM
   }
 
-  // 🔐 percorso normale AES-GCM
+  // 🔐 percorso normale AES-GCM con FALLBACK AAD per dati legacy
   if (!this.scopeCache[scope]) throw new Error(`Scope non inizializzato: ${scope}`);
   const { DEK } = this.scopeCache[scope];
-  const aad = asBytes(`${table}|${field}|${recordId}`);
-  const plaintext = await aesGcmDecrypt(
-    DEK,
-    fromBase64Safe(iv_b64),
-    fromBase64Safe(enc_b64),
-    aad
-  );
-  return JSON.parse(new TextDecoder().decode(plaintext));
+  
+  // Prova 3 formati AAD in ordine (per compatibilità con dati vecchi)
+  const aadFormats = [
+    `${table}|${field}|${recordId}`,  // Formato attuale
+    `${table}|${field}`,               // Formato legacy senza recordId
+    '',                                 // Nessun AAD (formato molto vecchio)
+  ];
+  
+  const ivBytes = fromBase64Safe(iv_b64);
+  const encBytes = fromBase64Safe(enc_b64);
+  
+  for (let i = 0; i < aadFormats.length; i++) {
+    try {
+      const aad = aadFormats[i] ? asBytes(aadFormats[i]) : undefined;
+      const plaintext = await aesGcmDecrypt(DEK, ivBytes, encBytes, aad);
+      
+      // Se arriviamo qui, la decriptazione ha avuto successo
+      if (i > 0) {
+        console.warn(`⚠️ [CryptoService] Decriptato con AAD legacy (formato ${i}): ${aadFormats[i] || 'vuoto'}`);
+      }
+      
+      return JSON.parse(new TextDecoder().decode(plaintext));
+    } catch (error) {
+      // Se non è l'ultimo tentativo, continua a provare
+      if (i < aadFormats.length - 1) {
+        continue;
+      }
+      // Ultimo tentativo fallito, lancia l'errore originale
+      throw error;
+    }
+  }
+  
+  // Non dovrebbe mai arrivare qui, ma per sicurezza
+  throw new Error('Decriptazione fallita con tutti i formati AAD');
 }
 
   /** 4) Blind Index (uguaglianza) */
