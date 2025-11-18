@@ -36,13 +36,49 @@ export async function POST(req: NextRequest) {
     
     const supabase = getSupabaseAdmin();
     
-    console.log('🔍 [API-BATCH] Query diretta su accounts (dati già in base64)...');
+    console.log('🔍 [API-BATCH] Query diretta su accounts...');
     
-    // ✅ Query DIRETTA - i dati in TEXT sono già in base64
-    const { data, error } = await supabase
+    // ✅ Query DIRETTA per ottenere i dati raw
+    const { data: rawData, error } = await supabase
       .from('accounts')
       .select('id, name_enc, name_iv, name_bi')
       .in('id', accountIds);
+    
+    if (error) {
+      console.error('❌ [API-BATCH] Supabase error:', error);
+      return NextResponse.json(
+        { error: 'Database query failed', details: error.message }, 
+        { status: 500 }
+      );
+    }
+    
+    // 🔄 Converti hex PostgreSQL → base64 per compatibilità frontend
+    const data = rawData?.map(account => {
+      const converted: any = { ...account };
+      
+      // Converti name_enc da hex a base64
+      if (account.name_enc && typeof account.name_enc === 'string' && account.name_enc.startsWith('\\x')) {
+        const hexStr = account.name_enc.slice(2); // rimuovi '\x'
+        const bytes = Buffer.from(hexStr, 'hex');
+        converted.name_enc = bytes.toString('base64');
+      }
+      
+      // Converti name_iv da hex a base64
+      if (account.name_iv && typeof account.name_iv === 'string' && account.name_iv.startsWith('\\x')) {
+        const hexStr = account.name_iv.slice(2);
+        const bytes = Buffer.from(hexStr, 'hex');
+        converted.name_iv = bytes.toString('base64');
+      }
+      
+      // Converti name_bi da hex a base64 (se presente)
+      if (account.name_bi && typeof account.name_bi === 'string' && account.name_bi.startsWith('\\x')) {
+        const hexStr = account.name_bi.slice(2);
+        const bytes = Buffer.from(hexStr, 'hex');
+        converted.name_bi = bytes.toString('base64');
+      }
+      
+      return converted;
+    });
     
     if (error) {
       console.error('❌ [API-BATCH] Supabase error:', error);
