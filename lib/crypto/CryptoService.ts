@@ -340,12 +340,14 @@ constructor(sb?: SupabaseClient, accountId: string | null = null) {
     const user_id = await this.getUserId();
 
     // ✅ CERCA SOLO LE CHIAVI DELL'UTENTE CORRENTE
+    // ⚠️ IMPORTANTE: prende la chiave PIÙ VECCHIA (ascending: true) perché i dati legacy
+    // sono stati cifrati con la prima chiave creata, non con l'ultima!
     const { data: row, error } = await this.sb
       .from("encryption_keys")
       .select("id, user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, created_at")
       .eq("user_id", user_id)
       .eq("scope", scope)
-      .order("created_at", { ascending: false })
+      .order("created_at", { ascending: true })  // ✅ PIÙ VECCHIA = prima usata
       .limit(1)
       .maybeSingle();
 
