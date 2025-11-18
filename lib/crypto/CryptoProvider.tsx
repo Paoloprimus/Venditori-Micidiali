@@ -176,7 +176,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
       // ✅ FIX: Salva passphrase in sessionStorage per auto-unlock successivi
       if (typeof window !== "undefined") {
         try {
-          sessionStorage.setItem("repping:pph", passphrase);
+          localStorage.setItem("repping:pph", passphrase);
           console.log("[CryptoProvider] ✅ Passphrase salvata in sessionStorage per auto-unlock");
         } catch (e) {
           console.error("[CryptoProvider] ❌ Errore salvataggio passphrase:", e);
