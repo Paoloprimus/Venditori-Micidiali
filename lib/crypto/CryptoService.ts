@@ -489,7 +489,12 @@ public async decryptJSON(
           try {
             const plain = await this.decryptJSON(scope, table, field, rowId, enc_b64, iv_b64);
             out[field] = typeof plain === "string" ? plain : JSON.stringify(plain);
-          } catch {
+          } catch (err) {
+            console.error(`❌ [CryptoService] decryptJSON FAILED for field "${field}":`, err);
+            console.error(`❌ [CryptoService] Error message:`, (err as Error).message);
+            console.error(`❌ [CryptoService] Stack:`, (err as Error).stack);
+            console.error(`❌ [CryptoService] enc_b64 (first 50):`, enc_b64?.substring(0, 50));
+            console.error(`❌ [CryptoService] iv_b64 (first 50):`, iv_b64?.substring(0, 50));
             out[field] = null; // errore decifratura → campo nullo
           }
         }
