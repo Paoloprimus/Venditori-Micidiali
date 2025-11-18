@@ -36,13 +36,13 @@ export async function POST(req: NextRequest) {
     
     const supabase = getSupabaseAdmin();
     
-    console.log('🔍 [API-BATCH] Chiamo get_accounts_base64...');
+    console.log('🔍 [API-BATCH] Query diretta su accounts (dati già in base64)...');
     
-    // ✅ Usa funzione RPC che converte bytea → base64
+    // ✅ Query DIRETTA - i dati in TEXT sono già in base64
     const { data, error } = await supabase
-      .rpc('get_accounts_base64', {
-        account_ids: accountIds
-      });
+      .from('accounts')
+      .select('id, name_enc, name_iv, name_bi')
+      .in('id', accountIds);
     
     if (error) {
       console.error('❌ [API-BATCH] Supabase error:', error);
