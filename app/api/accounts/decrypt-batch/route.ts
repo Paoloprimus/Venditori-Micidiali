@@ -60,7 +60,7 @@ export async function POST(req: NextRequest) {
       if (account.name_enc && typeof account.name_enc === 'string' && account.name_enc.startsWith('\\x')) {
         const hexStr = account.name_enc.slice(2); // rimuovi '\x'
         const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_enc = bytes.toString('base64');
+        converted.name_enc = bytes.toString('utf8');
       }
       
       // Converti name_iv da hex a base64
