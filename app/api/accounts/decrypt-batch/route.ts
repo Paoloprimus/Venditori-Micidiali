@@ -83,7 +83,7 @@ export async function POST(req: NextRequest) {
     if (error) {
       console.error('❌ [API-BATCH] Supabase error:', error);
       return NextResponse.json(
-        { error: 'Database query failed', details: error.message }, 
+        { error: 'Database query failed', details: (error as any)?.message || String(error) }, 
         { status: 500 }
       );
     }
