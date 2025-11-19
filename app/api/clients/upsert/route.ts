@@ -38,7 +38,10 @@ type UpsertClientBody = {
   latitude?: string | number;
   longitude?: string | number;
   
-  // 📝 Campi in chiaro per LLM
+  // 📝 Note in chiaro (campo separato)
+  notes?: string;
+  
+  // 📝 Campi in chiaro per LLM (custom - per ora vuoto)
   custom?: CustomFields;
 };
 
@@ -152,6 +155,11 @@ export async function POST(req: Request) {
         updateData.longitude = body.longitude;
       }
 
+      // 📝 Aggiorna notes se presente
+      if (body.notes !== undefined) {
+        updateData.notes = body.notes || null;
+      }
+
       const { data: updated, error: upErr } = await supabase
         .from("accounts")
         .update(updateData)
@@ -213,6 +221,11 @@ export async function POST(req: Request) {
       }
       if (body.longitude !== undefined && body.longitude !== null) {
         insertData.longitude = body.longitude;
+      }
+
+      // 📝 Aggiungi notes se presente
+      if (body.notes !== undefined) {
+        insertData.notes = body.notes || null;
       }
 
       const { data: inserted, error: insErr } = await supabase
