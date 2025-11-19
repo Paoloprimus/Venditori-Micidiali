@@ -108,44 +108,59 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
   
   console.log('🔍 [DECRYPT-PARSE] UUID da recuperare via API:', uuidsToFetch.length);
   
-  // ✅ Recupera dati cifrati in batch tramite API
+  // ✅ Recupera dati cifrati in batch tramite QUERY DIRETTA (come fa /clients)
   let accountsData = new Map<string, any>();
   
   if (uuidsToFetch.length > 0) {
-    console.log('🔍 [DECRYPT-API] Chiamo /api/accounts/decrypt-batch con', uuidsToFetch.length, 'UUID');
+    console.log('🔍 [DECRYPT-DB] Query diretta a Supabase per', uuidsToFetch.length, 'UUID');
     
     try {
-      const response = await fetch('/api/accounts/decrypt-batch', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountIds: uuidsToFetch })
-      });
+      // Query diretta come in /clients/page.tsx
+      const { data, error } = await supabase
+        .from('accounts')
+        .select('id, name_enc, name_iv, name_bi')
+        .in('id', uuidsToFetch);
       
-      console.log('🔍 [DECRYPT-API] Response status:', response.status);
-      
-      if (!response.ok) {
-        console.error('❌ [DECRYPT-API] Batch fetch failed:', response.status);
+      if (error) {
+        console.error('❌ [DECRYPT-DB] Supabase error:', error);
       } else {
-        const { accounts } = await response.json();
-        console.log('✅ [DECRYPT-API] Fetched accounts:', accounts?.length);
+        console.log('✅ [DECRYPT-DB] Fetched accounts:', data?.length);
         
-        for (const acc of accounts || []) {
-          accountsData.set(acc.id, acc);
-          console.log('🔍 [DECRYPT-API] Account stored:', {
+        // Converti hex a base64 usando lo STESSO metodo di /clients
+        const hexToBase64 = (hexStr: any): string => {
+          if (!hexStr || typeof hexStr !== 'string') return '';
+          if (!hexStr.startsWith('\\x')) return hexStr; // Se NON è hex, ritorna così com'è
+          
+          const hex = hexStr.slice(2);
+          const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+          return bytes;
+        };
+        
+        for (const acc of data || []) {
+          // Converti hex -> base64 prima di memorizzare
+          const converted = {
+            id: acc.id,
+            name_enc: hexToBase64(acc.name_enc),
+            name_iv: hexToBase64(acc.name_iv),
+            name_bi: hexToBase64(acc.name_bi)
+          };
+          
+          accountsData.set(acc.id, converted);
+          console.log('🔍 [DECRYPT-DB] Account stored:', {
             id: acc.id.substring(0, 8) + '...',
-            hasNameEnc: !!acc.name_enc,
-            nameEncLength: acc.name_enc?.length,
-            nameEncPrefix: acc.name_enc?.substring(0, 20),
-            hasNameIv: !!acc.name_iv,
-            hasNameBi: !!acc.name_bi
+            hasNameEnc: !!converted.name_enc,
+            nameEncLength: converted.name_enc?.length,
+            nameEncPrefix: converted.name_enc?.substring(0, 20),
+            hasNameIv: !!converted.name_iv,
+            hasNameBi: !!converted.name_bi
           });
         }
       }
     } catch (error) {
-      console.error('❌ [DECRYPT-API] Batch fetch error:', error);
+      console.error('❌ [DECRYPT-DB] Batch fetch error:', error);
     }
   } else {
-    console.log('✅ [DECRYPT-API] Tutti i placeholder hanno dati inline, skip API call');
+    console.log('✅ [DECRYPT-DB] Tutti i placeholder hanno dati inline, skip DB query');
   }
   
   let result = text;
