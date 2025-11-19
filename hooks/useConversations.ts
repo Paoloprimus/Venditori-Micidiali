@@ -65,10 +65,17 @@ export async function decryptClientPlaceholders(text: string): Promise<string> {
   
   // ✅ WAIT: Assicurati che lo scope 'table:accounts' sia inizializzato
   try {
+    // 🔥 FORZA reload scope dal DB (ignora cache)
+    console.log('🔍 [DECRYPT-SCOPE] FORZO reset cache scope...');
+    if ((crypto as any).scopeCache) {
+      delete (crypto as any).scopeCache['table:accounts'];
+      console.log('✅ [DECRYPT-SCOPE] Cache scope cancellata');
+    }
+    
     console.log('🔍 [DECRYPT-SCOPE] Inizializzo scope table:accounts...');
     if (typeof crypto.getOrCreateScopeKeys === 'function') {
       await crypto.getOrCreateScopeKeys('table:accounts');
-      console.log('✅ [DECRYPT-SCOPE] Scope inizializzato');
+      console.log('✅ [DECRYPT-SCOPE] Scope inizializzato dal DB');
     }
   } catch (error) {
     console.error('❌ [DECRYPT-SCOPE] Errore inizializzazione scope:', error);
