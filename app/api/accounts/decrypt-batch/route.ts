@@ -2,6 +2,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createSupabaseServer } from "@/lib/supabase/server";
 
 /**
  * Endpoint per recuperare dati cifrati degli account in batch
@@ -10,10 +11,25 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
  */
 export async function POST(req: NextRequest) {
   try {
+    // ✅ STEP 1: Autentica l'utente
+    const supabaseAuth = await createSupabaseServer();
+    const { data: { user } } = await supabaseAuth.auth.getUser();
+    
+    if (!user) {
+      console.error('❌ [API-BATCH] Utente non autenticato');
+      return NextResponse.json(
+        { error: "Non autenticato" }, 
+        { status: 401 }
+      );
+    }
+    
+    const userId = user.id;
+    
     const body = await req.json();
     const accountIds: string[] = body?.accountIds || [];
     
     console.log('🔍 [API-BATCH] ========== INIZIO ==========');
+    console.log('🔍 [API-BATCH] User ID:', userId.substring(0, 8) + '...');
     console.log('🔍 [API-BATCH] Request per', accountIds.length, 'account IDs');
     console.log('🔍 [API-BATCH] IDs:', accountIds.map(id => id.substring(0, 8) + '...'));
     
@@ -36,13 +52,14 @@ export async function POST(req: NextRequest) {
     
     const supabase = getSupabaseAdmin();
     
-    console.log('🔍 [API-BATCH] Query diretta su accounts...');
+    console.log('🔍 [API-BATCH] Query diretta su accounts (con filtro user_id)...');
     
-    // ✅ Query DIRETTA per ottenere i dati raw
+    // ✅ Query DIRETTA con FILTRO USER_ID
     const { data: rawData, error } = await supabase
       .from('accounts')
       .select('id, name_enc, name_iv, name_bi')
-      .in('id', accountIds);
+      .in('id', accountIds)
+      .eq('user_id', userId);  // ✅ AGGIUNTO!
     
     if (error) {
       console.error('❌ [API-BATCH] Supabase error:', error);
@@ -80,14 +97,6 @@ export async function POST(req: NextRequest) {
       return converted;
     });
     
-    if (error) {
-      console.error('❌ [API-BATCH] Supabase error:', error);
-      return NextResponse.json(
-        { error: 'Database query failed', details: (error as any)?.message || String(error) }, 
-        { status: 500 }
-      );
-    }
-    
     console.log('✅ [API-BATCH] Query OK, accounts trovati:', data?.length || 0);
     
     if (data && data.length > 0) {
@@ -104,7 +113,7 @@ export async function POST(req: NextRequest) {
         nameBiPrefix: data[0].name_bi?.substring(0, 30)
       });
     } else {
-      console.warn('⚠️ [API-BATCH] Nessun account trovato nel DB');
+      console.warn('⚠️ [API-BATCH] Nessun account trovato nel DB per questo user_id');
     }
     
     console.log('🔍 [API-BATCH] ========== FINE ==========');
