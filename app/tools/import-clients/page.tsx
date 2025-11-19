@@ -364,7 +364,7 @@ export default function ImportClientsPage() {
         
         if (client.name) fieldsToEncrypt.name = client.name;
         if (client.contact_name) fieldsToEncrypt.contact_name = client.contact_name;
-        if (client.city) fieldsToEncrypt.city = client.city;  // ✅ Ora cifrato!
+        // city NON viene cifrata - va in chiaro per Text-to-SQL
         if (client.phone) fieldsToEncrypt.phone = client.phone;
         if (client.address) fieldsToEncrypt.address = client.address;
         if (client.email) fieldsToEncrypt.email = client.email;
@@ -390,12 +390,18 @@ export default function ImportClientsPage() {
           name_bi: nameBlindIndex  // ✅ OBBLIGATORIO!
         };
         
-// Aggiungi custom (solo notes in chiaro)
-const custom: any = {};
-if (client.notes) custom.notes = client.notes;
-if (Object.keys(custom).length > 0) {
-  payload.custom = custom;
+// Aggiungi city in chiaro (per Text-to-SQL)
+if (client.city) {
+  payload.city = client.city;
 }
+
+// Aggiungi notes in chiaro (campo separato)
+if (client.notes) {
+  payload.notes = client.notes;
+}
+
+// Custom vuoto per ora
+payload.custom = {};
 
 // Aggiungi tipo_locale come campo separato (non in custom)
 if (client.tipo_locale) {
