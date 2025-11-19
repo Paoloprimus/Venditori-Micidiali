@@ -7,7 +7,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 /**
  * Endpoint per recuperare dati cifrati degli account in batch
  * Usa service_role_key per bypassare RLS
- * ✅ Converte bytea → base64 per compatibilità con CryptoService
+ * ✅ Converte bytea → utf8 per ottenere le stringhe base64 originali
  */
 export async function POST(req: NextRequest) {
   try {
@@ -59,7 +59,7 @@ export async function POST(req: NextRequest) {
       .from('accounts')
       .select('id, name_enc, name_iv, name_bi')
       .in('id', accountIds)
-      .eq('user_id', userId);  // ✅ AGGIUNTO!
+      .eq('user_id', userId);
     
     if (error) {
       console.error('❌ [API-BATCH] Supabase error:', error);
@@ -69,29 +69,29 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // 🔄 Converti hex PostgreSQL → base64 per compatibilità frontend
+    // 🔄 Converti hex PostgreSQL → UTF-8 per ottenere le stringhe base64 originali
     const data = rawData?.map(account => {
       const converted: any = { ...account };
       
-      // Converti name_enc da hex a base64
+      // ✅ TUTTI convertiti con utf8 (non base64!)
+      // Perché nel DB sono salvate stringhe base64, PostgreSQL le ritorna come hex
+      
       if (account.name_enc && typeof account.name_enc === 'string' && account.name_enc.startsWith('\\x')) {
-        const hexStr = account.name_enc.slice(2); // rimuovi '\x'
+        const hexStr = account.name_enc.slice(2);
         const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_enc = bytes.toString('utf8');
+        converted.name_enc = bytes.toString('utf8');  // ✅ utf8
       }
       
-      // Converti name_iv da hex a base64
       if (account.name_iv && typeof account.name_iv === 'string' && account.name_iv.startsWith('\\x')) {
         const hexStr = account.name_iv.slice(2);
         const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_iv = bytes.toString('base64');
+        converted.name_iv = bytes.toString('utf8');  // ✅ utf8 (NON base64!)
       }
       
-      // Converti name_bi da hex a base64 (se presente)
       if (account.name_bi && typeof account.name_bi === 'string' && account.name_bi.startsWith('\\x')) {
         const hexStr = account.name_bi.slice(2);
         const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_bi = bytes.toString('base64');
+        converted.name_bi = bytes.toString('utf8');  // ✅ utf8 (NON base64!)
       }
       
       return converted;
