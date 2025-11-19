@@ -7,7 +7,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 /**
  * Endpoint per recuperare dati cifrati degli account in batch
  * Usa service_role_key per bypassare RLS
- * ✅ Converte bytea → utf8 per ottenere le stringhe base64 originali
+ * ✅ Gestisce TUTTI i formati: hex PostgreSQL, Buffer JSON, stringhe dirette
  */
 export async function POST(req: NextRequest) {
   try {
@@ -69,29 +69,68 @@ export async function POST(req: NextRequest) {
       );
     }
     
-    // 🔄 Converti hex PostgreSQL → UTF-8 per ottenere le stringhe base64 originali
+    // 🔄 Converti in formato base64 stringa per compatibilità frontend
     const data = rawData?.map(account => {
       const converted: any = { ...account };
       
-      // ✅ TUTTI convertiti con utf8 (non base64!)
-      // Perché nel DB sono salvate stringhe base64, PostgreSQL le ritorna come hex
-      
-      if (account.name_enc && typeof account.name_enc === 'string' && account.name_enc.startsWith('\\x')) {
-        const hexStr = account.name_enc.slice(2);
-        const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_enc = bytes.toString('utf8');  // ✅ utf8
+      // ✅ Gestisci TUTTI i formati possibili per name_enc
+      if (account.name_enc) {
+        // CASO 1: Oggetto Buffer JSON da PostgreSQL
+        if (typeof account.name_enc === 'object' && (account.name_enc as any).type === 'Buffer') {
+          console.log('🔍 [API-BATCH] Formato Buffer JSON rilevato per', account.id.substring(0, 8));
+          const bufferData = (account.name_enc as any).data;
+          const bytes = Buffer.from(bufferData);
+          converted.name_enc = bytes.toString('utf8');
+        }
+        // CASO 2: Hex PostgreSQL con prefisso \x
+        else if (typeof account.name_enc === 'string' && account.name_enc.startsWith('\\x')) {
+          console.log('🔍 [API-BATCH] Formato hex rilevato per', account.id.substring(0, 8));
+          const hexStr = account.name_enc.slice(2);
+          const bytes = Buffer.from(hexStr, 'hex');
+          converted.name_enc = bytes.toString('utf8');
+        }
+        // CASO 3: Stringa diretta (già in formato corretto)
+        else if (typeof account.name_enc === 'string') {
+          console.log('🔍 [API-BATCH] Formato stringa diretta per', account.id.substring(0, 8));
+          converted.name_enc = account.name_enc;
+        }
+        else {
+          console.warn('⚠️ [API-BATCH] Formato sconosciuto per name_enc:', typeof account.name_enc);
+        }
       }
       
-      if (account.name_iv && typeof account.name_iv === 'string' && account.name_iv.startsWith('\\x')) {
-        const hexStr = account.name_iv.slice(2);
-        const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_iv = bytes.toString('utf8');  // ✅ utf8 (NON base64!)
+      // ✅ Gestisci name_iv
+      if (account.name_iv) {
+        if (typeof account.name_iv === 'object' && (account.name_iv as any).type === 'Buffer') {
+          const bufferData = (account.name_iv as any).data;
+          const bytes = Buffer.from(bufferData);
+          converted.name_iv = bytes.toString('utf8');
+        }
+        else if (typeof account.name_iv === 'string' && account.name_iv.startsWith('\\x')) {
+          const hexStr = account.name_iv.slice(2);
+          const bytes = Buffer.from(hexStr, 'hex');
+          converted.name_iv = bytes.toString('utf8');
+        }
+        else if (typeof account.name_iv === 'string') {
+          converted.name_iv = account.name_iv;
+        }
       }
       
-      if (account.name_bi && typeof account.name_bi === 'string' && account.name_bi.startsWith('\\x')) {
-        const hexStr = account.name_bi.slice(2);
-        const bytes = Buffer.from(hexStr, 'hex');
-        converted.name_bi = bytes.toString('utf8');  // ✅ utf8 (NON base64!)
+      // ✅ Gestisci name_bi
+      if (account.name_bi) {
+        if (typeof account.name_bi === 'object' && (account.name_bi as any).type === 'Buffer') {
+          const bufferData = (account.name_bi as any).data;
+          const bytes = Buffer.from(bufferData);
+          converted.name_bi = bytes.toString('utf8');
+        }
+        else if (typeof account.name_bi === 'string' && account.name_bi.startsWith('\\x')) {
+          const hexStr = account.name_bi.slice(2);
+          const bytes = Buffer.from(hexStr, 'hex');
+          converted.name_bi = bytes.toString('utf8');
+        }
+        else if (typeof account.name_bi === 'string') {
+          converted.name_bi = account.name_bi;
+        }
       }
       
       return converted;
@@ -103,6 +142,7 @@ export async function POST(req: NextRequest) {
       console.log('🔍 [API-BATCH] Primo account:', {
         id: data[0].id?.substring(0, 8) + '...',
         hasNameEnc: !!data[0].name_enc,
+        nameEncType: typeof data[0].name_enc,
         nameEncLength: data[0].name_enc?.length,
         nameEncPrefix: data[0].name_enc?.substring(0, 30),
         hasNameIv: !!data[0].name_iv,
