@@ -44,6 +44,9 @@ type RawAccount = {
   vat_number_enc?: any; vat_number_iv?: any;
   address_enc?: any; address_iv?: any;
   
+  // plain text
+  notes?: string;
+  
   // custom (plain text per LLM)
   custom?: any;
 };
@@ -253,6 +256,7 @@ const { data, error } = await supabase
     "phone_enc,phone_iv," +
     "vat_number_enc,vat_number_iv," +
     "address_enc,address_iv," +
+    "notes," +
     "custom"
   )
   .order("created_at", { ascending: false });
@@ -332,10 +336,9 @@ const decAny = await (crypto as any).decryptFields(
 
         const dec = toObj(decAny);
 
-        // ✅ Estrai note dal custom (sono in chiaro!)
-        const customObj = typeof r.custom === 'string' ? JSON.parse(r.custom) : (r.custom || {});
-        const notes = customObj.notes || "";
-        const city = r.city || customObj.city || "";
+        // ✅ Estrai note dal campo separato (in chiaro!)
+        const notes = r.notes || "";
+        const city = r.city || "";
         const tipoLocale = r.tipo_locale || "";
 
 plain.push({
