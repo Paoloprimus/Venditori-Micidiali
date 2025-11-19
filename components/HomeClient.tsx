@@ -7,6 +7,7 @@ import { supabase } from "../lib/supabase/client";
 import TopBar from "./home/TopBar";
 import Thread from "./home/Thread";
 import Composer from "./home/Composer";
+import PassphraseDebugPanel from "./PassphraseDebugPanel";
 
 import { runChatTurn_v2 as runPlanner } from "../app/chat/planner";
 import { useConversation } from "../app/context/ConversationContext";
@@ -647,6 +648,9 @@ if (pendingIntent) {
           Invia (planner)
         </button>
       </div>
+
+      {/* 🔍 DEBUG PANEL */}
+      <PassphraseDebugPanel />
 
       {/* ✅ MODIFICA 4: Drawer aggiornato */}
       <div style={{ position: "relative", zIndex: 2001 }}>
