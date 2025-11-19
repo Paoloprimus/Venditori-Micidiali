@@ -368,22 +368,40 @@ constructor(sb?: SupabaseClient, accountId: string | null = null) {
     const { wrapped: dek_wrapped, nonce: dek_wrapped_iv } = await wrapKey(DEK, this.MK);
     const { wrapped: bi_wrapped,  nonce: bi_wrapped_iv  } = await wrapKey(BI,  this.MK);
 
-// Calcola un fingerprint dalla MK
-const mkHash = await crypto.subtle.digest('SHA-256', this.MK!);
-const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
+    // Calcola un fingerprint dalla MK
+    const mkHash = await crypto.subtle.digest('SHA-256', this.MK!);
+    const kek_fingerprint = toBase64(new Uint8Array(mkHash)).substring(0, 16);
     
-const { error: insErr } = await this.sb
-  .from("encryption_keys")
-  .upsert(
-    { user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint },
-    { onConflict: "user_id,scope", ignoreDuplicates: true }
-  );
+    const { error: insErr } = await this.sb
+      .from("encryption_keys")
+      .upsert(
+        { user_id, scope, dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv, kek_fingerprint },
+        { onConflict: "user_id,scope", ignoreDuplicates: true }
+      );
 
-// accetta i “duplicati” come OK: niente eccezione nei casi di conflitto
-if (insErr && insErr.code !== "23505" && insErr.code !== "409") throw insErr;
+    // accetta i "duplicati" come OK: niente eccezione nei casi di conflitto
+    if (insErr && insErr.code !== "23505" && insErr.code !== "409") throw insErr;
 
+    // ✅ FIX CRITICO: Dopo l'upsert, RILEGGI dal DB per usare le chiavi corrette
+    // Se la riga esisteva già, l'upsert non ha inserito nulla e le chiavi random
+    // generate sopra NON devono essere usate!
+    const { data: finalRow, error: readErr } = await this.sb
+      .from("encryption_keys")
+      .select("dek_wrapped, dek_wrapped_iv, bi_wrapped, bi_wrapped_iv")
+      .eq("user_id", user_id)
+      .eq("scope", scope)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .single();
 
-    this.scopeCache[scope] = { DEK, BI };
+    if (readErr) throw readErr;
+    if (!finalRow) throw new Error("Impossibile leggere chiavi appena create/esistenti");
+
+    // Unwrap le chiavi dal DB (non quelle random!)
+    const finalDEK = await unwrapKey(finalRow.dek_wrapped, finalRow.dek_wrapped_iv, this.MK);
+    const finalBI = finalRow.bi_wrapped ? await unwrapKey(finalRow.bi_wrapped, finalRow.bi_wrapped_iv!, this.MK) : null;
+    
+    this.scopeCache[scope] = { DEK: finalDEK, BI: finalBI };
   }
 
   /** 3) Encrypt/Decrypt JSON */
