@@ -5,13 +5,14 @@ import { useState } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import {
-  generateReportPlanning,
+  generateReportVisite,
   savePdfToDevice,
   saveDocumentMetadata,
-  generatePlanningFilename,
+  generateVisiteFilename,
   formatDateItalian,
-  type ReportPlanningData,
-  type VisitaDetail
+  type ReportVisiteData,
+  type VisitaDetail,
+  type DocumentMetadata
 } from '@/lib/pdf';
 
 type Props = {
@@ -112,55 +113,55 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
         }
       }
 
-      // 5. Prepara dati per report
-      const visite: VisitaDetail[] = visitsData.map((v, idx) => {
+      // 5. Prepara dati per report (nuovo formato)
+      const visite: VisitaDetail[] = visitsData.map((v) => {
         const client = clientsMap.get(v.account_id);
         
-        // Calcola giorni da ultima visita
-        let giorniDaUltimaVisita: number | null = null;
-        if (client?.ultimaVisita) {
-          const oggi = new Date(data);
-          const ultima = new Date(client.ultimaVisita);
-          giorniDaUltimaVisita = Math.floor((oggi.getTime() - ultima.getTime()) / (1000 * 60 * 60 * 24));
-        }
+        // Formatta data e ora
+        const dataOra = new Date(v.data_visita).toLocaleString('it-IT', {
+          day: '2-digit',
+          month: '2-digit',
+          year: 'numeric',
+          hour: '2-digit',
+          minute: '2-digit'
+        });
 
         return {
-          ordine: idx + 1,
+          dataOra,
           nomeCliente: client?.name || 'N/A',
           cittaCliente: client?.city || '',
-          ultimaVisita: client?.ultimaVisita ? new Date(client.ultimaVisita).toLocaleDateString('it-IT') : null,
-          giorniDaUltimaVisita,
-          fatturato: v.importo_vendita ? parseFloat(v.importo_vendita) : null,
+          tipo: v.tipo || 'visita',
           esito: v.esito || 'altro',
-          noteVisita: v.notes,
+          importoVendita: v.importo_vendita ? parseFloat(v.importo_vendita) : null,
+          noteVisita: v.notes || null,
         };
       });
 
-      // Calcola totali
-      const numCompletate = visite.filter(v => v.esito === 'ordine_acquisito').length;
-      const numSaltate = visite.filter(v => v.esito === 'altro').length;
-      const fatturatoTotale = visite.reduce((sum, v) => sum + (v.fatturato || 0), 0);
+      // Calcola statistiche
+      const accountIdsVisitati = [...new Set(visite.map((_, idx) => visitsData[idx].account_id))];
+      const numClienti = accountIdsVisitati.length;
+      const fatturatoTotale = visite.reduce((sum, v) => sum + (v.importoVendita || 0), 0);
 
       // TODO: Calcolo km (per ora 0, implementare quando avremo coordinate)
       const kmTotali = 0;
 
-      const reportData: ReportPlanningData = {
+      const reportData: ReportVisiteData = {
         nomeAgente: user.email?.split('@')[0] || 'Agente',
-        data: data,
-        dataFormattata: formatDateItalian(data),
+        dataInizio: data,
+        dataFine: data, // Stesso giorno
+        periodoFormattato: formatDateItalian(data),
         numVisite: visite.length,
-        numCompletate,
-        numSaltate,
+        numClienti,
         fatturatoTotale,
         kmTotali,
         visite,
       };
 
       // 6. Genera PDF
-      const pdfBlob = await generateReportPlanning(reportData);
+      const pdfBlob = await generateReportVisite(reportData);
 
       // 7. Salva su device
-      const filename = generatePlanningFilename(data);
+      const filename = generateVisiteFilename(data, data);
       const filePath = await savePdfToDevice(pdfBlob, filename);
 
       if (!filePath) {
@@ -170,17 +171,21 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
       }
 
       // 8. Salva metadata nel DB
+      const metadataForDB: DocumentMetadata = {
+        data_inizio: data,
+        data_fine: data,
+        num_visite: visite.length,
+        num_clienti: numClienti,
+        fatturato_tot: fatturatoTotale,
+        km_tot: kmTotali,
+      };
+
       await saveDocumentMetadata({
         document_type: 'report_planning',
-        title: `Report Planning - ${formatDateItalian(data)}`,
+        title: `Report Visite - ${formatDateItalian(data)}`,
         filename,
         file_path: filePath,
-        metadata: {
-          data,
-          num_visite: visite.length,
-          fatturato_tot: fatturatoTotale,
-          km_tot: kmTotali,
-        },
+        metadata: metadataForDB,
         file_size: pdfBlob.size,
       });
 
@@ -250,7 +255,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
             boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
           }}>
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>
-              📄 Genera Report Planning
+              📄 Genera Report Visite
             </h2>
 
             <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
