@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import GenerateReportModal from './GenerateReportModal';
 import ListaClientiForm from './ListaClientiForm';
+import GenerateReportVisiteButton from './GenerateReportVisiteButton';
 import {
   generateReportListaClienti,
   savePdfToDevice,
@@ -17,7 +18,7 @@ import {
   type DocumentMetadata 
 } from '@/lib/pdf';
 
-type ReportType = 'planning' | 'lista_visite' | 'lista_fatturato' | 'lista_prodotto' | 'lista_km';
+type ReportType = 'visite' | 'lista_visite' | 'lista_fatturato' | 'lista_prodotto' | 'lista_km';
 
 type Props = {
   onSuccess?: () => void;
@@ -29,10 +30,9 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
 
   async function handleSelectReport(type: ReportType) {
-    if (type === 'planning') {
-      // Redirect a pagina planning o modale seleziona data
-      alert('Per Report Planning, vai alla pagina di esecuzione planning e genera da lì');
-      setShowModal(false);
+    if (type === 'visite') {
+      // Mostra form report visite
+      setSelectedReportType(type);
       return;
     }
 
@@ -305,8 +305,19 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
         />
       )}
 
+      {/* Form Report Visite */}
+      {selectedReportType === 'visite' && (
+        <GenerateReportVisiteButton
+          onClose={() => {
+            setSelectedReportType(null);
+            setShowModal(false);
+          }}
+          onSuccess={onSuccess}
+        />
+      )}
+
       {/* Form configurazione lista */}
-      {selectedReportType && selectedReportType !== 'planning' && (
+      {selectedReportType && selectedReportType !== 'visite' && (
         <ListaClientiForm
           reportType={selectedReportType as any}
           onBack={() => setSelectedReportType(null)}
