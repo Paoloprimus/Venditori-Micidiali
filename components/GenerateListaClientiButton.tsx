@@ -11,8 +11,9 @@ import {
   savePdfToDevice,
   saveDocumentMetadata,
   generateListaClientiFilename,
-  type ReportListaClientiData,
-  type ClienteListaDetail // Assumo che esista questo tipo in lib/pdf.ts
+  // Rimosso 'ReportListaClientiData' per evitare conflitti, 
+  // usando un type check implicito sull'oggetto passato.
+  type ClienteListaDetail 
 } from '@/lib/pdf';
 
 // AGGIUNTO 'lista_completa'
@@ -49,6 +50,7 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
     try {
       const reportType = formData.type as ReportType;
       
+      // 1. Chiamata API per recuperare i dati (clienti_raw)
       const response = await fetch('/api/clients/lista', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -66,7 +68,7 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
         return;
       }
       
-      // Decifratura dei dati
+      // 2. Decifratura dei dati
       const clienti: ClienteListaDetail[] = [];
       await (crypto as any).getOrCreateScopeKeys('table:accounts'); 
       
@@ -87,26 +89,22 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
                   return acc;
               }, {} as Record<string, string>);
 
-              // ➡️ CORREZIONE ERRORE DI TIPO
-              // Mappa i campi decifrati e grezzi (r) ai campi attesi dal tipo ClienteListaDetail
+              // Allinea i campi al tipo ClienteListaDetail (come corretto precedentemente)
               clienti.push({
                   id: r.id,
-                  // 1. Allinea i nomi dei campi al tipo ClienteListaDetail (es. 'nome' invece di 'name')
                   nome: dec.name || r.name_bi || 'NOME NON DISPONIBILE', 
-                  citta: r.city || '', // Campo 'city' -> 'citta'
+                  citta: r.city || '', 
                   tipo_locale: r.tipo_locale || '',
                   email: dec.email || '',
                   phone: dec.phone || '',
                   vat_number: dec.vat_number || '',
                   
-                  // 2. Allinea i campi di valore e data
-                  numVisite: r.visite || 0, // Campo 'visite' -> 'numVisite'
+                  numVisite: r.visite || 0,
                   fatturato: r.fatturato || 0,
                   km: r.km || 0,
-                  ultimaVisita: r.ultima_visita || null, // Aggiunto per soddisfare il tipo (se non presente in r)
-                  note: r.notes || '', // Aggiunto per soddisfare il tipo (se non presente in r)
+                  ultimaVisita: r.ultima_visita || null,
+                  note: r.notes || '',
                   created_at: r.created_at,
-                  // Mantieni i campi extra che potrebbero non essere nel tipo per ordinamento (se necessario)
                   contact_name: dec.contact_name || '',
               } as ClienteListaDetail);
               
@@ -118,9 +116,7 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
       numClienti = clienti.length;
       visiteTotali = metadata?.visiteTotali || 0;
       
-      // 4. ORDINAMENTO DEI CLIENTI DECIFRATI
-      // Usa i campi allineati ('nome', 'citta', 'fatturato', 'visite', 'km')
-      // Nota: ho corretto 'visite' in 'numVisite' nell'ordinamento, se necessario, basandomi sulla correzione sopra.
+      // 3. ORDINAMENTO DEI CLIENTI DECIFRATI
       const sortBy = formData.ordinaPer === 'visite' ? 'numVisite' : formData.ordinaPer || 'nome';
       const sortDir = formData.ordinaDir === 'desc' ? 'desc' : 'asc';
       
@@ -140,28 +136,31 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
           return 0;
       });
 
-      // 5. Generazione PDF
+      // 4. Generazione PDF
+      // ➡️ CORREZIONE: rimuovo 'report_type' dall'oggetto passato a generateReportListaClienti
       const pdfBlob = await generateReportListaClienti({
-          clienti: clienti,
-          report_type: reportType,
+          clienti: clienti, // L'unico campo noto e richiesto
+          // Se generateReportListaClienti ha bisogno di altri parametri,
+          // questi devono essere aggiunti al tipo ReportListaClientiData in /lib/pdf.ts
       });
       
+      // Uso reportType per il nome del file
       const filename = generateListaClientiFilename(reportType);
 
-      // 6. Salva su dispositivo
+      // 5. Salva su dispositivo
       await savePdfToDevice(pdfBlob, filename);
 
-      // 7. Salva metadati documento su Supabase
+      // 6. Salva metadati documento su Supabase
       await saveDocumentMetadata({
         user_id: (await supabase.auth.getUser()).data.user?.id,
         file_name: filename,
-        report_type: reportType,
+        report_type: reportType, // Qui è corretto usare report_type
         num_clienti: numClienti,
         visite_tot: visiteTotali,
         file_size: pdfBlob.size,
       });
 
-      // 8. Success!
+      // 7. Success!
       alert('✅ Lista generata e salvata!');
       setSelectedReportType(null);
       setShowModal(false);
