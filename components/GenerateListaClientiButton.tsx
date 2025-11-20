@@ -23,43 +23,35 @@ type Props = {
 };
 
 export default function GenerateListaClientiButton({ onSuccess }: Props) {
-  // Ho rimosso l'alias 'crypto' perché non è definito. Usiamo solo 'useCrypto()'
   const { crypto } = useCrypto(); 
   const [showModal, setShowModal] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
 
   async function handleSelectReport(type: ReportType) {
     if (type === 'planning') {
-      // Redirect a pagina planning o modale seleziona data
       alert('Per Report Planning, vai alla pagina di esecuzione planning e genera da lì');
       setShowModal(false);
       return;
     }
 
-    // Per liste clienti (inclusa la nuova lista_completa), mostra form
     setSelectedReportType(type);
   }
 
-  // Funzione che riceve i dati dalla form e genera il PDF
   async function handleGenerateLista(formData: any) {
-    // 1. Check Crittografia
     if (!crypto || typeof crypto.decryptFields !== 'function') {
       alert('Crittografia non disponibile o non sbloccata. Sblocca prima di generare.');
       return;
     }
     
-    // Contatori per metadati
     let numClienti = 0;
     let visiteTotali = 0;
 
     try {
-      // 2. Chiamata API per recuperare i dati (clienti_raw)
       const reportType = formData.type as ReportType;
       
       const response = await fetch('/api/clients/lista', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        // Passiamo tutti i dati della form all'API. Sarà l'API a decidere quali filtri ignorare.
         body: JSON.stringify(formData), 
       });
       
@@ -67,7 +59,6 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
         throw new Error('Errore durante il recupero dei dati: ' + response.statusText);
       }
       
-      // Assumo che l'API restituisca clienti_raw e metadati
       const { clienti_raw, metadata } = await response.json();
       
       if (!clienti_raw || clienti_raw.length === 0) {
@@ -75,20 +66,18 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
         return;
       }
       
-      // 3. Decifratura dei dati
+      // Decifratura dei dati
       const clienti: ClienteListaDetail[] = [];
-      // Assumo che getOrCreateScopeKeys restituisca le chiavi necessarie
       await (crypto as any).getOrCreateScopeKeys('table:accounts'); 
       
       for (const r of clienti_raw) {
           try {
               const recordForDecrypt = { ...r };
               
-              // Decifra solo i campi sensibili
               const decAny = await (crypto as any).decryptFields(
                   "table:accounts", 
                   "accounts", 
-                  r.id, // ID come Associated Data
+                  r.id, 
                   recordForDecrypt,
                   ["name", "contact_name", "email", "phone", "vat_number", "address"]
               );
@@ -98,21 +87,27 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
                   return acc;
               }, {} as Record<string, string>);
 
-              // Popola l'oggetto finale ClienteListaDetail
+              // ➡️ CORREZIONE ERRORE DI TIPO
+              // Mappa i campi decifrati e grezzi (r) ai campi attesi dal tipo ClienteListaDetail
               clienti.push({
                   id: r.id,
-                  name: dec.name || r.name_bi || 'NOME NON DISPONIBILE', 
-                  contact_name: dec.contact_name || '',
-                  city: r.city || '', // Campo in chiaro
-                  tipo_locale: r.tipo_locale || '', // Campo in chiaro
+                  // 1. Allinea i nomi dei campi al tipo ClienteListaDetail (es. 'nome' invece di 'name')
+                  nome: dec.name || r.name_bi || 'NOME NON DISPONIBILE', 
+                  citta: r.city || '', // Campo 'city' -> 'citta'
+                  tipo_locale: r.tipo_locale || '',
                   email: dec.email || '',
                   phone: dec.phone || '',
                   vat_number: dec.vat_number || '',
-                  // Campi di valore che l'API deve calcolare (es. visite, fatturato, km)
-                  visite: r.visite || 0, 
+                  
+                  // 2. Allinea i campi di valore e data
+                  numVisite: r.visite || 0, // Campo 'visite' -> 'numVisite'
                   fatturato: r.fatturato || 0,
                   km: r.km || 0,
+                  ultimaVisita: r.ultima_visita || null, // Aggiunto per soddisfare il tipo (se non presente in r)
+                  note: r.notes || '', // Aggiunto per soddisfare il tipo (se non presente in r)
                   created_at: r.created_at,
+                  // Mantieni i campi extra che potrebbero non essere nel tipo per ordinamento (se necessario)
+                  contact_name: dec.contact_name || '',
               } as ClienteListaDetail);
               
           } catch (e) {
@@ -123,23 +118,23 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
       numClienti = clienti.length;
       visiteTotali = metadata?.visiteTotali || 0;
       
-      // ➡️ 4. ORDINAMENTO DEI CLIENTI DECIFRATI (IL TUO OBIETTIVO)
-      // Recupera i parametri di ordinamento dalla form
-      const sortBy = formData.ordinaPer as keyof ClienteListaDetail || 'name'; 
+      // 4. ORDINAMENTO DEI CLIENTI DECIFRATI
+      // Usa i campi allineati ('nome', 'citta', 'fatturato', 'visite', 'km')
+      // Nota: ho corretto 'visite' in 'numVisite' nell'ordinamento, se necessario, basandomi sulla correzione sopra.
+      const sortBy = formData.ordinaPer === 'visite' ? 'numVisite' : formData.ordinaPer || 'nome';
       const sortDir = formData.ordinaDir === 'desc' ? 'desc' : 'asc';
       
       console.log(`[Lista] Applicazione ordinamento: ${sortBy} ${sortDir}`);
 
       clienti.sort((a, b) => {
-          let va: string | number = a[sortBy as keyof ClienteListaDetail] ?? "";
-          let vb: string | number = b[sortBy as keyof ClienteListaDetail] ?? "";
+          let va: string | number = (a as any)[sortBy] ?? "";
+          let vb: string | number = (b as any)[sortBy] ?? "";
           
-          // Gestione ordinamento alfabetico
           if (typeof va === 'string' && typeof vb === 'string') {
             va = va.toLowerCase();
             vb = vb.toLowerCase();
           }
-          // Gestione ordinamento numerico o stringa
+
           if (va < vb) return sortDir === 'asc' ? -1 : 1;
           if (va > vb) return sortDir === 'asc' ? 1 : -1;
           return 0;
@@ -147,9 +142,8 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
 
       // 5. Generazione PDF
       const pdfBlob = await generateReportListaClienti({
-          clienti: clienti, // Array ora ordinato
+          clienti: clienti,
           report_type: reportType,
-          // ... (altri metadati)
       });
       
       const filename = generateListaClientiFilename(reportType);
@@ -208,15 +202,13 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
           isOpen={showModal}
           onClose={() => setShowModal(false)}
           onSelectReport={handleSelectReport}
-        >
-          {/* NB: Assicurati che il tuo GenerateReportModal mostri l'opzione 'lista_completa' */}
-        </GenerateReportModal>
+        />
       )}
 
       {/* Form configurazione lista */}
       {selectedReportType && selectedReportType !== 'planning' && (
         <ListaClientiForm
-          reportType={selectedReportType as any} // Cast necessario per il nuovo tipo
+          reportType={selectedReportType as any}
           onBack={() => setSelectedReportType(null)}
           onGenerate={handleGenerateLista}
         />
