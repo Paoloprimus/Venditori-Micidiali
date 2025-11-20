@@ -13,7 +13,8 @@ import {
   generateListaClientiFilename,
   // 💡 USIAMO I TIPI REALI DAL TUO lib/pdf/types.ts
   type ReportListaClientiData, 
-  type ClienteListaDetail 
+  type ClienteListaDetail,
+  type DocumentMetadata // Necessario per costruire l'oggetto metadata
 } from '@/lib/pdf';
 
 // AGGIUNTO 'lista_completa'
@@ -82,7 +83,8 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
         return;
       }
       
-      // 2. Decifratura dei dati
+      // 2. Decifratura dei dati (omessa per brevità, codice precedente corretto)
+      // ... (Blocco di decifratura)
       const clienti: ClienteListaDetail[] = [];
       await (crypto as any).getOrCreateScopeKeys('table:accounts'); 
       
@@ -103,9 +105,7 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
                   return acc;
               }, {} as Record<string, string>);
 
-              // Allinea i campi al tipo ClienteListaDetail (da lib/pdf/types.ts)
               clienti.push({
-                  // campi del DB che mappano al tipo ClienteListaDetail
                   nome: dec.name || r.name_bi || 'NOME NON DISPONIBILE', 
                   citta: r.city || '', 
                   numVisite: r.visite || 0,
@@ -114,8 +114,6 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
                   ultimaVisita: r.ultima_visita || null,
                   note: r.notes || null,
                   
-                  // Campi extra non richiesti dal report, ma utili per l'ordinamento o logica
-                  // Mantengo 'id' e 'created_at' e gli altri campi
                   id: r.id,
                   created_at: r.created_at,
                   tipo_locale: r.tipo_locale || '',
@@ -130,14 +128,13 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
           }
       }
 
-      // Aggiorna metadati dai dati decifrati e dall'API
+      // Aggiorna metadati totali
       numClienti = clienti.length;
       visiteTotali = metadata?.visiteTotali || clienti.reduce((sum, c) => sum + (c.numVisite || 0), 0);
       kmTotali = metadata?.kmTotali || clienti.reduce((sum, c) => sum + (c.km || 0), 0);
       fatturatoTotale = metadata?.fatturatoTotale || clienti.reduce((sum, c) => sum + (c.fatturato || 0), 0);
       
-      // 3. ORDINAMENTO DEI CLIENTI DECIFRATI
-      // Mappatura dei campi di ordinamento della form ai nomi di campo reali in ClienteListaDetail
+      // 3. ORDINAMENTO DEI CLIENTI DECIFRATI (codice precedente corretto)
       const sortMap = {
         'nome': 'nome', 'citta': 'citta', 'fatturato': 'fatturato', 
         'visite': 'numVisite', 'km': 'km'
@@ -148,19 +145,16 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
       clienti.sort((a, b) => {
           let va: string | number = (a as any)[sortBy] ?? "";
           let vb: string | number = (b as any)[sortBy] ?? "";
-          
           if (typeof va === 'string' && typeof vb === 'string') {
             va = va.toLowerCase();
             vb = vb.toLowerCase();
           }
-
           if (va < vb) return sortDir === 'asc' ? -1 : 1;
           if (va > vb) return sortDir === 'asc' ? 1 : -1;
           return 0;
       });
 
-      // 4. Generazione PDF: COSTRUZIONE DELL'OGGETTO 'filtri' CORRETTO
-      
+      // 4. Generazione PDF: COSTRUZIONE DELL'OGGETTO 'filtri' 
       let filtroTipo: string = '';
       let filtroDescrizione: string = '';
 
@@ -197,7 +191,6 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
           descrizione: filtroDescrizione,
       };
 
-      // ➡️ Oggetto ReportListaClientiData completo e corretto
       const reportData: ReportListaClientiData = {
           clienti: clienti,
           nomeAgente: nomeAgente,
@@ -211,23 +204,31 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
 
       const pdfBlob = await generateReportListaClienti(reportData); 
 
-      // 5. Usa reportType per il nome del file
       const filename = generateListaClientiFilename(reportType);
 
-      // 6. Salva su dispositivo
-      await savePdfToDevice(pdfBlob, filename);
+      // 5. Salva su dispositivo e cattura il percorso
+      const filePath = await savePdfToDevice(pdfBlob, filename);
 
-      // 7. Salva metadati documento su Supabase
+      // 6. Salva metadati documento su Supabase
+      const metadataForDB: DocumentMetadata = {
+          filtro_tipo: filtroTipo,
+          periodo: formData.periodo || 'N/A',
+          valore_filtro: filtroDescrizione,
+          num_clienti: numClienti,
+          visite_tot: visiteTotali,
+      };
+
+      // ➡️ CORREZIONE: Passa l'oggetto con la struttura corretta richiesta dal tipo
       await saveDocumentMetadata({
-        user_id: user.data.user?.id,
-        file_name: filename,
-        report_type: reportType,
-        num_clienti: numClienti,
-        visite_tot: visiteTotali,
+        document_type: 'lista_clienti',
+        title: `Lista Clienti: ${filtroTipo} (${formData.ordinaPer})`,
+        filename: filename,
+        file_path: filePath || filename, // Usa il path restituito o il filename come fallback
+        metadata: metadataForDB,
         file_size: pdfBlob.size,
       });
 
-      // 8. Success!
+      // 7. Success!
       alert('✅ Lista generata e salvata!');
       setSelectedReportType(null);
       setShowModal(false);
