@@ -329,8 +329,12 @@ const recordForDecrypt = {
               }, {})
             : ((x ?? {}) as Record<string, unknown>);
 
+// ✅✅✅ FIX: Usa l'ID del record come Associated Data (firma)
 const decAny = await (crypto as any).decryptFields(
-  "table:accounts", "accounts", '', recordForDecrypt,
+  "table:accounts", 
+  "accounts", 
+  r.id, // <--- PUNTO CRITICO: Usa r.id invece di ''
+  recordForDecrypt,
   ["name", "contact_name", "email", "phone", "vat_number", "address"]
 );
 
