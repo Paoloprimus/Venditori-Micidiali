@@ -3,13 +3,13 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { ReportPlanningData, ReportListaClientiData } from './types';
+import type { ReportVisiteData, ReportListaClientiData } from './types';
 
 /**
- * Genera PDF per Report Planning giornaliero
+ * Genera PDF per Report Visite (giornaliero, settimanale o periodo)
  * @returns Blob del PDF generato
  */
-export async function generateReportPlanning(data: ReportPlanningData): Promise<Blob> {
+export async function generateReportVisite(data: ReportVisiteData): Promise<Blob> {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -22,12 +22,12 @@ export async function generateReportPlanning(data: ReportPlanningData): Promise<
   
   yPos += 10;
   doc.setFontSize(16);
-  doc.text('Report Planning Giornaliero', pageWidth / 2, yPos, { align: 'center' });
+  doc.text('Report Visite', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 8;
   doc.setFontSize(12);
   doc.setFont('helvetica', 'normal');
-  doc.text(data.dataFormattata, pageWidth / 2, yPos, { align: 'center' });
+  doc.text(data.periodoFormattato, pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 6;
   doc.setFontSize(10);
@@ -45,16 +45,17 @@ export async function generateReportPlanning(data: ReportPlanningData): Promise<
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(0);
-  doc.text('📊 Riepilogo Giornata', 15, yPos);
+  doc.text('📊 Riepilogo Periodo', 15, yPos);
   yPos += 8;
 
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
   
   const riepilogo = [
-    `Visite completate: ${data.numCompletate} su ${data.numVisite}`,
-    `Visite saltate: ${data.numSaltate}`,
-    `Fatturato giornata: €${data.fatturatoTotale.toFixed(2)}`,
+    `Periodo: ${data.dataInizio} - ${data.dataFine}`,
+    `Visite effettuate: ${data.numVisite}`,
+    `Clienti visitati: ${data.numClienti}`,
+    `Fatturato periodo: €${data.fatturatoTotale.toFixed(2)}`,
     `Km percorsi: ${data.kmTotali.toFixed(1)} km`
   ];
   
@@ -73,19 +74,18 @@ export async function generateReportPlanning(data: ReportPlanningData): Promise<
 
   // Prepara dati per la tabella
   const tableData = data.visite.map((v) => [
-    v.ordine.toString(),
+    v.dataOra,
     v.nomeCliente,
     v.cittaCliente || '-',
-    v.ultimaVisita || 'Prima visita',
-    v.giorniDaUltimaVisita ? `${v.giorniDaUltimaVisita}gg` : '-',
-    v.fatturato ? `€${v.fatturato.toFixed(2)}` : '-',
+    formatTipo(v.tipo),
     formatEsito(v.esito),
+    v.importoVendita ? `€${v.importoVendita.toFixed(2)}` : '-',
     v.noteVisita || '-'
   ]);
 
   autoTable(doc, {
     startY: yPos,
-    head: [['#', 'Cliente', 'Città', 'Ultima Visita', 'Giorni', 'Fatturato', 'Esito', 'Note']],
+    head: [['Data/Ora', 'Cliente', 'Città', 'Tipo', 'Esito', 'Fatturato', 'Note']],
     body: tableData,
     theme: 'striped',
     styles: { 
@@ -99,14 +99,13 @@ export async function generateReportPlanning(data: ReportPlanningData): Promise<
       fontStyle: 'bold'
     },
     columnStyles: {
-      0: { cellWidth: 10 },  // #
+      0: { cellWidth: 30 },  // Data/Ora
       1: { cellWidth: 35 },  // Cliente
       2: { cellWidth: 25 },  // Città
-      3: { cellWidth: 25 },  // Ultima Visita
-      4: { cellWidth: 15 },  // Giorni
+      3: { cellWidth: 20 },  // Tipo
+      4: { cellWidth: 25 },  // Esito
       5: { cellWidth: 25 },  // Fatturato
-      6: { cellWidth: 25 },  // Esito
-      7: { cellWidth: 'auto' } // Note
+      6: { cellWidth: 'auto' } // Note
     },
     didDrawPage: (data) => {
       // Footer con numero pagina
@@ -261,6 +260,18 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   // Genera blob
   const pdfBlob = doc.output('blob');
   return pdfBlob;
+}
+
+/**
+ * Formatta il tipo visita per visualizzazione
+ */
+function formatTipo(tipo: string): string {
+  const tipoMap: Record<string, string> = {
+    'visita': '🚗 Visita',
+    'chiamata': '📞 Chiamata'
+  };
+  
+  return tipoMap[tipo] || tipo;
 }
 
 /**
