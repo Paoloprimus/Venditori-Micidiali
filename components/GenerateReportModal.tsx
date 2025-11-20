@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-type ReportType = 'planning' | 'lista_visite' | 'lista_fatturato' | 'lista_prodotto' | 'lista_km';
+type ReportType = 'visite' | 'lista_visite' | 'lista_fatturato' | 'lista_prodotto' | 'lista_km';
 
 type Props = {
   isOpen: boolean;
@@ -17,7 +17,7 @@ export default function GenerateReportModal({ isOpen, onClose, onSelectReport }:
   if (!isOpen) return null;
 
   function handleSelectPlanning() {
-    onSelectReport('planning');
+    onSelectReport('visite');
   }
 
   function handleSelectLista(type: ReportType) {
@@ -92,9 +92,9 @@ export default function GenerateReportModal({ isOpen, onClose, onSelectReport }:
               >
                 <span style={{ fontSize: 24 }}>📊</span>
                 <div>
-                  <div>Report Planning Giornaliero</div>
+                  <div>Report Visite</div>
                   <div style={{ fontSize: 13, color: '#6b7280', marginTop: 4 }}>
-                    Riepilogo visite di una giornata
+                    Riepilogo visite per giorno, settimana o periodo
                   </div>
                 </div>
               </button>
