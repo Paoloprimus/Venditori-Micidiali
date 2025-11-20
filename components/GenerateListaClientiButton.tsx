@@ -11,224 +11,257 @@ import {
   savePdfToDevice,
   saveDocumentMetadata,
   generateListaClientiFilename,
-  // 💡 USIAMO I TIPI REALI DAL TUO lib/pdf/types.ts
-  type ReportListaClientiData, 
+  type ReportListaClientiData,
   type ClienteListaDetail,
-  type DocumentMetadata // Necessario per costruire l'oggetto metadata
+  // 💡 CORREZIONE 1: Importiamo il tipo DocumentMetadata per la funzione saveDocumentMetadata
+  type DocumentMetadata 
 } from '@/lib/pdf';
 
-// AGGIUNTO 'lista_completa'
-type ReportType = 'planning' | 'lista_completa' | 'lista_visite' | 'lista_fatturato' | 'lista_prodotto' | 'lista_km';
+type ReportType = 'planning' | 'lista_visite' | 'lista_fatturato' | 'lista_prodotto' | 'lista_km';
 
 type Props = {
   onSuccess?: () => void;
 };
 
-
 export default function GenerateListaClientiButton({ onSuccess }: Props) {
-  const { crypto } = useCrypto(); 
+  const { crypto } = useCrypto();
   const [showModal, setShowModal] = useState(false);
   const [selectedReportType, setSelectedReportType] = useState<ReportType | null>(null);
 
   async function handleSelectReport(type: ReportType) {
     if (type === 'planning') {
+      // Redirect a pagina planning o modale seleziona data
       alert('Per Report Planning, vai alla pagina di esecuzione planning e genera da lì');
       setShowModal(false);
       return;
     }
 
+    // Per liste clienti, mostra form
     setSelectedReportType(type);
   }
 
   async function handleGenerateLista(formData: any) {
     if (!crypto || typeof crypto.decryptFields !== 'function') {
-      alert('Crittografia non disponibile o non sbloccata. Sblocca prima di generare.');
+      alert('Crittografia non disponibile');
       return;
     }
-    
-    // Inizializzazione variabili per i metadati totali
-    let numClienti = 0;
-    let visiteTotali = 0;
-    let kmTotali = 0;
-    let fatturatoTotale = 0;
-    let nomeAgente = 'Sconosciuto';
-    
+
     try {
-      const reportType = formData.type as ReportType;
-      
-      // 0. Recupera i dati dell'utente per i metadati del report
-      const user = await supabase.auth.getUser();
-      if (user.data.user) {
-        const profileResponse = await supabase.from('profiles').select('first_name, last_name').eq('id', user.data.user.id).single();
-        if (profileResponse.data) {
-          nomeAgente = `${profileResponse.data.first_name || ''} ${profileResponse.data.last_name || ''}`.trim() || user.data.user.email || 'Agente';
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non autenticato');
+
+      // 1. Query clienti base
+      let query = supabase
+        .from('accounts')
+        .select('id, name_enc, name_iv, city, ultimo_esito_at, volume_attuale, latitude, longitude')
+        .eq('user_id', user.id);
+
+      const { data: clientsData, error: clientsError } = await query;
+      if (clientsError) throw clientsError;
+
+      if (!clientsData || clientsData.length === 0) {
+        alert('Nessun cliente trovato');
+        return;
+      }
+
+      // 2. Decifra nomi
+      const hexToBase64 = (hexStr: any): string => {
+        if (!hexStr || typeof hexStr !== 'string') return '';
+        if (!hexStr.startsWith('\\x')) return hexStr;
+        const hex = hexStr.slice(2);
+        const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+        return bytes;
+      };
+
+      const toObj = (x: any): Record<string, unknown> =>
+        Array.isArray(x)
+          ? x.reduce((acc: Record<string, unknown>, it: any) => {
+              if (it && typeof it === "object" && "name" in it) acc[it.name] = it.value ?? "";
+              return acc;
+            }, {})
+          : ((x ?? {}) as Record<string, unknown>);
+
+      const decryptedClients: any[] = [];
+      for (const c of clientsData) {
+        try {
+          const recordForDecrypt = {
+            ...c,
+            name_enc: hexToBase64(c.name_enc),
+            name_iv: hexToBase64(c.name_iv),
+          };
+
+          const decAny = await (crypto as any).decryptFields( // Aggiunto 'as any' per compatibilità
+            'table:accounts',
+            'accounts',
+            '',
+            recordForDecrypt,
+            ['name']
+          );
+
+          const dec = toObj(decAny);
+
+          decryptedClients.push({
+            id: c.id,
+            name: String(dec.name ?? 'Cliente senza nome'),
+            city: c.city || '',
+            ultimaVisita: c.ultimo_esito_at,
+            fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
+            latitude: c.latitude,
+            longitude: c.longitude,
+          });
+        } catch (e) {
+          console.error('[Lista] Errore decrypt:', e);
         }
       }
 
-      // 1. Chiamata API per recuperare i dati (clienti_raw)
-      const response = await fetch('/api/clients/lista', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData), 
-      });
-      
-      if (!response.ok) {
-        throw new Error('Errore durante il recupero dei dati: ' + response.statusText);
-      }
-      
-      const { clienti_raw, metadata } = await response.json();
-      
-      if (!clienti_raw || clienti_raw.length === 0) {
-        alert('Nessun cliente trovato per la generazione del report con i filtri selezionati.');
+      // 3. Applica filtri e calcola stats per ogni cliente
+      const clientsWithStats = await Promise.all(
+        decryptedClients.map(async (client) => {
+          // Query visite per questo cliente nel periodo
+          let visitsQuery = supabase
+            .from('visits')
+            .select('*')
+            .eq('user_id', user.id)
+            .eq('account_id', client.id);
+
+          if (formData.dataInizio) {
+            visitsQuery = visitsQuery.gte('data_visita', `${formData.dataInizio}T00:00:00`);
+          }
+          if (formData.dataFine) {
+            visitsQuery = visitsQuery.lte('data_visita', `${formData.dataFine}T23:59:59`);
+          }
+
+          const { data: visits } = await visitsQuery;
+          const numVisite = visits?.length || 0;
+          const fatturatoVisite = visits?.reduce((sum, v) => sum + (parseFloat(v.importo_vendita) || 0), 0) || 0;
+
+          // Calcola km (da posizione utente, se disponibile - TODO)
+          const km = 0; // Placeholder
+
+          return {
+            ...client,
+            numVisite,
+            fatturatoVisite,
+            km,
+          };
+        })
+      );
+
+      // 4. Filtra in base al tipo
+      let filteredClients = clientsWithStats;
+
+      if (formData.type === 'lista_visite') {
+        filteredClients = filteredClients.filter(c => c.numVisite >= (formData.minVisite || 0));
+      } else if (formData.type === 'lista_fatturato') {
+        filteredClients = filteredClients.filter(c => {
+          const fatturato = c.fatturatoVisite;
+          const min = formData.minFatturato || 0;
+          const max = formData.maxFatturato || Infinity;
+          return fatturato >= min && fatturato <= max;
+        });
+      } else if (formData.type === 'lista_prodotto') {
+        // TODO: Implementare query prodotti quando avremo la relazione
+        alert('Filtro per prodotto non ancora implementato (richiede relazione visite-prodotti)');
+        return;
+      } else if (formData.type === 'lista_km') {
+        // TODO: Implementare calcolo km quando avremo coordinate utente
+        alert('Filtro per km non ancora implementato (richiede geocoding completo)');
         return;
       }
-      
-      // 2. Decifratura dei dati (omessa per brevità, codice precedente corretto)
-      // ... (Blocco di decifratura)
-      const clienti: ClienteListaDetail[] = [];
-      await (crypto as any).getOrCreateScopeKeys('table:accounts'); 
-      
-      for (const r of clienti_raw) {
-          try {
-              const recordForDecrypt = { ...r };
-              
-              const decAny = await (crypto as any).decryptFields(
-                  "table:accounts", 
-                  "accounts", 
-                  r.id, 
-                  recordForDecrypt,
-                  ["name", "contact_name", "email", "phone", "vat_number", "address"]
-              );
 
-              const dec = (decAny as Array<{ name: string, value: string }>).reduce((acc, item) => {
-                  acc[item.name as keyof typeof acc] = item.value || '';
-                  return acc;
-              }, {} as Record<string, string>);
-
-              clienti.push({
-                  nome: dec.name || r.name_bi || 'NOME NON DISPONIBILE', 
-                  citta: r.city || '', 
-                  numVisite: r.visite || 0,
-                  fatturato: r.fatturato || 0,
-                  km: r.km || 0,
-                  ultimaVisita: r.ultima_visita || null,
-                  note: r.notes || null,
-                  
-                  id: r.id,
-                  created_at: r.created_at,
-                  tipo_locale: r.tipo_locale || '',
-                  email: dec.email || '',
-                  phone: dec.phone || '',
-                  vat_number: dec.vat_number || '',
-                  contact_name: dec.contact_name || '',
-              } as ClienteListaDetail);
-              
-          } catch (e) {
-              console.warn(`[Lista] Errore decifratura cliente ${r.id}:`, e);
-          }
+      if (filteredClients.length === 0) {
+        alert('Nessun cliente corrisponde ai filtri selezionati');
+        return;
       }
 
-      // Aggiorna metadati totali
-      numClienti = clienti.length;
-      visiteTotali = metadata?.visiteTotali || clienti.reduce((sum, c) => sum + (c.numVisite || 0), 0);
-      kmTotali = metadata?.kmTotali || clienti.reduce((sum, c) => sum + (c.km || 0), 0);
-      fatturatoTotale = metadata?.fatturatoTotale || clienti.reduce((sum, c) => sum + (c.fatturato || 0), 0);
-      
-      // 3. ORDINAMENTO DEI CLIENTI DECIFRATI (codice precedente corretto)
-      const sortMap = {
-        'nome': 'nome', 'citta': 'citta', 'fatturato': 'fatturato', 
-        'visite': 'numVisite', 'km': 'km'
-      };
-      const sortBy = sortMap[formData.ordinaPer as keyof typeof sortMap] || 'nome';
-      const sortDir = formData.ordinaDir === 'desc' ? 'desc' : 'asc';
-      
-      clienti.sort((a, b) => {
-          let va: string | number = (a as any)[sortBy] ?? "";
-          let vb: string | number = (b as any)[sortBy] ?? "";
-          if (typeof va === 'string' && typeof vb === 'string') {
-            va = va.toLowerCase();
-            vb = vb.toLowerCase();
-          }
-          if (va < vb) return sortDir === 'asc' ? -1 : 1;
-          if (va > vb) return sortDir === 'asc' ? 1 : -1;
-          return 0;
-      });
-
-      // 4. Generazione PDF: COSTRUZIONE DELL'OGGETTO 'filtri' 
-      let filtroTipo: string = '';
-      let filtroDescrizione: string = '';
-
-      if (reportType === 'lista_completa') {
-          filtroTipo = 'Lista Completa';
-          filtroDescrizione = `Ordinamento: ${formData.ordinaPer} ${formData.ordinaDir.toUpperCase()}`;
-      } else {
-          const periodoStr = formData.periodo === 'custom' 
-              ? `${formData.dataInizio} al ${formData.dataFine}`
-              : formData.periodo || 'N/A';
-              
-          switch (reportType) {
-              case 'lista_visite':
-                  filtroTipo = 'Visite';
-                  filtroDescrizione = `Minimo: ${formData.minVisite || 'N/A'}. Periodo: ${periodoStr}. Ordinamento: ${formData.ordinaPer}`;
-                  break;
-              case 'lista_fatturato':
-                  filtroTipo = 'Fatturato';
-                  filtroDescrizione = `Min: ${formData.minFatturato || 'N/A'} - Max: ${formData.maxFatturato || 'N/A'}. Periodo: ${periodoStr}. Ordinamento: ${formData.ordinaPer}`;
-                  break;
-              case 'lista_prodotto':
-                  filtroTipo = 'Prodotto';
-                  filtroDescrizione = `Prodotto: ${formData.prodottoNome || 'N/A'}. Periodo: ${periodoStr}. Ordinamento: ${formData.ordinaPer}`;
-                  break;
-              case 'lista_km':
-                  filtroTipo = 'Km Percorsi';
-                  filtroDescrizione = `Minimo: ${formData.minKm || 'N/A'}. Ordinamento: ${formData.ordinaPer}`;
-                  break;
-          }
+      // 5. Ordina
+      if (formData.ordinaPer === 'nome') {
+        filteredClients.sort((a, b) => a.name.localeCompare(b.name));
+      } else if (formData.ordinaPer === 'fatturato') {
+        filteredClients.sort((a, b) => b.fatturatoVisite - a.fatturatoVisite);
       }
 
-      const filtriData: ReportListaClientiData['filtri'] = {
-          tipo: filtroTipo,
-          descrizione: filtroDescrizione,
-      };
+      // 6. Prepara dati per PDF
+      const clientiLista: ClienteListaDetail[] = filteredClients.map(c => ({
+        nome: c.name,
+        citta: c.city,
+        numVisite: c.numVisite,
+        ultimaVisita: c.ultimaVisita ? new Date(c.ultimaVisita).toLocaleDateString('it-IT') : null,
+        fatturato: c.fatturatoVisite, // 💡 CORREZIONE 2: Usa 'fatturato' come richiesto dal tipo ClienteListaDetail
+        km: c.km,
+        note: null, // TODO: Aggiungere note se servono
+      }));
+
+      // Calcola totali
+      const numClienti = clientiLista.length;
+      const visiteTotali = clientiLista.reduce((sum, c) => sum + c.numVisite, 0);
+      const fatturatoTotale = clientiLista.reduce((sum, c) => sum + c.fatturato, 0);
+      const kmTotali = clientiLista.reduce((sum, c) => sum + c.km, 0);
+
+      // Descrizione filtro
+      let descrizione = '';
+      let filtroTipoString = ''; // Aggiungo una variabile per il tipo in formato stringa per il filename
+      if (formData.type === 'lista_visite') {
+        const periodo = formData.periodo === 'settimana' ? 'Settimana' : formData.periodo === 'mese' ? 'Mese' : 'Trimestre';
+        descrizione = `>=${formData.minVisite} visite in ${periodo}`;
+        filtroTipoString = 'Visite';
+      } else if (formData.type === 'lista_fatturato') {
+        const periodo = formData.periodo === 'settimana' ? 'Settimana' : formData.periodo === 'mese' ? 'Mese' : 'Trimestre';
+        const max = formData.maxFatturato ? ` - €${formData.maxFatturato}` : '+';
+        descrizione = `Fatturato €${formData.minFatturato}${max} in ${periodo}`;
+        filtroTipoString = 'Fatturato';
+      } else if (formData.type === 'lista_prodotto') {
+        filtroTipoString = 'Prodotto';
+        // ... Logica per descrizione prodotto
+      } else if (formData.type === 'lista_km') {
+        filtroTipoString = 'Km';
+        // ... Logica per descrizione km
+      }
 
       const reportData: ReportListaClientiData = {
-          clienti: clienti,
-          nomeAgente: nomeAgente,
-          dataGenerazione: new Date().toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-          filtri: filtriData, 
-          numClienti: numClienti,
-          visiteTotali: visiteTotali,
-          kmTotali: kmTotali,
-          fatturatoTotale: fatturatoTotale,
+        nomeAgente: user.email?.split('@')[0] || 'Agente',
+        dataGenerazione: new Date().toLocaleString('it-IT'),
+        filtri: {
+          tipo: formData.type,
+          descrizione,
+        },
+        clienti: clientiLista,
+        numClienti,
+        visiteTotali,
+        fatturatoTotale,
+        kmTotali,
       };
 
-      const pdfBlob = await generateReportListaClienti(reportData); 
+      // 7. Genera PDF
+      const pdfBlob = await generateReportListaClienti(reportData);
 
-      const filename = generateListaClientiFilename(reportType);
-
-      // 5. Salva su dispositivo e cattura il percorso
+      // 8. Salva su device
+      const filename = generateListaClientiFilename(filtroTipoString, undefined, formData.dataFine);
       const filePath = await savePdfToDevice(pdfBlob, filename);
 
-      // 6. Salva metadati documento su Supabase
+      if (!filePath) {
+        alert('Download PDF annullato');
+        return;
+      }
+
+      // 9. Salva metadata nel DB (La struttura di questo oggetto è ORA CORRETTA)
       const metadataForDB: DocumentMetadata = {
-          filtro_tipo: filtroTipo,
-          periodo: formData.periodo || 'N/A',
-          valore_filtro: filtroDescrizione,
+          filtro_tipo: formData.type,
+          periodo: formData.periodo,
           num_clienti: numClienti,
           visite_tot: visiteTotali,
       };
-
-      // ➡️ CORREZIONE: Passa l'oggetto con la struttura corretta richiesta dal tipo
+      
       await saveDocumentMetadata({
         document_type: 'lista_clienti',
-        title: `Lista Clienti: ${filtroTipo} (${formData.ordinaPer})`,
-        filename: filename,
-        file_path: filePath || filename, // Usa il path restituito o il filename come fallback
-        metadata: metadataForDB,
+        title: `Lista ${filtroTipoString} - ${descrizione}`,
+        filename,
+        file_path: filePath,
+        metadata: metadataForDB, // L'oggetto metadati corretto
         file_size: pdfBlob.size,
       });
 
-      // 7. Success!
+      // 10. Success!
       alert('✅ Lista generata e salvata!');
       setSelectedReportType(null);
       setShowModal(false);
