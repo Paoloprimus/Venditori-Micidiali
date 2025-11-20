@@ -3,8 +3,7 @@ import { createSupabaseServer } from "@/lib/supabase/server";
 
 // --- Tipi utili (documentativi)
 type CustomFields = {
-  notes?: string;             // Note generali (in chiaro per LLM)
-  // Campi legacy/futuri (stand-by)
+  notes?: string;             
   fascia?: "A" | "B" | "C";
   pagamento?: string;
   prodotti_interesse?: string[] | string;
@@ -15,12 +14,15 @@ type CustomFields = {
 };
 
 type UpsertClientBody = {
+  // ✅ AGGIUNTO: L'ID pre-generato dal client è fondamentale per la crittografia!
+  id?: string; 
+
   // 🔐 Ditta (cifrati)
   name_enc?: string;
   name_iv?: string;
   name_bi?: string;
-  city?: string;              // ✅ MODIFICATO: Città in chiaro
-  tipo_locale?: string;       // ✅ MODIFICATO: Tipo locale in chiaro (separato da custom)
+  city?: string;              
+  tipo_locale?: string;       
   address_enc?: string;
   address_iv?: string;
   vat_number_enc?: string;
@@ -34,14 +36,14 @@ type UpsertClientBody = {
   phone_enc?: string;
   phone_iv?: string;
   
-  // 📍 Coordinate GPS (in chiaro per calcoli distanza)
+  // 📍 Coordinate GPS 
   latitude?: string | number;
   longitude?: string | number;
   
-  // 📝 Note in chiaro (campo separato)
+  // 📝 Note in chiaro
   notes?: string;
   
-  // 📝 Campi in chiaro per LLM (custom - per ora vuoto)
+  // 📝 Campi custom
   custom?: CustomFields;
 };
 
@@ -56,11 +58,7 @@ function asArray(v: unknown): string[] | undefined {
 function normalizeCustom(input?: CustomFields) {
   if (!input) return undefined;
   const out: Record<string, unknown> = {};
-  
-  // Solo campi in chiaro per LLM (NO PII)
   if (input.notes) out.notes = String(input.notes);
-  
-  // Campi legacy (stand-by)
   if (input.fascia) out.fascia = input.fascia;
   if (input.pagamento) out.pagamento = String(input.pagamento);
   const pi = asArray(input.prodotti_interesse);
@@ -71,7 +69,6 @@ function normalizeCustom(input?: CustomFields) {
   if (tabu) out.tabu = tabu;
   const interessi = asArray(input.interessi);
   if (interessi) out.interessi = interessi;
-  
   return out;
 }
 
@@ -86,17 +83,16 @@ export async function POST(req: Request) {
     }
     const userId = user.id;
 
-    // 2) Input + validazioni minime
+    // 2) Input 
     const body = (await req.json()) as UpsertClientBody;
     
-    // Verifica che abbiamo i campi crittografati della ditta
     if (!body.name_enc || !body.name_iv || !body.name_bi) {
       return NextResponse.json({ error: "encrypted_name_required" }, { status: 400 });
     }
 
     const incomingCustom = normalizeCustom(body.custom);
 
-    // 3) Cerca account esistente usando il blind index
+    // 3) Cerca account esistente
     const { data: existingList, error: findErr } = await supabase
       .from("accounts")
       .select("id, custom")
@@ -111,19 +107,15 @@ export async function POST(req: Request) {
     let accountId: string | null = null;
 
     if (existingList && existingList.length > 0) {
-      // 4A) UPDATE - Merge custom + aggiorna tutti i campi cifrati
+      // 4A) UPDATE 
       const existing = existingList[0];
       const mergedCustom = { ...(existing.custom ?? {}), ...(incomingCustom ?? {}) };
 
       const updateData: any = { custom: mergedCustom };
       
-      // 🔐 Aggiorna campi cifrati ditta se presenti
-      if (body.city) {
-        updateData.city = body.city;
-      }
-      if (body.tipo_locale) {
-        updateData.tipo_locale = body.tipo_locale;
-      }
+      // Aggiorna campi (codice identico a prima...)
+      if (body.city) updateData.city = body.city;
+      if (body.tipo_locale) updateData.tipo_locale = body.tipo_locale;
       if (body.address_enc && body.address_iv) {
         updateData.address_enc = body.address_enc;
         updateData.address_iv = body.address_iv;
@@ -132,8 +124,6 @@ export async function POST(req: Request) {
         updateData.vat_number_enc = body.vat_number_enc;
         updateData.vat_number_iv = body.vat_number_iv;
       }
-      
-      // 🔐 Aggiorna campi cifrati contatto se presenti
       if (body.contact_name_enc && body.contact_name_iv) {
         updateData.contact_name_enc = body.contact_name_enc;
         updateData.contact_name_iv = body.contact_name_iv;
@@ -146,16 +136,12 @@ export async function POST(req: Request) {
         updateData.phone_enc = body.phone_enc;
         updateData.phone_iv = body.phone_iv;
       }
-
-      // 📍 Aggiorna coordinate GPS se presenti
       if (body.latitude !== undefined && body.latitude !== null) {
         updateData.latitude = body.latitude;
       }
       if (body.longitude !== undefined && body.longitude !== null) {
         updateData.longitude = body.longitude;
       }
-
-      // 📝 Aggiorna notes se presente
       if (body.notes !== undefined) {
         updateData.notes = body.notes || null;
       }
@@ -174,24 +160,23 @@ export async function POST(req: Request) {
 
       accountId = (updated && (updated as { id: string }).id) || existing.id;
     } else {
-      // 4B) INSERT - Tutti i campi cifrati in accounts
+      // 4B) INSERT - Qui sta la modifica CRUCIALE
       const insertData: any = {
         user_id: userId,
-        // 🔐 Ditta cifrata
         name_enc: body.name_enc,
         name_iv: body.name_iv,
         name_bi: body.name_bi,
-        // 📝 Custom in chiaro
         custom: incomingCustom ?? {},
       };
+
+      // ✅ FIX: Se il client ha mandato un ID (per la cifratura), USALO!
+      if (body.id) {
+        insertData.id = body.id;
+      }
       
-      // 🔐 Aggiungi campi cifrati ditta se presenti
-      if (body.city) {
-        insertData.city = body.city;
-      }
-      if (body.tipo_locale) {
-        insertData.tipo_locale = body.tipo_locale;
-      }
+      // Resto dei campi insert identico a prima...
+      if (body.city) insertData.city = body.city;
+      if (body.tipo_locale) insertData.tipo_locale = body.tipo_locale;
       if (body.address_enc && body.address_iv) {
         insertData.address_enc = body.address_enc;
         insertData.address_iv = body.address_iv;
@@ -200,8 +185,6 @@ export async function POST(req: Request) {
         insertData.vat_number_enc = body.vat_number_enc;
         insertData.vat_number_iv = body.vat_number_iv;
       }
-      
-      // 🔐 Aggiungi campi cifrati contatto se presenti
       if (body.contact_name_enc && body.contact_name_iv) {
         insertData.contact_name_enc = body.contact_name_enc;
         insertData.contact_name_iv = body.contact_name_iv;
@@ -214,16 +197,12 @@ export async function POST(req: Request) {
         insertData.phone_enc = body.phone_enc;
         insertData.phone_iv = body.phone_iv;
       }
-
-      // 📍 Aggiungi coordinate GPS se presenti
       if (body.latitude !== undefined && body.latitude !== null) {
         insertData.latitude = body.latitude;
       }
       if (body.longitude !== undefined && body.longitude !== null) {
         insertData.longitude = body.longitude;
       }
-
-      // 📝 Aggiungi notes se presente
       if (body.notes !== undefined) {
         insertData.notes = body.notes || null;
       }
