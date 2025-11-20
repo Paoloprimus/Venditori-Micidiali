@@ -116,12 +116,19 @@ export async function deleteDocument(documentId: string): Promise<void> {
 }
 
 /**
- * Genera filename per report planning
- * @param data - Data del report (formato: YYYY-MM-DD)
+ * Genera filename per report visite
+ * @param dataInizio - Data inizio del report (formato: YYYY-MM-DD)
+ * @param dataFine - Data fine del report (formato: YYYY-MM-DD)
  * @returns Nome file
  */
-export function generatePlanningFilename(data: string): string {
-  return `Report_Planning_${data}.pdf`;
+export function generateVisiteFilename(dataInizio: string, dataFine: string): string {
+  if (dataInizio === dataFine) {
+    // Report giornaliero
+    return `Report_Visite_${dataInizio}.pdf`;
+  } else {
+    // Report periodo
+    return `Report_Visite_${dataInizio}_${dataFine}.pdf`;
+  }
 }
 
 /**
