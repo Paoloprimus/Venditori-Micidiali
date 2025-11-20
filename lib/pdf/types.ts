@@ -2,18 +2,18 @@
 // Interfacce TypeScript per i dati dei report PDF
 
 /**
- * Dati per generare il Report Planning giornaliero
+ * Dati per generare il Report Visite (giornaliero, settimanale o periodo)
  */
-export interface ReportPlanningData {
+export interface ReportVisiteData {
   // Header info
   nomeAgente: string;
-  data: string; // formato: "2025-11-08"
-  dataFormattata: string; // formato: "8 Novembre 2025"
+  dataInizio: string; // formato: "2025-11-08"
+  dataFine: string; // formato: "2025-11-15"
+  periodoFormattato: string; // formato: "8 - 15 Novembre 2025" o "8 Novembre 2025"
   
   // Riepilogo
   numVisite: number;
-  numCompletate: number;
-  numSaltate: number;
+  numClienti: number; // clienti distinti visitati
   fatturatoTotale: number;
   kmTotali: number;
   
@@ -25,13 +25,12 @@ export interface ReportPlanningData {
  * Dettaglio singola visita nel report
  */
 export interface VisitaDetail {
-  ordine: number; // 1, 2, 3...
+  dataOra: string; // formato: "08/11/2025 14:30"
   nomeCliente: string;
   cittaCliente: string;
-  ultimaVisita: string | null; // formato: "15/10/2025" o null
-  giorniDaUltimaVisita: number | null;
-  fatturato: number | null;
+  tipo: string; // "visita" o "chiamata"
   esito: string; // "ordine_acquisito", "altro", ecc.
+  importoVendita: number | null;
   noteVisita: string | null;
 }
 
@@ -76,9 +75,11 @@ export interface ClienteListaDetail {
  * Metadata salvati nel database per ogni documento
  */
 export interface DocumentMetadata {
-  // Per report_planning
-  data?: string;
+  // Per report_planning (ora report_visite)
+  data_inizio?: string;
+  data_fine?: string;
   num_visite?: number;
+  num_clienti?: number;
   fatturato_tot?: number;
   km_tot?: number;
   
@@ -86,7 +87,6 @@ export interface DocumentMetadata {
   filtro_tipo?: string;
   periodo?: string;
   valore_filtro?: string;
-  num_clienti?: number;
   visite_tot?: number;
 }
 
