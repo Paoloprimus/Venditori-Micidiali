@@ -2,19 +2,15 @@
  * ============================================================================
  * PAGINA: Import Clienti (CSV e Excel)
  * ============================================================================
- * 
- * PERCORSO: /app/tools/import-clients/page.tsx
+ * * PERCORSO: /app/tools/import-clients/page.tsx
  * URL: https://reping.app/tools/import-clients
- * 
- * DESCRIZIONE:
+ * * DESCRIZIONE:
  * Pagina completa per l'importazione massiva di clienti da file CSV e Excel.
  * Include 5 step: Upload → Mapping → Preview → Import → Report
- * 
- * FORMATI SUPPORTATI:
+ * * FORMATI SUPPORTATI:
  * - CSV: Parsing con csv-parse
  * - XLSX/XLS: Parsing con libreria xlsx
- * 
- * FUNZIONALITÀ:
+ * * FUNZIONALITÀ:
  * - Upload universale con drag & drop
  * - Riconoscimento automatico formato da estensione
  * - Auto-detection intelligente delle colonne (match esatti + parziali)
@@ -24,17 +20,14 @@
  * - Gestione duplicati tramite blind index
  * - Progress bar durante parsing e import
  * - Report dettagliato finale
- * 
- * DIPENDENZE:
+ * * DIPENDENZE:
  * - csv-parse/browser/esm/sync (per CSV)
  * - xlsx (per Excel)
  * - window.cryptoSvc (fornito da CryptoProvider)
  * - API /api/clients/upsert (per salvare i clienti)
- * 
- * NOTA IMPORTANTE:
+ * * NOTA IMPORTANTE:
  * Usa scope "table:accounts" per la cifratura, NON "clients"!
- * 
- * ============================================================================
+ * * ============================================================================
  */
 
 "use client";
@@ -46,6 +39,10 @@ import * as XLSX from "xlsx";
 import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
 import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
+
+// Aggiungo l'import per crypto se non esiste. Se l'ambiente non ha crypto.randomUUID() disponibile globalmente,
+// questo potrebbe essere necessario. Tuttavia, in ambienti moderni come Next.js client side, è spesso globale.
+// Per sicurezza, lo usiamo come metodo disponibile.
 
 type CsvRow = {
   name?: string;
@@ -131,6 +128,18 @@ export default function ImportClientsPage() {
     }
     return svc;
   };
+  
+  // Funzione helper per generare UUID (usiamo l'API standard dei browser/Node.js)
+  const generateUUID = (): string => {
+    // Usiamo crypto.randomUUID() che è standard in Node.js >= 14 e nei browser moderni
+    if (typeof crypto !== 'undefined' && crypto.randomUUID) {
+        return crypto.randomUUID();
+    }
+    // Fallback se l'ambiente non ha crypto.randomUUID (improbabile in Next.js moderno)
+    // Qui puoi mettere un'implementazione di fallback, ma per ora assumiamo la presenza.
+    throw new Error("UUID generator non disponibile. Ambiente non supportato.");
+  }
+
 
   // Auto-detect colonne con priorità ai match esatti (INVERTITO: header -> field)
   const autoDetectMapping = (headers: string[]): ColumnMapping => {
@@ -359,6 +368,11 @@ export default function ImportClientsPage() {
       const client = validClients[i];
       
       try {
+        // ========== INIZIO MODIFICHE CRITICHE ==========
+
+        // 1. Genera un UUID per il nuovo account PRIMA di cifrare.
+        const accountId = generateUUID(); 
+
         // Prepara l'oggetto con i campi da cifrare
         const fieldsToEncrypt: Record<string, string> = {};
         
@@ -370,59 +384,64 @@ export default function ImportClientsPage() {
         if (client.email) fieldsToEncrypt.email = client.email;
         if (client.vat_number) fieldsToEncrypt.vat_number = client.vat_number;
         
-        // Cifra tutti i campi
+        // 2. Cifra tutti i campi, passando l'UUID appena creato come ID dell'oggetto.
+        // Questo UUID diventerà l'Associated Data (AD) che DEVE corrispondere
+        // durante la decifratura (decryptFields)
         const encrypted = await (cryptoSvc as any).encryptFields(
           "table:accounts",
           "accounts",
-          "",
+          accountId, // PASSAGGIO CHIAVE: USARE l'ID dell'account!
           fieldsToEncrypt
         );
         
-        // Genera blind index per il name (obbligatorio per duplicate detection)
+        // Genera blind index per il name
         const nameBlindIndex = await (cryptoSvc as any).computeBlindIndex(
           "table:accounts",
           client.name || ""
         );
         
-        // encrypted è un oggetto tipo: { name_enc: "...", name_iv: "...", contact_name_enc: "...", ... }
+        // 3. Aggiungi l'ID generato al payload per l'upsert
         const payload: any = { 
+          id: accountId, // ✅ ID del nuovo account
           ...encrypted,
           name_bi: nameBlindIndex  // ✅ OBBLIGATORIO!
         };
         
-// Aggiungi city in chiaro (per Text-to-SQL)
-if (client.city) {
-  payload.city = client.city;
-}
+        // ========== FINE MODIFICHE CRITICHE ==========
 
-// Aggiungi notes in chiaro (campo separato)
-if (client.notes) {
-  payload.notes = client.notes;
-}
+        // Aggiungi city in chiaro (per Text-to-SQL)
+        if (client.city) {
+          payload.city = client.city;
+        }
 
-// Custom vuoto per ora
-payload.custom = {};
+        // Aggiungi notes in chiaro (campo separato)
+        if (client.notes) {
+          payload.notes = client.notes;
+        }
 
-// Aggiungi tipo_locale come campo separato (non in custom)
-if (client.tipo_locale) {
-  payload.tipo_locale = client.tipo_locale;
-}
+        // Custom vuoto per ora
+        payload.custom = {};
 
-// Aggiungi coordinate GPS (in chiaro, non cifrate)
-if (client.latitude) {
-  const lat = parseFloat(client.latitude);
-  if (!isNaN(lat)) {
-    // Converti in stringa con max 8 decimali per numeric(10,8)
-    payload.latitude = lat.toFixed(8);
-  }
-}
-if (client.longitude) {
-  const lon = parseFloat(client.longitude);
-  if (!isNaN(lon)) {
-    // Converti in stringa con max 8 decimali per numeric(11,8)
-    payload.longitude = lon.toFixed(8);
-  }
-}
+        // Aggiungi tipo_locale come campo separato (non in custom)
+        if (client.tipo_locale) {
+          payload.tipo_locale = client.tipo_locale;
+        }
+
+        // Aggiungi coordinate GPS (in chiaro, non cifrate)
+        if (client.latitude) {
+          const lat = parseFloat(client.latitude);
+          if (!isNaN(lat)) {
+            // Converti in stringa con max 8 decimali per numeric(10,8)
+            payload.latitude = lat.toFixed(8);
+          }
+        }
+        if (client.longitude) {
+          const lon = parseFloat(client.longitude);
+          if (!isNaN(lon)) {
+            // Converti in stringa con max 8 decimali per numeric(11,8)
+            payload.longitude = lon.toFixed(8);
+          }
+        }
 
         // Invia al server
         const response = await fetch("/api/clients/upsert", {
