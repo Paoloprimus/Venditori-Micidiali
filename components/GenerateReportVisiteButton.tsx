@@ -97,7 +97,7 @@ export default function GenerateReportVisiteButton({ onSuccess, onClose }: Props
           const decAny = await (crypto as any).decryptFields(
             'table:accounts',
             'accounts',
-            '',
+            acc.id, // ✅ FIX: Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
@@ -109,7 +109,7 @@ export default function GenerateReportVisiteButton({ onSuccess, onClose }: Props
             city: acc.city || '',
           });
         } catch (e) {
-          console.error('[ReportVisite] Errore decrypt cliente:', e);
+          console.error('[ReportVisite] Errore decrypt cliente:', acc.id, e);
           accountsMap.set(acc.id, {
             name: 'Cliente sconosciuto',
             city: acc.city || '',
