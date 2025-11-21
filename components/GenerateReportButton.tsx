@@ -92,10 +92,10 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
             name_iv: hexToBase64(c.name_iv),
           };
 
-          const decAny = await crypto.decryptFields(
+          const decAny = await (crypto as any).decryptFields(
             'table:accounts',
             'accounts',
-            '',
+            c.id, // ✅ FIX: Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
@@ -109,7 +109,13 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
             fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
           });
         } catch (e) {
-          console.error('[Report] Errore decrypt cliente:', e);
+          console.error('[Report] Errore decrypt cliente:', c.id, e);
+          clientsMap.set(c.id, {
+            name: 'Cliente sconosciuto',
+            city: c.city || '',
+            ultimaVisita: c.ultimo_esito_at,
+            fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
+          });
         }
       }
 
