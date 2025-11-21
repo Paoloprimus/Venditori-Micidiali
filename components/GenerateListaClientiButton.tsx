@@ -82,6 +82,7 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
           : ((x ?? {}) as Record<string, unknown>);
 
       const decryptedClients: any[] = [];
+      
       for (const c of clientsData) {
         try {
           const recordForDecrypt = {
@@ -90,19 +91,21 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
             name_iv: hexToBase64(c.name_iv),
           };
 
-          const decAny = await (crypto as any).decryptFields( // Aggiunto 'as any' per compatibilità
+          const decAny = await (crypto as any).decryptFields(
             'table:accounts',
             'accounts',
-            '',
+            c.id, // ✅ FIX: Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
 
           const dec = toObj(decAny);
 
+          const clientName = String(dec.name ?? 'Cliente senza nome');
+
           decryptedClients.push({
             id: c.id,
-            name: String(dec.name ?? 'Cliente senza nome'),
+            name: clientName,
             city: c.city || '',
             ultimaVisita: c.ultimo_esito_at,
             fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
@@ -110,7 +113,17 @@ export default function GenerateListaClientiButton({ onSuccess }: Props) {
             longitude: c.longitude,
           });
         } catch (e) {
-          console.error('[Lista] Errore decrypt:', e);
+          console.error('[Lista] Errore decrypt cliente:', c.id, e);
+          // Aggiungi comunque il cliente con nome fallback
+          decryptedClients.push({
+            id: c.id,
+            name: 'Cliente sconosciuto (errore decrypt)',
+            city: c.city || '',
+            ultimaVisita: c.ultimo_esito_at,
+            fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
+            latitude: c.latitude,
+            longitude: c.longitude,
+          });
         }
       }
 
