@@ -153,7 +153,7 @@ export default function PlanningEditorPage() {
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            '',  // ID vuoto come in /clients
+            c.id, 
             recordForDecrypt,
             ['name']
           );
@@ -434,7 +434,7 @@ export default function PlanningEditorPage() {
       }
 
       alert('✅ Piano salvato!');
-      router.push('/planning');
+      // router.push('/planning');
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
