@@ -84,7 +84,6 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -154,7 +153,7 @@ export default function PlanningEditorPage() {
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id,  // ✅ FIX: Usa l'ID del cliente come Associated Data
+            '',  // ID vuoto come in /clients
             recordForDecrypt,
             ['name']
           );
@@ -226,22 +225,6 @@ export default function PlanningEditorPage() {
     scored.sort((a, b) => b.score - a.score);
     setScoredClients(scored);
   }, [clients]);
-
-  // Traccia modifiche non salvate
-  useEffect(() => {
-    // Se non c'è un piano salvato, non tracciare modifiche
-    if (!plan?.id) {
-      setIsDirty(false);
-      return;
-    }
-
-    // Verifica se ci sono differenze rispetto al piano salvato
-    const hasChanges = 
-      JSON.stringify(selectedIds.sort()) !== JSON.stringify((plan.account_ids || []).sort()) ||
-      planNotes !== (plan.notes || '');
-
-    setIsDirty(hasChanges);
-  }, [selectedIds, planNotes, plan]);
 
   // Calcola punteggio AI per un cliente
   function calculateScore(client: Client): ScoredClient {
@@ -431,26 +414,13 @@ export default function PlanningEditorPage() {
       };
 
       if (plan?.id) {
-        // Update - ricarica il piano dal DB dopo l'aggiornamento
-        const { data: updated, error } = await supabase
+        // Update
+        const { error } = await supabase
           .from('daily_plans')
           .update(planData)
-          .eq('id', plan.id)
-          .select()
-          .single();
+          .eq('id', plan.id);
         
         if (error) throw error;
-        
-        // ✅ Usa il record aggiornato dal DB (garantisce sincronizzazione)
-        console.log('[Planning] Piano aggiornato:', updated);
-        console.log('[Planning] Status dopo update:', updated.status);
-        setPlan(updated);
-        
-        // Forza reset dirty DOPO setPlan
-        setTimeout(() => {
-          setIsDirty(false);
-          console.log('[Planning] isDirty resettato, plan.id:', updated.id, 'plan.status:', updated.status);
-        }, 0);
       } else {
         // Insert
         const { data: inserted, error } = await supabase
@@ -460,21 +430,11 @@ export default function PlanningEditorPage() {
           .single();
         
         if (error) throw error;
-        
-        // Imposta il piano appena inserito (con ID!)
-        console.log('[Planning] Piano inserito:', inserted);
-        console.log('[Planning] Status dopo insert:', inserted.status);
         setPlan(inserted);
-        
-        // Forza reset dirty DOPO setPlan
-        setTimeout(() => {
-          setIsDirty(false);
-          console.log('[Planning] isDirty resettato, plan.id:', inserted.id, 'plan.status:', inserted.status);
-        }, 0);
       }
 
-      // Nessun alert qui - il bottone cambia automaticamente testo
-      
+      alert('✅ Piano salvato!');
+      router.push('/planning');
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -506,7 +466,6 @@ export default function PlanningEditorPage() {
 
       console.log('✅ Piano attivato!');
       router.push(`/planning/${dataStr}/execute`);
-      
     } catch (e: any) {
       console.error('Errore attivazione:', e);
       alert(`Errore: ${e.message}`);
@@ -886,35 +845,23 @@ export default function PlanningEditorPage() {
 
           <button
             onClick={savePlan}
-            disabled={saving || selectedIds.length === 0 || !isDirty}
+            disabled={saving || selectedIds.length === 0}
             style={{
               padding: '12px 24px',
               borderRadius: 8,
               border: 'none',
-              background: saving || selectedIds.length === 0 || !isDirty ? '#9ca3af' : '#10b981',
+              background: saving || selectedIds.length === 0 ? '#9ca3af' : '#10b981',
               color: 'white',
               fontSize: 14,
               fontWeight: 600,
-              cursor: saving || selectedIds.length === 0 || !isDirty ? 'not-allowed' : 'pointer',
+              cursor: saving || selectedIds.length === 0 ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
+            {saving ? '⏳ Salvataggio...' : '💾 Salva Piano'}
           </button>
 
-          {/* DEBUG: Condizione bottone Avvia Giornata */}
-          {(() => {
-            const showButton = !isDirty && plan?.status === 'draft' && plan?.id;
-            console.log('[Planning] Render bottone Avvia:', {
-              isDirty,
-              plan_id: plan?.id,
-              plan_status: plan?.status,
-              showButton
-            });
-            return null;
-          })()}
-
-          {/* Bottone Avvia Giornata (solo se salvato e draft) */}
-          {!isDirty && plan?.status === 'draft' && plan?.id && (
+          {/* Bottone Avvia Giornata (solo se draft e salvato) */}
+          {plan?.status === 'draft' && plan?.id && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}
