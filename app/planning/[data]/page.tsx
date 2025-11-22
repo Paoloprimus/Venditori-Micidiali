@@ -443,7 +443,14 @@ export default function PlanningEditorPage() {
         
         // ✅ Usa il record aggiornato dal DB (garantisce sincronizzazione)
         console.log('[Planning] Piano aggiornato:', updated);
+        console.log('[Planning] Status dopo update:', updated.status);
         setPlan(updated);
+        
+        // Forza reset dirty DOPO setPlan
+        setTimeout(() => {
+          setIsDirty(false);
+          console.log('[Planning] isDirty resettato, plan.id:', updated.id, 'plan.status:', updated.status);
+        }, 0);
       } else {
         // Insert
         const { data: inserted, error } = await supabase
@@ -456,13 +463,18 @@ export default function PlanningEditorPage() {
         
         // Imposta il piano appena inserito (con ID!)
         console.log('[Planning] Piano inserito:', inserted);
+        console.log('[Planning] Status dopo insert:', inserted.status);
         setPlan(inserted);
+        
+        // Forza reset dirty DOPO setPlan
+        setTimeout(() => {
+          setIsDirty(false);
+          console.log('[Planning] isDirty resettato, plan.id:', inserted.id, 'plan.status:', inserted.status);
+        }, 0);
       }
 
-      // ✅ Piano salvato con successo - resetta dirty state
-      setIsDirty(false);
-      alert('✅ Piano salvato! Ora puoi avviare la giornata.');
-      // ✅ NESSUN REDIRECT! L'utente rimane sulla pagina e vede il bottone "Avvia Giornata"
+      // Nessun alert qui - il bottone cambia automaticamente testo
+      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -494,6 +506,7 @@ export default function PlanningEditorPage() {
 
       console.log('✅ Piano attivato!');
       router.push(`/planning/${dataStr}/execute`);
+      
     } catch (e: any) {
       console.error('Errore attivazione:', e);
       alert(`Errore: ${e.message}`);
@@ -887,6 +900,18 @@ export default function PlanningEditorPage() {
           >
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
+
+          {/* DEBUG: Condizione bottone Avvia Giornata */}
+          {(() => {
+            const showButton = !isDirty && plan?.status === 'draft' && plan?.id;
+            console.log('[Planning] Render bottone Avvia:', {
+              isDirty,
+              plan_id: plan?.id,
+              plan_status: plan?.status,
+              showButton
+            });
+            return null;
+          })()}
 
           {/* Bottone Avvia Giornata (solo se salvato e draft) */}
           {!isDirty && plan?.status === 'draft' && plan?.id && (
