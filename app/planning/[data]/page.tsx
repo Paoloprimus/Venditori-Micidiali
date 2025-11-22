@@ -84,6 +84,7 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
+  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -153,7 +154,7 @@ export default function PlanningEditorPage() {
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id, 
+            c.id,  // ✅ FIX: Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
@@ -225,6 +226,22 @@ export default function PlanningEditorPage() {
     scored.sort((a, b) => b.score - a.score);
     setScoredClients(scored);
   }, [clients]);
+
+  // Traccia modifiche non salvate
+  useEffect(() => {
+    // Se non c'è un piano salvato, non tracciare modifiche
+    if (!plan?.id) {
+      setIsDirty(false);
+      return;
+    }
+
+    // Verifica se ci sono differenze rispetto al piano salvato
+    const hasChanges = 
+      JSON.stringify(selectedIds.sort()) !== JSON.stringify((plan.account_ids || []).sort()) ||
+      planNotes !== (plan.notes || '');
+
+    setIsDirty(hasChanges);
+  }, [selectedIds, planNotes, plan]);
 
   // Calcola punteggio AI per un cliente
   function calculateScore(client: Client): ScoredClient {
@@ -414,13 +431,19 @@ export default function PlanningEditorPage() {
       };
 
       if (plan?.id) {
-        // Update
-        const { error } = await supabase
+        // Update - ricarica il piano dal DB dopo l'aggiornamento
+        const { data: updated, error } = await supabase
           .from('daily_plans')
           .update(planData)
-          .eq('id', plan.id);
+          .eq('id', plan.id)
+          .select()
+          .single();
         
         if (error) throw error;
+        
+        // ✅ Usa il record aggiornato dal DB (garantisce sincronizzazione)
+        console.log('[Planning] Piano aggiornato:', updated);
+        setPlan(updated);
       } else {
         // Insert
         const { data: inserted, error } = await supabase
@@ -430,11 +453,16 @@ export default function PlanningEditorPage() {
           .single();
         
         if (error) throw error;
+        
+        // Imposta il piano appena inserito (con ID!)
+        console.log('[Planning] Piano inserito:', inserted);
         setPlan(inserted);
       }
 
-      alert('✅ Piano salvato!');
-      // router.push('/planning');
+      // ✅ Piano salvato con successo - resetta dirty state
+      setIsDirty(false);
+      alert('✅ Piano salvato! Ora puoi avviare la giornata.');
+      // ✅ NESSUN REDIRECT! L'utente rimane sulla pagina e vede il bottone "Avvia Giornata"
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -845,23 +873,23 @@ export default function PlanningEditorPage() {
 
           <button
             onClick={savePlan}
-            disabled={saving || selectedIds.length === 0}
+            disabled={saving || selectedIds.length === 0 || !isDirty}
             style={{
               padding: '12px 24px',
               borderRadius: 8,
               border: 'none',
-              background: saving || selectedIds.length === 0 ? '#9ca3af' : '#10b981',
+              background: saving || selectedIds.length === 0 || !isDirty ? '#9ca3af' : '#10b981',
               color: 'white',
               fontSize: 14,
               fontWeight: 600,
-              cursor: saving || selectedIds.length === 0 ? 'not-allowed' : 'pointer',
+              cursor: saving || selectedIds.length === 0 || !isDirty ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? '⏳ Salvataggio...' : '💾 Salva Piano'}
+            {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* Bottone Avvia Giornata (solo se draft e salvato) */}
-          {plan?.status === 'draft' && plan?.id && (
+          {/* Bottone Avvia Giornata (solo se salvato e draft) */}
+          {!isDirty && plan?.status === 'draft' && plan?.id && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}
