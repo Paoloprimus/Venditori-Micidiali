@@ -81,7 +81,7 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate (Manuale)
+  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -151,7 +151,7 @@ export default function PlanningEditorPage() {
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id,  // ✅ FIX: Usa l'ID del cliente come Associated Data
+            c.id,
             recordForDecrypt,
             ['name']
           );
@@ -207,7 +207,6 @@ export default function PlanningEditorPage() {
         setPlanNotes(planData.notes || '');
       }
 
-      // ✅ Reset manuale: appena caricato, è pulito.
       setIsDirty(false);
 
     } catch (e: any) {
@@ -227,22 +226,17 @@ export default function PlanningEditorPage() {
     setScoredClients(scored);
   }, [clients]);
 
-  // ❌ RIMOSSO useEffect per isDirty (P0.2 - Soluzione Definitiva)
-  // La gestione è ora completamente manuale nelle funzioni di modifica/salvataggio.
-
   // Calcola punteggio AI per un cliente
   function calculateScore(client: Client): ScoredClient {
     const today = new Date(dataStr);
 
-    // 1. LATENZA (32%) - Giorni dall'ultima visita
+    // 1. LATENZA (32%)
     let latencyScore = 0;
     let daysAgo = 0;
     
     if (client.ultimo_esito_at) {
       const lastVisit = new Date(client.ultimo_esito_at);
       daysAgo = Math.floor((today.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
-      
-      // Più giorni sono passati, più punteggio
       if (daysAgo >= 30) latencyScore = 100;
       else if (daysAgo >= 21) latencyScore = 80;
       else if (daysAgo >= 14) latencyScore = 60;
@@ -250,23 +244,18 @@ export default function PlanningEditorPage() {
       else if (daysAgo >= 3) latencyScore = 20;
       else latencyScore = 10;
     } else {
-      // Mai visitato = massima priorità
       latencyScore = 100;
       daysAgo = 999;
     }
 
-    // 2. DISTANZA (28%) - Vicinanza ad altri clienti selezionati
-    let distanceScore = 50; // default medio se nessuno selezionato
-    
+    // 2. DISTANZA (28%)
+    let distanceScore = 50;
     if (selectedIds.length > 0) {
       const selectedClients = clients.filter(c => selectedIds.includes(c.id));
       const distances = selectedClients.map(sc => 
         calculateDistance(client.latitude, client.longitude, sc.latitude, sc.longitude)
       );
-      
       const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
-      
-      // Più vicino = più punteggio
       if (avgDistance < 5) distanceScore = 100;
       else if (avgDistance < 10) distanceScore = 80;
       else if (avgDistance < 20) distanceScore = 60;
@@ -274,9 +263,8 @@ export default function PlanningEditorPage() {
       else distanceScore = 20;
     }
 
-    // 3. REVENUE (25%) - Volume vendite
+    // 3. REVENUE (25%)
     let revenueScore = 0;
-    
     if (client.volume_attuale) {
       if (client.volume_attuale >= 1000) revenueScore = 100;
       else if (client.volume_attuale >= 750) revenueScore = 80;
@@ -284,17 +272,15 @@ export default function PlanningEditorPage() {
       else if (client.volume_attuale >= 250) revenueScore = 40;
       else revenueScore = 20;
     } else {
-      revenueScore = 30; // default per chi non ha volume
+      revenueScore = 30;
     }
 
-    // 4. NOTE PRESCRITTIVE (20%) - Keywords urgenti
+    // 4. NOTE (20%)
     let notesScore = 0;
     const notes = client.custom?.notes || '';
     const notesLower = notes.toLowerCase();
-    
     const urgentKeywords = ['urgente', 'richiamare', 'importante', 'priorit', 'subito', 'asap'];
     const positiveKeywords = ['interessato', 'caldo', 'ordine', 'acquisto'];
-    
     if (urgentKeywords.some(kw => notesLower.includes(kw))) {
       notesScore = 100;
     } else if (positiveKeywords.some(kw => notesLower.includes(kw))) {
@@ -305,7 +291,6 @@ export default function PlanningEditorPage() {
       notesScore = 0;
     }
 
-    // Punteggio finale pesato
     const finalScore = Math.round(
       (latencyScore * 0.32) +
       (distanceScore * 0.28) +
@@ -326,9 +311,8 @@ export default function PlanningEditorPage() {
     };
   }
 
-  // Calcola distanza tra due punti GPS (km)
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371; // Raggio Terra in km
+    const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
     const a = 
@@ -339,34 +323,24 @@ export default function PlanningEditorPage() {
     return R * c;
   }
 
-  // Genera suggerimenti Smart
   function handleSmartSuggestion() {
     const topClients = scoredClients.slice(0, numClients);
     const ids = topClients.map(c => c.id);
     setSelectedIds(ids);
-    setIsDirty(true); // ✅ Manual dirty
+    setIsDirty(true);
   }
 
-  // Ottimizza percorso (TSP semplificato - nearest neighbor)
   function optimizeRoute() {
     if (selectedIds.length <= 1) return;
-
     const selectedClients = clients.filter(c => selectedIds.includes(c.id));
-    
-    // Algoritmo nearest neighbor (greedy)
     const ordered: Client[] = [];
     const remaining = [...selectedClients];
-    
-    // Parti dal primo cliente
     ordered.push(remaining.shift()!);
     
     while (remaining.length > 0) {
       const current = ordered[ordered.length - 1];
-      
-      // Trova il più vicino
       let nearestIdx = 0;
       let nearestDist = Infinity;
-      
       for (let i = 0; i < remaining.length; i++) {
         const dist = calculateDistance(
           current.latitude,
@@ -374,32 +348,26 @@ export default function PlanningEditorPage() {
           remaining[i].latitude,
           remaining[i].longitude
         );
-        
         if (dist < nearestDist) {
           nearestDist = dist;
           nearestIdx = i;
         }
       }
-      
       ordered.push(remaining.splice(nearestIdx, 1)[0]);
     }
-    
-    // Aggiorna ordine
     setSelectedIds(ordered.map(c => c.id));
-    setIsDirty(true); // ✅ Manual dirty
+    setIsDirty(true);
   }
 
-  // Toggle selezione cliente
   function toggleClient(id: string) {
     setSelectedIds(prev => 
       prev.includes(id) 
         ? prev.filter(i => i !== id)
         : [...prev, id]
     );
-    setIsDirty(true); // ✅ Manual dirty
+    setIsDirty(true);
   }
 
-  // Salva piano
   async function savePlan() {
     if (selectedIds.length === 0) {
       alert('Seleziona almeno un cliente');
@@ -415,7 +383,7 @@ export default function PlanningEditorPage() {
         user_id: user.id,
         data: dataStr,
         account_ids: selectedIds,
-        route_data: {}, // TODO: salvare dati percorso
+        route_data: {},
         notes: planNotes,
         status: plan?.status || 'draft',
       };
@@ -423,33 +391,26 @@ export default function PlanningEditorPage() {
       let updatedPlan;
 
       if (plan?.id) {
-        // Update - ricarica il piano dal DB dopo l'aggiornamento
         const { data, error } = await supabase
           .from('daily_plans')
           .update(planData)
           .eq('id', plan.id)
           .select()
           .single();
-        
         if (error) throw error;
         updatedPlan = data;
-        
       } else {
-        // Insert
         const { data, error } = await supabase
           .from('daily_plans')
           .insert(planData)
           .select()
           .single();
-        
         if (error) throw error;
         updatedPlan = data;
       }
 
-      // ✅ AGGIORNAMENTO STATO SICURO (nessun timeout)
-      console.log('[Planning] Piano salvato:', updatedPlan);
       setPlan(updatedPlan);
-      setIsDirty(false); // 🔒 Blocco le modifiche: "siamo puliti"
+      setIsDirty(false);
       
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
@@ -459,7 +420,6 @@ export default function PlanningEditorPage() {
     }
   }
 
-  // Attiva piano (draft → active)
   async function activatePlan() {
     if (!plan?.id) {
       alert('Devi prima salvare il piano');
@@ -480,7 +440,6 @@ export default function PlanningEditorPage() {
       
       if (error) throw error;
 
-      console.log('✅ Piano attivato!');
       router.push(`/planning/${dataStr}/execute`);
       
     } catch (e: any) {
@@ -491,25 +450,18 @@ export default function PlanningEditorPage() {
     }
   }
 
-  // Formatta data
   function formatDate(dateStr: string) {
     const date = new Date(dateStr);
     const days = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-    const months = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 
-                    'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
-    
+    const months = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
     return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   }
 
   if (!actuallyReady) {
     return (
       <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>
-          🔐 Sblocco crittografia...
-        </h2>
-        <p style={{ color: '#6b7280' }}>
-          Attendere il caricamento del sistema di cifratura.
-        </p>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>🔐 Sblocco crittografia...</h2>
+        <p style={{ color: '#6b7280' }}>Attendere il caricamento del sistema di cifratura.</p>
       </div>
     );
   }
@@ -517,9 +469,7 @@ export default function PlanningEditorPage() {
   if (loading) {
     return (
       <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>
-          ⏳ Caricamento...
-        </h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>⏳ Caricamento...</h2>
       </div>
     );
   }
@@ -831,7 +781,7 @@ export default function PlanningEditorPage() {
             value={planNotes}
             onChange={(e) => {
               setPlanNotes(e.target.value);
-              setIsDirty(true); // ✅ Manual dirty
+              setIsDirty(true);
             }}
             placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..."
             rows={4}
@@ -880,23 +830,8 @@ export default function PlanningEditorPage() {
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* DEBUG: Condizione bottone Avvia Giornata */}
-          {(() => {
-            const showButton = !isDirty && plan?.status === 'draft' && plan?.id;
-            if (showButton) {
-                console.log('[Planning] ✅ Bottone Avvia VISIBILE');
-            } else {
-                console.log('[Planning] ❌ Bottone Avvia NASCOSTO perché:', {
-                    isDirty,
-                    status: plan?.status,
-                    hasId: !!plan?.id
-                });
-            }
-            return null;
-          })()}
-
-          {/* Bottone Avvia Giornata (solo se salvato e draft) */}
-          {!isDirty && plan?.status === 'draft' && plan?.id && (
+          {/* Bottone Avvia Giornata - SENZA ISDIRTY CHECK */}
+          {plan?.status === 'draft' && plan?.id && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}
