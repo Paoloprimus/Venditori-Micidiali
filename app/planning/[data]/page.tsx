@@ -233,8 +233,10 @@ export default function PlanningEditorPage() {
     }
 
     // Verifica se ci sono differenze rispetto al piano salvato
+    // ✅ FIX CRITICO P0.2: Usa copia degli array ([...array]) per il sort
+    // per evitare di mutare lo stato e causare loop o controlli errati
     const hasChanges = 
-      JSON.stringify(selectedIds.sort()) !== JSON.stringify((plan.account_ids || []).sort()) ||
+      JSON.stringify([...selectedIds].sort()) !== JSON.stringify([...(plan.account_ids || [])].sort()) ||
       planNotes !== (plan.notes || '');
 
     setIsDirty(hasChanges);
@@ -427,9 +429,11 @@ export default function PlanningEditorPage() {
         status: plan?.status || 'draft',
       };
 
+      let updatedPlan;
+
       if (plan?.id) {
         // Update - ricarica il piano dal DB dopo l'aggiornamento
-        const { data: updated, error } = await supabase
+        const { data, error } = await supabase
           .from('daily_plans')
           .update(planData)
           .eq('id', plan.id)
@@ -437,35 +441,24 @@ export default function PlanningEditorPage() {
           .single();
         
         if (error) throw error;
-        
-        // ✅ Usa il record aggiornato dal DB (garantisce sincronizzazione)
-        console.log('[Planning] Piano aggiornato:', updated);
-        console.log('[Planning] Status dopo update:', updated.status);
-        setPlan(updated);
-        
-        // ✅ FIXED: Rimosso setTimeout per P0.2
-        setIsDirty(false);
-        console.log('[Planning] isDirty resettato, plan.id:', updated.id, 'plan.status:', updated.status);
+        updatedPlan = data;
         
       } else {
         // Insert
-        const { data: inserted, error } = await supabase
+        const { data, error } = await supabase
           .from('daily_plans')
           .insert(planData)
           .select()
           .single();
         
         if (error) throw error;
-        
-        // Imposta il piano appena inserito (con ID!)
-        console.log('[Planning] Piano inserito:', inserted);
-        console.log('[Planning] Status dopo insert:', inserted.status);
-        setPlan(inserted);
-        
-        // ✅ FIXED: Rimosso setTimeout per P0.2
-        setIsDirty(false);
-        console.log('[Planning] isDirty resettato, plan.id:', inserted.id, 'plan.status:', inserted.status);
+        updatedPlan = data;
       }
+
+      // ✅ FIX: Aggiorna lo stato con il dato DB e resetta isDirty immediatamente
+      console.log('[Planning] Piano salvato:', updatedPlan);
+      setPlan(updatedPlan);
+      setIsDirty(false); // Reset immediato, il useEffect confermerà perché ora gli array saranno identici
 
       // Nessun alert qui - il bottone cambia automaticamente testo
       
@@ -894,18 +887,6 @@ export default function PlanningEditorPage() {
           >
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
-
-          {/* DEBUG: Condizione bottone Avvia Giornata */}
-          {(() => {
-            const showButton = !isDirty && plan?.status === 'draft' && plan?.id;
-            console.log('[Planning] Render bottone Avvia:', {
-              isDirty,
-              plan_id: plan?.id,
-              plan_status: plan?.status,
-              showButton
-            });
-            return null;
-          })()}
 
           {/* Bottone Avvia Giornata (solo se salvato e draft) */}
           {!isDirty && plan?.status === 'draft' && plan?.id && (
