@@ -81,7 +81,7 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
+  const [isDirty, setIsDirty] = useState(false);
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -116,20 +116,16 @@ export default function PlanningEditorPage() {
 
       if (clientsError) throw clientsError;
 
-      // Decifra nomi clienti (STESSO PATTERN DI /clients/page.tsx)
       const decryptedClients: Client[] = [];
       
-      // Helper: converti hex-string in base64
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
-        
         const hex = hexStr.slice(2);
         const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
         return bytes;
       };
       
-      // Helper: converte risultato decryptFields in oggetto
       const toObj = (x: any): Record<string, unknown> =>
         Array.isArray(x)
           ? x.reduce((acc: Record<string, unknown>, it: any) => {
@@ -140,14 +136,12 @@ export default function PlanningEditorPage() {
       
       for (const c of clientsData || []) {
         try {
-          // Converti hex a base64
           const recordForDecrypt = {
             ...c,
             name_enc: hexToBase64(c.name_enc),
             name_iv: hexToBase64(c.name_iv),
           };
           
-          // Decifra
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
@@ -156,7 +150,6 @@ export default function PlanningEditorPage() {
             ['name']
           );
           
-          // Converti in oggetto
           const dec = toObj(decAny);
           
           decryptedClients.push({
@@ -173,7 +166,6 @@ export default function PlanningEditorPage() {
           });
         } catch (e) {
           console.error('[Planning] Errore decrypt cliente:', e);
-          // Aggiungi comunque con ID come fallback
           decryptedClients.push({
             id: c.id,
             name: `Cliente #${c.id.slice(0, 8)}`,
@@ -217,23 +209,20 @@ export default function PlanningEditorPage() {
     }
   }
 
-  // Calcola punteggi AI per tutti i clienti
+  // Calcola punteggi AI
   useEffect(() => {
     if (clients.length === 0) return;
-
     const scored = clients.map(client => calculateScore(client));
     scored.sort((a, b) => b.score - a.score);
     setScoredClients(scored);
   }, [clients]);
 
-  // Calcola punteggio AI per un cliente
+  // Calcola punteggio AI
   function calculateScore(client: Client): ScoredClient {
     const today = new Date(dataStr);
 
-    // 1. LATENZA (32%)
     let latencyScore = 0;
     let daysAgo = 0;
-    
     if (client.ultimo_esito_at) {
       const lastVisit = new Date(client.ultimo_esito_at);
       daysAgo = Math.floor((today.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
@@ -248,7 +237,6 @@ export default function PlanningEditorPage() {
       daysAgo = 999;
     }
 
-    // 2. DISTANZA (28%)
     let distanceScore = 50;
     if (selectedIds.length > 0) {
       const selectedClients = clients.filter(c => selectedIds.includes(c.id));
@@ -263,7 +251,6 @@ export default function PlanningEditorPage() {
       else distanceScore = 20;
     }
 
-    // 3. REVENUE (25%)
     let revenueScore = 0;
     if (client.volume_attuale) {
       if (client.volume_attuale >= 1000) revenueScore = 100;
@@ -275,7 +262,6 @@ export default function PlanningEditorPage() {
       revenueScore = 30;
     }
 
-    // 4. NOTE (20%)
     let notesScore = 0;
     const notes = client.custom?.notes || '';
     const notesLower = notes.toLowerCase();
@@ -287,26 +273,16 @@ export default function PlanningEditorPage() {
       notesScore = 60;
     } else if (notes.trim()) {
       notesScore = 30;
-    } else {
-      notesScore = 0;
     }
 
     const finalScore = Math.round(
-      (latencyScore * 0.32) +
-      (distanceScore * 0.28) +
-      (revenueScore * 0.25) +
-      (notesScore * 0.20)
+      (latencyScore * 0.32) + (distanceScore * 0.28) + (revenueScore * 0.25) + (notesScore * 0.20)
     );
 
     return {
       ...client,
       score: finalScore,
-      scoreBreakdown: {
-        latency: latencyScore,
-        distance: distanceScore,
-        revenue: revenueScore,
-        notes: notesScore,
-      },
+      scoreBreakdown: { latency: latencyScore, distance: distanceScore, revenue: revenueScore, notes: notesScore },
       daysAgo,
     };
   }
@@ -315,10 +291,7 @@ export default function PlanningEditorPage() {
     const R = 6371;
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = 
-      Math.sin(dLat/2) * Math.sin(dLat/2) +
-      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
   }
@@ -336,18 +309,12 @@ export default function PlanningEditorPage() {
     const ordered: Client[] = [];
     const remaining = [...selectedClients];
     ordered.push(remaining.shift()!);
-    
     while (remaining.length > 0) {
       const current = ordered[ordered.length - 1];
       let nearestIdx = 0;
       let nearestDist = Infinity;
       for (let i = 0; i < remaining.length; i++) {
-        const dist = calculateDistance(
-          current.latitude,
-          current.longitude,
-          remaining[i].latitude,
-          remaining[i].longitude
-        );
+        const dist = calculateDistance(current.latitude, current.longitude, remaining[i].latitude, remaining[i].longitude);
         if (dist < nearestDist) {
           nearestDist = dist;
           nearestIdx = i;
@@ -360,11 +327,7 @@ export default function PlanningEditorPage() {
   }
 
   function toggleClient(id: string) {
-    setSelectedIds(prev => 
-      prev.includes(id) 
-        ? prev.filter(i => i !== id)
-        : [...prev, id]
-    );
+    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
     setIsDirty(true);
   }
 
@@ -389,28 +352,18 @@ export default function PlanningEditorPage() {
       };
 
       let updatedPlan;
-
       if (plan?.id) {
-        const { data, error } = await supabase
-          .from('daily_plans')
-          .update(planData)
-          .eq('id', plan.id)
-          .select()
-          .single();
+        const { data, error } = await supabase.from('daily_plans').update(planData).eq('id', plan.id).select().single();
         if (error) throw error;
         updatedPlan = data;
       } else {
-        const { data, error } = await supabase
-          .from('daily_plans')
-          .insert(planData)
-          .select()
-          .single();
+        const { data, error } = await supabase.from('daily_plans').insert(planData).select().single();
         if (error) throw error;
         updatedPlan = data;
       }
 
       setPlan(updatedPlan);
-      setIsDirty(false);
+      setIsDirty(false); // Reset manuale
       
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
@@ -425,23 +378,15 @@ export default function PlanningEditorPage() {
       alert('Devi prima salvare il piano');
       return;
     }
-
     if (selectedIds.length === 0) {
       alert('Seleziona almeno un cliente per attivare il piano');
       return;
     }
-
     setSaving(true);
     try {
-      const { error } = await supabase
-        .from('daily_plans')
-        .update({ status: 'active' })
-        .eq('id', plan.id);
-      
+      const { error } = await supabase.from('daily_plans').update({ status: 'active' }).eq('id', plan.id);
       if (error) throw error;
-
       router.push(`/planning/${dataStr}/execute`);
-      
     } catch (e: any) {
       console.error('Errore attivazione:', e);
       alert(`Errore: ${e.message}`);
@@ -781,7 +726,7 @@ export default function PlanningEditorPage() {
             value={planNotes}
             onChange={(e) => {
               setPlanNotes(e.target.value);
-              setIsDirty(true);
+              setIsDirty(true); // ✅ Modifica manuale
             }}
             placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..."
             rows={4}
@@ -830,7 +775,7 @@ export default function PlanningEditorPage() {
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* Bottone Avvia Giornata - SENZA ISDIRTY CHECK */}
+          {/* Bottone Avvia Giornata (solo se draft e salvato) */}
           {plan?.status === 'draft' && plan?.id && (
             <button
               onClick={activatePlan}
