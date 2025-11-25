@@ -81,7 +81,7 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
+  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate (Manuale)
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -207,7 +207,7 @@ export default function PlanningEditorPage() {
         setPlanNotes(planData.notes || '');
       }
 
-      // ✅ Appena caricato, i dati sono sincronizzati (non sporchi)
+      // ✅ Reset manuale: appena caricato, è pulito.
       setIsDirty(false);
 
     } catch (e: any) {
@@ -226,6 +226,9 @@ export default function PlanningEditorPage() {
     scored.sort((a, b) => b.score - a.score);
     setScoredClients(scored);
   }, [clients]);
+
+  // ❌ RIMOSSO useEffect per isDirty (P0.2 - Soluzione Definitiva)
+  // La gestione è ora completamente manuale nelle funzioni di modifica/salvataggio.
 
   // Calcola punteggio AI per un cliente
   function calculateScore(client: Client): ScoredClient {
@@ -341,7 +344,7 @@ export default function PlanningEditorPage() {
     const topClients = scoredClients.slice(0, numClients);
     const ids = topClients.map(c => c.id);
     setSelectedIds(ids);
-    setIsDirty(true); // ✅ Modifica rilevata
+    setIsDirty(true); // ✅ Manual dirty
   }
 
   // Ottimizza percorso (TSP semplificato - nearest neighbor)
@@ -383,7 +386,7 @@ export default function PlanningEditorPage() {
     
     // Aggiorna ordine
     setSelectedIds(ordered.map(c => c.id));
-    setIsDirty(true); // ✅ Modifica rilevata
+    setIsDirty(true); // ✅ Manual dirty
   }
 
   // Toggle selezione cliente
@@ -393,7 +396,7 @@ export default function PlanningEditorPage() {
         ? prev.filter(i => i !== id)
         : [...prev, id]
     );
-    setIsDirty(true); // ✅ Modifica rilevata
+    setIsDirty(true); // ✅ Manual dirty
   }
 
   // Salva piano
@@ -443,11 +446,11 @@ export default function PlanningEditorPage() {
         updatedPlan = data;
       }
 
-      // ✅ FIX: Aggiorna lo stato con il dato DB e resetta isDirty immediatamente
+      // ✅ AGGIORNAMENTO STATO SICURO (nessun timeout)
       console.log('[Planning] Piano salvato:', updatedPlan);
       setPlan(updatedPlan);
-      setIsDirty(false); // ✅ Reset immediato e sicuro
-
+      setIsDirty(false); // 🔒 Blocco le modifiche: "siamo puliti"
+      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -828,7 +831,7 @@ export default function PlanningEditorPage() {
             value={planNotes}
             onChange={(e) => {
               setPlanNotes(e.target.value);
-              setIsDirty(true); // ✅ Modifica rilevata manualmente
+              setIsDirty(true); // ✅ Manual dirty
             }}
             placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..."
             rows={4}
@@ -876,6 +879,21 @@ export default function PlanningEditorPage() {
           >
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
+
+          {/* DEBUG: Condizione bottone Avvia Giornata */}
+          {(() => {
+            const showButton = !isDirty && plan?.status === 'draft' && plan?.id;
+            if (showButton) {
+                console.log('[Planning] ✅ Bottone Avvia VISIBILE');
+            } else {
+                console.log('[Planning] ❌ Bottone Avvia NASCOSTO perché:', {
+                    isDirty,
+                    status: plan?.status,
+                    hasId: !!plan?.id
+                });
+            }
+            return null;
+          })()}
 
           {/* Bottone Avvia Giornata (solo se salvato e draft) */}
           {!isDirty && plan?.status === 'draft' && plan?.id && (
