@@ -207,6 +207,9 @@ export default function PlanningEditorPage() {
         setPlanNotes(planData.notes || '');
       }
 
+      // ✅ Appena caricato, i dati sono sincronizzati (non sporchi)
+      setIsDirty(false);
+
     } catch (e: any) {
       console.error('Errore caricamento dati:', e);
       alert(`Errore: ${e.message}`);
@@ -223,24 +226,6 @@ export default function PlanningEditorPage() {
     scored.sort((a, b) => b.score - a.score);
     setScoredClients(scored);
   }, [clients]);
-
-  // Traccia modifiche non salvate
-  useEffect(() => {
-    // Se non c'è un piano salvato, non tracciare modifiche
-    if (!plan?.id) {
-      setIsDirty(false);
-      return;
-    }
-
-    // Verifica se ci sono differenze rispetto al piano salvato
-    // ✅ FIX CRITICO P0.2: Usa copia degli array ([...array]) per il sort
-    // per evitare di mutare lo stato e causare loop o controlli errati
-    const hasChanges = 
-      JSON.stringify([...selectedIds].sort()) !== JSON.stringify([...(plan.account_ids || [])].sort()) ||
-      planNotes !== (plan.notes || '');
-
-    setIsDirty(hasChanges);
-  }, [selectedIds, planNotes, plan]);
 
   // Calcola punteggio AI per un cliente
   function calculateScore(client: Client): ScoredClient {
@@ -356,6 +341,7 @@ export default function PlanningEditorPage() {
     const topClients = scoredClients.slice(0, numClients);
     const ids = topClients.map(c => c.id);
     setSelectedIds(ids);
+    setIsDirty(true); // ✅ Modifica rilevata
   }
 
   // Ottimizza percorso (TSP semplificato - nearest neighbor)
@@ -397,6 +383,7 @@ export default function PlanningEditorPage() {
     
     // Aggiorna ordine
     setSelectedIds(ordered.map(c => c.id));
+    setIsDirty(true); // ✅ Modifica rilevata
   }
 
   // Toggle selezione cliente
@@ -406,6 +393,7 @@ export default function PlanningEditorPage() {
         ? prev.filter(i => i !== id)
         : [...prev, id]
     );
+    setIsDirty(true); // ✅ Modifica rilevata
   }
 
   // Salva piano
@@ -458,10 +446,8 @@ export default function PlanningEditorPage() {
       // ✅ FIX: Aggiorna lo stato con il dato DB e resetta isDirty immediatamente
       console.log('[Planning] Piano salvato:', updatedPlan);
       setPlan(updatedPlan);
-      setIsDirty(false); // Reset immediato, il useEffect confermerà perché ora gli array saranno identici
+      setIsDirty(false); // ✅ Reset immediato e sicuro
 
-      // Nessun alert qui - il bottone cambia automaticamente testo
-      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -840,7 +826,10 @@ export default function PlanningEditorPage() {
           
           <textarea
             value={planNotes}
-            onChange={(e) => setPlanNotes(e.target.value)}
+            onChange={(e) => {
+              setPlanNotes(e.target.value);
+              setIsDirty(true); // ✅ Modifica rilevata manualmente
+            }}
             placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..."
             rows={4}
             style={{
