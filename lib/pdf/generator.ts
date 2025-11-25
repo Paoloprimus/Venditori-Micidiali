@@ -17,7 +17,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
 
   // ============== HEADER ==============
   doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.text('REPING', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 10;
@@ -26,7 +26,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
   
   yPos += 8;
   doc.setFontSize(12);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('Times', 'normal'); // Modificato da helvetica
   doc.text(data.periodoFormattato, pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 6;
@@ -43,13 +43,13 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
 
   // ============== RIEPILOGO ==============
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.setTextColor(0);
   doc.text('📊 Riepilogo Periodo', 15, yPos);
   yPos += 8;
 
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('Times', 'normal'); // Modificato da helvetica
   
   const riepilogo = [
     `Periodo: ${data.dataInizio} - ${data.dataFine}`,
@@ -68,7 +68,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
 
   // ============== DETTAGLIO VISITE ==============
   doc.setFontSize(14);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.text('📋 Dettaglio Visite', 15, yPos);
   yPos += 5;
 
@@ -89,6 +89,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
     body: tableData,
     theme: 'striped',
     styles: { 
+      font: 'Times', // Aggiunto font Times per la tabella
       fontSize: 8,
       cellPadding: 3,
       overflow: 'linebreak'
@@ -96,7 +97,8 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
     headStyles: { 
       fillColor: [37, 99, 235], // blu
       textColor: 255,
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      font: 'Times' // Assicuriamo Times anche nell'header
     },
     columnStyles: {
       0: { cellWidth: 30 },  // Data/Ora
@@ -113,6 +115,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
       const currentPage = (doc as any).internal.getCurrentPageInfo().pageNumber;
       
       doc.setFontSize(8);
+      doc.setFont('Times', 'normal'); // Assicura font Times nel footer
       doc.setTextColor(150);
       doc.text(
         `Generato il ${new Date().toLocaleString('it-IT')} - Pagina ${currentPage}/${pageCount}`,
@@ -140,7 +143,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
 
   // ============== HEADER ==============
   doc.setFontSize(20);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.text('REPING', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 10;
@@ -149,7 +152,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   
   yPos += 8;
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('Times', 'normal'); // Modificato da helvetica
   doc.setTextColor(100);
   doc.text(`Agente: ${data.nomeAgente}`, pageWidth / 2, yPos, { align: 'center' });
   
@@ -165,13 +168,13 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
 
   // ============== FILTRI APPLICATI ==============
   doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.setTextColor(0);
   doc.text('🔍 Filtri Applicati', 15, yPos);
   yPos += 7;
 
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('Times', 'normal'); // Modificato da helvetica
   doc.text(`Tipo: ${data.filtri.tipo}`, 20, yPos);
   yPos += 6;
   doc.text(`Criteri: ${data.filtri.descrizione}`, 20, yPos);
@@ -179,7 +182,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
 
   // ============== RISULTATI ==============
   doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.text('📊 Risultati', 15, yPos);
   yPos += 5;
 
@@ -200,6 +203,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
     body: tableData,
     theme: 'striped',
     styles: { 
+      font: 'Times', // Aggiunto font Times per la tabella
       fontSize: 8,
       cellPadding: 3,
       overflow: 'linebreak'
@@ -207,7 +211,8 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
     headStyles: { 
       fillColor: [37, 99, 235],
       textColor: 255,
-      fontStyle: 'bold'
+      fontStyle: 'bold',
+      font: 'Times' // Font Times nell'header
     },
     columnStyles: {
       0: { cellWidth: 40 },  // Cliente
@@ -224,6 +229,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
       const currentPage = (doc as any).internal.getCurrentPageInfo().pageNumber;
       
       doc.setFontSize(8);
+      doc.setFont('Times', 'normal'); // Font Times nel footer
       doc.setTextColor(150);
       doc.text(
         `Generato il ${new Date().toLocaleString('it-IT')} - Pagina ${currentPage}/${pageCount}`,
@@ -238,11 +244,11 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   const finalY = (doc as any).lastAutoTable.finalY + 10;
   
   doc.setFontSize(11);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont('Times', 'bold'); // Modificato da helvetica
   doc.text('TOTALI:', 15, finalY);
   
   doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont('Times', 'normal'); // Modificato da helvetica
   let totalY = finalY + 6;
   
   const totali = [
