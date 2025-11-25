@@ -1,7 +1,19 @@
 'use client';
 
 /**
- * PAGINA: Editor Piano Giornaliero (DEBUG VERSION)
+ * PAGINA: Editor Piano Giornaliero
+ * * PERCORSO: /app/planning/[data]/page.tsx
+ * URL: https://reping.app/planning/2025-11-05
+ * * DESCRIZIONE:
+ * Editor per creare e modificare piani di visita giornalieri.
+ * Include algoritmo AI per suggerimenti intelligenti e ottimizzazione percorso.
+ * * FUNZIONALITÀ:
+ * - Modalità Smart: AI suggerisce 5-10 clienti ottimali
+ * - Modalità Avanzata: selezione manuale con tutti i clienti
+ * - Algoritmo punteggi AI (latenza, distanza, revenue, note)
+ * - Ottimizzazione percorso geografico (TSP)
+ * - Salvataggio piano in daily_plans
+ * - Status: draft → active → completed
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -71,19 +83,7 @@ export default function PlanningEditorPage() {
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
 
-  const dataStr = params.data as string;
-
-  // 🔍 DEBUG LOGGING
-  // Questo mostrerà in console ogni volta che lo stato cambia
-  console.log('🔍 [PLANNING DEBUG]', {
-    planExists: !!plan,
-    planId: plan?.id,
-    planStatus: plan?.status,
-    selectedIdsCount: selectedIds.length,
-    isDirty,
-    CONDIZIONE_VISIBILITA: (plan?.status === 'draft' && !!plan?.id),
-    CONDIZIONE_DISABILITATO: (saving || selectedIds.length === 0)
-  });
+  const dataStr = params.data as string; // YYYY-MM-DD
 
   // Carica dati
   useEffect(() => {
@@ -106,6 +106,7 @@ export default function PlanningEditorPage() {
         return;
       }
 
+      // Carica clienti
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
         .select('id, name_enc, name_iv, city, tipo_locale, latitude, longitude, ultimo_esito, ultimo_esito_at, volume_attuale, custom')
@@ -182,6 +183,7 @@ export default function PlanningEditorPage() {
 
       setClients(decryptedClients);
 
+      // Carica piano esistente
       const { data: planData, error: planError } = await supabase
         .from('daily_plans')
         .select('*')
@@ -192,12 +194,9 @@ export default function PlanningEditorPage() {
       if (planError && planError.code !== 'PGRST116') throw planError;
 
       if (planData) {
-        console.log('✅ Piano caricato dal DB:', planData);
         setPlan(planData);
         setSelectedIds(planData.account_ids || []);
         setPlanNotes(planData.notes || '');
-      } else {
-        console.log('⚠️ Nessun piano esistente nel DB per questa data');
       }
 
       setIsDirty(false);
@@ -210,6 +209,7 @@ export default function PlanningEditorPage() {
     }
   }
 
+  // Calcola punteggi AI
   useEffect(() => {
     if (clients.length === 0) return;
     const scored = clients.map(client => calculateScore(client));
@@ -217,11 +217,12 @@ export default function PlanningEditorPage() {
     setScoredClients(scored);
   }, [clients]);
 
+  // Calcola punteggio AI
   function calculateScore(client: Client): ScoredClient {
     const today = new Date(dataStr);
+
     let latencyScore = 0;
     let daysAgo = 0;
-    
     if (client.ultimo_esito_at) {
       const lastVisit = new Date(client.ultimo_esito_at);
       daysAgo = Math.floor((today.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
@@ -308,7 +309,6 @@ export default function PlanningEditorPage() {
     const ordered: Client[] = [];
     const remaining = [...selectedClients];
     ordered.push(remaining.shift()!);
-    
     while (remaining.length > 0) {
       const current = ordered[ordered.length - 1];
       let nearestIdx = 0;
@@ -352,7 +352,6 @@ export default function PlanningEditorPage() {
       };
 
       let updatedPlan;
-
       if (plan?.id) {
         const { data, error } = await supabase.from('daily_plans').update(planData).eq('id', plan.id).select().single();
         if (error) throw error;
@@ -363,9 +362,8 @@ export default function PlanningEditorPage() {
         updatedPlan = data;
       }
 
-      console.log('✅ Save success. New plan state:', updatedPlan);
       setPlan(updatedPlan);
-      setIsDirty(false);
+      setIsDirty(false); // Reset manuale
       
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
@@ -760,12 +758,6 @@ export default function PlanningEditorPage() {
             ← Annulla
           </button>
 
-          {/* DEBUG INFO: 
-              Status: {plan?.status}
-              ID: {plan?.id}
-              isDirty: {String(isDirty)}
-          */}
-
           <button
             onClick={savePlan}
             disabled={saving || selectedIds.length === 0 || !isDirty}
@@ -783,8 +775,8 @@ export default function PlanningEditorPage() {
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* Bottone Avvia Giornata - Condizione sicura */}
-          {plan?.status === 'draft' && plan?.id && (
+          {/* Bottone Avvia Giornata (per draft e completed/restart) */}
+          {plan?.id && (plan?.status === 'draft' || plan?.status === 'completed') && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}
@@ -803,8 +795,8 @@ export default function PlanningEditorPage() {
             </button>
           )}
 
-          {/* Bottone Vai alle Visite (se piano attivo) */}
-          {plan?.status === 'active' && (
+          {/* Bottone Vai alle Visite (se piano attivo o completato) */}
+          {(plan?.status === 'active' || plan?.status === 'completed') && (
             <button
               onClick={() => router.push(`/planning/${dataStr}/execute`)}
               style={{
