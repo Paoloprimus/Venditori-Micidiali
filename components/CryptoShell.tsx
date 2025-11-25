@@ -30,8 +30,8 @@ export default function CryptoShell({ children }: { children: React.ReactNode })
       // pulizia pass in memoria persistente
 
       // pulizia pass in memoria persistente — RIMANDATA di 10s
-try { setTimeout(() => sessionStorage.removeItem("repping:pph"), 300000); } catch {}
-try { setTimeout(() => localStorage.removeItem("repping:pph"), 300000); } catch {}
+try { /* RIGA RIMOSSA PER P0.1 */ } catch {}
+try { /* RIGA RIMOSSA PER P0.1 */ } catch {}
 
       
       return true;
@@ -194,10 +194,10 @@ useEffect(() => {
               } catch {}
             }
           }
-        }
 
-        // backoff breve: 150ms, 300ms, 600ms...
-        await new Promise(r => setTimeout(r, 150 * Math.pow(2, attempts - 1)));
+          // backoff breve: 150ms, 300ms, 600ms...
+          await new Promise(r => setTimeout(r, 150 * Math.pow(2, attempts - 1)));
+        }
       }
     };
 
