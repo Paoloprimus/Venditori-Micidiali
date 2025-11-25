@@ -2,20 +2,16 @@
 
 /**
  * PAGINA: Execute Piano Giornaliero
- * 
- * PERCORSO: /app/planning/[data]/execute/page.tsx
+ * * PERCORSO: /app/planning/[data]/execute/page.tsx
  * URL: https://reping.app/planning/2025-11-05/execute
- * 
- * DESCRIZIONE:
+ * * DESCRIZIONE:
  * Interfaccia per eseguire le visite del piano giornaliero.
  * Mostra un cliente alla volta con possibilità di:
  * - Saltare (salva visita con esito='altro')
  * - Spostare in basso (riordina temporaneamente)
  * - Completare (salva visita con ordine)
- * 
- * MODIFICHE FASE 3:
- * - Aggiunto componente GenerateReportButton nella schermata finale
- * - Rimosso redirect automatico, ora controllato manualmente
+ * * FIX:
+ * - Corretto decryptFields passando c.id invece di stringa vuota
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -151,10 +147,11 @@ export default function ExecutePlanPage() {
             name_iv: hexToBase64(c.name_iv),
           };
 
+          // ✅ FIX: Passiamo c.id invece di '' come associatedData
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            '',
+            c.id, // <--- ERA '', ORA È c.id
             recordForDecrypt,
             ['name']
           );
@@ -173,6 +170,17 @@ export default function ExecutePlanPage() {
           });
         } catch (e) {
           console.error('[Execute] Errore decrypt:', e);
+          // Fallback in caso di errore
+          decryptedClients.push({
+            id: c.id,
+            name: 'Errore Decrypt',
+            city: c.city || '',
+            tipo_locale: c.tipo_locale || '',
+            ultimo_esito: c.ultimo_esito,
+            ultimo_esito_at: c.ultimo_esito_at,
+            volume_attuale: c.volume_attuale ? parseFloat(c.volume_attuale) : null,
+            custom: c.custom || {},
+          });
         }
       }
 
@@ -261,7 +269,7 @@ export default function ExecutePlanPage() {
     await saveVisit('ordine_acquisito', ordine);
   }
 
-  // Fine giornata - MODIFICATO: non più automatico
+  // Fine giornata
   useEffect(() => {
     if (isComplete && plan) {
       finishDay();
@@ -342,7 +350,7 @@ export default function ExecutePlanPage() {
     );
   }
 
-  // ============== SCHERMATA FINALE - MODIFICATA ============== 
+  // ============== SCHERMATA FINALE ============== 
   if (isComplete) {
     return (
       <>
