@@ -17,7 +17,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
 
   // ============== HEADER ==============
   doc.setFontSize(20);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
+  doc.setFont('Times', 'bold');
   doc.text('REPING', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 10;
@@ -26,7 +26,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
   
   yPos += 8;
   doc.setFontSize(12);
-  doc.setFont('Times', 'normal'); // Modificato da helvetica
+  doc.setFont('Times', 'normal');
   doc.text(data.periodoFormattato, pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 6;
@@ -41,21 +41,21 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
   doc.line(15, yPos, pageWidth - 15, yPos);
   yPos += 10;
 
-  // ============== RIEPILOGO ==============
+  // ============== RIEPILOGO (Emoji rimosse) ==============
   doc.setFontSize(14);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
+  doc.setFont('Times', 'bold');
   doc.setTextColor(0);
-  doc.text('📊 Riepilogo Periodo', 15, yPos);
+  doc.text('Riepilogo Periodo', 15, yPos); // Rimossa emoji 📊
   yPos += 8;
 
   doc.setFontSize(10);
-  doc.setFont('Times', 'normal'); // Modificato da helvetica
+  doc.setFont('Times', 'normal');
   
   const riepilogo = [
     `Periodo: ${data.dataInizio} - ${data.dataFine}`,
     `Visite effettuate: ${data.numVisite}`,
     `Clienti visitati: ${data.numClienti}`,
-    `Fatturato periodo: €${data.fatturatoTotale.toFixed(2)}`,
+    `Fatturato periodo: EUR ${data.fatturatoTotale.toFixed(2)}`, // € sostituito con EUR per sicurezza
     `Km percorsi: ${data.kmTotali.toFixed(1)} km`
   ];
   
@@ -66,10 +66,10 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
   
   yPos += 5;
 
-  // ============== DETTAGLIO VISITE ==============
+  // ============== DETTAGLIO VISITE (Emoji rimosse) ==============
   doc.setFontSize(14);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
-  doc.text('📋 Dettaglio Visite', 15, yPos);
+  doc.setFont('Times', 'bold');
+  doc.text('Dettaglio Visite', 15, yPos); // Rimossa emoji 📋
   yPos += 5;
 
   // Prepara dati per la tabella
@@ -79,7 +79,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
     v.cittaCliente || '-',
     formatTipo(v.tipo),
     formatEsito(v.esito),
-    v.importoVendita ? `€${v.importoVendita.toFixed(2)}` : '-',
+    v.importoVendita ? `EUR ${v.importoVendita.toFixed(2)}` : '-', // € -> EUR
     v.noteVisita || '-'
   ]);
 
@@ -89,7 +89,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
     body: tableData,
     theme: 'striped',
     styles: { 
-      font: 'Times', // Aggiunto font Times per la tabella
+      font: 'Times',
       fontSize: 8,
       cellPadding: 3,
       overflow: 'linebreak'
@@ -98,7 +98,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
       fillColor: [37, 99, 235], // blu
       textColor: 255,
       fontStyle: 'bold',
-      font: 'Times' // Assicuriamo Times anche nell'header
+      font: 'Times'
     },
     columnStyles: {
       0: { cellWidth: 30 },  // Data/Ora
@@ -115,7 +115,7 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
       const currentPage = (doc as any).internal.getCurrentPageInfo().pageNumber;
       
       doc.setFontSize(8);
-      doc.setFont('Times', 'normal'); // Assicura font Times nel footer
+      doc.setFont('Times', 'normal');
       doc.setTextColor(150);
       doc.text(
         `Generato il ${new Date().toLocaleString('it-IT')} - Pagina ${currentPage}/${pageCount}`,
@@ -143,7 +143,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
 
   // ============== HEADER ==============
   doc.setFontSize(20);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
+  doc.setFont('Times', 'bold');
   doc.text('REPING', pageWidth / 2, yPos, { align: 'center' });
   
   yPos += 10;
@@ -152,7 +152,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   
   yPos += 8;
   doc.setFontSize(10);
-  doc.setFont('Times', 'normal'); // Modificato da helvetica
+  doc.setFont('Times', 'normal');
   doc.setTextColor(100);
   doc.text(`Agente: ${data.nomeAgente}`, pageWidth / 2, yPos, { align: 'center' });
   
@@ -166,24 +166,24 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   doc.line(15, yPos, pageWidth - 15, yPos);
   yPos += 10;
 
-  // ============== FILTRI APPLICATI ==============
+  // ============== FILTRI APPLICATI (Emoji rimosse) ==============
   doc.setFontSize(12);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
+  doc.setFont('Times', 'bold');
   doc.setTextColor(0);
-  doc.text('🔍 Filtri Applicati', 15, yPos);
+  doc.text('Filtri Applicati', 15, yPos); // Rimossa emoji 🔍
   yPos += 7;
 
   doc.setFontSize(10);
-  doc.setFont('Times', 'normal'); // Modificato da helvetica
+  doc.setFont('Times', 'normal');
   doc.text(`Tipo: ${data.filtri.tipo}`, 20, yPos);
   yPos += 6;
   doc.text(`Criteri: ${data.filtri.descrizione}`, 20, yPos);
   yPos += 10;
 
-  // ============== RISULTATI ==============
+  // ============== RISULTATI (Emoji rimosse) ==============
   doc.setFontSize(12);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
-  doc.text('📊 Risultati', 15, yPos);
+  doc.setFont('Times', 'bold');
+  doc.text('Risultati', 15, yPos); // Rimossa emoji 📊
   yPos += 5;
 
   // Prepara dati per la tabella
@@ -192,7 +192,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
     c.citta || '-',
     c.numVisite.toString(),
     c.ultimaVisita || '-',
-    c.fatturato ? `€${c.fatturato.toFixed(2)}` : '-',
+    c.fatturato ? `EUR ${c.fatturato.toFixed(2)}` : '-',
     c.km ? `${c.km.toFixed(1)}km` : '-',
     c.note || '-'
   ]);
@@ -203,7 +203,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
     body: tableData,
     theme: 'striped',
     styles: { 
-      font: 'Times', // Aggiunto font Times per la tabella
+      font: 'Times',
       fontSize: 8,
       cellPadding: 3,
       overflow: 'linebreak'
@@ -212,7 +212,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
       fillColor: [37, 99, 235],
       textColor: 255,
       fontStyle: 'bold',
-      font: 'Times' // Font Times nell'header
+      font: 'Times'
     },
     columnStyles: {
       0: { cellWidth: 40 },  // Cliente
@@ -224,12 +224,12 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
       6: { cellWidth: 'auto' } // Note
     },
     didDrawPage: (data) => {
-      // Footer con totali e numero pagina
+      // Footer
       const pageCount = (doc as any).internal.getNumberOfPages();
       const currentPage = (doc as any).internal.getCurrentPageInfo().pageNumber;
       
       doc.setFontSize(8);
-      doc.setFont('Times', 'normal'); // Font Times nel footer
+      doc.setFont('Times', 'normal');
       doc.setTextColor(150);
       doc.text(
         `Generato il ${new Date().toLocaleString('it-IT')} - Pagina ${currentPage}/${pageCount}`,
@@ -240,21 +240,21 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
     }
   });
 
-  // Aggiungi totali in fondo all'ultima pagina
+  // Aggiungi totali
   const finalY = (doc as any).lastAutoTable.finalY + 10;
   
   doc.setFontSize(11);
-  doc.setFont('Times', 'bold'); // Modificato da helvetica
+  doc.setFont('Times', 'bold');
   doc.text('TOTALI:', 15, finalY);
   
   doc.setFontSize(10);
-  doc.setFont('Times', 'normal'); // Modificato da helvetica
+  doc.setFont('Times', 'normal');
   let totalY = finalY + 6;
   
   const totali = [
-    `N° clienti: ${data.numClienti}`,
+    `N. clienti: ${data.numClienti}`,
     `Visite totali: ${data.visiteTotali}`,
-    `Fatturato totale: €${data.fatturatoTotale.toFixed(2)}`,
+    `Fatturato totale: EUR ${data.fatturatoTotale.toFixed(2)}`,
     `Km totali: ${data.kmTotali.toFixed(1)} km`
   ];
   
@@ -269,27 +269,27 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
 }
 
 /**
- * Formatta il tipo visita per visualizzazione
+ * Formatta il tipo visita (NO EMOJI)
  */
 function formatTipo(tipo: string): string {
   const tipoMap: Record<string, string> = {
-    'visita': '🚗 Visita',
-    'chiamata': '📞 Chiamata'
+    'visita': 'Visita',     // Rimossa 🚗
+    'chiamata': 'Chiamata'  // Rimossa 📞
   };
   
   return tipoMap[tipo] || tipo;
 }
 
 /**
- * Formatta l'esito visita per visualizzazione
+ * Formatta l'esito visita (NO EMOJI)
  */
 function formatEsito(esito: string): string {
   const esitoMap: Record<string, string> = {
-    'ordine_acquisito': '✅ Ordine',
-    'da_richiamare': '📞 Richiamare',
-    'no_interesse': '❌ No interesse',
-    'info_richiesta': 'ℹ️ Info',
-    'altro': '📝 Altro'
+    'ordine_acquisito': 'Ordine',       // Rimossa ✅
+    'da_richiamare': 'Richiamare',      // Rimossa 📞
+    'no_interesse': 'No interesse',     // Rimossa ❌
+    'info_richiesta': 'Info',           // Rimossa ℹ️
+    'altro': 'Altro'                    // Rimossa 📝
   };
   
   return esitoMap[esito] || esito;
