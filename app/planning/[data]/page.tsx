@@ -2,15 +2,12 @@
 
 /**
  * PAGINA: Editor Piano Giornaliero
- * 
- * PERCORSO: /app/planning/[data]/page.tsx
+ * * PERCORSO: /app/planning/[data]/page.tsx
  * URL: https://reping.app/planning/2025-11-05
- * 
- * DESCRIZIONE:
+ * * DESCRIZIONE:
  * Editor per creare e modificare piani di visita giornalieri.
  * Include algoritmo AI per suggerimenti intelligenti e ottimizzazione percorso.
- * 
- * FUNZIONALITÀ:
+ * * FUNZIONALITÀ:
  * - Modalità Smart: AI suggerisce 5-10 clienti ottimali
  * - Modalità Avanzata: selezione manuale con tutti i clienti
  * - Algoritmo punteggi AI (latenza, distanza, revenue, note)
@@ -446,11 +443,10 @@ export default function PlanningEditorPage() {
         console.log('[Planning] Status dopo update:', updated.status);
         setPlan(updated);
         
-        // Forza reset dirty DOPO setPlan
-        setTimeout(() => {
-          setIsDirty(false);
-          console.log('[Planning] isDirty resettato, plan.id:', updated.id, 'plan.status:', updated.status);
-        }, 0);
+        // ✅ FIXED: Rimosso setTimeout per P0.2
+        setIsDirty(false);
+        console.log('[Planning] isDirty resettato, plan.id:', updated.id, 'plan.status:', updated.status);
+        
       } else {
         // Insert
         const { data: inserted, error } = await supabase
@@ -466,11 +462,9 @@ export default function PlanningEditorPage() {
         console.log('[Planning] Status dopo insert:', inserted.status);
         setPlan(inserted);
         
-        // Forza reset dirty DOPO setPlan
-        setTimeout(() => {
-          setIsDirty(false);
-          console.log('[Planning] isDirty resettato, plan.id:', inserted.id, 'plan.status:', inserted.status);
-        }, 0);
+        // ✅ FIXED: Rimosso setTimeout per P0.2
+        setIsDirty(false);
+        console.log('[Planning] isDirty resettato, plan.id:', inserted.id, 'plan.status:', inserted.status);
       }
 
       // Nessun alert qui - il bottone cambia automaticamente testo
