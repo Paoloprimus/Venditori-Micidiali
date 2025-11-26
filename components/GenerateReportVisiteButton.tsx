@@ -23,8 +23,8 @@ type FormData = {
 };
 
 type Props = {
-  data?: string;        // Opzionale (solo per modalità diretta da Planning)
-  accountIds?: string[]; // Opzionale (solo per modalità diretta da Planning)
+  data?: string; // formato: "2025-11-08" (opzionale se passato da form)
+  accountIds?: string[]; // IDs clienti del piano (opzionale)
   onSuccess?: () => void;
   onClose?: () => void;
 };
@@ -55,7 +55,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-// Format durata
+// Format durata (minuti -> Xh Ym)
 function formatDuration(minutes: number): string {
   if (minutes <= 0) return "0m";
   const h = Math.floor(minutes / 60);
@@ -64,8 +64,11 @@ function formatDuration(minutes: number): string {
   return `${h}h ${m}m`;
 }
 
-export default function GenerateReportVisiteButton({ data, accountIds, onSuccess, onClose }: Props) {
+export default function GenerateReportButton({ data, accountIds, onSuccess, onClose }: Props) {
   const { crypto } = useCrypto();
+  const [generating, setGenerating] = useState(false);
+  
+  // Se data e accountIds sono passati, siamo in "modalità diretta" (dal planning)
   const isDirectMode = !!(data && accountIds);
 
   async function handleGenerate(formData: FormData) {
@@ -74,28 +77,33 @@ export default function GenerateReportVisiteButton({ data, accountIds, onSuccess
       return;
     }
 
+    setGenerating(true);
     try {
+      // 1. Recupera user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      // 1. Recupera Piano per orario inizio (START UFFICIALE)
-      // Cerchiamo lo start time solo se il report è giornaliero
+      // 2. Recupera Piano per orario inizio (START UFFICIALE)
+      // Solo se siamo in mode giornaliero (data singola)
       let planStartTime: Date | null = null;
+      const targetDate = formData.dataInizio;
+      
       if (formData.dataInizio === formData.dataFine) {
-          const { data: plan } = await supabase
-              .from('daily_plans')
-              .select('route_data')
-              .eq('user_id', user.id)
-              .eq('data', formData.dataInizio)
-              .single();
-          
-          if (plan?.route_data?.started_at) {
-              planStartTime = new Date(plan.route_data.started_at);
-              console.log('[Report] Start Piano (DB):', planStartTime.toLocaleString());
-          }
+        const { data: plan } = await supabase
+            .from('daily_plans')
+            .select('route_data')
+            .eq('user_id', user.id)
+            .eq('data', targetDate)
+            .single();
+        
+        if (plan?.route_data?.started_at) {
+            planStartTime = new Date(plan.route_data.started_at);
+            console.log('[Report] Start Piano (DB):', planStartTime.toLocaleString());
+        }
       }
 
-      // 2. Recupera visite del periodo
+      // 3. Recupera visite del periodo
+      // Ordinate per data_visita (che è il timestamp di chiusura/salvataggio)
       let visitsQuery = supabase
         .from('visits')
         .select('id, account_id, tipo, data_visita, esito, importo_vendita, notes, durata')
@@ -104,7 +112,7 @@ export default function GenerateReportVisiteButton({ data, accountIds, onSuccess
         .lte('data_visita', `${formData.dataFine}T23:59:59`)
         .order('data_visita', { ascending: true }); // Cronologico
 
-      // Se siamo in direct mode, filtriamo solo i clienti del piano
+      // Se siamo in direct mode, filtriamo per gli account specifici del piano
       if (isDirectMode && accountIds) {
         visitsQuery = visitsQuery.in('account_id', accountIds);
       }
@@ -114,10 +122,11 @@ export default function GenerateReportVisiteButton({ data, accountIds, onSuccess
 
       if (!visitsData || visitsData.length === 0) {
         alert('Nessuna visita trovata nel periodo selezionato');
+        setGenerating(false);
         return;
       }
 
-      // 3. Recupera dati clienti
+      // 4. Recupera dati clienti
       const clientIds = [...new Set(visitsData.map(v => v.account_id))];
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
@@ -126,7 +135,7 @@ export default function GenerateReportVisiteButton({ data, accountIds, onSuccess
 
       if (clientsError) throw clientsError;
 
-      // 4. Decifra nomi clienti
+      // 5. Decifra nomi clienti
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
@@ -175,7 +184,7 @@ export default function GenerateReportVisiteButton({ data, accountIds, onSuccess
         }
       }
 
-      // 5. Calcoli KM e TEMPI
+      // 6. Calcoli KM e TEMPI
       let kmTotali = 0;
       let prevLat: number | undefined;
       let prevLon: number | undefined;
@@ -183,4 +192,169 @@ export default function GenerateReportVisiteButton({ data, accountIds, onSuccess
 
       // --- LOGICA TEMPI ---
       const firstVisit = visitsData[0];
-      const lastVisit
+      const lastVisit = visitsData[visitsData.length - 1];
+
+      // Calcoliamo quando è iniziata effettivamente la prima visita
+      const firstVisitEndTime = new Date(firstVisit.data_visita).getTime();
+      const firstVisitStartTime = firstVisitEndTime - ((firstVisit.durata || 0) * 60000);
+      
+      // L'inizio della giornata è il MINIMO tra "Avvia Piano" e "Inizio Prima Visita"
+      // Questo corregge i casi in cui l'utente preme "Avvia" in ritardo o mai
+      let startDayMs = firstVisitStartTime;
+      
+      if (planStartTime) {
+         const planStartMs = planStartTime.getTime();
+         // Se il piano è stato avviato PRIMA della prima visita (caso normale), usiamo quello
+         // Se è stato avviato DOPO (dimenticanza), usiamo l'inizio della visita
+         if (planStartMs < firstVisitStartTime) {
+            startDayMs = planStartMs; 
+         } else {
+            console.warn('[Report] Start Piano successivo alla prima visita, uso inizio visita.');
+         }
+      }
+
+      // Fine giornata = Fine ultima visita
+      const endDayMs = new Date(lastVisit.data_visita).getTime();
+      
+      // Tempo totale lavoro
+      const totalWorkMinutes = Math.max(0, Math.round((endDayMs - startDayMs) / 60000));
+
+      // Ciclo visite per KM e Durata Visite
+      for (const visit of visitsData) {
+        const account = accountsMap.get(visit.account_id);
+        
+        // Km: calcola distanza dalla tappa precedente
+        if (account?.lat && account?.lon) {
+          if (prevLat !== undefined && prevLon !== undefined) {
+            const dist = await getRoadDistance(prevLat, prevLon, account.lat, account.lon);
+            kmTotali += dist;
+          }
+          prevLat = account.lat;
+          prevLon = account.lon;
+        }
+
+        // Tempo visite (somma delle durate effettive registrate)
+        totalVisitMinutes += (visit.durata || 0);
+      }
+
+      // Tempo viaggio = Tempo Totale (da inizio a fine) - Tempo passato effettivamente in visita
+      // Se per qualche motivo (es. test rapidi) il totale è minore delle visite, mettiamo 0
+      const travelMinutes = Math.max(0, totalWorkMinutes - totalVisitMinutes);
+
+      // 7. Prepara dati per report
+      const visite: VisitaDetail[] = visitsData.map((v) => {
+        const client = accountsMap.get(v.account_id);
+        const dataOra = new Date(v.data_visita).toLocaleTimeString('it-IT', {
+          hour: '2-digit',
+          minute: '2-digit'
+        });
+
+        return {
+          dataOra,
+          nomeCliente: client?.name || 'N/A',
+          cittaCliente: client?.city || '',
+          tipo: v.tipo || 'visita',
+          esito: v.esito || 'altro',
+          importoVendita: v.importo_vendita ? parseFloat(v.importo_vendita as any) : null,
+          noteVisita: v.notes || null,
+          durataMinuti: v.durata || null,
+        };
+      });
+
+      const numClienti = clientIds.length;
+      const fatturatoTotale = visite.reduce((sum, v) => sum + (v.importoVendita || 0), 0);
+
+      const reportData: ReportVisiteData = {
+        nomeAgente: user.email?.split('@')[0] || 'Agente',
+        dataInizio: formData.dataInizio,
+        dataFine: formData.dataFine,
+        periodoFormattato: formatDateItalian(formData.dataInizio),
+        numVisite: visite.length,
+        numClienti,
+        fatturatoTotale,
+        kmTotali,
+        tempoTotaleOre: formatDuration(totalWorkMinutes),
+        tempoVisiteOre: formatDuration(totalVisitMinutes),
+        tempoViaggioOre: formatDuration(travelMinutes),
+        visite,
+      };
+
+      // 8. Genera e salva PDF
+      const pdfBlob = await generateReportVisite(reportData);
+      const filename = generateVisiteFilename(formData.dataInizio, formData.dataFine);
+      const filePath = await savePdfToDevice(pdfBlob, filename);
+
+      if (!filePath) {
+        alert('Download PDF annullato');
+        setGenerating(false);
+        return;
+      }
+
+      // 9. Salva metadata nel DB
+      const metadataForDB: DocumentMetadata = {
+        data_inizio: formData.dataInizio,
+        data_fine: formData.dataFine,
+        num_visite: visite.length,
+        num_clienti: numClienti,
+        fatturato_tot: fatturatoTotale,
+        km_tot: kmTotali,
+      };
+
+      await saveDocumentMetadata({
+        document_type: 'report_planning',
+        title: `Report Visite - ${formatDateItalian(formData.dataInizio)}`,
+        filename,
+        file_path: filePath,
+        metadata: metadataForDB,
+        file_size: pdfBlob.size,
+      });
+
+      alert(`✅ Report generato!\nTempo Totale: ${formatDuration(totalWorkMinutes)}\nTempo Visite: ${formatDuration(totalVisitMinutes)}\nTempo Spostamenti: ${formatDuration(travelMinutes)}`);
+      
+      if (onClose) onClose();
+      if (onSuccess) onSuccess();
+
+    } catch (e: any) {
+      console.error('[Report] Errore generazione:', e);
+      alert(`Errore: ${e.message}`);
+    } finally {
+      setGenerating(false);
+    }
+  }
+
+  // Render differenziato: Bottone diretto o Form
+  if (isDirectMode && data) {
+    return (
+      <button
+        onClick={() => handleGenerate({
+          periodoType: 'giorno',
+          dataInizio: data,
+          dataFine: data
+        })}
+        disabled={generating}
+        style={{
+          padding: '12px 24px',
+          borderRadius: 8,
+          border: 'none',
+          background: generating ? '#9ca3af' : '#2563eb',
+          color: 'white',
+          fontWeight: 600,
+          cursor: generating ? 'not-allowed' : 'pointer',
+          fontSize: 14,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        {generating ? '⏳ Generazione...' : '📄 Genera Report Giornata'}
+      </button>
+    );
+  }
+
+  return (
+    <ReportVisiteForm
+      onBack={onClose || (() => {})}
+      onGenerate={handleGenerate}
+    />
+  );
+}
