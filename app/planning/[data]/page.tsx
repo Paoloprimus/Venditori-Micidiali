@@ -11,6 +11,7 @@
  * - Aggiunto calcolo e visualizzazione dei KM stimati in tempo reale nel header "Visite Pianificate".
  * - Corretto il problema del bottone "Avvia Giornata".
  * - Ottimizzazione percorso (TSP) ora considera il punto di partenza salvato nelle impostazioni (Casa/Ufficio).
+ * - Aggiunto bottone "ELIMINA PIANO" per resettare la giornata.
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -119,17 +120,10 @@ export default function PlanningEditorPage() {
       .filter((c): c is Client => !!c);
 
     let km = 0;
-    // Se abbiamo un punto di partenza salvato, iniziamo il calcolo da lì
     let prevLat = startLat;
     let prevLon = startLon;
 
-    // Se NON abbiamo un punto di partenza (es. impostazioni vuote),
-    // il primo cliente non ha "costo di avvicinamento" nel totale parziale visualizzato qui,
-    // oppure possiamo assumere che parta dal primo cliente (km=0 iniziale).
-    // Per coerenza con optimizeRoute, se manca casa, prevLat/Lon restano undefined all'inizio loop
-    // e il primo segmento viene saltato (km tra null e primo cliente = 0).
-    
-    // Tuttavia, per dare un dato realistico, se manca casa, potremmo assumere partenza dal primo cliente
+    // Se manca casa, assumiamo partenza dal primo cliente (quindi il primo tratto è 0 km)
     if (prevLat === undefined || prevLon === undefined) {
        if (selClients.length > 0) {
          prevLat = selClients[0].latitude;
@@ -139,9 +133,6 @@ export default function PlanningEditorPage() {
 
     for (const client of selClients) {
       if (prevLat !== undefined && prevLon !== undefined) {
-        // Evita di sommare distanza 0 se siamo allo stesso punto (es. primo cliente senza casa)
-        // Ma qui prevLat è o casa o il cliente precedente.
-        // Se prevLat era il primo cliente (caso no-casa), la distanza col primo cliente è 0. Corretto.
         km += calculateDistance(prevLat, prevLon, client.latitude, client.longitude);
       }
       // La tappa corrente diventa la precedente per la prossima iterazione
@@ -395,7 +386,7 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
-  // ✅ MODIFICA STEP 3: Ottimizza percorso (TSP semplificato + Partenza da Casa)
+  // Ottimizza percorso (TSP semplificato + Partenza da Casa)
   function optimizeRoute() {
     if (selectedIds.length <= 1) return;
 
@@ -443,12 +434,10 @@ export default function PlanningEditorPage() {
       if (nearestIdx !== -1) {
         ordered.push(remaining.splice(nearestIdx, 1)[0]);
       } else {
-         // Fallback (non dovrebbe accadere se lista non vuota)
          ordered.push(remaining.shift()!);
       }
     } else {
-      // Senza casa, partiamo dal primo della lista corrente (o si potrebbe prendere il più a nord/sud/ecc)
-      // Per semplicità MVP, manteniamo il primo.
+      // Senza casa, partiamo dal primo della lista corrente
       ordered.push(remaining.shift()!);
     }
     
@@ -510,6 +499,33 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
+  // 🗑️ ELIMINA PIANO
+  async function deletePlan() {
+    if (!plan?.id) return;
+    
+    if (!confirm('⚠️ Sei sicuro di voler eliminare questo piano?\n\nTutte le impostazioni di questa giornata verranno perse.')) {
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('daily_plans')
+        .delete()
+        .eq('id', plan.id);
+
+      if (error) throw error;
+
+      // Torna al calendario
+      router.push('/planning');
+      
+    } catch (e: any) {
+      console.error('Errore eliminazione:', e);
+      alert(`Errore: ${e.message}`);
+      setSaving(false);
+    }
+  }
+
   // Salva piano
   async function savePlan() {
     if (selectedIds.length === 0) {
@@ -544,15 +560,12 @@ export default function PlanningEditorPage() {
         
         if (error) throw error;
         
-        // ✅ Usa il record aggiornato dal DB (garantisce sincronizzazione)
-        console.log('[Planning] Piano aggiornato:', updated);
-        console.log('[Planning] Status dopo update:', updated.status);
+        updatedPlan = data;
         setPlan(updated);
         
-        // Forza reset dirty DOPO setPlan
+        // Forza reset dirty
         setTimeout(() => {
           setIsDirty(false);
-          console.log('[Planning] isDirty resettato, plan.id:', updated.id, 'plan.status:', updated.status);
         }, 0);
       } else {
         // Insert
@@ -564,20 +577,15 @@ export default function PlanningEditorPage() {
         
         if (error) throw error;
         
-        // Imposta il piano appena inserito (con ID!)
-        console.log('[Planning] Piano inserito:', inserted);
-        console.log('[Planning] Status dopo insert:', inserted.status);
+        updatedPlan = data;
         setPlan(inserted);
         
-        // Forza reset dirty DOPO setPlan
+        // Forza reset dirty
         setTimeout(() => {
           setIsDirty(false);
-          console.log('[Planning] isDirty resettato, plan.id:', inserted.id, 'plan.status:', inserted.status);
         }, 0);
       }
 
-      // Nessun alert qui - il bottone cambia automaticamente testo
-      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -729,24 +737,36 @@ export default function PlanningEditorPage() {
           {/* Modalità Smart */}
           {mode === 'smart' && (
             <div style={{ background: '#f9fafb', padding: 24, borderRadius: 12, border: '1px solid #e5e7eb' }}>
-              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>🤖 Suggerimenti AI Intelligenti</h2>
-              <p style={{ color: '#6b7280', marginBottom: 24, fontSize: 14 }}>L'intelligenza artificiale seleziona automaticamente i clienti migliori...</p>
+              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>
+                🤖 Suggerimenti AI Intelligenti
+              </h2>
+              <p style={{ color: '#6b7280', marginBottom: 24, fontSize: 14 }}>
+                L'intelligenza artificiale seleziona automaticamente i clienti migliori da visitare oggi...
+              </p>
               <div style={{ marginBottom: 24 }}>
-                <label style={{ display: 'block', marginBottom: 12, fontWeight: 600 }}>Quanti clienti vuoi visitare oggi?</label>
+                <label style={{ display: 'block', marginBottom: 12, fontWeight: 600 }}>
+                  Quanti clienti vuoi visitare oggi?
+                </label>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                   <input type="range" min="5" max="10" value={numClients} onChange={(e) => setNumClients(parseInt(e.target.value))} style={{ flex: 1 }} />
                   <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb', minWidth: 40 }}>{numClients}</span>
                 </div>
               </div>
-              <button onClick={handleSmartSuggestion} style={{ width: '100%', padding: '16px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>✨ Genera Suggerimenti AI</button>
+              <button onClick={handleSmartSuggestion} style={{ width: '100%', padding: '16px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>
+                ✨ Genera Suggerimenti AI
+              </button>
             </div>
           )}
 
           {/* Modalità Avanzata */}
           {mode === 'advanced' && (
             <div style={{ background: '#f9fafb', padding: 24, borderRadius: 12, border: '1px solid #e5e7eb' }}>
-              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>⚙️ Selezione Manuale Clienti</h2>
-              <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14 }}>Tutti i {clients.length} clienti ordinati per punteggio AI. Seleziona quelli che vuoi visitare.</p>
+              <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>
+                ⚙️ Selezione Manuale Clienti
+              </h2>
+              <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14 }}>
+                Tutti i {clients.length} clienti ordinati per punteggio AI...
+              </p>
               <div style={{ maxHeight: 400, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
                 <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                   <thead style={{ background: '#f9fafb', position: 'sticky', top: 0 }}>
@@ -821,20 +841,22 @@ export default function PlanningEditorPage() {
                   alignItems: 'center',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {/* Numero sequenza */}
                     <div style={{ 
-                      width: 28, height: 28, borderRadius: '50%', 
-                      background: '#2563eb', color: 'white', 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                      fontWeight: 700, fontSize: 13 
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4
                     }}>
-                      {idx + 1}
-                    </div>
-
-                    {/* Controlli Riordino */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▲</button>
-                      <button onClick={() => moveDown(idx)} disabled={idx === selectedClients.length - 1} style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▼</button>
+                      <div style={{ 
+                        width: 28, height: 28, borderRadius: '50%', 
+                        background: '#2563eb', color: 'white', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        fontWeight: 700, fontSize: 13 
+                      }}>
+                        {idx + 1}
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▲</button>
+                        <button onClick={() => moveDown(idx)} disabled={idx === selectedClients.length - 1} style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▼</button>
+                      </div>
                     </div>
 
                     <div>
@@ -876,7 +898,44 @@ export default function PlanningEditorPage() {
 
         {/* Azioni */}
         <div style={{ display: 'flex', gap: 12 }}>
-          <button onClick={() => router.push('/planning')} style={{ padding: '12px 24px', borderRadius: 8, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>← Annulla</button>
+          {/* Annulla (Sinistra) */}
+          <button 
+            onClick={() => router.push('/planning')} 
+            style={{ 
+              padding: '12px 24px', 
+              borderRadius: 8, 
+              border: '1px solid #d1d5db', 
+              background: 'white', 
+              cursor: 'pointer', 
+              fontSize: 14, 
+              fontWeight: 600 
+            }}
+          >
+            ← Annulla
+          </button>
+
+          {/* 🗑️ ELIMINA PIANO (Rosso, visibile solo se il piano esiste) */}
+          {plan?.id && (
+            <button
+              onClick={deletePlan}
+              disabled={saving}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: '1px solid #ef4444',
+                background: 'white',
+                color: '#ef4444',
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: saving ? 'not-allowed' : 'pointer',
+                marginRight: 'auto', // Spinge gli altri bottoni a destra
+              }}
+            >
+              🗑️ Elimina Piano
+            </button>
+          )}
+
+          <div style={{ flex: 1 }}></div> {/* Spacer flessibile */}
 
           <button
             onClick={savePlan}
