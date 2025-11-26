@@ -111,7 +111,7 @@ export default function Login() {
         }
         
         // redirect "hard" alla home
-        window.location.replace("/clients"); // Usa /clients se è la tua home
+        window.location.replace("/"); // Usa /clients se è la tua home
 
       } else {
         // Questo ramo gestisce il caso di signup dove è richiesta conferma email
