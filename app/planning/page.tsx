@@ -7,13 +7,9 @@
  * * DESCRIZIONE:
  * Vista calendario mensile per gestire i piani di visita giornalieri.
  * Mostra i piani esistenti e permette di crearne di nuovi.
- * * FUNZIONALITÀ:
- * - Calendario mese corrente
- * - Lista piani esistenti
- * - Indicatori status per ogni giorno
- * - Navigazione a editor piano giornaliero
- * - Filtro per mese (prev/next)
- * - Blocco date passate (sola lettura)
+ * * FIX:
+ * - Corretto problema fuso orario nel controllo date passate.
+ * Ora usa la data locale invece di UTC.
  */
 
 import { useRouter } from 'next/navigation';
@@ -65,8 +61,12 @@ export default function PlanningPage() {
       const firstDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth(), 1);
       const lastDay = new Date(currentMonth.getFullYear(), currentMonth.getMonth() + 1, 0);
 
-      const firstDayStr = firstDay.toISOString().split('T')[0];
-      const lastDayStr = lastDay.toISOString().split('T')[0];
+      // Usa helper locale per date query
+      const toLocalYMD = (d: Date) => 
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+      const firstDayStr = toLocalYMD(firstDay);
+      const lastDayStr = toLocalYMD(lastDay);
 
       const { data, error } = await supabase
         .from('daily_plans')
@@ -85,6 +85,14 @@ export default function PlanningPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  // Helper per formattare date in locale YYYY-MM-DD (Fix Timezone)
+  function getLocalDateString(date: Date): string {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
   }
 
   // Genera giorni del mese per il calendario
@@ -145,7 +153,7 @@ export default function PlanningPage() {
 
   // Trova piano per una data
   function getPlanForDate(date: Date): DailyPlan | undefined {
-    const dateStr = date.toISOString().split('T')[0];
+    const dateStr = getLocalDateString(date);
     return plans.find(p => p.data === dateStr);
   }
 
@@ -184,10 +192,11 @@ export default function PlanningPage() {
 
   // Click su un giorno
   function handleDayClick(date: Date) {
-    const dateStr = date.toISOString().split('T')[0];
-    const todayStr = new Date().toISOString().split('T')[0];
+    // ✅ FIX: Usa helper locale per evitare problemi di fuso orario
+    const dateStr = getLocalDateString(date);
+    const todayStr = getLocalDateString(new Date());
     
-    // 🔒 Controllo: non permettere modifiche nel passato
+    // 🔒 Controllo: non permettere modifiche nel passato (dateStr < todayStr)
     if (dateStr < todayStr) {
       // Cerca se c'è un piano esistente per quella data
       const plan = getPlanForDate(date);
@@ -197,16 +206,14 @@ export default function PlanningPage() {
         return;
       }
       
-      // Se c'è un piano, permetti di vederlo ma avvisa che è storico
-      // (La logica di readonly sarà gestita all'interno della pagina del piano se necessario, 
-      // ma qui permettiamo l'accesso per consultazione/report)
+      // Se c'è un piano, permetti di vederlo (anche se passato)
     }
     
     router.push(`/planning/${dateStr}`);
   }
 
   const calendarDays = getCalendarDays();
-  const today = new Date().toISOString().split('T')[0];
+  const today = getLocalDateString(new Date()); // ✅ FIX
 
   return (
     <>
@@ -367,9 +374,9 @@ export default function PlanningPage() {
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)' }}>
               {calendarDays.map((day, idx) => {
                 const plan = getPlanForDate(day.date);
-                const isToday = day.date.toISOString().split('T')[0] === today;
-                const dateStr = day.date.toISOString().split('T')[0];
-                const isPast = dateStr < today;
+                const dayStr = getLocalDateString(day.date); // ✅ FIX
+                const isToday = dayStr === today; // ✅ FIX
+                const isPast = dayStr < today; // ✅ FIX
                 
                 return (
                   <div
@@ -450,7 +457,7 @@ export default function PlanningPage() {
 
             <div style={{ display: 'grid', gap: 16 }}>
               {getCurrentWeekDays().map((date) => {
-                const dateStr = date.toISOString().split('T')[0];
+                const dateStr = getLocalDateString(date); // ✅ FIX
                 const plan = getPlanForDate(date);
                 const isToday = dateStr === today;
                 const isPast = dateStr < today;
