@@ -12,6 +12,7 @@
  * - Corretto il problema del bottone "Avvia Giornata".
  * - Ottimizzazione percorso (TSP) ora considera il punto di partenza salvato nelle impostazioni (Casa/Ufficio).
  * - Aggiunto bottone "ELIMINA PIANO" per resettare la giornata.
+ * - FIX: Corretto errore di compilazione "Cannot find name 'data'" in savePlan.
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -434,6 +435,7 @@ export default function PlanningEditorPage() {
       if (nearestIdx !== -1) {
         ordered.push(remaining.splice(nearestIdx, 1)[0]);
       } else {
+         // Fallback (non dovrebbe accadere se lista non vuota)
          ordered.push(remaining.shift()!);
       }
     } else {
@@ -550,8 +552,8 @@ export default function PlanningEditorPage() {
       let updatedPlan;
 
       if (plan?.id) {
-        // Update - ricarica il piano dal DB dopo l'aggiornamento
-        const { data: updated, error } = await supabase
+        // Update
+        const { data, error } = await supabase
           .from('daily_plans')
           .update(planData)
           .eq('id', plan.id)
@@ -561,15 +563,9 @@ export default function PlanningEditorPage() {
         if (error) throw error;
         
         updatedPlan = data;
-        setPlan(updated);
-        
-        // Forza reset dirty
-        setTimeout(() => {
-          setIsDirty(false);
-        }, 0);
       } else {
         // Insert
-        const { data: inserted, error } = await supabase
+        const { data, error } = await supabase
           .from('daily_plans')
           .insert(planData)
           .select()
@@ -578,14 +574,19 @@ export default function PlanningEditorPage() {
         if (error) throw error;
         
         updatedPlan = data;
-        setPlan(inserted);
-        
-        // Forza reset dirty
-        setTimeout(() => {
-          setIsDirty(false);
-        }, 0);
       }
 
+      // ✅ Usa il record aggiornato
+      console.log('[Planning] Piano aggiornato:', updatedPlan);
+      setPlan(updatedPlan);
+      
+      // Forza reset dirty DOPO setPlan
+      setTimeout(() => {
+        setIsDirty(false);
+        console.log('[Planning] isDirty resettato, plan.id:', updatedPlan?.id, 'plan.status:', updatedPlan?.status);
+      }, 0);
+
+      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -765,7 +766,7 @@ export default function PlanningEditorPage() {
                 ⚙️ Selezione Manuale Clienti
               </h2>
               <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14 }}>
-                Tutti i {clients.length} clienti ordinati per punteggio AI...
+                Tutti i {clients.length} clienti ordinati per punteggio AI. Seleziona quelli che vuoi visitare.
               </p>
               <div style={{ maxHeight: 400, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
                 <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
@@ -783,15 +784,36 @@ export default function PlanningEditorPage() {
                     {scoredClients.map((client) => (
                       <tr key={client.id} style={{ background: selectedIds.includes(client.id) ? '#eff6ff' : 'white' }}>
                         <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb' }}>
-                          <input type="checkbox" checked={selectedIds.includes(client.id)} onChange={() => toggleClient(client.id)} style={{ width: 16, height: 16, cursor: 'pointer' }} />
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(client.id)}
+                            onChange={() => toggleClient(client.id)}
+                            style={{ width: 16, height: 16, cursor: 'pointer' }}
+                          />
                         </td>
                         <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb' }}>
-                          <span style={{ padding: '2px 8px', borderRadius: 4, background: client.score >= 80 ? '#dcfce7' : client.score >= 60 ? '#fef3c7' : '#f3f4f6', color: client.score >= 80 ? '#15803d' : client.score >= 60 ? '#92400e' : '#6b7280', fontWeight: 600 }}>{client.score}</span>
+                          <span style={{ 
+                            padding: '2px 8px', 
+                            borderRadius: 4, 
+                            background: client.score >= 80 ? '#dcfce7' : client.score >= 60 ? '#fef3c7' : '#f3f4f6',
+                            color: client.score >= 80 ? '#15803d' : client.score >= 60 ? '#92400e' : '#6b7280',
+                            fontWeight: 600,
+                          }}>
+                            {client.score}
+                          </span>
                         </td>
-                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', fontWeight: 500 }}>{client.name}</td>
-                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{client.city}</td>
-                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{client.ultimo_esito || '-'}</td>
-                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>{client.daysAgo === 999 ? 'Mai' : `${client.daysAgo}gg`}</td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', fontWeight: 500 }}>
+                          {client.name}
+                        </td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
+                          {client.city}
+                        </td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
+                          {client.ultimo_esito || '-'}
+                        </td>
+                        <td style={{ padding: 8, borderBottom: '1px solid #e5e7eb', color: '#6b7280' }}>
+                          {client.daysAgo === 999 ? 'Mai' : `${client.daysAgo}gg`}
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -841,22 +863,20 @@ export default function PlanningEditorPage() {
                   alignItems: 'center',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    {/* Numero sequenza */}
                     <div style={{ 
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4
+                      width: 28, height: 28, borderRadius: '50%', 
+                      background: '#2563eb', color: 'white', 
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                      fontWeight: 700, fontSize: 13 
                     }}>
-                      <div style={{ 
-                        width: 28, height: 28, borderRadius: '50%', 
-                        background: '#2563eb', color: 'white', 
-                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                        fontWeight: 700, fontSize: 13 
-                      }}>
-                        {idx + 1}
-                      </div>
-                      
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                        <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▲</button>
-                        <button onClick={() => moveDown(idx)} disabled={idx === selectedClients.length - 1} style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▼</button>
-                      </div>
+                      {idx + 1}
+                    </div>
+
+                    {/* Controlli Riordino */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▲</button>
+                      <button onClick={() => moveDown(idx)} disabled={idx === selectedClients.length - 1} style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▼</button>
                     </div>
 
                     <div>
