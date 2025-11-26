@@ -2,20 +2,18 @@
 
 /**
  * PAGINA: Planning Calendario
- * 
- * PERCORSO: /app/planning/page.tsx
+ * * PERCORSO: /app/planning/page.tsx
  * URL: https://reping.app/planning
- * 
- * DESCRIZIONE:
+ * * DESCRIZIONE:
  * Vista calendario mensile per gestire i piani di visita giornalieri.
  * Mostra i piani esistenti e permette di crearne di nuovi.
- * 
- * FUNZIONALITÀ:
+ * * FUNZIONALITÀ:
  * - Calendario mese corrente
  * - Lista piani esistenti
  * - Indicatori status per ogni giorno
  * - Navigazione a editor piano giornaliero
  * - Filtro per mese (prev/next)
+ * - Blocco date passate (sola lettura)
  */
 
 import { useRouter } from 'next/navigation';
@@ -187,6 +185,23 @@ export default function PlanningPage() {
   // Click su un giorno
   function handleDayClick(date: Date) {
     const dateStr = date.toISOString().split('T')[0];
+    const todayStr = new Date().toISOString().split('T')[0];
+    
+    // 🔒 Controllo: non permettere modifiche nel passato
+    if (dateStr < todayStr) {
+      // Cerca se c'è un piano esistente per quella data
+      const plan = getPlanForDate(date);
+      
+      if (!plan) {
+        alert('⛔ Non puoi creare piani per date passate.');
+        return;
+      }
+      
+      // Se c'è un piano, permetti di vederlo ma avvisa che è storico
+      // (La logica di readonly sarà gestita all'interno della pagina del piano se necessario, 
+      // ma qui permettiamo l'accesso per consultazione/report)
+    }
+    
     router.push(`/planning/${dateStr}`);
   }
 
@@ -354,6 +369,7 @@ export default function PlanningPage() {
                 const plan = getPlanForDate(day.date);
                 const isToday = day.date.toISOString().split('T')[0] === today;
                 const dateStr = day.date.toISOString().split('T')[0];
+                const isPast = dateStr < today;
                 
                 return (
                   <div
@@ -365,18 +381,18 @@ export default function PlanningPage() {
                       borderRight: (idx + 1) % 7 !== 0 ? '1px solid #e5e7eb' : 'none',
                       borderBottom: idx < calendarDays.length - 7 ? '1px solid #e5e7eb' : 'none',
                       cursor: day.isCurrentMonth ? 'pointer' : 'default',
-                      background: isToday ? '#eff6ff' : 'white',
+                      background: isToday ? '#eff6ff' : (isPast && day.isCurrentMonth ? '#f9fafb' : 'white'),
                       opacity: day.isCurrentMonth ? 1 : 0.4,
                       transition: 'background 0.2s',
                     }}
                     onMouseEnter={(e) => {
                       if (day.isCurrentMonth) {
-                        e.currentTarget.style.background = isToday ? '#dbeafe' : '#f9fafb';
+                        e.currentTarget.style.background = isToday ? '#dbeafe' : '#f3f4f6';
                       }
                     }}
                     onMouseLeave={(e) => {
                       if (day.isCurrentMonth) {
-                        e.currentTarget.style.background = isToday ? '#eff6ff' : 'white';
+                        e.currentTarget.style.background = isToday ? '#eff6ff' : (isPast ? '#f9fafb' : 'white');
                       }
                     }}
                   >
@@ -384,7 +400,7 @@ export default function PlanningPage() {
                     <div style={{ 
                       fontSize: 14, 
                       fontWeight: isToday ? 700 : 500, 
-                      color: isToday ? '#2563eb' : (day.isCurrentMonth ? '#111827' : '#9ca3af'),
+                      color: isToday ? '#2563eb' : (day.isCurrentMonth ? (isPast ? '#6b7280' : '#111827') : '#9ca3af'),
                       marginBottom: 4,
                     }}>
                       {day.date.getDate()}
@@ -417,7 +433,7 @@ export default function PlanningPage() {
                     {/* Indicatore nessun piano */}
                     {!plan && day.isCurrentMonth && (
                       <div style={{ fontSize: 11, color: '#9ca3af', marginTop: 4 }}>
-                        ⚪ Pianifica
+                        {isPast ? '' : '⚪ Pianifica'}
                       </div>
                     )}
                   </div>
@@ -437,6 +453,7 @@ export default function PlanningPage() {
                 const dateStr = date.toISOString().split('T')[0];
                 const plan = getPlanForDate(date);
                 const isToday = dateStr === today;
+                const isPast = dateStr < today;
                 const dayNames = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
 
                 return (
@@ -445,19 +462,12 @@ export default function PlanningPage() {
                     onClick={() => handleDayClick(date)}
                     style={{
                       padding: 20,
-                      background: isToday ? '#eff6ff' : 'white',
+                      background: isToday ? '#eff6ff' : (isPast ? '#f9fafb' : 'white'),
                       borderRadius: 12,
                       border: isToday ? '2px solid #2563eb' : '1px solid #e5e7eb',
                       cursor: 'pointer',
                       transition: 'all 0.2s',
-                    }}
-                    onMouseEnter={(e) => {
-                      e.currentTarget.style.transform = 'translateY(-2px)';
-                      e.currentTarget.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
-                    }}
-                    onMouseLeave={(e) => {
-                      e.currentTarget.style.transform = 'translateY(0)';
-                      e.currentTarget.style.boxShadow = 'none';
+                      opacity: isPast && !plan ? 0.6 : 1
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', marginBottom: 12 }}>
@@ -496,7 +506,7 @@ export default function PlanningPage() {
                       </div>
                     ) : (
                       <div style={{ fontSize: 14, color: '#9ca3af' }}>
-                        Nessun piano • <span style={{ color: '#2563eb', fontWeight: 500 }}>Clicca per pianificare</span>
+                        {isPast ? 'Nessun piano registrato' : <>Nessun piano • <span style={{ color: '#2563eb', fontWeight: 500 }}>Clicca per pianificare</span></>}
                       </div>
                     )}
                   </div>
