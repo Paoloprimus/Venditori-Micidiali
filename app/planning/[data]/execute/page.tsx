@@ -12,6 +12,7 @@
  * - Completare (salva visita con ordine)
  * * FIX:
  * - Corretto decryptFields passando c.id invece di stringa vuota
+ * - Aggiunto Time Tracking (Inizia/Termina)
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -72,6 +73,9 @@ export default function ExecutePlanPage() {
   const [completed, setCompleted] = useState(0);
   const [skipped, setSkipped] = useState(0);
 
+  // NUOVO: Stato per il timer della visita
+  const [visitStartTime, setVisitStartTime] = useState<Date | null>(null);
+
   // Carica piano e clienti
   useEffect(() => {
     if (actuallyReady) {
@@ -104,9 +108,12 @@ export default function ExecutePlanPage() {
       if (planError) throw planError;
 
       if (!planData || planData.status !== 'active') {
-        alert('Piano non attivo. Torna al planning per attivarlo.');
-        router.push(`/planning/${dataStr}`);
-        return;
+        // Se è completato, lasciamo vedere per il report finale, altrimenti redirect
+        if (planData?.status !== 'completed') {
+            alert('Piano non attivo. Torna al planning per attivarlo.');
+            router.push(`/planning/${dataStr}`);
+            return;
+        }
       }
 
       setPlan(planData);
@@ -121,7 +128,7 @@ export default function ExecutePlanPage() {
 
       if (clientsError) throw clientsError;
 
-      // Decifra nomi (STESSO PATTERN /clients)
+      // Decifra nomi (Logica originale intatta)
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
@@ -147,11 +154,11 @@ export default function ExecutePlanPage() {
             name_iv: hexToBase64(c.name_iv),
           };
 
-          // ✅ FIX: Passiamo c.id invece di '' come associatedData
+          // Decrypt usando l'ID come AD (Fix precedente mantenuto)
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id, // <--- ERA '', ORA È c.id
+            c.id, 
             recordForDecrypt,
             ['name']
           );
@@ -199,7 +206,12 @@ export default function ExecutePlanPage() {
   const isLast = currentIndex === orderedIds.length - 1;
   const isComplete = currentIndex >= orderedIds.length;
 
-  // Salva visita
+  // NUOVO: Funzione per avviare il timer
+  function handleStartVisit() {
+    setVisitStartTime(new Date());
+  }
+
+  // MODIFICATO: Salva visita con tempi reali
   async function saveVisit(esito: 'ordine_acquisito' | 'altro', ordineValue?: string) {
     if (!currentClient) return;
 
@@ -208,14 +220,27 @@ export default function ExecutePlanPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
+      const now = new Date();
+
+      // Calcolo durata in minuti
+      let durataMinuti = 0;
+      if (visitStartTime) {
+        const diffMs = now.getTime() - visitStartTime.getTime();
+        durataMinuti = Math.max(1, Math.round(diffMs / 60000));
+      } else {
+        // Se l'utente ha saltato senza fare "Start", mettiamo un default o 0
+        durataMinuti = 0;
+      }
+
       const visitData = {
         user_id: user.id,
         account_id: currentClient.id,
-        tipo: 'visita',  // Tipo fisso per planning giornaliero
-        data_visita: new Date(dataStr).toISOString(),
+        tipo: 'visita',
+        data_visita: now.toISOString(), // Usa ora reale corrente
         esito: esito,
         importo_vendita: ordineValue ? parseFloat(ordineValue) : null,
         notes: noteVisita || null,
+        durata: durataMinuti // Salviamo la durata calcolata
       };
 
       const { error } = await supabase
@@ -224,15 +249,16 @@ export default function ExecutePlanPage() {
 
       if (error) throw error;
 
-      console.log(`✅ Visita salvata: ${esito}`);
+      console.log(`✅ Visita salvata: ${esito}, Durata: ${durataMinuti}m`);
 
       // Stats
       if (esito === 'altro') setSkipped(prev => prev + 1);
       else if (esito === 'ordine_acquisito') setCompleted(prev => prev + 1);
 
-      // Reset form
+      // Reset form e timer
       setOrdine('');
       setNoteVisita('');
+      setVisitStartTime(null);
 
       // Prossimo cliente
       setCurrentIndex(prev => prev + 1);
@@ -259,6 +285,9 @@ export default function ExecutePlanPage() {
     newOrder[currentIndex] = newOrder[currentIndex + 1];
     newOrder[currentIndex + 1] = temp;
     setOrderedIds(newOrder);
+    
+    // Reset timer se si posticipa
+    setVisitStartTime(null);
   }
 
   async function handleComplete() {
@@ -271,7 +300,7 @@ export default function ExecutePlanPage() {
 
   // Fine giornata
   useEffect(() => {
-    if (isComplete && plan) {
+    if (isComplete && plan && plan.status !== 'completed') {
       finishDay();
     }
   }, [isComplete, plan]);
@@ -397,7 +426,7 @@ export default function ExecutePlanPage() {
               </div>
             </div>
 
-            {/* NUOVO: Bottone Genera Report */}
+            {/* Bottone Genera Report */}
             <div style={{ marginBottom: 24 }}>
               <GenerateReportButton 
                 data={dataStr}
@@ -460,9 +489,11 @@ export default function ExecutePlanPage() {
     );
   }
 
+  // ============================================================================
+  // UI PRINCIPALE: MODIFICATA PER GESTIRE IL TIMER VISITA
+  // ============================================================================
   return (
     <>
-      {/* TopBar */}
       <div style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 1000, background: 'white', borderBottom: '1px solid #e5e7eb' }}>
         <TopBar
           title="🎯 Esecuzione Visite"
@@ -483,207 +514,240 @@ export default function ExecutePlanPage() {
       />
 
       <div style={{ maxWidth: 700, margin: '0 auto', padding: '90px 24px 40px' }}>
-      {/* Header Progress */}
-      <div style={{ marginBottom: 32 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
-            Visita {currentIndex + 1} di {orderedIds.length}
-          </h1>
-          <button
-            onClick={() => router.push(`/planning/${dataStr}`)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1px solid #d1d5db',
-              background: 'white',
-              cursor: 'pointer',
-              fontSize: 14,
-            }}
-          >
-            🔙 Esci
-          </button>
-        </div>
-
-        {/* Progress Bar */}
-        <div style={{ width: '100%', height: 8, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
-          <div style={{
-            width: `${((currentIndex) / orderedIds.length) * 100}%`,
-            height: '100%',
-            background: '#10b981',
-            transition: 'width 0.3s',
-          }} />
-        </div>
-
-        <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 13, color: '#6b7280' }}>
-          <span>✅ Fatte: {completed}</span>
-          <span>⏭️ Saltate: {skipped}</span>
-          <span>📍 Rimanenti: {orderedIds.length - currentIndex}</span>
-        </div>
-      </div>
-
-      {/* Card Cliente */}
-      <div style={{ background: 'white', borderRadius: 16, border: '2px solid #e5e7eb', padding: 32, marginBottom: 24 }}>
-        {/* Info Cliente */}
+        {/* Header Progress */}
         <div style={{ marginBottom: 32 }}>
-          <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{currentClient.name}</h2>
-          <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 16 }}>
-            📍 {currentClient.city} • {currentClient.tipo_locale}
-          </div>
-
-          {/* Stats Cliente */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 16, background: '#f9fafb', borderRadius: 8 }}>
-            <div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Ultima Visita</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>
-                {currentClient.ultimo_esito_at 
-                  ? new Date(currentClient.ultimo_esito_at).toLocaleDateString()
-                  : 'Mai visitato'}
-              </div>
-              {currentClient.ultimo_esito && (
-                <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
-                  Esito: {currentClient.ultimo_esito}
-                </div>
-              )}
-            </div>
-
-            <div>
-              <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Fatturato YTD</div>
-              <div style={{ fontSize: 16, fontWeight: 600 }}>
-                {currentClient.volume_attuale 
-                  ? `€${currentClient.volume_attuale.toFixed(2)}`
-                  : '€0.00'}
-              </div>
-            </div>
-          </div>
-
-          {/* Note Cliente */}
-          {currentClient.custom?.notes && (
-            <div style={{ marginTop: 16, padding: 12, background: '#fef3c7', borderRadius: 8, border: '1px solid #fbbf24' }}>
-              <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>📝 Note:</div>
-              <div style={{ fontSize: 14, color: '#78350f' }}>{currentClient.custom.notes}</div>
-            </div>
-          )}
-        </div>
-
-        {/* Form Visita */}
-        <div style={{ marginBottom: 32 }}>
-          <div style={{ marginBottom: 16 }}>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-              💰 Importo Vendita (€) *
-            </label>
-            <input
-              type="number"
-              step="0.01"
-              value={ordine}
-              onChange={(e) => setOrdine(e.target.value)}
-              placeholder="0.00"
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0 }}>
+              Visita {currentIndex + 1} di {orderedIds.length}
+            </h1>
+            <button
+              onClick={() => router.push(`/planning/${dataStr}`)}
               style={{
-                width: '100%',
-                padding: 12,
-                fontSize: 16,
+                padding: '8px 16px',
                 borderRadius: 8,
-                border: '2px solid #d1d5db',
-              }}
-            />
-          </div>
-
-          <div>
-            <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
-              📝 Note Visita
-            </label>
-            <textarea
-              value={noteVisita}
-              onChange={(e) => setNoteVisita(e.target.value)}
-              placeholder="Aggiungi note sulla visita..."
-              rows={3}
-              style={{
-                width: '100%',
-                padding: 12,
+                border: '1px solid #d1d5db',
+                background: 'white',
+                cursor: 'pointer',
                 fontSize: 14,
-                borderRadius: 8,
-                border: '2px solid #d1d5db',
-                resize: 'vertical',
               }}
-            />
+            >
+              🔙 Esci
+            </button>
+          </div>
+
+          {/* Progress Bar */}
+          <div style={{ width: '100%', height: 8, background: '#e5e7eb', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{
+              width: `${((currentIndex) / orderedIds.length) * 100}%`,
+              height: '100%',
+              background: '#10b981',
+              transition: 'width 0.3s',
+            }} />
+          </div>
+
+          <div style={{ display: 'flex', gap: 16, marginTop: 12, fontSize: 13, color: '#6b7280' }}>
+            <span>✅ Fatte: {completed}</span>
+            <span>⏭️ Saltate: {skipped}</span>
+            <span>📍 Rimanenti: {orderedIds.length - currentIndex}</span>
           </div>
         </div>
 
-        {/* Azioni */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12 }}>
-          <button
-            onClick={handleSkip}
-            disabled={saving}
-            style={{
-              padding: '14px',
-              borderRadius: 8,
-              border: '2px solid #f59e0b',
-              background: 'white',
-              color: '#f59e0b',
-              fontWeight: 600,
-              cursor: saving ? 'not-allowed' : 'pointer',
-              opacity: saving ? 0.5 : 1,
-            }}
-          >
-            ⏭️ Saltato
-          </button>
+        {/* Card Cliente */}
+        <div style={{ background: 'white', borderRadius: 16, border: '2px solid #e5e7eb', padding: 32, marginBottom: 24 }}>
+          {/* Info Cliente */}
+          <div style={{ marginBottom: 32 }}>
+            <h2 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>{currentClient.name}</h2>
+            <div style={{ fontSize: 16, color: '#6b7280', marginBottom: 16 }}>
+              📍 {currentClient.city} • {currentClient.tipo_locale}
+            </div>
 
-          <button
-            onClick={handlePostpone}
-            disabled={saving || isLast}
-            style={{
-              padding: '14px',
-              borderRadius: 8,
-              border: '2px solid #6b7280',
-              background: 'white',
-              color: '#6b7280',
-              fontWeight: 600,
-              cursor: (saving || isLast) ? 'not-allowed' : 'pointer',
-              opacity: (saving || isLast) ? 0.5 : 1,
-            }}
-          >
-            ⬇️ Spostato
-          </button>
-
-          <button
-            onClick={handleComplete}
-            disabled={saving || !ordine.trim()}
-            style={{
-              padding: '14px',
-              borderRadius: 8,
-              border: 'none',
-              background: (!ordine.trim() || saving) ? '#9ca3af' : '#10b981',
-              color: 'white',
-              fontWeight: 600,
-              cursor: (!ordine.trim() || saving) ? 'not-allowed' : 'pointer',
-            }}
-          >
-            ✅ Fatto
-          </button>
-        </div>
-      </div>
-
-      {/* Prossimi Clienti */}
-      {currentIndex < orderedIds.length - 1 && (
-        <div style={{ padding: 16, background: '#f9fafb', borderRadius: 8, border: '1px solid #e5e7eb' }}>
-          <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8, color: '#6b7280' }}>
-            📋 Prossimi Clienti:
-          </div>
-          {orderedIds.slice(currentIndex + 1, currentIndex + 4).map((id, idx) => {
-            const client = clients.find(c => c.id === id);
-            return client ? (
-              <div key={id} style={{ fontSize: 13, color: '#6b7280', marginBottom: 4 }}>
-                {idx + 1}. {client.name} ({client.city})
+            {/* Stats Cliente */}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, padding: 16, background: '#f9fafb', borderRadius: 8 }}>
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Ultima Visita</div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>
+                  {currentClient.ultimo_esito_at 
+                    ? new Date(currentClient.ultimo_esito_at).toLocaleDateString()
+                    : 'Mai visitato'}
+                </div>
+                {currentClient.ultimo_esito && (
+                  <div style={{ fontSize: 13, color: '#6b7280', marginTop: 2 }}>
+                    Esito: {currentClient.ultimo_esito}
+                  </div>
+                )}
               </div>
-            ) : null;
-          })}
-          {orderedIds.length - currentIndex > 4 && (
-            <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 4 }}>
-              ... e altri {orderedIds.length - currentIndex - 4}
+
+              <div>
+                <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>Fatturato YTD</div>
+                <div style={{ fontSize: 16, fontWeight: 600 }}>
+                  {currentClient.volume_attuale 
+                    ? `€${currentClient.volume_attuale.toFixed(2)}`
+                    : '€0.00'}
+                </div>
+              </div>
+            </div>
+
+            {/* Note Cliente */}
+            {currentClient.custom?.notes && (
+              <div style={{ marginTop: 16, padding: 12, background: '#fef3c7', borderRadius: 8, border: '1px solid #fbbf24' }}>
+                <div style={{ fontSize: 12, fontWeight: 600, color: '#92400e', marginBottom: 4 }}>📝 Note:</div>
+                <div style={{ fontSize: 14, color: '#78350f' }}>{currentClient.custom.notes}</div>
+              </div>
+            )}
+          </div>
+
+          {/* MODIFICA LOGICA UI: Stato Visita */}
+          {!visitStartTime ? (
+            // STATO 1: DA INIZIARE
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              <button
+                onClick={handleStartVisit}
+                style={{
+                  width: '100%',
+                  padding: '20px',
+                  borderRadius: 12,
+                  border: 'none',
+                  background: '#2563eb',
+                  color: 'white',
+                  fontSize: 18,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(37,99,235,0.3)'
+                }}
+              >
+                ▶️ INIZIA VISITA
+              </button>
+
+              <div style={{ display: 'flex', gap: 12 }}>
+                <button 
+                  onClick={handleSkip} 
+                  disabled={saving}
+                  style={{ 
+                    flex: 1, 
+                    padding: '12px', 
+                    borderRadius: 8, 
+                    border: '2px solid #f59e0b', 
+                    background: 'white', 
+                    color: '#f59e0b', 
+                    fontWeight: 600 
+                  }}
+                >
+                  ⏭️ Salta (Chiuso/Assente)
+                </button>
+                
+                <button 
+                  onClick={handlePostpone} 
+                  disabled={saving || isLast}
+                  style={{ 
+                    flex: 1, 
+                    padding: '12px', 
+                    borderRadius: 8, 
+                    border: '2px solid #6b7280', 
+                    background: 'white', 
+                    color: '#6b7280', 
+                    fontWeight: 600,
+                    opacity: isLast ? 0.5 : 1 
+                  }}
+                >
+                  ⬇️ Sposta dopo
+                </button>
+              </div>
+            </div>
+          ) : (
+            // STATO 2: IN CORSO
+            <div className="animate-in fade-in duration-300">
+              <div style={{ 
+                textAlign: 'center', 
+                marginBottom: 24, 
+                padding: 12, 
+                background: '#dbeafe', 
+                borderRadius: 8, 
+                color: '#1e40af', 
+                fontWeight: 600,
+                border: '1px solid #bfdbfe'
+              }}>
+                ⏱️ Visita in corso...
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
+                  💰 Importo Vendita (€) *
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  value={ordine}
+                  onChange={(e) => setOrdine(e.target.value)}
+                  placeholder="0.00"
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    fontSize: 16,
+                    borderRadius: 8,
+                    border: '2px solid #d1d5db',
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 8, fontWeight: 600, fontSize: 14 }}>
+                  📝 Note Visita
+                </label>
+                <textarea
+                  value={noteVisita}
+                  onChange={(e) => setNoteVisita(e.target.value)}
+                  placeholder="Aggiungi note sulla visita..."
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    padding: 12,
+                    fontSize: 14,
+                    borderRadius: 8,
+                    border: '2px solid #d1d5db',
+                    resize: 'vertical',
+                  }}
+                />
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+                <button
+                  onClick={handleSkip}
+                  disabled={saving}
+                  style={{
+                    padding: '16px',
+                    borderRadius: 8,
+                    border: '2px solid #f59e0b',
+                    background: 'white',
+                    color: '#f59e0b',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Niente ordine
+                </button>
+
+                <button
+                  onClick={handleComplete}
+                  disabled={saving || !ordine.trim()}
+                  style={{
+                    padding: '16px',
+                    borderRadius: 8,
+                    border: 'none',
+                    background: '#10b981',
+                    color: 'white',
+                    fontWeight: 700,
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(16,185,129,0.3)',
+                    opacity: !ordine.trim() ? 0.5 : 1
+                  }}
+                >
+                  ✅ TERMINA
+                </button>
+              </div>
             </div>
           )}
         </div>
-      )}
-    </div>
-  </>
+      </div>
+    </>
   );
 }
