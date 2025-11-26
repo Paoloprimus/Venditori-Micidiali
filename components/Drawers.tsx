@@ -826,6 +826,63 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
 
 /* --------------------- Contenuto: IMPOSTAZIONI --------------------- */
 function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
+  const [homeAddress, setHomeAddress] = useState('');
+  const [homeCity, setHomeCity] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [savedCoords, setSavedCoords] = useState<string | null>(null);
+
+  // Carica impostazioni salvate
+  useEffect(() => {
+    const saved = localStorage.getItem('repping_settings');
+    if (saved) {
+      try {
+        const data = JSON.parse(saved);
+        if (data.homeAddress) setHomeAddress(data.homeAddress);
+        if (data.homeCity) setHomeCity(data.homeCity);
+        if (data.homeLat && data.homeLon) {
+          setSavedCoords(`${data.homeLat}, ${data.homeLon}`);
+        }
+      } catch {}
+    }
+  }, []);
+
+  async function handleSave() {
+    if (!homeAddress.trim() || !homeCity.trim()) {
+      alert('Inserisci indirizzo e città');
+      return;
+    }
+
+    setSaving(true);
+    try {
+      // Geocoding
+      const coords = await geocodeAddress(homeAddress, homeCity);
+      
+      if (!coords) {
+        alert('Indirizzo non trovato. Verifica i dati.');
+        return;
+      }
+
+      // Salva in localStorage
+      const settings = {
+        homeAddress,
+        homeCity,
+        homeLat: coords.latitude,
+        homeLon: coords.longitude,
+        updatedAt: new Date().toISOString()
+      };
+      
+      localStorage.setItem('repping_settings', JSON.stringify(settings));
+      setSavedCoords(`${coords.latitude}, ${coords.longitude}`);
+      alert('✅ Impostazioni salvate!\nIl punto di partenza verrà usato per ottimizzare i percorsi.');
+      
+    } catch (e: any) {
+      console.error(e);
+      alert('Errore durante il salvataggio');
+    } finally {
+      setSaving(false);
+    }
+  }
+
   return (
     <>
       <div className="topbar">
@@ -833,11 +890,63 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
         <div className="title">Impostazioni</div>
       </div>
       <div className="list" style={{ padding: 16 }}>
-        <div style={{ color: '#6b7280', fontSize: 14 }}>
-          Qui ci saranno le configurazioni dell'app.
+        
+        <div style={{ marginBottom: 24 }}>
+          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#111827' }}>📍 Punto di Partenza</h3>
+          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+            Imposta il tuo indirizzo di casa o ufficio. Verrà usato per ottimizzare i percorsi giornalieri.
+          </p>
+          
+          <div style={{ display: 'grid', gap: 12 }}>
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Indirizzo</label>
+              <input 
+                value={homeAddress}
+                onChange={e => setHomeAddress(e.target.value)}
+                placeholder="Es. Via Roma 10"
+                style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #d1d5db' }}
+              />
+            </div>
+            
+            <div>
+              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Città</label>
+              <input 
+                value={homeCity}
+                onChange={e => setHomeCity(e.target.value)}
+                placeholder="Es. Milano"
+                style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #d1d5db' }}
+              />
+            </div>
+
+            <button 
+              onClick={handleSave}
+              disabled={saving}
+              style={{ 
+                marginTop: 8,
+                width: '100%', 
+                padding: '12px', 
+                borderRadius: 8, 
+                border: 'none', 
+                background: '#2563eb', 
+                color: 'white',
+                fontWeight: 600,
+                cursor: 'pointer',
+                opacity: saving ? 0.7 : 1
+              }}
+            >
+              {saving ? 'Salvataggio...' : '💾 Salva Indirizzo'}
+            </button>
+
+            {savedCoords && (
+              <div style={{ marginTop: 8, padding: 12, background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 12, color: '#15803d' }}>
+                ✅ Coordinate salvate: {savedCoords}
+              </div>
+            )}
+          </div>
         </div>
-        <div style={{ marginTop: 16, padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 13 }}>
-          ⚙️ Coming soon...
+
+        <div style={{ padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 13, color: '#6b7280' }}>
+          ℹ️ Altre impostazioni in arrivo...
         </div>
       </div>
     </>
