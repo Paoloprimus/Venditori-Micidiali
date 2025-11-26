@@ -13,6 +13,7 @@
  * - Ottimizzazione percorso (TSP) ora considera il punto di partenza salvato nelle impostazioni (Casa/Ufficio).
  * - Aggiunto bottone "ELIMINA PIANO" per resettare la giornata.
  * - FIX: Corretto errore di compilazione "Cannot find name 'data'" in savePlan.
+ * - FIX: Salvataggio timestamp 'started_at' all'avvio della giornata per report precisi.
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -552,8 +553,8 @@ export default function PlanningEditorPage() {
       let updatedPlan;
 
       if (plan?.id) {
-        // Update
-        const { data, error } = await supabase
+        // Update - ricarica il piano dal DB dopo l'aggiornamento
+        const { data: updated, error } = await supabase
           .from('daily_plans')
           .update(planData)
           .eq('id', plan.id)
@@ -562,10 +563,16 @@ export default function PlanningEditorPage() {
         
         if (error) throw error;
         
-        updatedPlan = data;
+        updatedPlan = updated;
+        setPlan(updated);
+        
+        // Forza reset dirty
+        setTimeout(() => {
+          setIsDirty(false);
+        }, 0);
       } else {
         // Insert
-        const { data, error } = await supabase
+        const { data: inserted, error } = await supabase
           .from('daily_plans')
           .insert(planData)
           .select()
@@ -573,20 +580,15 @@ export default function PlanningEditorPage() {
         
         if (error) throw error;
         
-        updatedPlan = data;
+        updatedPlan = inserted;
+        setPlan(inserted);
+        
+        // Forza reset dirty
+        setTimeout(() => {
+          setIsDirty(false);
+        }, 0);
       }
 
-      // ✅ Usa il record aggiornato
-      console.log('[Planning] Piano aggiornato:', updatedPlan);
-      setPlan(updatedPlan);
-      
-      // Forza reset dirty DOPO setPlan
-      setTimeout(() => {
-        setIsDirty(false);
-        console.log('[Planning] isDirty resettato, plan.id:', updatedPlan?.id, 'plan.status:', updatedPlan?.status);
-      }, 0);
-
-      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -609,14 +611,20 @@ export default function PlanningEditorPage() {
 
     setSaving(true);
     try {
+      // ✅ SALVA ORA DI INIZIO (TIMBRO CARTELLINO)
+      const nowIso = new Date().toISOString();
+
       const { error } = await supabase
         .from('daily_plans')
-        .update({ status: 'active' })
+        .update({ 
+          status: 'active',
+          route_data: { ...plan.route_data, started_at: nowIso } // Salva 'started_at'
+        })
         .eq('id', plan.id);
       
       if (error) throw error;
 
-      console.log('✅ Piano attivato!');
+      console.log('✅ Piano attivato con start time:', nowIso);
       router.push(`/planning/${dataStr}/execute`);
       
     } catch (e: any) {
