@@ -11,8 +11,7 @@
  * - Modalità Smart: AI suggerisce 5-10 clienti ottimali
  * - Modalità Avanzata: selezione manuale con tutti i clienti
  * - Algoritmo punteggi AI (latenza, distanza, revenue, note)
- * - Ottimizzazione percorso geografico (TSP)
- * - Riordinamento manuale (Su/Giù)
+ * - Ottimizzazione percorso geografico (TSP) con partenza da CASA
  * - Salvataggio piano in daily_plans
  * - Status: draft → active → completed
  */
@@ -82,7 +81,7 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
+  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -117,17 +116,20 @@ export default function PlanningEditorPage() {
 
       if (clientsError) throw clientsError;
 
-      // Decifra nomi clienti
+      // Decifra nomi clienti (STESSO PATTERN DI /clients/page.tsx)
       const decryptedClients: Client[] = [];
       
+      // Helper: converti hex-string in base64
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
+        
         const hex = hexStr.slice(2);
         const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
         return bytes;
       };
       
+      // Helper: converte risultato decryptFields in oggetto
       const toObj = (x: any): Record<string, unknown> =>
         Array.isArray(x)
           ? x.reduce((acc: Record<string, unknown>, it: any) => {
@@ -138,20 +140,23 @@ export default function PlanningEditorPage() {
       
       for (const c of clientsData || []) {
         try {
+          // Converti hex a base64
           const recordForDecrypt = {
             ...c,
             name_enc: hexToBase64(c.name_enc),
             name_iv: hexToBase64(c.name_iv),
           };
           
+          // Decifra
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id,
+            c.id,  // ✅ FIX: Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
           
+          // Converti in oggetto
           const dec = toObj(decAny);
           
           decryptedClients.push({
@@ -168,6 +173,7 @@ export default function PlanningEditorPage() {
           });
         } catch (e) {
           console.error('[Planning] Errore decrypt cliente:', e);
+          // Aggiungi comunque con ID come fallback
           decryptedClients.push({
             id: c.id,
             name: `Cliente #${c.id.slice(0, 8)}`,
@@ -201,6 +207,7 @@ export default function PlanningEditorPage() {
         setPlanNotes(planData.notes || '');
       }
 
+      // ✅ Reset manuale isDirty al caricamento
       setIsDirty(false);
 
     } catch (e: any) {
@@ -211,23 +218,28 @@ export default function PlanningEditorPage() {
     }
   }
 
-  // Calcola punteggi AI
+  // Calcola punteggi AI per tutti i clienti
   useEffect(() => {
     if (clients.length === 0) return;
+
     const scored = clients.map(client => calculateScore(client));
     scored.sort((a, b) => b.score - a.score);
     setScoredClients(scored);
   }, [clients]);
 
-  // Calcola punteggio AI
+  // Calcola punteggio AI per un cliente
   function calculateScore(client: Client): ScoredClient {
     const today = new Date(dataStr);
 
+    // 1. LATENZA (32%) - Giorni dall'ultima visita
     let latencyScore = 0;
     let daysAgo = 0;
+    
     if (client.ultimo_esito_at) {
       const lastVisit = new Date(client.ultimo_esito_at);
       daysAgo = Math.floor((today.getTime() - lastVisit.getTime()) / (1000 * 60 * 60 * 24));
+      
+      // Più giorni sono passati, più punteggio
       if (daysAgo >= 30) latencyScore = 100;
       else if (daysAgo >= 21) latencyScore = 80;
       else if (daysAgo >= 14) latencyScore = 60;
@@ -235,17 +247,23 @@ export default function PlanningEditorPage() {
       else if (daysAgo >= 3) latencyScore = 20;
       else latencyScore = 10;
     } else {
+      // Mai visitato = massima priorità
       latencyScore = 100;
       daysAgo = 999;
     }
 
-    let distanceScore = 50;
+    // 2. DISTANZA (28%) - Vicinanza ad altri clienti selezionati
+    let distanceScore = 50; // default medio se nessuno selezionato
+    
     if (selectedIds.length > 0) {
       const selectedClients = clients.filter(c => selectedIds.includes(c.id));
       const distances = selectedClients.map(sc => 
         calculateDistance(client.latitude, client.longitude, sc.latitude, sc.longitude)
       );
+      
       const avgDistance = distances.reduce((a, b) => a + b, 0) / distances.length;
+      
+      // Più vicino = più punteggio
       if (avgDistance < 5) distanceScore = 100;
       else if (avgDistance < 10) distanceScore = 80;
       else if (avgDistance < 20) distanceScore = 60;
@@ -253,7 +271,9 @@ export default function PlanningEditorPage() {
       else distanceScore = 20;
     }
 
+    // 3. REVENUE (25%) - Volume vendite
     let revenueScore = 0;
+    
     if (client.volume_attuale) {
       if (client.volume_attuale >= 1000) revenueScore = 100;
       else if (client.volume_attuale >= 750) revenueScore = 80;
@@ -261,43 +281,62 @@ export default function PlanningEditorPage() {
       else if (client.volume_attuale >= 250) revenueScore = 40;
       else revenueScore = 20;
     } else {
-      revenueScore = 30;
+      revenueScore = 30; // default per chi non ha volume
     }
 
+    // 4. NOTE PRESCRITTIVE (20%) - Keywords urgenti
     let notesScore = 0;
     const notes = client.custom?.notes || '';
     const notesLower = notes.toLowerCase();
+    
     const urgentKeywords = ['urgente', 'richiamare', 'importante', 'priorit', 'subito', 'asap'];
     const positiveKeywords = ['interessato', 'caldo', 'ordine', 'acquisto'];
+    
     if (urgentKeywords.some(kw => notesLower.includes(kw))) {
       notesScore = 100;
     } else if (positiveKeywords.some(kw => notesLower.includes(kw))) {
       notesScore = 60;
     } else if (notes.trim()) {
       notesScore = 30;
+    } else {
+      notesScore = 0;
     }
 
+    // Punteggio finale pesato
     const finalScore = Math.round(
-      (latencyScore * 0.32) + (distanceScore * 0.28) + (revenueScore * 0.25) + (notesScore * 0.20)
+      (latencyScore * 0.32) +
+      (distanceScore * 0.28) +
+      (revenueScore * 0.25) +
+      (notesScore * 0.20)
     );
 
     return {
       ...client,
       score: finalScore,
-      scoreBreakdown: { latency: latencyScore, distance: distanceScore, revenue: revenueScore, notes: notesScore },
+      scoreBreakdown: {
+        latency: latencyScore,
+        distance: distanceScore,
+        revenue: revenueScore,
+        notes: notesScore,
+      },
       daysAgo,
     };
   }
 
+  // Calcola distanza tra due punti GPS (km)
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-    const R = 6371;
+    const R = 6371; // Raggio Terra in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
     const dLon = (lon2 - lon1) * Math.PI / 180;
-    const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+      Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     return R * c;
   }
 
+  // Genera suggerimenti Smart
   function handleSmartSuggestion() {
     const topClients = scoredClients.slice(0, numClients);
     const ids = topClients.map(c => c.id);
@@ -305,33 +344,92 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
+  // Ottimizza percorso (TSP semplificato + Partenza da Casa)
   function optimizeRoute() {
     if (selectedIds.length <= 1) return;
-    const selectedClientsList = selectedIds.map(id => clients.find(c => c.id === id)).filter((c): c is Client => !!c);
+
+    // Recupera i clienti selezionati
+    const selectedClientsList = selectedIds
+      .map(id => clients.find(c => c.id === id))
+      .filter((c): c is Client => !!c);
+    
     const ordered: Client[] = [];
     const remaining = [...selectedClientsList];
     
-    // Inizia dal primo della lista corrente (o potremmo scegliere il più vicino all'ufficio se avessimo le coordinate)
-    ordered.push(remaining.shift()!);
-    
-    while (remaining.length > 0) {
-      const current = ordered[ordered.length - 1];
-      let nearestIdx = 0;
+    // 1. Cerca coordinate casa nelle impostazioni
+    let startLat: number | undefined;
+    let startLon: number | undefined;
+
+    if (typeof window !== 'undefined') {
+      try {
+        const settings = localStorage.getItem('repping_settings');
+        if (settings) {
+          const parsed = JSON.parse(settings);
+          if (parsed.homeLat && parsed.homeLon) {
+            startLat = parseFloat(parsed.homeLat);
+            startLon = parseFloat(parsed.homeLon);
+          }
+        }
+      } catch (e) {
+        console.error("Errore lettura impostazioni casa:", e);
+      }
+    }
+
+    // 2. Determina il primo cliente
+    if (startLat && startLon) {
+      // Se abbiamo casa, troviamo il cliente più vicino a casa
+      let nearestIdx = -1;
       let nearestDist = Infinity;
+
       for (let i = 0; i < remaining.length; i++) {
-        const dist = calculateDistance(current.latitude, current.longitude, remaining[i].latitude, remaining[i].longitude);
+        const dist = calculateDistance(startLat, startLon, remaining[i].latitude, remaining[i].longitude);
         if (dist < nearestDist) {
           nearestDist = dist;
           nearestIdx = i;
         }
       }
+
+      if (nearestIdx !== -1) {
+        ordered.push(remaining.splice(nearestIdx, 1)[0]);
+      } else {
+         ordered.push(remaining.shift()!);
+      }
+    } else {
+      // Senza casa, partiamo dal primo della lista corrente
+      ordered.push(remaining.shift()!);
+    }
+    
+    // 3. Algoritmo nearest neighbor per i successivi
+    while (remaining.length > 0) {
+      const current = ordered[ordered.length - 1];
+      
+      // Trova il più vicino al corrente
+      let nearestIdx = 0;
+      let nearestDist = Infinity;
+      
+      for (let i = 0; i < remaining.length; i++) {
+        const dist = calculateDistance(
+          current.latitude,
+          current.longitude,
+          remaining[i].latitude,
+          remaining[i].longitude
+        );
+        
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearestIdx = i;
+        }
+      }
+      
       ordered.push(remaining.splice(nearestIdx, 1)[0]);
     }
     
+    // Aggiorna ordine
     setSelectedIds(ordered.map(c => c.id));
     setIsDirty(true);
   }
 
+  // Toggle selezione cliente
   function toggleClient(id: string) {
     setSelectedIds(prev => 
       prev.includes(id) 
@@ -341,7 +439,7 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
-  // 🆕 Sposta visita SU
+  // Sposta visita SU
   function moveUp(index: number) {
     if (index === 0) return;
     const newIds = [...selectedIds];
@@ -350,7 +448,7 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
-  // 🆕 Sposta visita GIÙ
+  // Sposta visita GIÙ
   function moveDown(index: number) {
     if (index === selectedIds.length - 1) return;
     const newIds = [...selectedIds];
@@ -359,6 +457,7 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
+  // Salva piano
   async function savePlan() {
     if (selectedIds.length === 0) {
       alert('Seleziona almeno un cliente');
@@ -374,18 +473,33 @@ export default function PlanningEditorPage() {
         user_id: user.id,
         data: dataStr,
         account_ids: selectedIds,
-        route_data: {},
+        route_data: {}, // TODO: salvare dati percorso
         notes: planNotes,
         status: plan?.status || 'draft',
       };
 
       let updatedPlan;
+
       if (plan?.id) {
-        const { data, error } = await supabase.from('daily_plans').update(planData).eq('id', plan.id).select().single();
+        // Update
+        const { data, error } = await supabase
+          .from('daily_plans')
+          .update(planData)
+          .eq('id', plan.id)
+          .select()
+          .single();
+        
         if (error) throw error;
         updatedPlan = data;
+        
       } else {
-        const { data, error } = await supabase.from('daily_plans').insert(planData).select().single();
+        // Insert
+        const { data, error } = await supabase
+          .from('daily_plans')
+          .insert(planData)
+          .select()
+          .single();
+        
         if (error) throw error;
         updatedPlan = data;
       }
@@ -401,20 +515,30 @@ export default function PlanningEditorPage() {
     }
   }
 
+  // Attiva piano
   async function activatePlan() {
     if (!plan?.id) {
       alert('Devi prima salvare il piano');
       return;
     }
+
     if (selectedIds.length === 0) {
       alert('Seleziona almeno un cliente per attivare il piano');
       return;
     }
+
     setSaving(true);
     try {
-      const { error } = await supabase.from('daily_plans').update({ status: 'active' }).eq('id', plan.id);
+      const { error } = await supabase
+        .from('daily_plans')
+        .update({ status: 'active' })
+        .eq('id', plan.id);
+      
       if (error) throw error;
+
+      console.log('✅ Piano attivato!');
       router.push(`/planning/${dataStr}/execute`);
+      
     } catch (e: any) {
       console.error('Errore attivazione:', e);
       alert(`Errore: ${e.message}`);
@@ -423,18 +547,25 @@ export default function PlanningEditorPage() {
     }
   }
 
+  // Formatta data
   function formatDate(dateStr: string) {
     const date = new Date(dateStr);
     const days = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
-    const months = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+    const months = ['gennaio', 'febbraio', 'marzo', 'aprile', 'maggio', 'giugno', 
+                    'luglio', 'agosto', 'settembre', 'ottobre', 'novembre', 'dicembre'];
+    
     return `${days[date.getDay()]} ${date.getDate()} ${months[date.getMonth()]} ${date.getFullYear()}`;
   }
 
   if (!actuallyReady) {
     return (
       <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>🔐 Sblocco crittografia...</h2>
-        <p style={{ color: '#6b7280' }}>Attendere il caricamento del sistema di cifratura.</p>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>
+          🔐 Sblocco crittografia...
+        </h2>
+        <p style={{ color: '#6b7280' }}>
+          Attendere il caricamento del sistema di cifratura.
+        </p>
       </div>
     );
   }
@@ -442,12 +573,14 @@ export default function PlanningEditorPage() {
   if (loading) {
     return (
       <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, textAlign: 'center' }}>
-        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>⏳ Caricamento...</h2>
+        <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>
+          ⏳ Caricamento...
+        </h2>
       </div>
     );
   }
 
-  // ✅ FIX VISUALIZZAZIONE: Mappa gli ID all'oggetto cliente per mantenere l'ordine
+  // Mappa gli ID agli oggetti cliente per il rendering
   const selectedClients = selectedIds
     .map(id => clients.find(c => c.id === id))
     .filter((c): c is Client => !!c);
@@ -704,57 +837,33 @@ export default function PlanningEditorPage() {
                   alignItems: 'center',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    <div style={{ 
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 4
-                    }}>
-                      {/* Numero sequenza */}
+                    {/* Controlli Ordine e Numero */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
                       <div style={{ 
-                        width: 28, 
-                        height: 28, 
-                        borderRadius: '50%', 
-                        background: '#2563eb', 
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 700,
-                        fontSize: 13
+                        width: 28, height: 28, borderRadius: '50%', 
+                        background: '#2563eb', color: 'white', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        fontWeight: 700, fontSize: 13 
                       }}>
                         {idx + 1}
                       </div>
-                    </div>
-
-                    {/* Controlli Riordino */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <button 
-                        onClick={() => moveUp(idx)} 
-                        disabled={idx === 0}
-                        style={{ 
-                          opacity: idx === 0 ? 0.3 : 1, 
-                          cursor: idx === 0 ? 'default' : 'pointer',
-                          fontSize: 12,
-                          background: 'none',
-                          border: 'none'
-                        }}
-                      >
-                        ▲
-                      </button>
-                      <button 
-                        onClick={() => moveDown(idx)} 
-                        disabled={idx === selectedClients.length - 1}
-                        style={{ 
-                          opacity: idx === selectedClients.length - 1 ? 0.3 : 1, 
-                          cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer',
-                          fontSize: 12,
-                          background: 'none',
-                          border: 'none'
-                        }}
-                      >
-                        ▼
-                      </button>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <button 
+                          onClick={() => moveUp(idx)} 
+                          disabled={idx === 0}
+                          style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none' }}
+                        >
+                          ▲
+                        </button>
+                        <button 
+                          onClick={() => moveDown(idx)} 
+                          disabled={idx === selectedClients.length - 1}
+                          style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none' }}
+                        >
+                          ▼
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -845,8 +954,8 @@ export default function PlanningEditorPage() {
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* Bottone Avvia Giornata (solo se draft e salvato) */}
-          {plan?.status === 'draft' && plan?.id && (
+          {/* Bottone Avvia Giornata (solo se draft o completed) */}
+          {plan?.id && (plan?.status === 'draft' || plan?.status === 'completed') && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}
@@ -865,8 +974,8 @@ export default function PlanningEditorPage() {
             </button>
           )}
 
-          {/* Bottone Vai alle Visite (se piano attivo o completato) */}
-          {(plan?.status === 'active' || plan?.status === 'completed') && (
+          {/* Bottone Vai alle Visite (se piano attivo) */}
+          {(plan?.status === 'active') && (
             <button
               onClick={() => router.push(`/planning/${dataStr}/execute`)}
               style={{
