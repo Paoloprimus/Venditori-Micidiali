@@ -12,6 +12,7 @@
  * - Modalità Avanzata: selezione manuale con tutti i clienti
  * - Algoritmo punteggi AI (latenza, distanza, revenue, note)
  * - Ottimizzazione percorso geografico (TSP)
+ * - Riordinamento manuale (Su/Giù)
  * - Salvataggio piano in daily_plans
  * - Status: draft → active → completed
  */
@@ -116,6 +117,7 @@ export default function PlanningEditorPage() {
 
       if (clientsError) throw clientsError;
 
+      // Decifra nomi clienti
       const decryptedClients: Client[] = [];
       
       const hexToBase64 = (hexStr: any): string => {
@@ -305,10 +307,13 @@ export default function PlanningEditorPage() {
 
   function optimizeRoute() {
     if (selectedIds.length <= 1) return;
-    const selectedClients = clients.filter(c => selectedIds.includes(c.id));
+    const selectedClientsList = selectedIds.map(id => clients.find(c => c.id === id)).filter((c): c is Client => !!c);
     const ordered: Client[] = [];
-    const remaining = [...selectedClients];
+    const remaining = [...selectedClientsList];
+    
+    // Inizia dal primo della lista corrente (o potremmo scegliere il più vicino all'ufficio se avessimo le coordinate)
     ordered.push(remaining.shift()!);
+    
     while (remaining.length > 0) {
       const current = ordered[ordered.length - 1];
       let nearestIdx = 0;
@@ -322,12 +327,35 @@ export default function PlanningEditorPage() {
       }
       ordered.push(remaining.splice(nearestIdx, 1)[0]);
     }
+    
     setSelectedIds(ordered.map(c => c.id));
     setIsDirty(true);
   }
 
   function toggleClient(id: string) {
-    setSelectedIds(prev => prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]);
+    setSelectedIds(prev => 
+      prev.includes(id) 
+        ? prev.filter(i => i !== id)
+        : [...prev, id]
+    );
+    setIsDirty(true);
+  }
+
+  // 🆕 Sposta visita SU
+  function moveUp(index: number) {
+    if (index === 0) return;
+    const newIds = [...selectedIds];
+    [newIds[index - 1], newIds[index]] = [newIds[index], newIds[index - 1]];
+    setSelectedIds(newIds);
+    setIsDirty(true);
+  }
+
+  // 🆕 Sposta visita GIÙ
+  function moveDown(index: number) {
+    if (index === selectedIds.length - 1) return;
+    const newIds = [...selectedIds];
+    [newIds[index], newIds[index + 1]] = [newIds[index + 1], newIds[index]];
+    setSelectedIds(newIds);
     setIsDirty(true);
   }
 
@@ -363,7 +391,7 @@ export default function PlanningEditorPage() {
       }
 
       setPlan(updatedPlan);
-      setIsDirty(false); // Reset manuale
+      setIsDirty(false);
       
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
@@ -419,7 +447,10 @@ export default function PlanningEditorPage() {
     );
   }
 
-  const selectedClients = clients.filter(c => selectedIds.includes(c.id));
+  // ✅ FIX VISUALIZZAZIONE: Mappa gli ID all'oggetto cliente per mantenere l'ordine
+  const selectedClients = selectedIds
+    .map(id => clients.find(c => c.id === id))
+    .filter((c): c is Client => !!c);
 
   return (
     <>
@@ -674,17 +705,56 @@ export default function PlanningEditorPage() {
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
                     <div style={{ 
-                      width: 32, 
-                      height: 32, 
-                      borderRadius: '50%', 
-                      background: '#2563eb', 
-                      color: 'white',
                       display: 'flex',
+                      flexDirection: 'column',
                       alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 700,
+                      gap: 4
                     }}>
-                      {idx + 1}
+                      {/* Numero sequenza */}
+                      <div style={{ 
+                        width: 28, 
+                        height: 28, 
+                        borderRadius: '50%', 
+                        background: '#2563eb', 
+                        color: 'white',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontWeight: 700,
+                        fontSize: 13
+                      }}>
+                        {idx + 1}
+                      </div>
+                    </div>
+
+                    {/* Controlli Riordino */}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                      <button 
+                        onClick={() => moveUp(idx)} 
+                        disabled={idx === 0}
+                        style={{ 
+                          opacity: idx === 0 ? 0.3 : 1, 
+                          cursor: idx === 0 ? 'default' : 'pointer',
+                          fontSize: 12,
+                          background: 'none',
+                          border: 'none'
+                        }}
+                      >
+                        ▲
+                      </button>
+                      <button 
+                        onClick={() => moveDown(idx)} 
+                        disabled={idx === selectedClients.length - 1}
+                        style={{ 
+                          opacity: idx === selectedClients.length - 1 ? 0.3 : 1, 
+                          cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer',
+                          fontSize: 12,
+                          background: 'none',
+                          border: 'none'
+                        }}
+                      >
+                        ▼
+                      </button>
                     </div>
 
                     <div>
@@ -775,8 +845,8 @@ export default function PlanningEditorPage() {
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* Bottone Avvia Giornata (per draft e completed/restart) */}
-          {plan?.id && (plan?.status === 'draft' || plan?.status === 'completed') && (
+          {/* Bottone Avvia Giornata (solo se draft e salvato) */}
+          {plan?.status === 'draft' && plan?.id && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}
