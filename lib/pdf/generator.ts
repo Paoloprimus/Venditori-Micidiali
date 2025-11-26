@@ -41,51 +41,54 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
   doc.line(15, yPos, pageWidth - 15, yPos);
   yPos += 10;
 
-  // ============== RIEPILOGO (Emoji rimosse) ==============
+  // ============== RIEPILOGO ==============
   doc.setFontSize(14);
   doc.setFont('Times', 'bold');
   doc.setTextColor(0);
-  doc.text('Riepilogo Periodo', 15, yPos); // Rimossa emoji 📊
+  doc.text('Riepilogo Periodo', 15, yPos);
   yPos += 8;
 
   doc.setFontSize(10);
   doc.setFont('Times', 'normal');
   
-  const riepilogo = [
-    `Periodo: ${data.dataInizio} - ${data.dataFine}`,
-    `Visite effettuate: ${data.numVisite}`,
-    `Clienti visitati: ${data.numClienti}`,
-    `Fatturato periodo: EUR ${data.fatturatoTotale.toFixed(2)}`, // € sostituito con EUR per sicurezza
-    `Km percorsi: ${data.kmTotali.toFixed(1)} km`
-  ];
+  // Layout a due colonne per il riepilogo
+  const col1X = 20;
+  const col2X = 110;
   
-  riepilogo.forEach((line) => {
-    doc.text(line, 20, yPos);
-    yPos += 6;
-  });
-  
-  yPos += 5;
+  // Colonna 1: Dati quantitativi
+  doc.text(`Visite effettuate: ${data.numVisite}`, col1X, yPos);
+  doc.text(`Clienti visitati: ${data.numClienti}`, col1X, yPos + 6);
+  doc.text(`Fatturato periodo: EUR ${data.fatturatoTotale.toFixed(2)}`, col1X, yPos + 12);
+  doc.text(`Km percorsi: ${data.kmTotali.toFixed(1)} km`, col1X, yPos + 18);
 
-  // ============== DETTAGLIO VISITE (Emoji rimosse) ==============
+  // Colonna 2: Dati temporali (NUOVO)
+  doc.text(`Tempo Totale: ${data.tempoTotaleOre}`, col2X, yPos);
+  doc.text(`Tempo in Visita: ${data.tempoVisiteOre}`, col2X, yPos + 6);
+  doc.text(`Tempo Spostamenti: ${data.tempoViaggioOre}`, col2X, yPos + 12);
+  
+  yPos += 25;
+
+  // ============== DETTAGLIO VISITE ==============
   doc.setFontSize(14);
   doc.setFont('Times', 'bold');
-  doc.text('Dettaglio Visite', 15, yPos); // Rimossa emoji 📋
+  doc.text('Dettaglio Visite', 15, yPos);
   yPos += 5;
 
   // Prepara dati per la tabella
+  // Colonne: Ora | Cliente | Città | Durata | Esito | Importo | Note
   const tableData = data.visite.map((v) => [
-    v.dataOra,
+    v.dataOra, // Si assume che sia formattata solo come ora (es. 14:30) se giornaliero, o data+ora se periodo
     v.nomeCliente,
     v.cittaCliente || '-',
-    formatTipo(v.tipo),
+    v.durataMinuti ? `${v.durataMinuti}m` : '-', // NUOVO CAMPO
     formatEsito(v.esito),
-    v.importoVendita ? `EUR ${v.importoVendita.toFixed(2)}` : '-', // € -> EUR
+    v.importoVendita ? `EUR ${v.importoVendita.toFixed(0)}` : '-',
     v.noteVisita || '-'
   ]);
 
   autoTable(doc, {
     startY: yPos,
-    head: [['Data/Ora', 'Cliente', 'Città', 'Tipo', 'Esito', 'Fatturato', 'Note']],
+    head: [['Ora', 'Cliente', 'Città', 'Durata', 'Esito', 'Importo', 'Note']],
     body: tableData,
     theme: 'striped',
     styles: { 
@@ -101,12 +104,12 @@ export async function generateReportVisite(data: ReportVisiteData): Promise<Blob
       font: 'Times'
     },
     columnStyles: {
-      0: { cellWidth: 30 },  // Data/Ora
+      0: { cellWidth: 15 },  // Ora
       1: { cellWidth: 35 },  // Cliente
       2: { cellWidth: 25 },  // Città
-      3: { cellWidth: 20 },  // Tipo
+      3: { cellWidth: 15 },  // Durata
       4: { cellWidth: 25 },  // Esito
-      5: { cellWidth: 25 },  // Fatturato
+      5: { cellWidth: 20 },  // Importo
       6: { cellWidth: 'auto' } // Note
     },
     didDrawPage: (data) => {
@@ -166,11 +169,11 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   doc.line(15, yPos, pageWidth - 15, yPos);
   yPos += 10;
 
-  // ============== FILTRI APPLICATI (Emoji rimosse) ==============
+  // ============== FILTRI APPLICATI ==============
   doc.setFontSize(12);
   doc.setFont('Times', 'bold');
   doc.setTextColor(0);
-  doc.text('Filtri Applicati', 15, yPos); // Rimossa emoji 🔍
+  doc.text('Filtri Applicati', 15, yPos);
   yPos += 7;
 
   doc.setFontSize(10);
@@ -180,10 +183,10 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
   doc.text(`Criteri: ${data.filtri.descrizione}`, 20, yPos);
   yPos += 10;
 
-  // ============== RISULTATI (Emoji rimosse) ==============
+  // ============== RISULTATI ==============
   doc.setFontSize(12);
   doc.setFont('Times', 'bold');
-  doc.text('Risultati', 15, yPos); // Rimossa emoji 📊
+  doc.text('Risultati', 15, yPos);
   yPos += 5;
 
   // Prepara dati per la tabella
@@ -240,7 +243,7 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
     }
   });
 
-  // Aggiungi totali
+  // Aggiungi totali in fondo all'ultima pagina
   const finalY = (doc as any).lastAutoTable.finalY + 10;
   
   doc.setFontSize(11);
@@ -273,8 +276,8 @@ export async function generateReportListaClienti(data: ReportListaClientiData): 
  */
 function formatTipo(tipo: string): string {
   const tipoMap: Record<string, string> = {
-    'visita': 'Visita',     // Rimossa 🚗
-    'chiamata': 'Chiamata'  // Rimossa 📞
+    'visita': 'Visita',
+    'chiamata': 'Chiamata'
   };
   
   return tipoMap[tipo] || tipo;
@@ -285,11 +288,11 @@ function formatTipo(tipo: string): string {
  */
 function formatEsito(esito: string): string {
   const esitoMap: Record<string, string> = {
-    'ordine_acquisito': 'Ordine',       // Rimossa ✅
-    'da_richiamare': 'Richiamare',      // Rimossa 📞
-    'no_interesse': 'No interesse',     // Rimossa ❌
-    'info_richiesta': 'Info',           // Rimossa ℹ️
-    'altro': 'Altro'                    // Rimossa 📝
+    'ordine_acquisito': 'Ordine',
+    'da_richiamare': 'Richiamare',
+    'no_interesse': 'No int.',
+    'info_richiesta': 'Info',
+    'altro': 'Altro'
   };
   
   return esitoMap[esito] || esito;
