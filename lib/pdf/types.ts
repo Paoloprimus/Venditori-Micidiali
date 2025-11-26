@@ -7,15 +7,20 @@
 export interface ReportVisiteData {
   // Header info
   nomeAgente: string;
-  dataInizio: string; // formato: "2025-11-08"
-  dataFine: string; // formato: "2025-11-15"
-  periodoFormattato: string; // formato: "8 - 15 Novembre 2025" o "8 Novembre 2025"
+  dataInizio: string; 
+  dataFine: string; 
+  periodoFormattato: string; 
   
   // Riepilogo
   numVisite: number;
-  numClienti: number; // clienti distinti visitati
+  numClienti: number; 
   fatturatoTotale: number;
   kmTotali: number;
+
+  // NUOVI CAMPI TEMPO
+  tempoTotaleOre: string; // es. "8h 30m"
+  tempoVisiteOre: string; // es. "4h 15m"
+  tempoViaggioOre: string; // es. "4h 15m"
   
   // Dettaglio visite
   visite: VisitaDetail[];
@@ -25,42 +30,33 @@ export interface ReportVisiteData {
  * Dettaglio singola visita nel report
  */
 export interface VisitaDetail {
-  dataOra: string; // formato: "08/11/2025 14:30"
+  dataOra: string; 
   nomeCliente: string;
   cittaCliente: string;
-  tipo: string; // "visita" o "chiamata"
-  esito: string; // "ordine_acquisito", "altro", ecc.
+  tipo: string; 
+  esito: string; 
   importoVendita: number | null;
   noteVisita: string | null;
+  durataMinuti: number | null; // Aggiunto per visualizzazione
 }
 
 /**
  * Dati per generare Report Lista Clienti
  */
 export interface ReportListaClientiData {
-  // Header info
   nomeAgente: string;
   dataGenerazione: string;
-  
-  // Filtri applicati
   filtri: {
-    tipo: string; // "periodo", "visite", "fatturato", "km"
-    descrizione: string; // "Novembre 2025", ">5 visite", ecc.
+    tipo: string;
+    descrizione: string;
   };
-  
-  // Risultati
   clienti: ClienteListaDetail[];
-  
-  // Totali
   numClienti: number;
   visiteTotali: number;
   fatturatoTotale: number;
   kmTotali: number;
 }
 
-/**
- * Dettaglio singolo cliente nel report lista
- */
 export interface ClienteListaDetail {
   nome: string;
   citta: string;
@@ -71,28 +67,19 @@ export interface ClienteListaDetail {
   note: string | null;
 }
 
-/**
- * Metadata salvati nel database per ogni documento
- */
 export interface DocumentMetadata {
-  // Per report_planning (ora report_visite)
   data_inizio?: string;
   data_fine?: string;
   num_visite?: number;
   num_clienti?: number;
   fatturato_tot?: number;
   km_tot?: number;
-  
-  // Per lista_clienti
   filtro_tipo?: string;
   periodo?: string;
   valore_filtro?: string;
   visite_tot?: number;
 }
 
-/**
- * Record completo del documento nel database
- */
 export interface DocumentRecord {
   id: string;
   user_id: string;
