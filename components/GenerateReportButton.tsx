@@ -21,6 +21,40 @@ type Props = {
   onSuccess?: () => void;
 };
 
+// --- Helpers per calcolo distanze e tempi ---
+
+// OSRM per distanza stradale
+async function getRoadDistance(lat1: number, lon1: number, lat2: number, lon2: number): Promise<number> {
+  try {
+    const url = `https://router.project-osrm.org/route/v1/driving/${lon1},${lat1};${lon2},${lat2}?overview=false`;
+    const res = await fetch(url);
+    if (!res.ok) return 0;
+    const json = await res.json();
+    if (json.code !== 'Ok' || !json.routes || json.routes.length === 0) return 0;
+    return json.routes[0].distance / 1000;
+  } catch { return 0; }
+}
+
+// Haversine (fallback)
+function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
+  const R = 6371; 
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat/2) * Math.sin(dLat/2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+// Format durata
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = Math.round(minutes % 60);
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
 export default function GenerateReportButton({ data, accountIds, onSuccess }: Props) {
   const { crypto } = useCrypto();
   const [generating, setGenerating] = useState(false);
@@ -38,15 +72,27 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      // 2. Recupera visite della giornata
+      // 2. Recupera Piano per orario inizio (se disponibile)
+      let dayStartTime: Date | null = null;
+      const { data: plan } = await supabase
+          .from('daily_plans')
+          .select('updated_at')
+          .eq('user_id', user.id)
+          .eq('data', data)
+          .single();
+      if (plan?.updated_at) {
+          dayStartTime = new Date(plan.updated_at);
+      }
+
+      // 3. Recupera visite della giornata (AGGIUNTO 'durata')
       const { data: visitsData, error: visitsError } = await supabase
         .from('visits')
-        .select('*')
+        .select('id, account_id, tipo, data_visita, esito, importo_vendita, notes, durata')
         .eq('user_id', user.id)
         .gte('data_visita', `${data}T00:00:00`)
         .lte('data_visita', `${data}T23:59:59`)
         .in('account_id', accountIds)
-        .order('created_at', { ascending: true });
+        .order('data_visita', { ascending: true });
 
       if (visitsError) throw visitsError;
 
@@ -56,16 +102,16 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
         return;
       }
 
-      // 3. Recupera dati clienti
+      // 4. Recupera dati clienti (AGGIUNTO lat/long)
       const clientIds = [...new Set(visitsData.map(v => v.account_id))];
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
-        .select('id, name_enc, name_iv, city, ultimo_esito_at, volume_attuale')
+        .select('id, name_enc, name_iv, city, latitude, longitude')
         .in('id', clientIds);
 
       if (clientsError) throw clientsError;
 
-      // 4. Decifra nomi clienti
+      // 5. Decifra nomi clienti
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
@@ -82,7 +128,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
             }, {})
           : ((x ?? {}) as Record<string, unknown>);
 
-      const clientsMap = new Map<string, { name: string; city: string; ultimaVisita: string | null; fatturato: number }>();
+      const accountsMap = new Map<string, { name: string; city: string; lat?: number; lon?: number }>();
 
       for (const c of clientsData || []) {
         try {
@@ -95,39 +141,64 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
           const decAny = await (crypto as any).decryptFields(
             'table:accounts',
             'accounts',
-            c.id, // ✅ FIX: Usa l'ID del cliente come Associated Data
+            c.id,
             recordForDecrypt,
             ['name']
           );
 
           const dec = toObj(decAny);
 
-          clientsMap.set(c.id, {
+          accountsMap.set(c.id, {
             name: String(dec.name ?? 'Cliente senza nome'),
             city: c.city || '',
-            ultimaVisita: c.ultimo_esito_at,
-            fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
+            lat: c.latitude ? parseFloat(c.latitude) : undefined,
+            lon: c.longitude ? parseFloat(c.longitude) : undefined
           });
         } catch (e) {
           console.error('[Report] Errore decrypt cliente:', c.id, e);
-          clientsMap.set(c.id, {
-            name: 'Cliente sconosciuto',
-            city: c.city || '',
-            ultimaVisita: c.ultimo_esito_at,
-            fatturato: c.volume_attuale ? parseFloat(c.volume_attuale) : 0,
-          });
+          accountsMap.set(c.id, { name: 'Sconosciuto', city: '' });
         }
       }
 
-      // 5. Prepara dati per report (nuovo formato)
-      const visite: VisitaDetail[] = visitsData.map((v) => {
-        const client = clientsMap.get(v.account_id);
+      // 6. Calcoli KM e TEMPI
+      let kmTotali = 0;
+      let prevLat: number | undefined;
+      let prevLon: number | undefined;
+      let totalVisitMinutes = 0;
+
+      // Calcolo tempi totali
+      const firstVisitEnd = new Date(visitsData[0].data_visita);
+      const lastVisitEnd = new Date(visitsData[visitsData.length - 1].data_visita);
+      
+      // Se non abbiamo l'orario di inizio piano, stimiamo basandoci sulla fine della prima visita
+      const startTime = dayStartTime || new Date(firstVisitEnd.getTime() - ((visitsData[0].durata || 15) * 60000));
+      const endTime = lastVisitEnd;
+      
+      const totalWorkMinutes = Math.max(0, Math.round((endTime.getTime() - startTime.getTime()) / 60000));
+
+      for (const visit of visitsData) {
+        const account = accountsMap.get(visit.account_id);
         
-        // Formatta data e ora
-        const dataOra = new Date(v.data_visita).toLocaleString('it-IT', {
-          day: '2-digit',
-          month: '2-digit',
-          year: 'numeric',
+        // Km
+        if (account?.lat && account?.lon) {
+          if (prevLat !== undefined && prevLon !== undefined) {
+            const dist = await getRoadDistance(prevLat, prevLon, account.lat, account.lon);
+            kmTotali += dist;
+          }
+          prevLat = account.lat;
+          prevLon = account.lon;
+        }
+
+        // Tempo visite
+        totalVisitMinutes += (visit.durata || 0);
+      }
+
+      const travelMinutes = Math.max(0, totalWorkMinutes - totalVisitMinutes);
+
+      // 7. Prepara dati per report
+      const visite: VisitaDetail[] = visitsData.map((v) => {
+        const client = accountsMap.get(v.account_id);
+        const dataOra = new Date(v.data_visita).toLocaleTimeString('it-IT', {
           hour: '2-digit',
           minute: '2-digit'
         });
@@ -138,35 +209,33 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
           cittaCliente: client?.city || '',
           tipo: v.tipo || 'visita',
           esito: v.esito || 'altro',
-          importoVendita: v.importo_vendita ? parseFloat(v.importo_vendita) : null,
+          importoVendita: v.importo_vendita ? parseFloat(v.importo_vendita as any) : null,
           noteVisita: v.notes || null,
+          durataMinuti: v.durata || null, // ✅ AGGIUNTO
         };
       });
 
-      // Calcola statistiche
-      const accountIdsVisitati = [...new Set(visite.map((_, idx) => visitsData[idx].account_id))];
-      const numClienti = accountIdsVisitati.length;
+      const numClienti = accountIds.length;
       const fatturatoTotale = visite.reduce((sum, v) => sum + (v.importoVendita || 0), 0);
-
-      // TODO: Calcolo km (per ora 0, implementare quando avremo coordinate)
-      const kmTotali = 0;
 
       const reportData: ReportVisiteData = {
         nomeAgente: user.email?.split('@')[0] || 'Agente',
         dataInizio: data,
-        dataFine: data, // Stesso giorno
+        dataFine: data,
         periodoFormattato: formatDateItalian(data),
         numVisite: visite.length,
         numClienti,
         fatturatoTotale,
-        kmTotali,
+        kmTotali, // Valore calcolato
+        // ✅ AGGIUNTI CAMPI TEMPO
+        tempoTotaleOre: formatDuration(totalWorkMinutes),
+        tempoVisiteOre: formatDuration(totalVisitMinutes),
+        tempoViaggioOre: formatDuration(travelMinutes),
         visite,
       };
 
-      // 6. Genera PDF
+      // 8. Genera e salva PDF
       const pdfBlob = await generateReportVisite(reportData);
-
-      // 7. Salva su device
       const filename = generateVisiteFilename(data, data);
       const filePath = await savePdfToDevice(pdfBlob, filename);
 
@@ -176,7 +245,6 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
         return;
       }
 
-      // 8. Salva metadata nel DB
       const metadataForDB: DocumentMetadata = {
         data_inizio: data,
         data_fine: data,
@@ -195,8 +263,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
         file_size: pdfBlob.size,
       });
 
-      // 9. Success!
-      alert('✅ Report generato e salvato!');
+      alert(`✅ Report generato e salvato!\nKm: ${kmTotali.toFixed(1)} | Tempo: ${formatDuration(totalWorkMinutes)}`);
       setShowModal(false);
       if (onSuccess) onSuccess();
 
@@ -232,25 +299,18 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
       {/* Modal Conferma */}
       {showModal && (
         <>
-          {/* Backdrop */}
           <div
             onClick={() => !generating && setShowModal(false)}
             style={{
               position: 'fixed',
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
+              top: 0, left: 0, right: 0, bottom: 0,
               background: 'rgba(0, 0, 0, 0.5)',
               zIndex: 9998,
             }}
           />
-
-          {/* Modal */}
           <div style={{
             position: 'fixed',
-            top: '50%',
-            left: '50%',
+            top: '50%', left: '50%',
             transform: 'translate(-50%, -50%)',
             background: 'white',
             borderRadius: 16,
@@ -263,12 +323,10 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
             <h2 style={{ fontSize: 20, fontWeight: 700, marginBottom: 16 }}>
               📄 Genera Report Visite
             </h2>
-
             <p style={{ fontSize: 14, color: '#6b7280', marginBottom: 24 }}>
               Verrà generato un PDF con il riepilogo completo della giornata del <strong>{formatDateItalian(data)}</strong>, 
-              incluse tutte le visite effettuate, fatturati e note.
+              incluse visite, fatturati, note e calcolo km/tempi.
             </p>
-
             <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
               <button
                 onClick={() => setShowModal(false)}
@@ -284,7 +342,6 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
               >
                 Annulla
               </button>
-
               <button
                 onClick={handleGenerate}
                 disabled={generating}
