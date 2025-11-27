@@ -12,8 +12,7 @@
  * - Corretto il problema del bottone "Avvia Giornata".
  * - Ottimizzazione percorso (TSP) ora considera il punto di partenza salvato nelle impostazioni (Casa/Ufficio).
  * - Aggiunto bottone "ELIMINA PIANO" per resettare la giornata.
- * - FIX: Corretto errore di compilazione "Cannot find name 'data'" in savePlan.
- * - FIX: Salvataggio timestamp 'started_at' all'avvio della giornata per report precisi.
+ * - FIX CRITICO: Aggiunto getOrCreateScopeKeys per caricare le chiavi di decifratura prima di leggere i clienti.
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -83,7 +82,7 @@ export default function PlanningEditorPage() {
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   
-  // 🚗 NUOVO: Stato per i KM stimati
+  // Stato per i KM stimati
   const [totalKm, setTotalKm] = useState(0);
 
   const dataStr = params.data as string; // YYYY-MM-DD
@@ -95,7 +94,7 @@ export default function PlanningEditorPage() {
     }
   }, [actuallyReady, dataStr]);
 
-  // 🚗 NUOVO: Calcolo KM in tempo reale
+  // Calcolo KM in tempo reale
   useEffect(() => {
     if (selectedIds.length === 0) {
       setTotalKm(0);
@@ -157,6 +156,14 @@ export default function PlanningEditorPage() {
       if (!user) {
         router.push('/login');
         return;
+      }
+
+      // ✅ FIX CRITICO: Inizializza le chiavi di cifratura per la tabella accounts
+      // Senza questo, decryptFields fallisce e restituisce null per i nomi
+      try {
+        await (crypto as any).getOrCreateScopeKeys('table:accounts');
+      } catch (e) {
+        console.error('Errore inizializzazione scope keys:', e);
       }
 
       // Carica clienti
@@ -436,7 +443,6 @@ export default function PlanningEditorPage() {
       if (nearestIdx !== -1) {
         ordered.push(remaining.splice(nearestIdx, 1)[0]);
       } else {
-         // Fallback (non dovrebbe accadere se lista non vuota)
          ordered.push(remaining.shift()!);
       }
     } else {
@@ -597,7 +603,7 @@ export default function PlanningEditorPage() {
     }
   }
 
-// Attiva piano (draft → active)
+  // Attiva piano (draft → active)
   async function activatePlan() {
     if (!plan?.id) {
       alert('Devi prima salvare il piano');
