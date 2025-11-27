@@ -597,7 +597,7 @@ export default function PlanningEditorPage() {
     }
   }
 
-  // Attiva piano (draft → active)
+// Attiva piano (draft → active)
   async function activatePlan() {
     if (!plan?.id) {
       alert('Devi prima salvare il piano');
@@ -611,20 +611,23 @@ export default function PlanningEditorPage() {
 
     setSaving(true);
     try {
-      // ✅ SALVA ORA DI INIZIO (TIMBRO CARTELLINO)
+      // ✅ MODIFICA: Cattura l'ora attuale come "Timbro di Inizio"
       const nowIso = new Date().toISOString();
+      
+      // Mantiene eventuali dati esistenti in route_data e aggiunge started_at
+      const currentRouteData = plan.route_data || {};
 
       const { error } = await supabase
         .from('daily_plans')
         .update({ 
           status: 'active',
-          route_data: { ...plan.route_data, started_at: nowIso } // Salva 'started_at'
+          route_data: { ...currentRouteData, started_at: nowIso } 
         })
         .eq('id', plan.id);
       
       if (error) throw error;
 
-      console.log('✅ Piano attivato con start time:', nowIso);
+      console.log('✅ Piano attivato! Orario inizio registrato:', nowIso);
       router.push(`/planning/${dataStr}/execute`);
       
     } catch (e: any) {
