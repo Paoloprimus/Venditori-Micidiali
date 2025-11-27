@@ -96,6 +96,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
             .eq('data', targetDate)
             .single();
         
+        // Recupera 'started_at' dal JSON route_data
         if (plan?.route_data?.started_at) {
             planStartTime = new Date(plan.route_data.started_at);
             console.log('[Report] Start Piano (DB):', planStartTime.toLocaleString());
@@ -190,12 +191,13 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
       let prevLon: number | undefined;
       let totalVisitMinutes = 0;
 
-      // --- LOGICA TEMPI ---
+      // --- LOGICA TEMPI ROBUSTA ---
       const firstVisit = visitsData[0];
       const lastVisit = visitsData[visitsData.length - 1];
 
       // Calcoliamo quando è iniziata effettivamente la prima visita
       const firstVisitEndTime = new Date(firstVisit.data_visita).getTime();
+      // Se manca durata, assumiamo 0 per non rompere i calcoli
       const firstVisitStartTime = firstVisitEndTime - ((firstVisit.durata || 0) * 60000);
       
       // L'inizio della giornata è il MINIMO tra "Avvia Piano" e "Inizio Prima Visita"
@@ -205,7 +207,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
       if (planStartTime) {
          const planStartMs = planStartTime.getTime();
          // Se il piano è stato avviato PRIMA della prima visita (caso normale), usiamo quello
-         // Se è stato avviato DOPO (dimenticanza), usiamo l'inizio della visita
+         // Se è stato avviato DOPO (dimenticanza), usiamo l'inizio della visita per non avere tempi negativi
          if (planStartMs < firstVisitStartTime) {
             startDayMs = planStartMs; 
          } else {
@@ -216,7 +218,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
       // Fine giornata = Fine ultima visita
       const endDayMs = new Date(lastVisit.data_visita).getTime();
       
-      // Tempo totale lavoro
+      // Tempo totale lavoro = Fine - Inizio
       const totalWorkMinutes = Math.max(0, Math.round((endDayMs - startDayMs) / 60000));
 
       // Ciclo visite per KM e Durata Visite
@@ -229,6 +231,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
             const dist = await getRoadDistance(prevLat, prevLon, account.lat, account.lon);
             kmTotali += dist;
           }
+          // Aggiorna tappa precedente
           prevLat = account.lat;
           prevLon = account.lon;
         }
@@ -237,8 +240,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         totalVisitMinutes += (visit.durata || 0);
       }
 
-      // Tempo viaggio = Tempo Totale (da inizio a fine) - Tempo passato effettivamente in visita
-      // Se per qualche motivo (es. test rapidi) il totale è minore delle visite, mettiamo 0
+      // Tempo viaggio = Tempo Totale - Tempo Visite
       const travelMinutes = Math.max(0, totalWorkMinutes - totalVisitMinutes);
 
       // 7. Prepara dati per report
