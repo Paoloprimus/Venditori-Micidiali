@@ -12,7 +12,7 @@
  * - Corretto il problema del bottone "Avvia Giornata".
  * - Ottimizzazione percorso (TSP) ora considera il punto di partenza salvato nelle impostazioni (Casa/Ufficio).
  * - Aggiunto bottone "ELIMINA PIANO" per resettare la giornata.
- * - FIX CRITICO: Aggiunto getOrCreateScopeKeys per caricare le chiavi di decifratura prima di leggere i clienti.
+ * - FIX: Corretto errore di compilazione "Cannot find name 'data'" in savePlan.
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -82,7 +82,7 @@ export default function PlanningEditorPage() {
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   
-  // Stato per i KM stimati
+  // 🚗 NUOVO: Stato per i KM stimati
   const [totalKm, setTotalKm] = useState(0);
 
   const dataStr = params.data as string; // YYYY-MM-DD
@@ -94,7 +94,7 @@ export default function PlanningEditorPage() {
     }
   }, [actuallyReady, dataStr]);
 
-  // Calcolo KM in tempo reale
+  // 🚗 NUOVO: Calcolo KM in tempo reale
   useEffect(() => {
     if (selectedIds.length === 0) {
       setTotalKm(0);
@@ -156,14 +156,6 @@ export default function PlanningEditorPage() {
       if (!user) {
         router.push('/login');
         return;
-      }
-
-      // ✅ FIX CRITICO: Inizializza le chiavi di cifratura per la tabella accounts
-      // Senza questo, decryptFields fallisce e restituisce null per i nomi
-      try {
-        await (crypto as any).getOrCreateScopeKeys('table:accounts');
-      } catch (e) {
-        console.error('Errore inizializzazione scope keys:', e);
       }
 
       // Carica clienti
@@ -443,6 +435,7 @@ export default function PlanningEditorPage() {
       if (nearestIdx !== -1) {
         ordered.push(remaining.splice(nearestIdx, 1)[0]);
       } else {
+         // Fallback (non dovrebbe accadere se lista non vuota)
          ordered.push(remaining.shift()!);
       }
     } else {
@@ -559,8 +552,8 @@ export default function PlanningEditorPage() {
       let updatedPlan;
 
       if (plan?.id) {
-        // Update - ricarica il piano dal DB dopo l'aggiornamento
-        const { data: updated, error } = await supabase
+        // Update
+        const { data, error } = await supabase
           .from('daily_plans')
           .update(planData)
           .eq('id', plan.id)
@@ -569,16 +562,10 @@ export default function PlanningEditorPage() {
         
         if (error) throw error;
         
-        updatedPlan = updated;
-        setPlan(updated);
-        
-        // Forza reset dirty
-        setTimeout(() => {
-          setIsDirty(false);
-        }, 0);
+        updatedPlan = data;
       } else {
         // Insert
-        const { data: inserted, error } = await supabase
+        const { data, error } = await supabase
           .from('daily_plans')
           .insert(planData)
           .select()
@@ -586,15 +573,20 @@ export default function PlanningEditorPage() {
         
         if (error) throw error;
         
-        updatedPlan = inserted;
-        setPlan(inserted);
-        
-        // Forza reset dirty
-        setTimeout(() => {
-          setIsDirty(false);
-        }, 0);
+        updatedPlan = data;
       }
 
+      // ✅ Usa il record aggiornato
+      console.log('[Planning] Piano aggiornato:', updatedPlan);
+      setPlan(updatedPlan);
+      
+      // Forza reset dirty DOPO setPlan
+      setTimeout(() => {
+        setIsDirty(false);
+        console.log('[Planning] isDirty resettato, plan.id:', updatedPlan?.id, 'plan.status:', updatedPlan?.status);
+      }, 0);
+
+      
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
       alert(`Errore: ${e.message}`);
@@ -617,23 +609,14 @@ export default function PlanningEditorPage() {
 
     setSaving(true);
     try {
-      // ✅ MODIFICA: Cattura l'ora attuale come "Timbro di Inizio"
-      const nowIso = new Date().toISOString();
-      
-      // Mantiene eventuali dati esistenti in route_data e aggiunge started_at
-      const currentRouteData = plan.route_data || {};
-
       const { error } = await supabase
         .from('daily_plans')
-        .update({ 
-          status: 'active',
-          route_data: { ...currentRouteData, started_at: nowIso } 
-        })
+        .update({ status: 'active' })
         .eq('id', plan.id);
       
       if (error) throw error;
 
-      console.log('✅ Piano attivato! Orario inizio registrato:', nowIso);
+      console.log('✅ Piano attivato!');
       router.push(`/planning/${dataStr}/execute`);
       
     } catch (e: any) {
