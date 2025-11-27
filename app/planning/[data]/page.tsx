@@ -7,12 +7,13 @@
  * * DESCRIZIONE:
  * Editor per creare e modificare piani di visita giornalieri.
  * Include algoritmo AI per suggerimenti intelligenti e ottimizzazione percorso.
- * * MODIFICHE RECENTI:
- * - Aggiunto calcolo e visualizzazione dei KM stimati in tempo reale nel header "Visite Pianificate".
- * - Corretto il problema del bottone "Avvia Giornata".
- * - Ottimizzazione percorso (TSP) ora considera il punto di partenza salvato nelle impostazioni (Casa/Ufficio).
- * - Aggiunto bottone "ELIMINA PIANO" per resettare la giornata.
- * - FIX: Corretto errore di compilazione "Cannot find name 'data'" in savePlan.
+ * * FUNZIONALITÀ:
+ * - Modalità Smart: AI suggerisce 5-10 clienti ottimali
+ * - Modalità Avanzata: selezione manuale con tutti i clienti
+ * - Algoritmo punteggi AI (latenza, distanza, revenue, note)
+ * - Ottimizzazione percorso geografico (TSP) con partenza da CASA
+ * - Salvataggio piano in daily_plans
+ * - Status: draft → active → completed
  */
 
 import { useRouter, useParams } from 'next/navigation';
@@ -80,10 +81,7 @@ export default function PlanningEditorPage() {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [planNotes, setPlanNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [isDirty, setIsDirty] = useState(false);
-  
-  // 🚗 NUOVO: Stato per i KM stimati
-  const [totalKm, setTotalKm] = useState(0);
+  const [isDirty, setIsDirty] = useState(false); // Traccia modifiche non salvate
 
   const dataStr = params.data as string; // YYYY-MM-DD
 
@@ -93,56 +91,6 @@ export default function PlanningEditorPage() {
       loadData();
     }
   }, [actuallyReady, dataStr]);
-
-  // 🚗 NUOVO: Calcolo KM in tempo reale
-  useEffect(() => {
-    if (selectedIds.length === 0) {
-      setTotalKm(0);
-      return;
-    }
-
-    // Recupera coordinate CASA dalle impostazioni
-    let startLat: number | undefined;
-    let startLon: number | undefined;
-    try {
-      const settings = localStorage.getItem('repping_settings');
-      if (settings) {
-        const parsed = JSON.parse(settings);
-        if (parsed.homeLat && parsed.homeLon) {
-          startLat = parseFloat(parsed.homeLat);
-          startLon = parseFloat(parsed.homeLon);
-        }
-      }
-    } catch {}
-
-    // Recupera gli oggetti cliente nell'ordine selezionato
-    const selClients = selectedIds
-      .map(id => clients.find(c => c.id === id))
-      .filter((c): c is Client => !!c);
-
-    let km = 0;
-    let prevLat = startLat;
-    let prevLon = startLon;
-
-    // Se manca casa, assumiamo partenza dal primo cliente (quindi il primo tratto è 0 km)
-    if (prevLat === undefined || prevLon === undefined) {
-       if (selClients.length > 0) {
-         prevLat = selClients[0].latitude;
-         prevLon = selClients[0].longitude;
-       }
-    }
-
-    for (const client of selClients) {
-      if (prevLat !== undefined && prevLon !== undefined) {
-        km += calculateDistance(prevLat, prevLon, client.latitude, client.longitude);
-      }
-      // La tappa corrente diventa la precedente per la prossima iterazione
-      prevLat = client.latitude;
-      prevLon = client.longitude;
-    }
-
-    setTotalKm(km);
-  }, [selectedIds, clients]);
 
   async function loadData() {
     setLoading(true);
@@ -168,16 +116,20 @@ export default function PlanningEditorPage() {
 
       if (clientsError) throw clientsError;
 
+      // Decifra nomi clienti (STESSO PATTERN DI /clients/page.tsx)
       const decryptedClients: Client[] = [];
       
+      // Helper: converti hex-string in base64
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
+        
         const hex = hexStr.slice(2);
         const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
         return bytes;
       };
       
+      // Helper: converte risultato decryptFields in oggetto
       const toObj = (x: any): Record<string, unknown> =>
         Array.isArray(x)
           ? x.reduce((acc: Record<string, unknown>, it: any) => {
@@ -188,20 +140,23 @@ export default function PlanningEditorPage() {
       
       for (const c of clientsData || []) {
         try {
+          // Converti hex a base64
           const recordForDecrypt = {
             ...c,
             name_enc: hexToBase64(c.name_enc),
             name_iv: hexToBase64(c.name_iv),
           };
           
+          // Decifra
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id,
+            c.id,  // ✅ FIX: Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
           
+          // Converti in oggetto
           const dec = toObj(decAny);
           
           decryptedClients.push({
@@ -218,6 +173,7 @@ export default function PlanningEditorPage() {
           });
         } catch (e) {
           console.error('[Planning] Errore decrypt cliente:', e);
+          // Aggiungi comunque con ID come fallback
           decryptedClients.push({
             id: c.id,
             name: `Cliente #${c.id.slice(0, 8)}`,
@@ -251,6 +207,7 @@ export default function PlanningEditorPage() {
         setPlanNotes(planData.notes || '');
       }
 
+      // ✅ Reset manuale isDirty al caricamento
       setIsDirty(false);
 
     } catch (e: any) {
@@ -435,7 +392,6 @@ export default function PlanningEditorPage() {
       if (nearestIdx !== -1) {
         ordered.push(remaining.splice(nearestIdx, 1)[0]);
       } else {
-         // Fallback (non dovrebbe accadere se lista non vuota)
          ordered.push(remaining.shift()!);
       }
     } else {
@@ -501,33 +457,6 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
-  // 🗑️ ELIMINA PIANO
-  async function deletePlan() {
-    if (!plan?.id) return;
-    
-    if (!confirm('⚠️ Sei sicuro di voler eliminare questo piano?\n\nTutte le impostazioni di questa giornata verranno perse.')) {
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const { error } = await supabase
-        .from('daily_plans')
-        .delete()
-        .eq('id', plan.id);
-
-      if (error) throw error;
-
-      // Torna al calendario
-      router.push('/planning');
-      
-    } catch (e: any) {
-      console.error('Errore eliminazione:', e);
-      alert(`Errore: ${e.message}`);
-      setSaving(false);
-    }
-  }
-
   // Salva piano
   async function savePlan() {
     if (selectedIds.length === 0) {
@@ -561,8 +490,8 @@ export default function PlanningEditorPage() {
           .single();
         
         if (error) throw error;
-        
         updatedPlan = data;
+        
       } else {
         // Insert
         const { data, error } = await supabase
@@ -572,20 +501,11 @@ export default function PlanningEditorPage() {
           .single();
         
         if (error) throw error;
-        
         updatedPlan = data;
       }
 
-      // ✅ Usa il record aggiornato
-      console.log('[Planning] Piano aggiornato:', updatedPlan);
       setPlan(updatedPlan);
-      
-      // Forza reset dirty DOPO setPlan
-      setTimeout(() => {
-        setIsDirty(false);
-        console.log('[Planning] isDirty resettato, plan.id:', updatedPlan?.id, 'plan.status:', updatedPlan?.status);
-      }, 0);
-
+      setIsDirty(false);
       
     } catch (e: any) {
       console.error('Errore salvataggio:', e);
@@ -595,7 +515,7 @@ export default function PlanningEditorPage() {
     }
   }
 
-  // Attiva piano (draft → active)
+  // Attiva piano
   async function activatePlan() {
     if (!plan?.id) {
       alert('Devi prima salvare il piano');
@@ -660,6 +580,7 @@ export default function PlanningEditorPage() {
     );
   }
 
+  // Mappa gli ID agli oggetti cliente per il rendering
   const selectedClients = selectedIds
     .map(id => clients.find(c => c.id === id))
     .filter((c): c is Client => !!c);
@@ -731,8 +652,35 @@ export default function PlanningEditorPage() {
         {/* Modalità */}
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
-            <button onClick={() => setMode('smart')} style={{ padding: '12px 24px', borderRadius: 8, border: mode === 'smart' ? '2px solid #2563eb' : '1px solid #d1d5db', background: mode === 'smart' ? '#eff6ff' : 'white', color: mode === 'smart' ? '#1e40af' : '#6b7280', fontWeight: 600, cursor: 'pointer' }}>🤖 Piano Smart</button>
-            <button onClick={() => setMode('advanced')} style={{ padding: '12px 24px', borderRadius: 8, border: mode === 'advanced' ? '2px solid #2563eb' : '1px solid #d1d5db', background: mode === 'advanced' ? '#eff6ff' : 'white', color: mode === 'advanced' ? '#1e40af' : '#6b7280', fontWeight: 600, cursor: 'pointer' }}>⚙️ Editor Avanzato</button>
+            <button
+              onClick={() => setMode('smart')}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: mode === 'smart' ? '2px solid #2563eb' : '1px solid #d1d5db',
+                background: mode === 'smart' ? '#eff6ff' : 'white',
+                color: mode === 'smart' ? '#1e40af' : '#6b7280',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🤖 Piano Smart
+            </button>
+
+            <button
+              onClick={() => setMode('advanced')}
+              style={{
+                padding: '12px 24px',
+                borderRadius: 8,
+                border: mode === 'advanced' ? '2px solid #2563eb' : '1px solid #d1d5db',
+                background: mode === 'advanced' ? '#eff6ff' : 'white',
+                color: mode === 'advanced' ? '#1e40af' : '#6b7280',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              ⚙️ Editor Avanzato
+            </button>
           </div>
 
           {/* Modalità Smart */}
@@ -741,19 +689,46 @@ export default function PlanningEditorPage() {
               <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>
                 🤖 Suggerimenti AI Intelligenti
               </h2>
+
               <p style={{ color: '#6b7280', marginBottom: 24, fontSize: 14 }}>
-                L'intelligenza artificiale seleziona automaticamente i clienti migliori da visitare oggi...
+                L'intelligenza artificiale seleziona automaticamente i clienti migliori da visitare oggi 
+                in base a latenza, distanza, volume vendite e note urgenti.
               </p>
+
               <div style={{ marginBottom: 24 }}>
                 <label style={{ display: 'block', marginBottom: 12, fontWeight: 600 }}>
                   Quanti clienti vuoi visitare oggi?
                 </label>
+                
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <input type="range" min="5" max="10" value={numClients} onChange={(e) => setNumClients(parseInt(e.target.value))} style={{ flex: 1 }} />
-                  <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb', minWidth: 40 }}>{numClients}</span>
+                  <input
+                    type="range"
+                    min="5"
+                    max="10"
+                    value={numClients}
+                    onChange={(e) => setNumClients(parseInt(e.target.value))}
+                    style={{ flex: 1 }}
+                  />
+                  <span style={{ fontSize: 24, fontWeight: 700, color: '#2563eb', minWidth: 40 }}>
+                    {numClients}
+                  </span>
                 </div>
               </div>
-              <button onClick={handleSmartSuggestion} style={{ width: '100%', padding: '16px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontSize: 16, fontWeight: 600, cursor: 'pointer' }}>
+
+              <button
+                onClick={handleSmartSuggestion}
+                style={{
+                  width: '100%',
+                  padding: '16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#2563eb',
+                  color: 'white',
+                  fontSize: 16,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
                 ✨ Genera Suggerimenti AI
               </button>
             </div>
@@ -765,9 +740,11 @@ export default function PlanningEditorPage() {
               <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>
                 ⚙️ Selezione Manuale Clienti
               </h2>
+
               <p style={{ color: '#6b7280', marginBottom: 16, fontSize: 14 }}>
                 Tutti i {clients.length} clienti ordinati per punteggio AI. Seleziona quelli che vuoi visitare.
               </p>
+
               <div style={{ maxHeight: 400, overflow: 'auto', border: '1px solid #e5e7eb', borderRadius: 8 }}>
                 <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
                   <thead style={{ background: '#f9fafb', position: 'sticky', top: 0 }}>
@@ -829,9 +806,6 @@ export default function PlanningEditorPage() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
               <h2 style={{ fontSize: 20, fontWeight: 600 }}>
                 📍 Visite Pianificate ({selectedIds.length})
-                <span style={{ marginLeft: 12, fontSize: 16, color: '#6b7280', fontWeight: 400 }}>
-                  • 🚗 ~{totalKm.toFixed(1)} km
-                </span>
               </h2>
 
               <button
@@ -863,20 +837,33 @@ export default function PlanningEditorPage() {
                   alignItems: 'center',
                 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                    {/* Numero sequenza */}
-                    <div style={{ 
-                      width: 28, height: 28, borderRadius: '50%', 
-                      background: '#2563eb', color: 'white', 
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', 
-                      fontWeight: 700, fontSize: 13 
-                    }}>
-                      {idx + 1}
-                    </div>
-
-                    {/* Controlli Riordino */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                      <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▲</button>
-                      <button onClick={() => moveDown(idx)} disabled={idx === selectedClients.length - 1} style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▼</button>
+                    {/* Controlli Ordine e Numero */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                      <div style={{ 
+                        width: 28, height: 28, borderRadius: '50%', 
+                        background: '#2563eb', color: 'white', 
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', 
+                        fontWeight: 700, fontSize: 13 
+                      }}>
+                        {idx + 1}
+                      </div>
+                      
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <button 
+                          onClick={() => moveUp(idx)} 
+                          disabled={idx === 0}
+                          style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none' }}
+                        >
+                          ▲
+                        </button>
+                        <button 
+                          onClick={() => moveDown(idx)} 
+                          disabled={idx === selectedClients.length - 1}
+                          style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none' }}
+                        >
+                          ▼
+                        </button>
+                      </div>
                     </div>
 
                     <div>
@@ -913,49 +900,42 @@ export default function PlanningEditorPage() {
         {/* Note Giornata */}
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>📝 Note Giornata</h2>
-          <textarea value={planNotes} onChange={(e) => { setPlanNotes(e.target.value); setIsDirty(true); }} placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..." rows={4} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, resize: 'vertical' }} />
+          
+          <textarea
+            value={planNotes}
+            onChange={(e) => {
+              setPlanNotes(e.target.value);
+              setIsDirty(true);
+            }}
+            placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..."
+            rows={4}
+            style={{
+              width: '100%',
+              padding: 12,
+              borderRadius: 8,
+              border: '1px solid #d1d5db',
+              fontSize: 14,
+              resize: 'vertical',
+            }}
+          />
         </div>
 
         {/* Azioni */}
         <div style={{ display: 'flex', gap: 12 }}>
-          {/* Annulla (Sinistra) */}
-          <button 
-            onClick={() => router.push('/planning')} 
-            style={{ 
-              padding: '12px 24px', 
-              borderRadius: 8, 
-              border: '1px solid #d1d5db', 
-              background: 'white', 
-              cursor: 'pointer', 
-              fontSize: 14, 
-              fontWeight: 600 
+          <button
+            onClick={() => router.push('/planning')}
+            style={{
+              padding: '12px 24px',
+              borderRadius: 8,
+              border: '1px solid #d1d5db',
+              background: 'white',
+              cursor: 'pointer',
+              fontSize: 14,
+              fontWeight: 600,
             }}
           >
             ← Annulla
           </button>
-
-          {/* 🗑️ ELIMINA PIANO (Rosso, visibile solo se il piano esiste) */}
-          {plan?.id && (
-            <button
-              onClick={deletePlan}
-              disabled={saving}
-              style={{
-                padding: '12px 24px',
-                borderRadius: 8,
-                border: '1px solid #ef4444',
-                background: 'white',
-                color: '#ef4444',
-                fontSize: 14,
-                fontWeight: 600,
-                cursor: saving ? 'not-allowed' : 'pointer',
-                marginRight: 'auto', // Spinge gli altri bottoni a destra
-              }}
-            >
-              🗑️ Elimina Piano
-            </button>
-          )}
-
-          <div style={{ flex: 1 }}></div> {/* Spacer flessibile */}
 
           <button
             onClick={savePlan}
@@ -974,7 +954,7 @@ export default function PlanningEditorPage() {
             {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
           </button>
 
-          {/* Bottone Avvia Giornata */}
+          {/* Bottone Avvia Giornata (solo se draft o completed) */}
           {plan?.id && (plan?.status === 'draft' || plan?.status === 'completed') && (
             <button
               onClick={activatePlan}
@@ -994,7 +974,7 @@ export default function PlanningEditorPage() {
             </button>
           )}
 
-          {/* Bottone Vai alle Visite */}
+          {/* Bottone Vai alle Visite (se piano attivo) */}
           {(plan?.status === 'active') && (
             <button
               onClick={() => router.push(`/planning/${dataStr}/execute`)}
