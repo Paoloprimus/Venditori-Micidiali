@@ -16,12 +16,6 @@ import {
   type DocumentMetadata
 } from '@/lib/pdf';
 
-type FormData = {
-  periodoType: 'giorno' | 'settimana' | 'personalizzato';
-  dataInizio: string;
-  dataFine: string;
-};
-
 type Props = {
   data?: string; // formato: "2025-11-08" (opzionale se passato da form)
   accountIds?: string[]; // IDs clienti del piano (opzionale)
@@ -55,7 +49,7 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-// Format durata (minuti -> Xh Ym)
+// Format durata
 function formatDuration(minutes: number): string {
   if (minutes <= 0) return "0m";
   const h = Math.floor(minutes / 60);
@@ -71,7 +65,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
   // Se data e accountIds sono passati, siamo in "modalità diretta" (dal planning)
   const isDirectMode = !!(data && accountIds);
 
-  async function handleGenerate(formData: FormData) {
+  async function handleGenerate(formData: any) {
     if (!crypto || typeof crypto.decryptFields !== 'function') {
       alert('Crittografia non disponibile');
       return;
@@ -79,15 +73,13 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
 
     setGenerating(true);
     try {
-      // 1. Recupera user
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      // 2. Recupera Piano per orario inizio (START UFFICIALE)
-      // Solo se siamo in mode giornaliero (data singola)
-      let planStartTime: Date | null = null;
       const targetDate = formData.dataInizio;
       
+      // 1. Recupera Piano per orario inizio (START UFFICIALE)
+      let planStartTime: Date | null = null;
       if (formData.dataInizio === formData.dataFine) {
         const { data: plan } = await supabase
             .from('daily_plans')
@@ -103,7 +95,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         }
       }
 
-      // 3. Recupera visite del periodo
+      // 2. Recupera visite del periodo
       // Ordinate per data_visita (che è il timestamp di chiusura/salvataggio)
       let visitsQuery = supabase
         .from('visits')
@@ -127,7 +119,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         return;
       }
 
-      // 4. Recupera dati clienti
+      // 3. Recupera dati clienti
       const clientIds = [...new Set(visitsData.map(v => v.account_id))];
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
@@ -136,7 +128,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
 
       if (clientsError) throw clientsError;
 
-      // 5. Decifra nomi clienti
+      // 4. Decifra nomi clienti
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
@@ -185,7 +177,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         }
       }
 
-      // 6. Calcoli KM e TEMPI
+      // 5. Calcoli KM e TEMPI
       let kmTotali = 0;
       let prevLat: number | undefined;
       let prevLon: number | undefined;
@@ -197,7 +189,6 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
 
       // Calcoliamo quando è iniziata effettivamente la prima visita
       const firstVisitEndTime = new Date(firstVisit.data_visita).getTime();
-      // Se manca durata, assumiamo 0 per non rompere i calcoli
       const firstVisitStartTime = firstVisitEndTime - ((firstVisit.durata || 0) * 60000);
       
       // L'inizio della giornata è il MINIMO tra "Avvia Piano" e "Inizio Prima Visita"
@@ -243,7 +234,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
       // Tempo viaggio = Tempo Totale - Tempo Visite
       const travelMinutes = Math.max(0, totalWorkMinutes - totalVisitMinutes);
 
-      // 7. Prepara dati per report
+      // 6. Prepara dati per report
       const visite: VisitaDetail[] = visitsData.map((v) => {
         const client = accountsMap.get(v.account_id);
         const dataOra = new Date(v.data_visita).toLocaleTimeString('it-IT', {
@@ -281,7 +272,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         visite,
       };
 
-      // 8. Genera e salva PDF
+      // 7. Genera e salva PDF
       const pdfBlob = await generateReportVisite(reportData);
       const filename = generateVisiteFilename(formData.dataInizio, formData.dataFine);
       const filePath = await savePdfToDevice(pdfBlob, filename);
@@ -292,7 +283,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         return;
       }
 
-      // 9. Salva metadata nel DB
+      // 8. Salva metadata nel DB
       const metadataForDB: DocumentMetadata = {
         data_inizio: formData.dataInizio,
         data_fine: formData.dataFine,
@@ -311,7 +302,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess, onCl
         file_size: pdfBlob.size,
       });
 
-      alert(`✅ Report generato!\nTempo Totale: ${formatDuration(totalWorkMinutes)}\nTempo Visite: ${formatDuration(totalVisitMinutes)}\nTempo Spostamenti: ${formatDuration(travelMinutes)}`);
+      alert(`✅ Report generato!\nKm: ${kmTotali.toFixed(1)} | Tempo: ${formatDuration(totalWorkMinutes)}`);
       
       if (onClose) onClose();
       if (onSuccess) onSuccess();
