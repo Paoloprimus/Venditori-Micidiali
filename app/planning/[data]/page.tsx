@@ -141,11 +141,11 @@ export default function PlanningEditorPage() {
     setTotalKm(km);
   }, [selectedIds, clients]);
 
-  async function loadData() {
+async function loadData() {
     setLoading(true);
     try {
       if (!crypto || typeof crypto.decryptFields !== 'function') {
-        console.error('Crypto non disponibile');
+        console.error('Crypto non disponibile o decryptFields non presente');
         return;
       }
 
@@ -155,29 +155,37 @@ export default function PlanningEditorPage() {
         return;
       }
 
-      // FIX: Inizializza chiavi scope
-      try { await (crypto as any).getOrCreateScopeKeys('table:accounts'); } catch {}
+      // 1️⃣ FIX: Inizializza le chiavi per la tabella accounts (MANCAVA QUESTO!)
+      try {
+        await (crypto as any).getOrCreateScopeKeys('table:accounts');
+      } catch (e) {
+        console.error('Errore scope keys:', e);
+      }
 
-      // Carica clienti
+      // 2️⃣ FIX: Aggiunto 'created_at' alla query (come in clients/page.tsx)
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
-        .select('id, name_enc, name_iv, city, tipo_locale, latitude, longitude, ultimo_esito, ultimo_esito_at, volume_attuale, custom')
+        .select('id, created_at, name_enc, name_iv, city, tipo_locale, latitude, longitude, ultimo_esito, ultimo_esito_at, volume_attuale, custom')
         .eq('user_id', user.id)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null);
 
       if (clientsError) throw clientsError;
 
+      // Decifra nomi clienti (STESSO PATTERN DI /clients/page.tsx)
       const decryptedClients: Client[] = [];
       
+      // Helper: converti hex-string in base64
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
+        
         const hex = hexStr.slice(2);
         const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
         return bytes;
       };
       
+      // Helper: converte risultato decryptFields in oggetto
       const toObj = (x: any): Record<string, unknown> =>
         Array.isArray(x)
           ? x.reduce((acc: Record<string, unknown>, it: any) => {
@@ -188,20 +196,23 @@ export default function PlanningEditorPage() {
       
       for (const c of clientsData || []) {
         try {
+          // Converti hex a base64
           const recordForDecrypt = {
             ...c,
             name_enc: hexToBase64(c.name_enc),
             name_iv: hexToBase64(c.name_iv),
           };
           
+          // Decifra
           const decAny = await crypto.decryptFields(
             'table:accounts',
             'accounts',
-            c.id,
+            c.id,  // Usa l'ID del cliente come Associated Data
             recordForDecrypt,
             ['name']
           );
           
+          // Converti in oggetto
           const dec = toObj(decAny);
           
           decryptedClients.push({
@@ -217,6 +228,8 @@ export default function PlanningEditorPage() {
             custom: c.custom || {},
           });
         } catch (e) {
+          console.error('[Planning] Errore decrypt cliente:', e);
+          // Aggiungi comunque con ID come fallback
           decryptedClients.push({
             id: c.id,
             name: `Cliente #${c.id.slice(0, 8)}`,
