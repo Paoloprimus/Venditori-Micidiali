@@ -26,6 +26,7 @@ import { fetchPromemoria, createPromemoria, updatePromemoria, deletePromemoria, 
 import PromemoriaList from './PromemoriaList';
 import PromemoriaForm from './PromemoriaForm';
 import { geocodeAddress } from '@/lib/geocoding';
+import { supabase } from '@/lib/supabase/client';
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
@@ -257,6 +258,46 @@ export function DrawersWithBackdrop({
 /* ------------------------ Contenuto: GESTIONE DATI ------------------------ */
 function DrawerDati({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('uscite');
+  
+  // 🆕 Stato per ricerca scheda cliente
+  const [showClientSearch, setShowClientSearch] = useState(false);
+  const [clientQuery, setClientQuery] = useState('');
+  const [clientResults, setClientResults] = useState<Array<{id: string, name: string, city: string}>>([]);
+  const [searchingClients, setSearchingClients] = useState(false);
+  
+  // Cerca clienti (per city/tipo_locale in chiaro)
+  async function searchClients(query: string) {
+    if (!query.trim() || query.length < 2) {
+      setClientResults([]);
+      return;
+    }
+    
+    setSearchingClients(true);
+    try {
+      const { data } = await supabase
+        .from('accounts')
+        .select('id, city, tipo_locale')
+        .or(`city.ilike.%${query}%,tipo_locale.ilike.%${query}%`)
+        .limit(10);
+      
+      const results = (data || []).map((c: any) => ({
+        id: c.id,
+        name: c.tipo_locale || 'Cliente',
+        city: c.city || '',
+      }));
+      
+      setClientResults(results);
+    } catch (e) {
+      console.error('[DrawerDati] Search error:', e);
+    } finally {
+      setSearchingClients(false);
+    }
+  }
+  
+  function goToClientDetail(clientId: string) {
+    onClose();
+    window.location.href = `/clients/${clientId}`;
+  }
 
   function goQuickAdd() {
     onClose();
@@ -449,6 +490,90 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
             <button className="btn" onClick={goClientsList}>
               📋 Lista clienti
             </button>
+            
+            {/* 🆕 Accordion per ricerca scheda cliente */}
+            <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+              <button 
+                className="btn"
+                onClick={() => setShowClientSearch(!showClientSearch)}
+                style={{ 
+                  width: '100%', 
+                  display: 'flex', 
+                  justifyContent: 'space-between', 
+                  alignItems: 'center',
+                  background: showClientSearch ? '#f3f4f6' : 'white',
+                  borderRadius: 0,
+                  margin: 0,
+                }}
+              >
+                <span>🔍 Cerca scheda cliente</span>
+                <span style={{ fontSize: 12 }}>{showClientSearch ? '▲' : '▼'}</span>
+              </button>
+              
+              {showClientSearch && (
+                <div style={{ padding: 12, background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
+                  <input
+                    type="text"
+                    placeholder="Cerca per città o tipo locale..."
+                    value={clientQuery}
+                    onChange={(e) => {
+                      setClientQuery(e.target.value);
+                      searchClients(e.target.value);
+                    }}
+                    style={{
+                      width: '100%',
+                      padding: '8px 12px',
+                      borderRadius: 6,
+                      border: '1px solid #d1d5db',
+                      fontSize: 14,
+                      marginBottom: 8,
+                    }}
+                  />
+                  
+                  {searchingClients && (
+                    <div style={{ fontSize: 12, color: '#6b7280', padding: 8 }}>Cerco...</div>
+                  )}
+                  
+                  {!searchingClients && clientResults.length > 0 && (
+                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
+                      {clientResults.map((c) => (
+                        <button
+                          key={c.id}
+                          onClick={() => goToClientDetail(c.id)}
+                          style={{
+                            width: '100%',
+                            padding: '8px 12px',
+                            textAlign: 'left',
+                            background: 'white',
+                            border: '1px solid #e5e7eb',
+                            borderRadius: 6,
+                            marginBottom: 4,
+                            cursor: 'pointer',
+                            fontSize: 13,
+                          }}
+                        >
+                          <div style={{ fontWeight: 500 }}>{c.name}</div>
+                          {c.city && <div style={{ fontSize: 11, color: '#6b7280' }}>📍 {c.city}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  
+                  {!searchingClients && clientQuery.length >= 2 && clientResults.length === 0 && (
+                    <div style={{ fontSize: 12, color: '#9ca3af', padding: 8, textAlign: 'center' }}>
+                      Nessun risultato. Prova dalla <a href="/clients" style={{ color: '#2563eb' }}>lista completa</a>.
+                    </div>
+                  )}
+                  
+                  {clientQuery.length < 2 && (
+                    <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
+                      Digita almeno 2 caratteri
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+            
             <button className="btn" onClick={goQuickAdd} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Aggiungi singolo
             </button>
@@ -826,12 +951,56 @@ function DrawerDocs({ onClose }: { onClose: () => void }) {
 
 /* --------------------- Contenuto: IMPOSTAZIONI --------------------- */
 function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
+  // Stato Profilo
+  const [profileExpanded, setProfileExpanded] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileEmail, setProfileEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [profileRole, setProfileRole] = useState('');
+  const [profileCreatedAt, setProfileCreatedAt] = useState('');
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  
+  // Stato Indirizzo Casa
+  const [addressExpanded, setAddressExpanded] = useState(false);
   const [homeAddress, setHomeAddress] = useState('');
   const [homeCity, setHomeCity] = useState('');
   const [saving, setSaving] = useState(false);
   const [savedCoords, setSavedCoords] = useState<string | null>(null);
 
-  // Carica impostazioni salvate
+  // Carica profilo utente
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        setProfileEmail(user.email || '');
+        setProfileCreatedAt(user.created_at || '');
+        
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, role')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          setFirstName(profile.first_name || '');
+          setLastName(profile.last_name || '');
+          setProfileRole(profile.role || 'venditore');
+        }
+      } catch (e) {
+        console.error('[Profile] Errore caricamento:', e);
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+    
+    loadProfile();
+  }, []);
+
+  // Carica impostazioni indirizzo salvate
   useEffect(() => {
     const saved = localStorage.getItem('repping_settings');
     if (saved) {
@@ -846,7 +1015,37 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
     }
   }, []);
 
-  async function handleSave() {
+  // Salva profilo
+  async function handleSaveProfile() {
+    if (!firstName.trim() || !lastName.trim()) {
+      alert('Inserisci nome e cognome');
+      return;
+    }
+    
+    setProfileSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non autenticato');
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ first_name: firstName.trim(), last_name: lastName.trim() })
+        .eq('id', user.id);
+      
+      if (error) throw error;
+      
+      setProfileEditing(false);
+      alert('✅ Profilo aggiornato!');
+    } catch (e: any) {
+      console.error('[Profile] Errore salvataggio:', e);
+      alert(`Errore: ${e.message}`);
+    } finally {
+      setProfileSaving(false);
+    }
+  }
+
+  // Salva indirizzo casa
+  async function handleSaveAddress() {
     if (!homeAddress.trim() || !homeCity.trim()) {
       alert('Inserisci indirizzo e città');
       return;
@@ -854,7 +1053,6 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
 
     setSaving(true);
     try {
-      // Geocoding
       const coords = await geocodeAddress(homeAddress, homeCity);
       
       if (!coords) {
@@ -862,7 +1060,6 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
         return;
       }
 
-      // Salva in localStorage
       const settings = {
         homeAddress,
         homeCity,
@@ -883,6 +1080,11 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const roleLabels: Record<string, string> = {
+    admin: '👑 Amministratore',
+    venditore: '💼 Venditore',
+  };
+
   return (
     <>
       <div className="topbar">
@@ -891,62 +1093,234 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
       </div>
       <div className="list" style={{ padding: 16 }}>
         
-        <div style={{ marginBottom: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 600, marginBottom: 12, color: '#111827' }}>📍 Punto di Partenza</h3>
-          <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
-            Imposta il tuo indirizzo di casa o ufficio. Verrà usato per ottimizzare i percorsi giornalieri.
-          </p>
+        {/* ========== SEZIONE PROFILO ========== */}
+        <div style={{ marginBottom: 16 }}>
+          <button
+            onClick={() => setProfileExpanded(!profileExpanded)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              background: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: profileExpanded ? '8px 8px 0 0' : 8,
+              cursor: 'pointer',
+              fontSize: 16,
+              fontWeight: 600,
+              color: '#111827',
+            }}
+          >
+            <span>👤 Il Mio Profilo</span>
+            <span style={{ fontSize: 12 }}>{profileExpanded ? '▲' : '▼'}</span>
+          </button>
           
-          <div style={{ display: 'grid', gap: 12 }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Indirizzo</label>
-              <input 
-                value={homeAddress}
-                onChange={e => setHomeAddress(e.target.value)}
-                placeholder="Es. Via Roma 10"
-                style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #d1d5db' }}
-              />
+          {profileExpanded && (
+            <div style={{
+              padding: 16,
+              border: '1px solid #e5e7eb',
+              borderTop: 'none',
+              borderRadius: '0 0 8px 8px',
+              background: 'white',
+            }}>
+              {profileLoading ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: 20 }}>
+                  ⏳ Caricamento profilo...
+                </div>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  {/* Avatar e Nome */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{
+                      width: 60,
+                      height: 60,
+                      borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontSize: 24,
+                      fontWeight: 700,
+                    }}>
+                      {firstName.charAt(0).toUpperCase()}{lastName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>
+                        {firstName} {lastName}
+                      </div>
+                      <div style={{ fontSize: 13, color: '#6b7280' }}>
+                        {roleLabels[profileRole] || profileRole}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Email */}
+                  <div style={{ padding: '12px 16px', background: '#f9fafb', borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>📧 Email</div>
+                    <div style={{ fontSize: 14, color: '#111827' }}>{profileEmail}</div>
+                  </div>
+                  
+                  {/* Data registrazione */}
+                  {profileCreatedAt && (
+                    <div style={{ padding: '12px 16px', background: '#f9fafb', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>📅 Membro dal</div>
+                      <div style={{ fontSize: 14, color: '#111827' }}>
+                        {new Date(profileCreatedAt).toLocaleDateString('it-IT', {
+                          day: 'numeric',
+                          month: 'long',
+                          year: 'numeric'
+                        })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Form modifica nome */}
+                  {profileEditing ? (
+                    <div style={{ display: 'grid', gap: 12, padding: 16, background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#1e40af' }}>Nome</label>
+                        <input 
+                          value={firstName}
+                          onChange={e => setFirstName(e.target.value)}
+                          style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #93c5fd' }}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#1e40af' }}>Cognome</label>
+                        <input 
+                          value={lastName}
+                          onChange={e => setLastName(e.target.value)}
+                          style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #93c5fd' }}
+                        />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button
+                          onClick={() => setProfileEditing(false)}
+                          style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}
+                        >
+                          Annulla
+                        </button>
+                        <button
+                          onClick={handleSaveProfile}
+                          disabled={profileSaving}
+                          style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, cursor: 'pointer', opacity: profileSaving ? 0.7 : 1 }}
+                        >
+                          {profileSaving ? 'Salvo...' : '💾 Salva'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => setProfileEditing(true)}
+                      style={{
+                        padding: '10px 16px',
+                        borderRadius: 8,
+                        border: '1px solid #d1d5db',
+                        background: 'white',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        color: '#374151',
+                      }}
+                    >
+                      ✏️ Modifica Nome
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            
-            <div>
-              <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Città</label>
-              <input 
-                value={homeCity}
-                onChange={e => setHomeCity(e.target.value)}
-                placeholder="Es. Milano"
-                style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #d1d5db' }}
-              />
-            </div>
-
-            <button 
-              onClick={handleSave}
-              disabled={saving}
-              style={{ 
-                marginTop: 8,
-                width: '100%', 
-                padding: '12px', 
-                borderRadius: 8, 
-                border: 'none', 
-                background: '#2563eb', 
-                color: 'white',
-                fontWeight: 600,
-                cursor: 'pointer',
-                opacity: saving ? 0.7 : 1
-              }}
-            >
-              {saving ? 'Salvataggio...' : '💾 Salva Indirizzo'}
-            </button>
-
-            {savedCoords && (
-              <div style={{ marginTop: 8, padding: 12, background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 12, color: '#15803d' }}>
-                ✅ Coordinate salvate: {savedCoords}
-              </div>
-            )}
-          </div>
+          )}
         </div>
 
-        <div style={{ padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 13, color: '#6b7280' }}>
-          ℹ️ Altre impostazioni in arrivo...
+        {/* ========== SEZIONE INDIRIZZO CASA ========== */}
+        <div style={{ marginBottom: 16 }}>
+          <button
+            onClick={() => setAddressExpanded(!addressExpanded)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              background: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: addressExpanded ? '8px 8px 0 0' : 8,
+              cursor: 'pointer',
+              fontSize: 16,
+              fontWeight: 600,
+              color: '#111827',
+            }}
+          >
+            <span>📍 Punto di Partenza</span>
+            <span style={{ fontSize: 12 }}>{addressExpanded ? '▲' : '▼'}</span>
+          </button>
+          
+          {addressExpanded && (
+            <div style={{
+              padding: 16,
+              border: '1px solid #e5e7eb',
+              borderTop: 'none',
+              borderRadius: '0 0 8px 8px',
+              background: 'white',
+            }}>
+              <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+                Imposta il tuo indirizzo di casa o ufficio. Verrà usato per ottimizzare i percorsi giornalieri.
+              </p>
+              
+              <div style={{ display: 'grid', gap: 12 }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Indirizzo</label>
+                  <input 
+                    value={homeAddress}
+                    onChange={e => setHomeAddress(e.target.value)}
+                    placeholder="Es. Via Roma 10"
+                    style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #d1d5db' }}
+                  />
+                </div>
+                
+                <div>
+                  <label style={{ display: 'block', fontSize: 13, fontWeight: 500, marginBottom: 4 }}>Città</label>
+                  <input 
+                    value={homeCity}
+                    onChange={e => setHomeCity(e.target.value)}
+                    placeholder="Es. Milano"
+                    style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #d1d5db' }}
+                  />
+                </div>
+
+                <button 
+                  onClick={handleSaveAddress}
+                  disabled={saving}
+                  style={{ 
+                    marginTop: 8,
+                    width: '100%', 
+                    padding: '12px', 
+                    borderRadius: 8, 
+                    border: 'none', 
+                    background: '#2563eb', 
+                    color: 'white',
+                    fontWeight: 600,
+                    cursor: 'pointer',
+                    opacity: saving ? 0.7 : 1
+                  }}
+                >
+                  {saving ? 'Salvataggio...' : '💾 Salva Indirizzo'}
+                </button>
+
+                {savedCoords && (
+                  <div style={{ marginTop: 8, padding: 12, background: '#f0fdf4', borderRadius: 8, border: '1px solid #bbf7d0', fontSize: 12, color: '#15803d' }}>
+                    ✅ Coordinate salvate: {savedCoords}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Versione App */}
+        <div style={{ padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
+          REPING Beta 1.0 • 2025
         </div>
       </div>
     </>

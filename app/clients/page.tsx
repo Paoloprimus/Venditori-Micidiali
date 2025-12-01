@@ -193,32 +193,47 @@ useEffect(() => {
     return;
   }
 
-  // Prova a leggere la passphrase
-  const pass = 
-    typeof window !== 'undefined'
-      ? (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph') || '')
-      : '';
-
-  console.log('[/clients] 🔑 Passphrase trovata:', !!pass);
-  
-  if (!pass) {
-    console.log('[/clients] ❌ Nessuna passphrase in storage');
-    return;
+  // 🔧 FIX: Ritenta lettura passphrase con delay (Android lento)
+  async function tryGetPassphrase(): Promise<string> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const pass = sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph') || '';
+      if (pass) return pass;
+      if (attempt < 2) {
+        console.log(`[/clients] ⏳ Passphrase non trovata, attendo... (${attempt + 1}/3)`);
+        await new Promise(r => setTimeout(r, 300));
+      }
+    }
+    return '';
   }
 
   // FORZA unlock + caricamento dati
   (async () => {
     try {
       unlockingRef.current = true;
+      
+      const pass = await tryGetPassphrase();
+      console.log('[/clients] 🔑 Passphrase trovata:', !!pass);
+      
+      if (!pass) {
+        console.log('[/clients] ❌ Nessuna passphrase in storage dopo retry');
+        return;
+      }
+      
       setDiag((d) => ({ ...d, passInStorage: true, unlockAttempts: (d.unlockAttempts ?? 0) + 1 }));
       
       console.log('[/clients] 🔓 Avvio unlock...');
       await unlock(pass);
       console.log('[/clients] ✅ Unlock completato!');
       
+      // 🔧 FIX: Attendi un momento per assicurarsi che MK sia pronta
+      await new Promise(r => setTimeout(r, 100));
+      
       console.log('[/clients] 🔧 Avvio prewarm...');
       await prewarm(DEFAULT_SCOPES);
       console.log('[/clients] ✅ Prewarm completato!');
+      
+      // 🔧 FIX: Attendi ancora un momento prima di caricare dati
+      await new Promise(r => setTimeout(r, 100));
       
       // 🚀 FORZA caricamento dati dopo unlock
       console.log('[/clients] 📊 Carico i dati...');
@@ -229,11 +244,9 @@ useEffect(() => {
       const msg = String(e?.message || e || '');
       console.error('[/clients] ❌ Unlock fallito:', msg);
       
-      // Se fallisce, pulisci passphrase invalida
-      if (!/OperationError/i.test(msg)) {
-        sessionStorage.removeItem('repping:pph');
-        localStorage.removeItem('repping:pph');
-      }
+      // 🔧 FIX: NON rimuovere la passphrase! Potrebbe essere solo un errore temporaneo
+      // La rimozione causava il bug su Android dove la passphrase veniva cancellata erroneamente
+      console.warn('[/clients] ⚠️ Errore durante unlock, ma mantengo passphrase');
     } finally {
       unlockingRef.current = false;
     }
@@ -267,13 +280,24 @@ const { data, error } = await supabase
       return;
     }
 
-    // ✅ Forza creazione scope keys PRIMA di decifrare
-    try {
-      console.log('[/clients] 🔧 Creo scope keys prima di decifrare...');
-      await (crypto as any).getOrCreateScopeKeys('table:accounts');
-      console.log('[/clients] ✅ Scope keys creati');
-    } catch (e) {
-      console.error('[/clients] ❌ Errore creazione scope keys:', e);
+    // ✅ Forza creazione scope keys PRIMA di decifrare (con retry)
+    let scopeKeysReady = false;
+    for (let attempt = 0; attempt < 3 && !scopeKeysReady; attempt++) {
+      try {
+        console.log(`[/clients] 🔧 Creo scope keys... (tentativo ${attempt + 1}/3)`);
+        await (crypto as any).getOrCreateScopeKeys('table:accounts');
+        console.log('[/clients] ✅ Scope keys creati');
+        scopeKeysReady = true;
+      } catch (e) {
+        console.error('[/clients] ❌ Errore creazione scope keys:', e);
+        if (attempt < 2) {
+          await new Promise(r => setTimeout(r, 300));
+        }
+      }
+    }
+    
+    if (!scopeKeysReady) {
+      console.error('[/clients] ❌ CRITICO: Impossibile creare scope keys dopo 3 tentativi');
     }
 
     // DEBUG logs (opzionali, puoi rimuoverli dopo il test)
@@ -339,6 +363,15 @@ const decAny = await (crypto as any).decryptFields(
 );
 
         const dec = toObj(decAny);
+        
+        // 🔧 FIX BUG #2: Log dettagliato se decifratura fallisce
+        if (!dec.name && r.name_enc) {
+          console.warn('[/clients] ⚠️ Decifratura nome fallita per', r.id, {
+            hasNameEnc: !!r.name_enc,
+            hasNameIv: !!r.name_iv,
+            decResult: dec,
+          });
+        }
 
         // ✅ Estrai note dal campo separato (in chiaro!)
         const notes = r.notes || "";
@@ -631,7 +664,25 @@ async function saveEditing() {
     );
   }
 
+  // 🔧 FIX: Mostra loader durante auto-unlock, form SOLO se non c'è passphrase
   if (!actuallyReady || !crypto) {
+    const hasPassInStorage = typeof window !== 'undefined' && 
+      (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
+    
+    // Se c'è passphrase in storage O stiamo ancora provando, mostra loader
+    if (hasPassInStorage || checking || unlockingRef.current) {
+      return (
+        <div className="p-6 max-w-md" style={{ textAlign: 'center', marginTop: 100 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔓</div>
+          <div style={{ fontSize: 18, color: '#6b7280' }}>Sblocco dati in corso...</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
+            Decifratura automatica attiva
+          </div>
+        </div>
+      );
+    }
+    
+    // Nessuna passphrase → mostra form
     return (
       <div className="p-6 max-w-md space-y-3">
         <h2 className="text-lg font-semibold">🔐 Sblocca i dati cifrati</h2>
@@ -726,8 +777,20 @@ return (
               <tbody>
                 {view.map((r) => (
                   <tr key={r.id} className="border-t hover:bg-gray-50">
-                    {/* Nome - NON EDITABILE */}
-                    <td className="px-3 py-2 bg-gray-100">{r.name || "—"}</td>
+                    {/* Nome - CLICCABILE per aprire scheda cliente */}
+                    <td className="px-3 py-2 bg-gray-100">
+                      <a 
+                        href={`/clients/${r.id}`}
+                        style={{ 
+                          color: '#2563eb', 
+                          textDecoration: 'none',
+                          fontWeight: 500,
+                        }}
+                        title="Apri scheda cliente"
+                      >
+                        {r.name || "—"}
+                      </a>
+                    </td>
                     
                     {/* Contatto - EDITABILE */}
                     <EditableCell
@@ -890,44 +953,113 @@ function EditableCell({
 }) {
   const isEditing = editingCell?.rowId === rowId && editingCell?.field === field;
   
+  // 🔧 FIX UX: Bottoni di conferma/annulla invece di salvataggio automatico su blur
   if (isEditing) {
+    const hasChanged = tempValue !== value;
+    
     if (options && options.length > 0) {
       return (
         <td className="px-3 py-2">
-          <select
-            value={tempValue}
-            onChange={(e) => onTempChange(e.target.value)}
-            onBlur={onSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") onSave();
-              if (e.key === "Escape") onCancel();
-            }}
-            autoFocus
-            className="w-full px-2 py-1 border rounded"
-          >
-            <option value="">Seleziona...</option>
-            {options.map(opt => (
-              <option key={opt} value={opt}>{opt}</option>
-            ))}
-          </select>
+          <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+            <select
+              value={tempValue}
+              onChange={(e) => onTempChange(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && hasChanged) onSave();
+                if (e.key === "Escape") onCancel();
+              }}
+              autoFocus
+              className="flex-1 px-2 py-1 border rounded"
+              style={{ minWidth: 100 }}
+            >
+              <option value="">Seleziona...</option>
+              {options.map(opt => (
+                <option key={opt} value={opt}>{opt}</option>
+              ))}
+            </select>
+            <button
+              onClick={onSave}
+              disabled={!hasChanged}
+              title="Conferma modifica"
+              style={{
+                padding: '4px 8px',
+                borderRadius: 4,
+                border: 'none',
+                background: hasChanged ? '#10b981' : '#d1d5db',
+                color: 'white',
+                cursor: hasChanged ? 'pointer' : 'not-allowed',
+                fontSize: 14,
+              }}
+            >
+              ✓
+            </button>
+            <button
+              onClick={onCancel}
+              title="Annulla"
+              style={{
+                padding: '4px 8px',
+                borderRadius: 4,
+                border: 'none',
+                background: '#ef4444',
+                color: 'white',
+                cursor: 'pointer',
+                fontSize: 14,
+              }}
+            >
+              ✕
+            </button>
+          </div>
         </td>
       );
     }
     
     return (
       <td className="px-3 py-2">
-        <input
-          type="text"
-          value={tempValue}
-          onChange={(e) => onTempChange(e.target.value)}
-          onBlur={onSave}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") onSave();
-            if (e.key === "Escape") onCancel();
-          }}
-          autoFocus
-          className="w-full px-2 py-1 border rounded"
-        />
+        <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+          <input
+            type="text"
+            value={tempValue}
+            onChange={(e) => onTempChange(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && hasChanged) onSave();
+              if (e.key === "Escape") onCancel();
+            }}
+            autoFocus
+            className="flex-1 px-2 py-1 border rounded"
+            style={{ minWidth: 80 }}
+          />
+          <button
+            onClick={onSave}
+            disabled={!hasChanged}
+            title="Conferma modifica"
+            style={{
+              padding: '4px 8px',
+              borderRadius: 4,
+              border: 'none',
+              background: hasChanged ? '#10b981' : '#d1d5db',
+              color: 'white',
+              cursor: hasChanged ? 'pointer' : 'not-allowed',
+              fontSize: 14,
+            }}
+          >
+            ✓
+          </button>
+          <button
+            onClick={onCancel}
+            title="Annulla"
+            style={{
+              padding: '4px 8px',
+              borderRadius: 4,
+              border: 'none',
+              background: '#ef4444',
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: 14,
+            }}
+          >
+            ✕
+          </button>
+        </div>
       </td>
     );
   }

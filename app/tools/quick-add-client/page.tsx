@@ -444,11 +444,16 @@ export default function QuickAddClientPage() {
     try {
       const scope = 'table:accounts';
       
+      // 🔧 FIX BUG CRITICO: Genera UUID PRIMA di cifrare!
+      // L'ID deve essere lo stesso usato come AAD in cifratura E decifratura
+      const accountId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+      console.log('[QuickAdd] 🔑 ID account generato:', accountId);
+      
       // Critta il nome cliente usando encryptFields
       const nameEncrypted = await crypto.encryptFields(
         scope,
         'accounts',
-        '', // nessun ID ancora, è un nuovo record
+        accountId, // ✅ FIX: Usa l'ID generato come AAD
         { name: form.nomeCliente.trim() }
       );
 
@@ -492,7 +497,7 @@ export default function QuickAddClientPage() {
       const contactNameEncrypted = await crypto.encryptFields(
         scope,
         'accounts',
-        '',
+        accountId, // ✅ FIX: Usa stesso ID
         { contact_name: form.nomeContatto.trim() }
       );
 
@@ -522,7 +527,7 @@ export default function QuickAddClientPage() {
         emailEncrypted = await crypto.encryptFields(
           scope,
           'accounts',
-          '',
+          accountId, // ✅ FIX: Usa stesso ID
           { email: form.email.trim() }
         );
         if (!emailEncrypted?.email_enc || !emailEncrypted?.email_iv) {
@@ -535,7 +540,7 @@ export default function QuickAddClientPage() {
       const phoneEncrypted = await crypto.encryptFields(
         scope,
         'accounts',
-        '',
+        accountId, // ✅ FIX: Usa stesso ID
         { phone: form.telefono.trim() }
       );
       if (!phoneEncrypted?.phone_enc || !phoneEncrypted?.phone_iv) {
@@ -547,7 +552,7 @@ export default function QuickAddClientPage() {
       const addressEncrypted = await crypto.encryptFields(
         scope,
         'accounts',
-        '',
+        accountId, // ✅ FIX: Usa stesso ID
         { address: form.indirizzo.trim() }
       );
       if (!addressEncrypted?.address_enc || !addressEncrypted?.address_iv) {
@@ -561,7 +566,7 @@ export default function QuickAddClientPage() {
         pivaEncrypted = await crypto.encryptFields(
           scope,
           'accounts',
-          '',
+          accountId, // ✅ FIX: Usa stesso ID
           { vat_number: form.piva.trim() }
         );
         if (!pivaEncrypted?.vat_number_enc || !pivaEncrypted?.vat_number_iv) {
@@ -597,6 +602,7 @@ export default function QuickAddClientPage() {
 
       // Prepara il payload
       const payload: any = {
+        id: accountId, // ✅ FIX: Invia l'ID usato per cifrare, così il DB userà lo stesso!
         name_enc: nameEncrypted.name_enc,
         name_iv: nameEncrypted.name_iv,
         name_bi: nameBlind,
@@ -640,7 +646,8 @@ export default function QuickAddClientPage() {
       } else {
         const geoMsg = latitude && longitude ? ' con coordinate GPS' : '';
         setResultMsg(`✅ Cliente salvato${geoMsg}! ID: ${data.accountId}`);
-        speak('Cliente salvato con successo!');
+        // 🔇 TTS disabilitato temporaneamente (nota UX del 01/12)
+        // speak('Cliente salvato con successo!');
         
         // Reset form dopo 2 secondi
         setTimeout(() => {
@@ -674,7 +681,25 @@ export default function QuickAddClientPage() {
   }, [dialogState]);
 
   // 🔐 Blocco UI se crittografia non è pronta
+  // 🔧 FIX: Mostra loader durante auto-unlock, form completo SOLO se non c'è passphrase
   if (!actuallyReady || !crypto) {
+    const hasPassInStorage = typeof window !== 'undefined' && 
+      (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
+    
+    // Se c'è passphrase in storage, mostra loader minimo (auto-unlock in corso)
+    if (hasPassInStorage) {
+      return (
+        <div style={{ padding: 24, textAlign: 'center', marginTop: 100 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔓</div>
+          <div style={{ fontSize: 18, color: '#6b7280' }}>Sblocco dati in corso...</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
+            Decifratura automatica attiva
+          </div>
+        </div>
+      );
+    }
+    
+    // Nessuna passphrase → mostra schermata completa di attesa
     return (
       <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, border: '1px solid #e5e7eb', borderRadius: 12 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: '#111827' }}>
