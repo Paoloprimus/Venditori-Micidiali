@@ -255,6 +255,79 @@ export async function runChatTurn_v2(
   }
 }
 
+// ==================== INTENT CHAINING HANDLER ====================
+
+/**
+ * Gestisce intent concatenati eseguendoli in sequenza
+ * Es: "Cerca Rossi e dimmi quando l'ho visto" → client_search + visit_last
+ */
+async function handleChainedIntents(
+  parsed: ParsedIntent,
+  crypto: CryptoLike | null,
+  state: ConversationContextState,
+  nluContext: ConversationContext
+): Promise<{ text: string; intent: string }> {
+  if (!crypto) return { ...needCrypto(), intent: parsed.intent };
+
+  const chainedIntents = parsed.chainedIntents ?? [];
+  const allIntents = [
+    { intent: parsed.intent, entities: parsed.entities, confidence: parsed.confidence },
+    ...chainedIntents
+  ];
+
+  const responses: string[] = [];
+  let sharedEntities = { ...parsed.entities };
+
+  for (let i = 0; i < allIntents.length; i++) {
+    const { intent, entities } = allIntents[i];
+    
+    // Merge entità: eredita da precedenti ma mantieni specifiche
+    const mergedEntities = { ...sharedEntities, ...entities };
+    
+    // Crea un parsed fittizio per ogni sub-intent
+    const subParsed: ParsedIntent = {
+      intent,
+      confidence: parsed.confidence,
+      entities: mergedEntities,
+      raw: parsed.raw,
+      normalized: parsed.normalized,
+      needsConfirmation: false,
+    };
+
+    try {
+      // Esegui l'intent (senza ricorsione in chaining)
+      const result = await handleIntent(subParsed, crypto, state, nluContext);
+      
+      // Aggiungi risposta con numerazione
+      if (allIntents.length > 1) {
+        responses.push(`**${i + 1}.** ${result.text}`);
+      } else {
+        responses.push(result.text);
+      }
+      
+      // Propaga entità risolte (es: clientName trovato in search)
+      if (mergedEntities.clientName) {
+        sharedEntities.clientName = mergedEntities.clientName;
+      }
+      if (mergedEntities.clientId) {
+        sharedEntities.clientId = mergedEntities.clientId;
+      }
+      
+    } catch (e) {
+      console.error(`[Planner] Errore in intent chain ${intent}:`, e);
+      responses.push(`**${i + 1}.** ⚠️ Errore nell'esecuzione di ${intent}`);
+    }
+  }
+
+  // Combina le risposte
+  const combinedText = responses.join('\n\n---\n\n');
+  
+  return {
+    text: combinedText,
+    intent: `chained:${allIntents.map(i => i.intent).join('+')}`,
+  };
+}
+
 // ==================== HANDLER INTENT ====================
 
 async function handleIntent(
@@ -264,6 +337,11 @@ async function handleIntent(
   nluContext: ConversationContext
 ): Promise<{ text: string; intent: string }> {
   const { intent, entities } = parsed;
+
+  // 🆕 INTENT CHAINING - Gestisci intent multipli
+  if (parsed.chainedIntents && parsed.chainedIntents.length > 0) {
+    return handleChainedIntents(parsed, crypto, state, nluContext);
+  }
 
   switch (intent) {
     // ═══════════════════════════════════════════════════════════════

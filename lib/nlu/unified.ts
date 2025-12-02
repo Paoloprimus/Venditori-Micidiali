@@ -24,6 +24,7 @@ export type IntentType =
   | 'client_list'            // "Lista clienti" / "Elencali"
   | 'client_search'          // "Cerca cliente Rossi"
   | 'composite_query'        // "Clienti di Verona che hanno comprato vino" (filtri multipli)
+  | 'chained_query'          // "Aggiungi visita a Rossi e registra ordine" (più azioni)
   | 'client_detail'          // "Info su Rossi" / "Dimmi tutto su Bianchi"
   | 'client_create'          // "Nuovo cliente Mario Rossi"
   | 'client_inactive'        // "Chi non vedo da un mese?"
@@ -125,6 +126,11 @@ export type EntityType = {
   hasOrdered?: boolean;      // Ha effettuato ordini (true/false)
   notVisitedDays?: number;   // Non visitato da X giorni
   filters?: string[];        // Lista filtri applicati per debug/display
+  // 🆕 Per intent chaining (più azioni in una query)
+  chainedIntents?: Array<{
+    intent: IntentType;
+    entities: Partial<EntityType>;
+  }>;
 };
 
 // 🆕 Tipo per gestire risposte a domande impossibili
@@ -161,6 +167,12 @@ export type ParsedIntent = {
     question: string;
     options: { label: string; intent: IntentType; entities: EntityType }[];
   };
+  // 🆕 Intent Chaining - intent multipli in una query
+  chainedIntents?: Array<{
+    intent: IntentType;
+    entities: EntityType;
+    confidence: number;
+  }>;
 };
 
 // 🆕 Contesto conversazionale potenziato
@@ -388,6 +400,143 @@ function extractCompositeFilters(text: string): EntityType {
 }
 
 // ═══════════════════════════════════════════════════════════════
+// 🆕 INTENT CHAINING - Più azioni in una query
+// ═══════════════════════════════════════════════════════════════
+
+// Pattern che indicano concatenazione di azioni
+const CHAIN_CONNECTORS = /\b(e poi|e dopo|poi|dopo|e anche|inoltre|e)\b/gi;
+
+// Pattern per riconoscere singole azioni
+const ACTION_PATTERNS: Array<{ pattern: RegExp; intent: IntentType; entityExtractor?: (text: string) => Partial<EntityType> }> = [
+  // Visite
+  {
+    pattern: /\b(aggiungi|registra|inserisci|salva)\s+(una\s+)?visita\b.*?\b(a|da|per)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i,
+    intent: 'visit_create',
+    entityExtractor: (t) => {
+      const m = t.match(/\b(?:a|da|per)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i);
+      return m?.[1] ? { clientName: capitalizeWords(m[1].trim()) } : {};
+    }
+  },
+  // Ordini
+  {
+    pattern: /\b(registra|inserisci|aggiungi)\s+(un\s+)?ordine\b/i,
+    intent: 'visit_create', // Usa visit_create con importo
+    entityExtractor: (t) => {
+      const amountMatch = t.match(/(\d+)\s*€/);
+      return amountMatch ? { amount: parseInt(amountMatch[1]) } : {};
+    }
+  },
+  // Info cliente
+  {
+    pattern: /\b(dimmi|mostra|info|informazioni|dettagli)\s+(?:tutto\s+)?(?:su|di|del|della)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i,
+    intent: 'client_detail',
+    entityExtractor: (t) => {
+      const m = t.match(/(?:su|di|del|della)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i);
+      return m?.[1] ? { clientName: capitalizeWords(m[1].trim()) } : {};
+    }
+  },
+  // Ultima visita
+  {
+    pattern: /\b(quando|ultima\s+volta)\b.*\b(visto|visitato)\b/i,
+    intent: 'visit_last',
+    entityExtractor: () => ({})
+  },
+  // Vendite cliente
+  {
+    pattern: /\b(quanto|vendite|fatturato)\b.*\b(venduto|fatturato)\b/i,
+    intent: 'sales_by_client',
+    entityExtractor: () => ({})
+  },
+  // Cerca cliente
+  {
+    pattern: /\b(cerca|trova|cerco)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i,
+    intent: 'client_search',
+    entityExtractor: (t) => {
+      const m = t.match(/(?:cerca|trova|cerco)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i);
+      return m?.[1] ? { clientName: capitalizeWords(m[1].trim()) } : {};
+    }
+  },
+  // Storico visite
+  {
+    pattern: /\b(storico|cronologia|tutte le visite)\b/i,
+    intent: 'visit_history',
+    entityExtractor: () => ({})
+  },
+  // Note
+  {
+    pattern: /\b(cosa sai|note|informazioni)\b.*\b(su|di)\b/i,
+    intent: 'notes_search',
+    entityExtractor: () => ({})
+  },
+];
+
+/**
+ * Verifica se una query contiene più azioni concatenate
+ */
+function isChainedQuery(text: string): boolean {
+  // Conta i connettori
+  const connectors = text.match(CHAIN_CONNECTORS);
+  if (!connectors || connectors.length === 0) return false;
+  
+  // Verifica che ci siano almeno 2 azioni riconoscibili
+  let actionCount = 0;
+  for (const ap of ACTION_PATTERNS) {
+    if (ap.pattern.test(text)) actionCount++;
+  }
+  
+  return actionCount >= 2;
+}
+
+/**
+ * Estrae le azioni concatenate da una query
+ * Es: "Cerca Rossi e dimmi quando l'ho visto" → [client_search, visit_last]
+ */
+function extractChainedIntents(text: string): Array<{ intent: IntentType; entities: Partial<EntityType> }> {
+  const results: Array<{ intent: IntentType; entities: Partial<EntityType> }> = [];
+  
+  // Split per connettori, ma mantieni il contesto
+  const parts = text.split(CHAIN_CONNECTORS).filter(p => p.trim().length > 3);
+  
+  // Se non abbiamo abbastanza parti, prova a estrarre direttamente
+  if (parts.length < 2) {
+    // Estrai tutte le azioni trovate nella query originale
+    for (const ap of ACTION_PATTERNS) {
+      if (ap.pattern.test(text)) {
+        const entities = ap.entityExtractor?.(text) ?? {};
+        results.push({ intent: ap.intent, entities });
+      }
+    }
+    return results;
+  }
+  
+  // Analizza ogni parte
+  for (const part of parts) {
+    const trimmed = part.trim();
+    if (trimmed.length < 3) continue;
+    
+    for (const ap of ACTION_PATTERNS) {
+      if (ap.pattern.test(trimmed)) {
+        const entities = ap.entityExtractor?.(trimmed) ?? {};
+        results.push({ intent: ap.intent, entities });
+        break; // Una sola azione per parte
+      }
+    }
+  }
+  
+  // Se prima parte ha un nome cliente, propagalo alle altre azioni senza nome
+  if (results.length > 1 && results[0].entities.clientName) {
+    const sharedClientName = results[0].entities.clientName;
+    for (let i = 1; i < results.length; i++) {
+      if (!results[i].entities.clientName) {
+        results[i].entities.clientName = sharedClientName;
+      }
+    }
+  }
+  
+  return results;
+}
+
+// ═══════════════════════════════════════════════════════════════
 
 // Estrae tutte le entità possibili da un testo
 function extractEntities(text: string, context?: ConversationContext): EntityType {
@@ -552,6 +701,28 @@ const INTENT_MATCHERS: IntentMatcher[] = [
         priority: 'low'
       });
       return suggestions;
+    }
+  },
+
+  // 🆕 INTENT CHAINING - Più azioni in una query
+  // Esempi: "Aggiungi visita a Rossi e registra ordine"
+  //         "Cerca Bianchi e dimmi quando l'ho visto"
+  //         "Trova cliente Milano e mostra vendite"
+  {
+    intent: 'chained_query',
+    patterns: [
+      // Pattern con connettori espliciti
+      /\b(aggiungi|registra|cerca|trova|dimmi|mostra)\b.*\b(e poi|poi|e dopo|e anche|e)\b.*\b(aggiungi|registra|dimmi|mostra|vendite|visite|ordine|info)/i,
+      // Pattern con "e" tra due verbi d'azione
+      /\b(cerca|trova)\b.*\b(e)\b.*\b(dimmi|mostra|quando)/i,
+      /\b(visita)\b.*\b(e)\b.*\b(ordine|registra)/i,
+    ],
+    confidence: 0.98, // Altissima priorità per catturare prima di altri intent
+    entityExtractor: (text) => {
+      if (!isChainedQuery(text)) return {};
+      const chainedIntents = extractChainedIntents(text);
+      if (chainedIntents.length < 2) return {};
+      return { chainedIntents };
     }
   },
 
@@ -1446,6 +1617,154 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   },
 ];
 
+// ==================== INTENT CHAINING ====================
+
+// Pattern per riconoscere congiunzioni che separano intent
+const CHAIN_SEPARATORS = [
+  /\s+e\s+poi\s+/i,           // "e poi"
+  /\s+poi\s+/i,               // "poi"
+  /\s+e\s+(?=dimmi|mostrami|cerca|aggiungi|registra|quant)/i,  // "e" seguito da verbo
+  /\s+dopo\s+/i,              // "dopo"
+  /,\s*(?=dimmi|mostrami|cerca|aggiungi|registra|quant)/i,     // virgola seguita da verbo
+];
+
+// Intent che possono essere concatenati (source → target)
+const CHAINABLE_INTENTS: Record<string, IntentType[]> = {
+  'client_search': ['client_detail', 'visit_last', 'visit_history', 'sales_by_client', 'notes_search'],
+  'client_detail': ['visit_last', 'visit_history', 'sales_by_client', 'notes_search'],
+  'visit_create': ['sales_summary', 'planning_today'],
+  'client_count': ['client_list', 'sales_summary'],
+  'visit_count': ['visit_today', 'sales_summary'],
+  'sales_summary': ['analytics_top_clients', 'analytics_top_products'],
+};
+
+/**
+ * Parsa query con intent multipli concatenati
+ * Es: "Cerca Rossi e dimmi quando l'ho visto" → client_search + visit_last
+ */
+function parseChainedIntents(
+  normalized: string,
+  raw: string,
+  context?: ConversationContext
+): ParsedIntent | null {
+  // Verifica se c'è un separatore
+  let parts: string[] = [];
+  let separatorFound = false;
+
+  for (const separator of CHAIN_SEPARATORS) {
+    if (separator.test(normalized)) {
+      parts = normalized.split(separator).map(p => p.trim()).filter(p => p.length > 0);
+      if (parts.length >= 2) {
+        separatorFound = true;
+        break;
+      }
+    }
+  }
+
+  if (!separatorFound || parts.length < 2) {
+    return null;
+  }
+
+  // Parsa ogni parte separatamente (senza ricorsione in chaining)
+  const parsedParts: Array<{ intent: IntentType; entities: EntityType; confidence: number }> = [];
+
+  for (const part of parts) {
+    const partResult = parseSingleIntent(part, context);
+    if (partResult && partResult.intent !== 'unknown') {
+      parsedParts.push({
+        intent: partResult.intent,
+        entities: partResult.entities,
+        confidence: partResult.confidence
+      });
+    }
+  }
+
+  // Se non abbiamo almeno 2 intent validi, non è un chaining
+  if (parsedParts.length < 2) {
+    return null;
+  }
+
+  // Verifica che il chaining sia valido (intent compatibili)
+  const primaryIntent = parsedParts[0];
+  const allowedChains = CHAINABLE_INTENTS[primaryIntent.intent] ?? [];
+  
+  // Filtra solo intent chainable
+  const validChains = parsedParts.slice(1).filter(p => 
+    allowedChains.includes(p.intent) || allowedChains.length === 0
+  );
+
+  if (validChains.length === 0) {
+    // Nessun chain valido, torna al parsing normale
+    return null;
+  }
+
+  // Propaga entità dal primo intent agli altri (es: clientName)
+  const propagatedChains = validChains.map(chain => {
+    const mergedEntities = { ...primaryIntent.entities };
+    // Mantieni entità specifiche del chain, ma eredita quelle mancanti
+    for (const [key, value] of Object.entries(chain.entities)) {
+      if (value !== undefined) {
+        (mergedEntities as any)[key] = value;
+      }
+    }
+    return {
+      ...chain,
+      entities: mergedEntities
+    };
+  });
+
+  // Costruisci il risultato con chaining
+  return {
+    intent: primaryIntent.intent,
+    confidence: primaryIntent.confidence * 0.95, // Leggero penalty per complessità
+    entities: primaryIntent.entities,
+    raw,
+    normalized,
+    needsConfirmation: false,
+    chainedIntents: propagatedChains,
+    suggestedResponse: undefined, // Il planner gestirà la risposta combinata
+  };
+}
+
+/**
+ * Parsa un singolo intent (usato internamente per chaining)
+ */
+function parseSingleIntent(
+  text: string,
+  context?: ConversationContext
+): { intent: IntentType; entities: EntityType; confidence: number } | null {
+  const normalized = normalize(text);
+  const baseEntities = extractEntities(normalized, context);
+
+  for (const matcher of INTENT_MATCHERS) {
+    for (const pattern of matcher.patterns) {
+      const match = normalized.match(pattern);
+      if (match) {
+        const matcherEntities = matcher.entityExtractor?.(normalized, match) ?? {};
+        const entities = { ...baseEntities, ...matcherEntities };
+
+        // Eredita dal contesto
+        if (!entities.clientName && context?.focusClient) {
+          const clientIntents: IntentType[] = [
+            'visit_history', 'visit_last', 'sales_by_client', 'client_detail', 'notes_search'
+          ];
+          if (clientIntents.includes(matcher.intent)) {
+            entities.clientName = context.focusClient.name;
+          }
+        }
+
+        return {
+          intent: matcher.intent,
+          entities,
+          confidence: matcher.confidence
+        };
+      }
+    }
+  }
+
+  return null;
+}
+
 // ==================== PARSER PRINCIPALE ====================
 
 export function parseIntent(
@@ -1454,6 +1773,13 @@ export function parseIntent(
 ): ParsedIntent {
   const raw = input;
   const normalized = normalize(input);
+
+  // 🆕 INTENT CHAINING - Riconosci query con più comandi
+  // Es: "Cerca Rossi e dimmi quando l'ho visto"
+  const chainedResult = parseChainedIntents(normalized, raw, context);
+  if (chainedResult) {
+    return chainedResult;
+  }
 
   // 0. Fast-path per input molto brevi (probabili follow-up o nomi)
   if (normalized.length <= 3 && context?.focusClient) {
