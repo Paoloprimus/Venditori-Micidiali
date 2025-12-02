@@ -16,6 +16,7 @@ type PlainVisit = {
   durata: number | null;
   importo_vendita: number | null;
   note: string;
+  prodotti_discussi: string | null;  // 🆕 Prodotti discussi/venduti
   created_at: string;
 };
 
@@ -44,6 +45,14 @@ export default function VisitsPage(): JSX.Element {
   const [tempImporto, setTempImporto] = useState<string>('');
 
   const [pass, setPass] = useState<string>('');
+
+  // 🆕 STATO PER MODAL ELIMINAZIONE VISITA
+  const [deleteModal, setDeleteModal] = useState<{open: boolean, visitId: string | null, clientName: string, dataVisita: string}>({
+    open: false,
+    visitId: null,
+    clientName: '',
+    dataVisita: ''
+  });
 
   function handleSortClick(key: SortKey) {
     if (sortBy === key) {
@@ -171,8 +180,9 @@ export default function VisitsPage(): JSX.Element {
                 name_iv: hexToBase64(account.name_iv),
               };
 
+              // 🔧 FIX: Usa account.id come AAD per decifratura corretta
               const decAny = await (crypto as any).decryptFields(
-                "table:accounts", "accounts", '', accountForDecrypt, ["name"]
+                "table:accounts", "accounts", account.id, accountForDecrypt, ["name"]
               );
               const dec = toObj(decAny);
               clienteNome = String(dec.name ?? 'Cliente Sconosciuto');
@@ -191,6 +201,7 @@ export default function VisitsPage(): JSX.Element {
             durata: r.durata,
             importo_vendita: r.importo_vendita,
             note: r.notes || '',
+            prodotti_discussi: r.prodotti_discussi || null,  // 🆕
             created_at: r.created_at,
           });
         } catch (e) {
@@ -286,6 +297,37 @@ export default function VisitsPage(): JSX.Element {
     return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
+  // 🆕 APRI MODAL ELIMINAZIONE
+  function openDeleteModal(visitId: string, clientName: string, dataVisita: string) {
+    setDeleteModal({ open: true, visitId, clientName, dataVisita: formatDate(dataVisita) });
+  }
+
+  // 🆕 CHIUDI MODAL ELIMINAZIONE
+  function closeDeleteModal() {
+    setDeleteModal({ open: false, visitId: null, clientName: '', dataVisita: '' });
+  }
+
+  // 🆕 CONFERMA ELIMINAZIONE VISITA
+  async function confirmDeleteVisit() {
+    if (!deleteModal.visitId) return;
+    
+    try {
+      const { error } = await supabase
+        .from('visits')
+        .delete()
+        .eq('id', deleteModal.visitId);
+      
+      if (error) throw error;
+      
+      // Rimuovi dalla lista locale
+      setRows(prev => prev.filter(r => r.id !== deleteModal.visitId));
+      closeDeleteModal();
+    } catch (e: any) {
+      console.error('[/visits] delete error:', e);
+      alert(`Errore durante l'eliminazione: ${e.message}`);
+    }
+  }
+
   if (!authChecked) {
     return (<div style={{ padding: 20, textAlign: 'center' }}>Caricamento...</div>);
   }
@@ -294,7 +336,25 @@ export default function VisitsPage(): JSX.Element {
     return (<div style={{ padding: 20, textAlign: 'center' }}>Non autenticato. <a href="/login">Login</a></div>);
   }
 
+  // 🔧 FIX: Mostra loader durante auto-unlock, form SOLO se non c'è passphrase
   if (!actuallyReady || !crypto) {
+    const hasPassInStorage = typeof window !== 'undefined' && 
+      (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
+    
+    // Se c'è passphrase in storage, mostra loader (auto-unlock in corso)
+    if (hasPassInStorage) {
+      return (
+        <div style={{ padding: 24, textAlign: 'center', marginTop: 100 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔓</div>
+          <div style={{ fontSize: 18, color: '#6b7280' }}>Sblocco dati in corso...</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
+            Decifratura automatica attiva
+          </div>
+        </div>
+      );
+    }
+    
+    // Nessuna passphrase → mostra form
     return (
       <div style={{ padding: 24, maxWidth: 448, margin: '0 auto' }}>
         <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>🔐 Sblocca i dati cifrati</h2>
@@ -425,7 +485,9 @@ export default function VisitsPage(): JSX.Element {
                     Importo {sortBy === 'importo_vendita' && (sortDir === 'asc' ? '↑' : '↓')}
                   </th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Durata</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Prodotti</th>
                   <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Note</th>
+                  <th style={{ padding: '12px 8px', textAlign: 'center', fontWeight: 600 }}>Azioni</th>
                 </tr>
               </thead>
               <tbody>
@@ -437,31 +499,93 @@ export default function VisitsPage(): JSX.Element {
                         {v.tipo === 'visita' ? '🚗 Visita' : '📞 Chiamata'}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 8px', fontWeight: 500 }}>{v.cliente_nome}</td>
+                    <td style={{ padding: '12px 8px', fontWeight: 500 }}>
+                      <a 
+                        href={`/clients/${v.account_id}`}
+                        style={{ color: '#2563eb', textDecoration: 'none' }}
+                        title="Apri scheda cliente"
+                      >
+                        {v.cliente_nome}
+                      </a>
+                    </td>
                     <td style={{ padding: '12px 8px', color: '#6b7280' }}>{v.esito}</td>
                     <td style={{ padding: '12px 8px', textAlign: 'right' }}>
                       {editingImporto === v.id ? (
-                        <input
-                          type="number"
-                          step="0.01"
-                          value={tempImporto}
-                          onChange={(e) => setTempImporto(e.target.value)}
-                          onBlur={() => updateImporto(v.id, tempImporto)}
-                          onKeyDown={(e) => { if (e.key === 'Enter') updateImporto(v.id, tempImporto); if (e.key === 'Escape') setEditingImporto(null); }}
-                          autoFocus
-                          style={{ width: 80, padding: '4px 6px', border: '1px solid #2563eb', borderRadius: 4, fontSize: 13, textAlign: 'right' }}
-                        />
+                        <div style={{ display: 'flex', gap: 4, alignItems: 'center', justifyContent: 'flex-end' }}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            value={tempImporto}
+                            onChange={(e) => setTempImporto(e.target.value)}
+                            onKeyDown={(e) => { 
+                              if (e.key === 'Enter' && tempImporto !== String(v.importo_vendita || '0')) updateImporto(v.id, tempImporto); 
+                              if (e.key === 'Escape') setEditingImporto(null); 
+                            }}
+                            autoFocus
+                            style={{ width: 70, padding: '4px 6px', border: '1px solid #2563eb', borderRadius: 4, fontSize: 13, textAlign: 'right' }}
+                          />
+                          <button
+                            onClick={() => updateImporto(v.id, tempImporto)}
+                            disabled={tempImporto === String(v.importo_vendita || '0')}
+                            title="Conferma"
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: 4,
+                              border: 'none',
+                              background: tempImporto !== String(v.importo_vendita || '0') ? '#10b981' : '#d1d5db',
+                              color: 'white',
+                              cursor: tempImporto !== String(v.importo_vendita || '0') ? 'pointer' : 'not-allowed',
+                              fontSize: 14,
+                            }}
+                          >
+                            ✓
+                          </button>
+                          <button
+                            onClick={() => setEditingImporto(null)}
+                            title="Annulla"
+                            style={{
+                              padding: '4px 8px',
+                              borderRadius: 4,
+                              border: 'none',
+                              background: '#ef4444',
+                              color: 'white',
+                              cursor: 'pointer',
+                              fontSize: 14,
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </div>
                       ) : (
                         <span
                           onClick={() => { setEditingImporto(v.id); setTempImporto(String(v.importo_vendita || '0')); }}
                           style={{ cursor: 'pointer', color: v.importo_vendita ? '#059669' : '#9ca3af', fontWeight: v.importo_vendita ? 500 : 400 }}
+                          title="Clicca per modificare"
                         >
                           {v.importo_vendita ? `€${v.importo_vendita.toFixed(2)}` : '—'}
                         </span>
                       )}
                     </td>
                     <td style={{ padding: '12px 8px', color: '#6b7280' }}>{v.durata ? `${v.durata} min` : '—'}</td>
+                    <td style={{ padding: '12px 8px', color: '#6b7280', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={v.prodotti_discussi || ''}>
+                      {v.prodotti_discussi ? `📦 ${v.prodotti_discussi}` : '—'}
+                    </td>
                     <td style={{ padding: '12px 8px', color: '#6b7280', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v.note || '—'}</td>
+                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                      <button
+                        onClick={() => openDeleteModal(v.id, v.cliente_nome, v.data_visita)}
+                        style={{ 
+                          background: 'none', 
+                          border: 'none', 
+                          cursor: 'pointer',
+                          fontSize: 16,
+                          padding: 4,
+                        }}
+                        title="Elimina visita"
+                      >
+                        🗑️
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -469,6 +593,79 @@ export default function VisitsPage(): JSX.Element {
           </div>
         )}
       </div>
+
+      {/* 🆕 MODAL CONFERMA ELIMINAZIONE VISITA */}
+      {deleteModal.open && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+          onClick={closeDeleteModal}
+        >
+          <div 
+            style={{
+              background: 'white',
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 400,
+              width: '90%',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>⚠️</div>
+            <h3 style={{ fontSize: 18, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
+              Eliminare questa visita?
+            </h3>
+            <p style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 16 }}>
+              Visita del <strong>{deleteModal.dataVisita}</strong> a:
+            </p>
+            <p style={{ fontSize: 16, fontWeight: 600, textAlign: 'center', marginBottom: 16, color: '#111827' }}>
+              {deleteModal.clientName}
+            </p>
+            <p style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', marginBottom: 24 }}>
+              ⚠️ Questa azione è irreversibile.
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={closeDeleteModal}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Annulla
+              </button>
+              <button
+                onClick={confirmDeleteVisit}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                🗑️ Elimina
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

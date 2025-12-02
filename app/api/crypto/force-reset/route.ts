@@ -22,7 +22,16 @@ export async function POST(req: NextRequest) {
 
     const supabase = getSupabaseAdmin();
 
-    // 1) Cancella eventuali chiavi per quello user (DEK/BI per gli scope)
+    // 1) ⚠️ PRIMA cancella i dati cifrati (altrimenti diventano irrecuperabili!)
+    const delAccounts = await supabase
+      .from("accounts")
+      .delete()
+      .eq("user_id", userId)
+      .select("id");
+    
+    console.log(`[force-reset] Cancellati ${delAccounts.data?.length || 0} accounts per user ${userId}`);
+    
+    // 2) Cancella eventuali chiavi per quello user (DEK/BI per gli scope)
     const delKeys = await supabase
       .from("encryption_keys")
       .delete()
@@ -36,7 +45,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 2) Azzera i campi della Master Key nel profilo (MK + KDF)
+    // 3) Azzera i campi della Master Key nel profilo (MK + KDF)
     const upd = await supabase
       .from("profiles")
       .update({
@@ -56,7 +65,8 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
-      removed: Array.isArray(delKeys.data) ? delKeys.data.length : null,
+      accounts_deleted: Array.isArray(delAccounts.data) ? delAccounts.data.length : 0,
+      keys_removed: Array.isArray(delKeys.data) ? delKeys.data.length : null,
       profile_reset: true,
       version: VERSION,
     });

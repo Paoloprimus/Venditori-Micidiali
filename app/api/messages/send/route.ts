@@ -1,638 +1,687 @@
 // app/api/messages/send/route.ts
+// VERSIONE 3.0 - Function Calling (conversazione naturale)
+
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
-import { encryptText, decryptText } from "@/lib/crypto/serverEncryption";
-
-// ===== IMPORT SISTEMA TEXT-TO-SQL =====
-import { generateSQL } from "@/lib/text-to-sql";
-import { validateSQL, sanitizeSQL } from "@/lib/sql-validator";
-import { formatResponse } from "@/lib/response-templates";
-import { generateEmbedding, findSimilarQuery, saveCacheEntry } from "@/lib/cache";
-// ===== FINE IMPORT =====
+import { encryptText } from "@/lib/crypto/serverEncryption";
 
 export const runtime = "nodejs";
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
+const MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
+const CONVERSATIONS_TABLE = "conversations";
+const MESSAGES_TABLE = "messages";
 
-// Config base
-const MODEL  = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
-const SYSTEM = process.env.OPENAI_SYSTEM_PROMPT || "Rispondi in italiano in modo chiaro e conciso.";
+// ==================== TOOLS DEFINITIONS ====================
 
-// Tabelle
-const CONVERSATIONS_TABLE = process.env.DB_CONVERSATIONS_TABLE || "conversations";
-const MESSAGES_TABLE      = process.env.DB_MESSAGES_TABLE || "messages";
-
-// ===== TYPES =====
-
-interface PreviousContext {
-  userQuery: string;
-  queryPlan: any;
-  resultIds?: string[];
-  resultCount: number;
-  timestamp: string;
-}
-
-// ===== FUNZIONI HELPER PER CONTESTO =====
-
-/**
- * Verifica se query è fuori ambito business (out of scope)
- */
-function isOutOfScope(query: string): boolean {
-  const normalized = query.toLowerCase();
-  
-  // Pattern out-of-scope (non business)
-  const outOfScopePatterns = [
-    /\b(meteo|tempo|previsioni)\b/,
-    /\b(ricetta|cucina|ingredienti)\b/,
-    /\b(sport|calcio|partita)\b/,
-    /\b(notizie|news|politica)\b/,
-    /\b(film|cinema|serie tv)\b/,
-    /\b(musica|canzone|artista)\b/,
-    /\b(viaggio|volo|hotel|vacanza)\b/,
-    /\b(salute|malattia|sintomi|medico)\b/
-  ];
-  
-  return outOfScopePatterns.some(pattern => pattern.test(normalized));
-}
-
-/**
- * Risposta per query out of scope
- */
-function getOutOfScopeResponse(): string {
-  return 'Non posso aiutarti con questa richiesta. Sono specializzato nella gestione del tuo portafoglio commerciale HoReCa. Posso assisterti con clienti, visite, promemoria, statistiche e pianificazione. Come posso aiutarti?';
-}
-
-// ===== FINE FUNZIONI HELPER =====
-
-/**
- * Marker invisibile per salvare contesto nel messaggio
- */
-const CONTEXT_MARKER_START = '\n\n<!--SEMANTIC_CONTEXT:';
-const CONTEXT_MARKER_END = '-->';
-
-/**
- * Crea marker contesto da aggiungere al messaggio assistant
- */
-function createContextMarker(context: PreviousContext): string {
-  const contextJson = JSON.stringify(context);
-  return `${CONTEXT_MARKER_START}${contextJson}${CONTEXT_MARKER_END}`;
-}
-
-/**
- * Estrae contesto dall'ultimo messaggio con marker
- */
-function extractContextFromMessage(messageBody: string): PreviousContext | undefined {
-  try {
-    const startIdx = messageBody.lastIndexOf(CONTEXT_MARKER_START);
-    if (startIdx === -1) return undefined;
-    
-    const endIdx = messageBody.indexOf(CONTEXT_MARKER_END, startIdx);
-    if (endIdx === -1) return undefined;
-    
-    const contextJson = messageBody.substring(
-      startIdx + CONTEXT_MARKER_START.length, 
-      endIdx
-    );
-    
-    return JSON.parse(contextJson);
-  } catch (error) {
-    console.error('[extractContext] Parse error:', error);
-    return undefined;
-  }
-}
-
-/**
- * Recupera contesto dalla conversazione recente
- */
-async function getPreviousContext(
-  conversationId: string, 
-  supabase: any
-): Promise<PreviousContext | undefined> {
-  try {
-    // Prendi ultimi 5 messaggi assistant
-    const { data: messages, error } = await supabase
-      .from(MESSAGES_TABLE)
-      .select('body_enc, body_iv, body_tag, created_at')
-      .eq('conversation_id', conversationId)
-      .eq('role', 'assistant')
-      .order('created_at', { ascending: false })
-      .limit(5);
-    
-    if (error || !messages || messages.length === 0) {
-      return undefined;
-    }
-    
-    // Cerca marker nell'ultimo messaggio assistant
-    for (const msg of messages) {
-      try {
-        const decrypted = decryptText(msg.body_enc, msg.body_iv, msg.body_tag);
-        const context = extractContextFromMessage(decrypted);
-        if (context) {
-          console.log('[getPreviousContext] Found context from:', context.userQuery);
-          return context;
+const tools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
+  {
+    type: "function",
+    function: {
+      name: "search_clients",
+      description: "Cerca clienti nel database. Usa per domande su clienti, conteggi, liste.",
+      parameters: {
+        type: "object",
+        properties: {
+          city: { type: "string", description: "Filtra per città (es. Verona, Negrar)" },
+          tipo_locale: { type: "string", description: "Tipo: bar, ristorante, pizzeria, hotel, etc." },
+          notes_contain: { type: "string", description: "Cerca testo nelle note (es. figli, pagamento, interessi)" },
+          limit: { type: "number", description: "Max risultati (default 10, max 100)" },
+          count_only: { type: "boolean", description: "Se true, restituisce solo il conteggio" }
         }
-      } catch (decryptError) {
-        // Ignora errori di decriptazione, passa al messaggio successivo
-        continue;
       }
     }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_in_notes",
+      description: "Cerca informazioni specifiche nelle note dei clienti. Usa per domande tipo 'ha figli?', 'preferenze pagamento', 'interessi', etc.",
+      parameters: {
+        type: "object",
+        properties: {
+          search_text: { type: "string", description: "Cosa cercare nelle note (es. figli, contanti, allergico)" },
+          client_city: { type: "string", description: "Opzionale: filtra per città del cliente" }
+        },
+        required: ["search_text"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_visits",
+      description: "Ottieni visite/attività. Usa per storico visite, ultime visite, visite di oggi.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_id: { type: "string", description: "ID cliente specifico (opzionale)" },
+          period: { type: "string", enum: ["today", "week", "month", "year"], description: "Periodo" },
+          limit: { type: "number", description: "Max risultati (default 10)" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_sales_summary",
+      description: "Riepilogo vendite/fatturato per periodo.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["today", "week", "month", "year"], description: "Periodo (default: month)" },
+          client_id: { type: "string", description: "Solo per un cliente specifico (opzionale)" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "navigate_to_page",
+      description: "Genera link per aprire una pagina dell'app (clienti, visite, prodotti, etc.)",
+      parameters: {
+        type: "object",
+        properties: {
+          page: { type: "string", enum: ["clients", "visits", "products", "documents", "settings"], description: "Pagina da aprire" }
+        },
+        required: ["page"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_visit_by_position",
+      description: "Ottieni info su una visita in base alla posizione nel giorno (primo, secondo, terzo cliente visitato). Usa per domande tipo 'il secondo cliente di oggi', 'il primo che ho visto ieri'.",
+      parameters: {
+        type: "object",
+        properties: {
+          day: { type: "string", enum: ["today", "yesterday", "tomorrow"], description: "Giorno di riferimento" },
+          position: { type: "number", description: "Posizione: 1 = primo, 2 = secondo, etc." }
+        },
+        required: ["day", "position"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "search_visits_by_product",
+      description: "Cerca visite in cui sono stati discussi/venduti specifici prodotti. Usa per domande tipo 'chi ha comprato cornetti', 'a chi ho venduto birra'.",
+      parameters: {
+        type: "object",
+        properties: {
+          product: { type: "string", description: "Prodotto cercato (es. cornetti, birra, caffè)" },
+          day: { type: "string", enum: ["today", "yesterday", "week", "month"], description: "Periodo (opzionale)" }
+        },
+        required: ["product"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "generate_pdf_report",
+      description: "Genera un report PDF. Usa quando l'utente chiede di salvare, esportare, o generare un PDF/report.",
+      parameters: {
+        type: "object",
+        properties: {
+          report_type: { type: "string", enum: ["clienti", "visite", "vendite"], description: "Tipo di report" },
+          city_filter: { type: "string", description: "Filtra per città (opzionale)" },
+          tipo_filter: { type: "string", description: "Filtra per tipo locale (opzionale)" },
+          period: { type: "string", enum: ["today", "week", "month", "year"], description: "Periodo per report visite/vendite" }
+        },
+        required: ["report_type"]
+      }
+    }
+  }
+];
+
+// ==================== TOOL IMPLEMENTATIONS ====================
+
+async function executeFunction(
+  name: string, 
+  args: Record<string, any>, 
+  userId: string,
+  supabase: any
+): Promise<any> {
+  
+  switch (name) {
+    case "search_clients": {
+      let query = supabase
+        .from("accounts")
+        .select(args.count_only ? "id" : "id, city, tipo_locale, notes")
+        .eq("user_id", userId);
+      
+      // "Inizia con" per evitare falsi positivi (es: "Verona" non trova "Villafranca di Verona")
+      if (args.city) query = query.ilike("city", `${args.city}%`);
+      if (args.tipo_locale) query = query.ilike("tipo_locale", `%${args.tipo_locale}%`);
+      if (args.notes_contain) query = query.ilike("notes", `%${args.notes_contain}%`);
+      
+      const limit = Math.min(args.limit || 10, 100);
+      query = query.limit(limit);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      if (args.count_only) {
+        return { count: data?.length || 0, ids: data?.map((d: any) => d.id) || [] };
+      }
+      return { clients: data || [], count: data?.length || 0 };
+    }
     
-    return undefined;
-  } catch (error) {
-    console.error('[getPreviousContext] Error:', error);
-    return undefined;
+    case "search_in_notes": {
+      let query = supabase
+        .from("accounts")
+        .select("id, city, tipo_locale, notes")
+        .eq("user_id", userId)
+        .ilike("notes", `%${args.search_text}%`);
+      
+      if (args.client_city) query = query.ilike("city", `${args.client_city}%`);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        return { found: false, message: `Nessuna nota trovata con "${args.search_text}"` };
+      }
+      
+      // Estrai snippet rilevanti dalle note
+      const results = data.map((c: any) => {
+        const notes = c.notes || "";
+        // Trova la frase che contiene il termine cercato
+        const sentences = notes.split(/[.!?]+/);
+        const relevant = sentences.find((s: string) => 
+          s.toLowerCase().includes(args.search_text.toLowerCase())
+        );
+        return {
+          client_id: c.id,
+          city: c.city,
+          tipo: c.tipo_locale,
+          snippet: relevant?.trim() || notes.substring(0, 100)
+        };
+      });
+      
+      return { found: true, results, count: results.length };
+    }
+    
+    case "get_visits": {
+      let query = supabase
+        .from("visits")
+        .select("id, account_id, data_visita, tipo, esito, importo_vendita, prodotti_discussi")
+        .eq("user_id", userId)
+        .order("data_visita", { ascending: false });
+      
+      if (args.client_id) query = query.eq("account_id", args.client_id);
+      
+      if (args.period) {
+        const now = new Date();
+        let fromDate: Date;
+        switch (args.period) {
+          case "today": fromDate = new Date(now.toDateString()); break;
+          case "week": fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); break;
+          case "month": fromDate = new Date(now.getFullYear(), now.getMonth(), 1); break;
+          case "year": fromDate = new Date(now.getFullYear(), 0, 1); break;
+          default: fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        }
+        query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+      }
+      
+      const limit = Math.min(args.limit || 10, 50);
+      query = query.limit(limit);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      return { visits: data || [], count: data?.length || 0 };
+    }
+    
+    case "get_sales_summary": {
+      const now = new Date();
+      let fromDate: Date;
+      let periodLabel: string;
+      
+      switch (args.period || "month") {
+        case "today": 
+          fromDate = new Date(now.toDateString()); 
+          periodLabel = "oggi";
+          break;
+        case "week": 
+          fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          periodLabel = "questa settimana";
+          break;
+        case "year": 
+          fromDate = new Date(now.getFullYear(), 0, 1);
+          periodLabel = "quest'anno";
+          break;
+        default: 
+          fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodLabel = "questo mese";
+      }
+      
+      let query = supabase
+        .from("visits")
+        .select("importo_vendita")
+        .eq("user_id", userId)
+        .gte("data_visita", fromDate.toISOString().split('T')[0]);
+      
+      if (args.client_id) query = query.eq("account_id", args.client_id);
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      
+      const total = (data || []).reduce((sum: number, v: any) => sum + (v.importo_vendita || 0), 0);
+      const orderCount = (data || []).filter((v: any) => v.importo_vendita > 0).length;
+      
+      return { total, orderCount, period: periodLabel };
+    }
+    
+    case "navigate_to_page": {
+      const pages: Record<string, { url: string; name: string }> = {
+        clients: { url: "/clients", name: "Lista Clienti" },
+        visits: { url: "/visits", name: "Lista Visite" },
+        products: { url: "/products", name: "Prodotti" },
+        documents: { url: "/documents", name: "Documenti" },
+        settings: { url: "/settings", name: "Impostazioni" }
+      };
+      return pages[args.page] || { url: "/", name: "Home" };
+    }
+    
+    case "get_visit_by_position": {
+      const now = new Date();
+      let targetDate: string;
+      
+      switch (args.day) {
+        case "yesterday":
+          const yesterday = new Date(now);
+          yesterday.setDate(yesterday.getDate() - 1);
+          targetDate = yesterday.toISOString().split('T')[0];
+          break;
+        case "tomorrow":
+          const tomorrow = new Date(now);
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          targetDate = tomorrow.toISOString().split('T')[0];
+          break;
+        default: // today
+          targetDate = now.toISOString().split('T')[0];
+      }
+      
+      // Prendi tutte le visite del giorno ordinate per orario
+      const { data, error } = await supabase
+        .from("visits")
+        .select("id, account_id, data_visita, tipo, esito, importo_vendita, prodotti_discussi, notes, created_at")
+        .eq("user_id", userId)
+        .eq("data_visita", targetDate)
+        .order("created_at", { ascending: true });
+      
+      if (error) throw error;
+      if (!data || data.length === 0) {
+        return { found: false, message: `Nessuna visita trovata per ${args.day === 'yesterday' ? 'ieri' : args.day === 'tomorrow' ? 'domani' : 'oggi'}` };
+      }
+      
+      const position = args.position - 1; // 0-indexed
+      if (position < 0 || position >= data.length) {
+        return { found: false, message: `Hai solo ${data.length} visite ${args.day === 'yesterday' ? 'ieri' : args.day === 'tomorrow' ? 'domani' : 'oggi'}` };
+      }
+      
+      const visit = data[position];
+      
+      // Prendi anche le note del cliente
+      const { data: clientData } = await supabase
+        .from("accounts")
+        .select("city, tipo_locale, notes")
+        .eq("id", visit.account_id)
+        .single();
+      
+      return {
+        found: true,
+        position: args.position,
+        day: args.day,
+        visit: {
+          client_id: visit.account_id,
+          client_city: clientData?.city,
+          client_tipo: clientData?.tipo_locale,
+          client_notes: clientData?.notes,
+          visit_tipo: visit.tipo,
+          esito: visit.esito,
+          importo: visit.importo_vendita,
+          prodotti: visit.prodotti_discussi,
+          visit_notes: visit.notes
+        }
+      };
+    }
+    
+    case "search_visits_by_product": {
+      let query = supabase
+        .from("visits")
+        .select("id, account_id, data_visita, tipo, esito, importo_vendita, prodotti_discussi")
+        .eq("user_id", userId)
+        .ilike("prodotti_discussi", `%${args.product}%`)
+        .order("data_visita", { ascending: false });
+      
+      if (args.day) {
+        const now = new Date();
+        let fromDate: Date;
+        switch (args.day) {
+          case "today":
+            fromDate = new Date(now.toDateString());
+            break;
+          case "yesterday":
+            fromDate = new Date(now);
+            fromDate.setDate(fromDate.getDate() - 1);
+            query = query.eq("data_visita", fromDate.toISOString().split('T')[0]);
+            break;
+          case "week":
+            fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+            break;
+          default:
+            fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+            query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+        }
+      }
+      
+      const { data, error } = await query.limit(10);
+      if (error) throw error;
+      
+      if (!data || data.length === 0) {
+        return { found: false, message: `Nessuna visita trovata con prodotto "${args.product}"` };
+      }
+      
+      return {
+        found: true,
+        product: args.product,
+        visits: data.map((v: any) => ({
+          client_id: v.account_id,
+          date: v.data_visita,
+          importo: v.importo_vendita,
+          prodotti: v.prodotti_discussi
+        })),
+        count: data.length
+      };
+    }
+    
+    case "generate_pdf_report": {
+      // Restituisce un comando speciale che il frontend intercetterà
+      const filters: Record<string, string> = {};
+      if (args.city_filter) filters.city = args.city_filter;
+      if (args.tipo_filter) filters.tipo = args.tipo_filter;
+      if (args.period) filters.period = args.period;
+      
+      return {
+        action: "GENERATE_PDF",
+        report_type: args.report_type,
+        filters,
+        // Il frontend userà questi dati per generare il PDF
+      };
+    }
+    
+    default:
+      return { error: "Funzione non trovata" };
   }
 }
 
-/**
- * Estrae ID risultati dalla query result
- */
-function extractResultIds(data: any[]): string[] {
-  if (!data || data.length === 0) return [];
-  
-  // Cerca campo "id" o "account_id"
-  return data
-    .map(row => row.id || row.account_id)
-    .filter(id => id && typeof id === 'string')
-    .slice(0, 100); // Max 100 ID per evitare marker troppo lunghi
+// ==================== FORMAT RESPONSE ====================
+
+function formatToolResult(name: string, result: any): string {
+  switch (name) {
+    case "search_clients": {
+      if (result.count === 0) return "Nessun cliente trovato.";
+      if (result.clients) {
+        // Lista clienti
+        const lines = result.clients.slice(0, 10).map((c: any, i: number) => {
+          let line = `${i + 1}. [CLIENT:${c.id}]`;
+          if (c.tipo_locale) line += ` - ${c.tipo_locale}`;
+          if (c.city) line += ` - ${c.city}`;
+          return line;
+        });
+        return lines.join("\n") + (result.count > 10 ? `\n\n...e altri ${result.count - 10}` : "");
+      }
+      // Solo count
+      return `${result.count}`;
+    }
+    
+    case "get_visits": {
+      if (result.count === 0) return "Nessuna visita trovata.";
+      const lines = result.visits.slice(0, 10).map((v: any, i: number) => {
+        const data = new Date(v.data_visita).toLocaleDateString("it-IT");
+        let line = `${i + 1}. ${data} - [CLIENT:${v.account_id}] - ${v.tipo || "visita"}`;
+        if (v.importo_vendita) line += ` - €${v.importo_vendita}`;
+        return line;
+      });
+      return lines.join("\n");
+    }
+    
+    case "get_sales_summary": {
+      if (result.total === 0) return `Nessuna vendita ${result.period}.`;
+      return `**€${result.total.toLocaleString("it-IT")}** ${result.period} (${result.orderCount} ordini)`;
+    }
+    
+    case "navigate_to_page": {
+      return `📂 **${result.name}**\n\n👉 [Clicca qui per aprire](${result.url})`;
+    }
+    
+    case "search_in_notes": {
+      if (!result.found) return result.message;
+      const lines = result.results.slice(0, 5).map((r: any, i: number) => {
+        let line = `${i + 1}. [CLIENT:${r.client_id}]`;
+        if (r.city) line += ` (${r.city})`;
+        line += `\n   📝 "${r.snippet}"`;
+        return line;
+      });
+      return lines.join("\n\n");
+    }
+    
+    case "get_visit_by_position": {
+      if (!result.found) return result.message;
+      const v = result.visit;
+      const dayLabel = result.day === 'yesterday' ? 'ieri' : result.day === 'tomorrow' ? 'domani' : 'oggi';
+      let text = `**Visita #${result.position} di ${dayLabel}:**\n\n`;
+      text += `👤 [CLIENT:${v.client_id}]`;
+      if (v.client_city) text += ` - ${v.client_city}`;
+      if (v.client_tipo) text += ` (${v.client_tipo})`;
+      text += '\n';
+      if (v.esito) text += `📋 Esito: ${v.esito}\n`;
+      if (v.importo) text += `💰 Importo: €${v.importo}\n`;
+      if (v.prodotti) text += `📦 Prodotti: ${v.prodotti}\n`;
+      if (v.client_notes) text += `\n📝 Note cliente: ${v.client_notes}`;
+      return text;
+    }
+    
+    case "search_visits_by_product": {
+      if (!result.found) return result.message;
+      let text = `Trovate **${result.count}** visite con "${result.product}":\n\n`;
+      result.visits.slice(0, 5).forEach((v: any, i: number) => {
+        const date = new Date(v.date).toLocaleDateString('it-IT');
+        text += `${i + 1}. [CLIENT:${v.client_id}] - ${date}`;
+        if (v.importo) text += ` - €${v.importo}`;
+        text += '\n';
+      });
+      return text;
+    }
+    
+    case "generate_pdf_report": {
+      // Marker speciale che il frontend intercetta
+      const filterDesc = Object.entries(result.filters || {})
+        .map(([k, v]) => `${k}: ${v}`)
+        .join(', ') || 'nessuno';
+      
+      return `[PDF_COMMAND:${JSON.stringify(result)}]\n\n📄 **Report PDF pronto!**\n\nTipo: ${result.report_type}\nFiltri: ${filterDesc}\n\n👉 Clicca il pulsante qui sotto per scaricare il PDF.`;
+    }
+    
+    default:
+      return JSON.stringify(result);
+  }
 }
 
-/**
- * Determina se la query è NUOVA (standalone) o FOLLOW-UP (dipende da contesto)
- * 
- * @param query - Query utente
- * @returns true se è nuova (ignora contesto), false se è follow-up (usa contesto)
- */
-function isNewQuery(query: string): boolean {
-  const normalized = query.toLowerCase().trim();
-  
-  // 🎯 PATTERN FOLLOW-UP (dipendono da contesto precedente)
-  const followUpPatterns = [
-    /^mostra dettagli?$/i,
-    /^elenca( tutti)?$/i,
-    /^mostra( tutto)?$/i,
-    /^solo (quelli|quegli|quei|bar|ristoranti|pizzerie|clienti)/i,
-    /^filtra per/i,
-    /^ordina per/i,
-    /^(i )?primi? \d+$/i,
-    /^ultim[io] \d+$/i,
-    /^con (fatturato|note|ordine|visita|importo)/i,
-    /^aggiungi (fatturato|note|ordine|visita)/i,
-    /^anche (fatturato|note|ordine|visita)/i,
-    /^dimmi (il|i|le) (fatturato|note|ordine|visita)/i,
-    /^mostrami (anche|pure)/i
-  ];
-  
-  // Se matcha pattern follow-up → NON è nuova
-  if (followUpPatterns.some(pattern => pattern.test(normalized))) {
-    return false;
-  }
-  
-  // 🎯 PATTERN QUERY NUOVE (standalone, complete)
-  // Query che iniziano con interrogativi o verbi "informativi"
-  const newQueryStarters = [
-    /^quant[aeio]/i,        // "quanti clienti", "quanto ho venduto"
-    /^qual[ei]/i,           // "quali clienti", "quale bar"
-    /^chi/i,                // "chi sono i top clienti"
-    /^dove/i,               // "dove sono i bar"
-    /^quando/i,             // "quando ho visitato"
-    /^come/i,               // "come stanno i clienti"
-    /^dimmi (i|le|tutti)/i, // "dimmi i clienti", "dimmi tutti i bar"
-    /^(trova|cerca|mostra) (i|le|tutti|tutte|clienti|bar|ristoranti)/i,
-    /^elenca (i|le|tutti|tutte|clienti|bar|ristoranti)/i,
-    /^lista (di )?clienti/i,
-    /^top \d+/i,            // "top 5 clienti"
-    /^clienti (che|non|con|senza|a|di|da)/i,  // "clienti non visitati", "clienti di Verona"
-    /^bar (a|di|che|con|senza)/i,
-    /^ristoranti? (a|di|che|con|senza)/i,
-    /^pizzerie (a|di|che|con|senza)/i
-  ];
-  
-  // Se matcha pattern nuova → È NUOVA
-  if (newQueryStarters.some(pattern => pattern.test(normalized))) {
-    return true;
-  }
-  
-  // 🤔 EURISTICHE AGGIUNTIVE
-  // Se la query è molto corta (<4 parole) E non ha verbi completi → probabile follow-up
-  const wordCount = normalized.split(/\s+/).length;
-  const hasCompleteVerb = /\b(sono|hanno|voglio|dammi|mostra|elenca|trova|cerca)\b/i.test(normalized);
-  
-  if (wordCount <= 3 && !hasCompleteVerb) {
-    return false; // Probabile follow-up tipo "solo Verona", "con note"
-  }
-  
-  // Default: se ha >4 parole e contiene sostantivi business → È NUOVA
-  const hasBusinessNouns = /\b(clienti|bar|ristoranti?|pizzerie|hotel|gelateri[ae]|visite?|vendite?|fatturato)\b/i.test(normalized);
-  if (wordCount > 4 && hasBusinessNouns) {
-    return true;
-  }
-  
-  // Default conservativo: tratta come follow-up se ambiguo
-  return false;
-}
-
-// ===== FINE FUNZIONI HELPER =====
+// ==================== MAIN HANDLER ====================
 
 export async function POST(req: NextRequest) {
   try {
-    const body = await req.json().catch(() => ({} as any));
+    const body = await req.json().catch(() => ({}));
     const content = String(body?.content ?? "").trim();
-    const conversationId = body?.conversationId ? String(body.conversationId) : undefined;
-    const terse = Boolean(body?.terse);
+    const conversationId = body?.conversationId;
 
-    if (!content)        return NextResponse.json({ error: "content mancante" }, { status: 400 });
+    if (!content) return NextResponse.json({ error: "content mancante" }, { status: 400 });
     if (!conversationId) return NextResponse.json({ error: "conversationId mancante" }, { status: 400 });
     if (content.length > 8000) return NextResponse.json({ error: "content troppo lungo" }, { status: 413 });
 
     const supabase = getSupabaseAdmin();
 
-    // 0) Recupera l'owner della conversazione (user_id)
-    const conv = await supabase
+    // Get conversation owner
+    const { data: conv, error: convError } = await supabase
       .from(CONVERSATIONS_TABLE)
       .select("user_id")
       .eq("id", conversationId)
       .single();
 
-    if (conv.error || !conv.data) {
-      console.error("[send] conversation lookup error:", conv.error);
-      return NextResponse.json(
-        { error: "conversation_not_found", details: conv.error?.message },
-        { status: 404 }
-      );
+    if (convError || !conv) {
+      return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
     }
 
-    const ownerUserId = conv.data.user_id;
+    const userId = conv.user_id;
 
-    // 🔐 CIFRA il messaggio USER prima di salvarlo
+    // Save user message
     const userEnc = encryptText(content);
-
-    // 1) Salva messaggio USER cifrato
-    const insUser = await supabase
-      .from(MESSAGES_TABLE)
-      .insert({
+    await supabase.from(MESSAGES_TABLE).insert({
         conversation_id: conversationId,
-        user_id: ownerUserId,
+      user_id: userId,
         role: "user",
         body_enc: userEnc.ciphertext,
         body_iv: userEnc.iv,
         body_tag: userEnc.tag,
-        content: null, // ← campo vecchio vuoto
-      })
-      .select("id")
-      .single();
-
-    if (insUser.error) {
-      console.error("[send] insert user msg error:", insUser.error);
-      return NextResponse.json(
-        { error: "insert_user_failed", details: insUser.error.message, code: insUser.error.code },
-        { status: 500 }
-      );
-    }
-
-    // 1.b) INTENTO LOCALE: "quanti clienti ho?"
-    const normalized = content.toLowerCase().trim();
-    const askClients = /^(quanti|numero|n\.)\s+(clienti|accounts?)(\s+ho)?\??$/.test(normalized);
-
-    if (askClients) {
-      const { count, error } = await supabase
-        .from("accounts")
-        .select("id", { count: "exact", head: true })
-        .or(`owner_id.eq.${ownerUserId},user_id.eq.${ownerUserId}`);
-
-      const n = count ?? 0;
-      const reply =
-        error
-          ? "Non riesco a contare i clienti adesso."
-          : `Hai ${n} ${n === 1 ? "cliente" : "clienti"}.`;
-
-      // 🔐 CIFRA la risposta locale
-      const replyEnc = encryptText(reply);
-
-      const insAsstLocal = await supabase
-        .from(MESSAGES_TABLE)
-        .insert({
-          conversation_id: conversationId,
-          user_id: ownerUserId,
-          role: "assistant",
-          body_enc: replyEnc.ciphertext,
-          body_iv: replyEnc.iv,
-          body_tag: replyEnc.tag,
-          content: null,
-        })
-        .select("id")
-        .single();
-
-      if (insAsstLocal.error) {
-        console.error("[send] insert assistant (count) msg error:", insAsstLocal.error);
-      }
-
-      return NextResponse.json({ reply }, { status: 200 });
-    }
-
-    // ========== INIZIO SISTEMA SEMANTICO ==========
-    // Verifica se query è out of scope (non business-related)
-    if (isOutOfScope(content)) {
-      const reply = getOutOfScopeResponse();
-      
-      // 🔐 Cifra risposta
-      const replyEnc = encryptText(reply);
-      
-      await supabase
-        .from(MESSAGES_TABLE)
-        .insert({
-          conversation_id: conversationId,
-          user_id: ownerUserId,
-          role: "assistant",
-          body_enc: replyEnc.ciphertext,
-          body_iv: replyEnc.iv,
-          body_tag: replyEnc.tag,
-          content: null,
-        });
-      
-      return NextResponse.json({ reply }, { status: 200 });
-    }
-
-    // Prova sistema semantico
-    try {
-      console.log('[send] Attempting Text-to-SQL system for query:', content);
-      
-      // 🎯 DETERMINA SE QUERY È NUOVA O FOLLOW-UP
-      const queryIsNew = isNewQuery(content);
-      console.log('[send] Query type:', queryIsNew ? 'NEW (standalone)' : 'FOLLOW-UP (uses context)');
-      
-      // 🔄 RECUPERA CONTESTO PRECEDENTE (solo se è follow-up)
-      let previousContext: { query: string; resultIds: string[] } | undefined = undefined;
-      
-      if (!queryIsNew) {
-        const ctx = await getPreviousContext(conversationId, supabase);
-        if (ctx) {
-          previousContext = {
-            query: ctx.userQuery,
-            resultIds: ctx.resultIds || []
-          };
-          console.log('[send] Found previous context:', {
-            query: previousContext.query,
-            resultCount: previousContext.resultIds.length
-          });
-        } else {
-          console.log('[send] Follow-up query but no context found');
-        }
-      } else {
-        console.log('[send] New query - ignoring any previous context');
-      }
-      
-      // 💾 CACHE SEMANTICA + SQL GENERATION
-      let sql: string;
-      let params: any[];
-      
-      if (queryIsNew) {
-        try {
-          // Genera embedding
-          const startEmbed = Date.now();
-          const embedding = await generateEmbedding(content);
-          console.log('[cache] Embedding generated in', Date.now() - startEmbed, 'ms');
-          
-          // Cerca in cache
-          const startSearch = Date.now();
-          const cached = await findSimilarQuery(embedding, ownerUserId, supabase);
-          console.log('[cache] Search completed in', Date.now() - startSearch, 'ms');
-          
-          if (cached && cached.similarity >= 0.85) {
-            // CACHE HIT
-            sql = cached.plan.sql;
-            params = cached.plan.params;
-            console.log('[cache] ✅ HIT - similarity:', cached.similarity.toFixed(3));
-            
-            // 🔒 Ri-valida SQL cached (defense in depth)
-            validateSQL(sql);
-          } else {
-            // CACHE MISS → LLM genera SQL
-            console.log('[cache] ❌ MISS - calling Text-to-SQL LLM');
-            const startSQL = Date.now();
-            const sqlResult = await generateSQL(content, ownerUserId, previousContext);
-            console.log('[cache] SQL generated in', Date.now() - startSQL, 'ms');
-            
-            // 🔍 LOG SQL GENERATO (prima della validazione)
-            console.log('[SQL-RAW] Generated SQL:', sqlResult.sql);
-            console.log('[SQL-RAW] Params:', JSON.stringify(sqlResult.params));
-            
-            sql = sanitizeSQL(sqlResult.sql); // Aggiunge LIMIT + valida
-            params = sqlResult.params;
-            
-            console.log('[SQL-SANITIZED] After sanitize:', sql);
-            
-            // Salva in cache (async)
-            saveCacheEntry(content, embedding, { sql, params }, ownerUserId, supabase).catch(err => {
-              console.error('[cache] Save failed:', err);
-            });
-          }
-        } catch (cacheError) {
-          // Fallback: se cache fallisce, genera SQL diretto
-          console.error('[cache] Error, falling back to direct SQL generation:', cacheError);
-          const sqlResult = await generateSQL(content, ownerUserId, previousContext);
-          
-          // 🔍 LOG SQL GENERATO (fallback)
-          console.log('[SQL-FALLBACK] Generated SQL:', sqlResult.sql);
-          console.log('[SQL-FALLBACK] Params:', JSON.stringify(sqlResult.params));
-          
-          sql = sanitizeSQL(sqlResult.sql);
-          params = sqlResult.params;
-          
-          console.log('[SQL-FALLBACK-SANITIZED] After sanitize:', sql);
-        }
-      } else {
-        // Query FOLLOW-UP: non cacheable, genera SQL con contesto
-        const sqlResult = await generateSQL(content, ownerUserId, previousContext);
-        
-        // 🔍 LOG SQL GENERATO (follow-up)
-        console.log('[SQL-FOLLOWUP] Generated SQL:', sqlResult.sql);
-        console.log('[SQL-FOLLOWUP] Params:', JSON.stringify(sqlResult.params));
-        
-        sql = sanitizeSQL(sqlResult.sql);
-        params = sqlResult.params;
-        
-        console.log('[SQL-FOLLOWUP-SANITIZED] After sanitize:', sql);
-      }
-      
-      console.log('[send] SQL ready:', sql);
-      console.log('[send] Params:', params);
-      
-      // 🔒 ESEGUI SQL (RPC sicuro)
-      const startExec = Date.now();
-      
-const { data, error: queryError } = await supabase
-  .rpc('execute_safe_select', {
-    query_sql: sql,
-    query_params: params  // ✅ TOGLI JSON.stringify
-  });
-      
-      console.log('[send] Query executed in', Date.now() - startExec, 'ms');
-      
-      if (queryError) {
-        throw new Error(`Query execution failed: ${queryError.message}`);
-      }
-      
-      // Parse risultato JSON
-      const queryResult = typeof data === 'string' ? JSON.parse(data) : (Array.isArray(data) ? data : []);
-      
-      console.log('[send] 🔍 Query result count:', queryResult.length);
-      if (queryResult.length > 0) {
-        console.log('[send] 🔍 First row keys:', Object.keys(queryResult[0]));
-        console.log('[send] 🔍 First row data:', queryResult[0]);
-        console.log('[send] 🔍 Has id field?', 'id' in queryResult[0]);
-        console.log('[send] 🔍 Has account_id field?', 'account_id' in queryResult[0]);
-      }
-      
-      // ⚡ TEMPLATE RISPOSTA (NO LLM Composer)
-      const semanticReply = formatResponse(queryResult, content);
-      console.log('[send] Response formatted, length:', semanticReply.length);
-      console.log('[send] 🔍 Response preview:', semanticReply.substring(0, 200));
-      
-      // 🔄 CREA CONTESTO PER PROSSIMA QUERY
-      const newContext = {
-        userQuery: content,
-        queryPlan: { sql, params }, // Salva SQL invece di QueryPlan
-        resultIds: queryResult ? extractResultIds(queryResult) : undefined,
-        resultCount: queryResult?.length || 0,
-        timestamp: new Date().toISOString()
-      };
-      
-      // Aggiungi marker invisibile alla risposta
-      const replyWithContext = semanticReply + createContextMarker(newContext);
-      
-      // 🔐 Cifra risposta CON contesto
-      const semanticEnc = encryptText(replyWithContext);
-      
-      // Salva messaggio assistant
-      const insAsstSemantic = await supabase
-        .from(MESSAGES_TABLE)
-        .insert({
-          conversation_id: conversationId,
-          user_id: ownerUserId,
-          role: "assistant",
-          body_enc: semanticEnc.ciphertext,
-          body_iv: semanticEnc.iv,
-          body_tag: semanticEnc.tag,
-          content: null,
-        })
-        .select("id")
-        .single();
-      
-      if (insAsstSemantic.error) {
-        console.error('[send] insert assistant semantic msg error:', insAsstSemantic.error);
-      }
-      
-      console.log('[send] ✅ Text-to-SQL system succeeded');
-      // Ritorna risposta SENZA marker (invisibile al frontend)
-      return NextResponse.json({ reply: semanticReply }, { status: 200 });
-      
-    } catch (semanticError: any) {
-      // Log dettagliato dell'errore
-      console.error('[send] ❌ Text-to-SQL system error:');
-      console.error('  Error type:', semanticError.constructor.name);
-      console.error('  Error message:', semanticError.message);
-      console.error('  Error stack:', semanticError.stack);
-      console.error('  Query was:', content);
-      
-      // Se è errore di validazione SQL, non fare fallback
-      if (semanticError.message?.includes('SQL') || semanticError.message?.includes('validat')) {
-        const errorEnc = encryptText('La query non è valida. Riprova con una richiesta diversa.');
-        await supabase.from(MESSAGES_TABLE).insert({
-          conversation_id: conversationId,
-          user_id: ownerUserId,
-          role: "assistant",
-          body_enc: errorEnc.ciphertext,
-          body_iv: errorEnc.iv,
-          body_tag: errorEnc.tag,
-          content: null,
-        });
-        return NextResponse.json({ reply: 'La query non è valida. Riprova con una richiesta diversa.' }, { status: 200 });
-      }
-      
-      // Prosegue al blocco OpenAI standard sotto
-    }
-    // ========== FINE SISTEMA TEXT-TO-SQL ==========
-
-    // 2) Fallback: Chiama OpenAI standard (come prima)
-    // SYSTEM PROMPT MODIFICATO per limitare AI
-    const sys = `${SYSTEM}
-
-IMPORTANTE: Sei l'assistente REPING per la gestione commerciale nel settore HoReCa.
-
-Rispondi SOLO se la domanda riguarda:
-- Clienti e portafoglio
-- Visite e chiamate
-- Promemoria e task
-- Note commerciali
-- Prodotti del catalogo
-- Pianificazione vendite
-- Statistiche business
-
-Se l'utente chiede informazioni generali (meteo, sport, notizie, politica, ricette, ecc.):
-Rispondi educatamente: "Non posso aiutarti con questa richiesta. Sono specializzato nella gestione del tuo portafoglio commerciale HoReCa. Posso assisterti con clienti, visite, promemoria, statistiche e pianificazione. Come posso aiutarti?"
-
-${terse ? "Rispondi molto brevemente." : ""}`;
-
-    const completion = await openai.chat.completions.create({
-      model: MODEL,
-      messages: [
-        { role: "system", content: sys },
-        { role: "user", content }, // ← in chiaro per OpenAI
-      ],
-      temperature: 0.3,
+      content: null
     });
 
-    const reply = completion.choices?.[0]?.message?.content?.trim() || "Ok.";
-
-    // 🔐 CIFRA la risposta dell'assistente prima di salvarla
-    const assistantEnc = encryptText(reply);
-
-    // 3) Salva messaggio ASSISTANT cifrato
-    const insAsst = await supabase
+    // Get recent conversation history for context
+    const { data: history } = await supabase
       .from(MESSAGES_TABLE)
-      .insert({
-        conversation_id: conversationId,
-        user_id: ownerUserId,
-        role: "assistant",
-        body_enc: assistantEnc.ciphertext,
-        body_iv: assistantEnc.iv,
-        body_tag: assistantEnc.tag,
-        content: null, // ← campo vecchio vuoto
-      })
-      .select("id")
-      .single();
+      .select("role, body_enc, body_iv, body_tag")
+      .eq("conversation_id", conversationId)
+      .order("created_at", { ascending: false })
+      .limit(6); // Ultimi 3 scambi (6 messaggi)
 
-    if (insAsst.error) {
-      console.error("[send] insert assistant msg error:", insAsst.error);
+    // Decrypt history
+    const { decryptText } = await import("@/lib/crypto/serverEncryption");
+    const decryptedHistory: { role: string; content: string }[] = [];
+    
+    for (const msg of (history || []).reverse()) {
+      try {
+        const decrypted = decryptText(msg.body_enc, msg.body_iv, msg.body_tag);
+        decryptedHistory.push({ role: msg.role, content: decrypted });
+      } catch { /* skip unreadable */ }
     }
 
-    return NextResponse.json({ reply }); // ← ritorna in chiaro al client (transitorio)
+    // Build messages array
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: `Sei l'assistente REPPING per agenti di commercio HoReCa. Rispondi in italiano, breve e utile.
+
+REGOLE:
+- Usa le funzioni per accedere ai dati (clienti, visite, vendite)
+- I nomi clienti sono cifrati: usa [CLIENT:id] come placeholder
+- IMPORTANTE: Se l'utente dice "elencali", "elencameli", "quali sono", "chi sono", DEVI usare gli STESSI FILTRI della query precedente
+- Esempio: se prima ha chiesto "clienti di Negrar" e ora dice "elencali", cerca clienti di Negrar`
+      }
+    ];
+
+    // Add conversation history (for context)
+    for (const msg of decryptedHistory.slice(-4)) { // Ultimi 2 scambi
+      messages.push({ 
+        role: msg.role as "user" | "assistant", 
+        content: msg.content 
+      });
+    }
+    
+    // Add current user message
+    messages.push({ role: "user", content });
+
+    // Call OpenAI with tools
+    const response = await openai.chat.completions.create({
+      model: MODEL,
+      messages,
+      tools,
+      tool_choice: "auto",
+      temperature: 0.3,
+      max_tokens: 1000
+    });
+
+    let reply = "";
+    const assistantMessage = response.choices[0].message;
+
+    // Check if LLM wants to call a function
+    if (assistantMessage.tool_calls && assistantMessage.tool_calls.length > 0) {
+      // Execute all tool calls
+      const toolResults: { name: string; result: any }[] = [];
+      
+      for (const toolCall of assistantMessage.tool_calls) {
+        const fnName = toolCall.function.name;
+        const fnArgs = JSON.parse(toolCall.function.arguments || "{}");
+        
+        console.log(`[function-call] ${fnName}:`, fnArgs);
+        
+        const result = await executeFunction(fnName, fnArgs, userId, supabase);
+        toolResults.push({ name: fnName, result });
+      }
+
+      // If single tool call, format the result directly
+      if (toolResults.length === 1) {
+        reply = formatToolResult(toolResults[0].name, toolResults[0].result);
+      } else {
+        // Multiple tool calls - let LLM compose the response
+        const toolMessages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+          ...messages,
+          assistantMessage,
+          ...assistantMessage.tool_calls.map((tc, i) => ({
+            role: "tool" as const,
+            tool_call_id: tc.id,
+            content: JSON.stringify(toolResults[i].result)
+          }))
+        ];
+
+        const finalResponse = await openai.chat.completions.create({
+          model: MODEL,
+          messages: toolMessages,
+          temperature: 0.3,
+          max_tokens: 500
+        });
+
+        reply = finalResponse.choices[0].message.content || "Ecco i risultati.";
+      }
+    } else {
+      // No tool call - direct response
+      reply = assistantMessage.content || "Come posso aiutarti?";
+    }
+
+    // Save assistant message
+    const replyEnc = encryptText(reply);
+        await supabase.from(MESSAGES_TABLE).insert({
+          conversation_id: conversationId,
+      user_id: userId,
+          role: "assistant",
+      body_enc: replyEnc.ciphertext,
+      body_iv: replyEnc.iv,
+      body_tag: replyEnc.tag,
+      content: null
+    });
+
+    return NextResponse.json({ reply });
+
   } catch (err: any) {
-    // Gestione errori quota OpenAI
-    const status = err?.status ?? 500;
-    const type   = err?.error?.type ?? err?.code;
-    const retryHeader = err?.headers?.get?.("retry-after");
-    const retryAfter = retryHeader ? Number(retryHeader) : undefined;
-
-    if (status === 429 || type === "insufficient_quota") {
-      return NextResponse.json(
-        { error: "QUOTA_ESAURITA", message: "Quota OpenAI esaurita o rate limit.", retryAfter },
-        { status: 429 }
-      );
-    }
-
-    if (typeof err?.message === "string" && err.message.includes("[supabase] Missing env")) {
-      console.error(err);
-      return NextResponse.json({ error: err.message }, { status: 500 });
-    }
-
     console.error("[/api/messages/send] ERROR:", err);
+    
+    if (err?.status === 429) {
+      return NextResponse.json({ error: "QUOTA_ESAURITA" }, { status: 429 });
+    }
+    
     return NextResponse.json({ error: err?.message || "Errore interno" }, { status: 500 });
   }
 }
 
 export async function GET() {
-  return NextResponse.json({ ok: true, model: MODEL });
+  return NextResponse.json({ ok: true, model: MODEL, version: "3.0-function-calling" });
 }

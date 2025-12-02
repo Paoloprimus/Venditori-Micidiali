@@ -223,6 +223,7 @@ export default function QuickAddClientPage() {
 
       // ✅ 4) Prepara il body con i campi cifrati
       const body: any = {
+        id: tempId, // ✅ FIX: Invia l'ID usato per cifrare!
         name_enc: nameEncrypted.name_enc,
         name_iv: nameEncrypted.name_iv,
         name_bi,
@@ -326,7 +327,25 @@ export default function QuickAddClientPage() {
     }
   }
 
+  // 🔧 FIX: Mostra loader durante auto-unlock, form SOLO se non c'è passphrase
   if (!ready || !crypto) {
+    const hasPassInStorage = typeof window !== 'undefined' && 
+      (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
+    
+    // Se c'è passphrase in storage, mostra loader (auto-unlock in corso)
+    if (hasPassInStorage) {
+      return (
+        <div style={{ maxWidth: 820, margin: '40px auto', padding: 24, textAlign: 'center' }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🔓</div>
+          <div style={{ fontSize: 18, color: '#6b7280' }}>Sblocco dati in corso...</div>
+          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
+            Decifratura automatica attiva
+          </div>
+        </div>
+      );
+    }
+    
+    // Nessuna passphrase → mostra form
     return (
       <div style={{ maxWidth: 820, margin: '40px auto', padding: 24 }}>
         <h1 style={{ fontSize: 24, fontWeight: 700, marginBottom: 8 }}>Cliente rapido 🔐</h1>

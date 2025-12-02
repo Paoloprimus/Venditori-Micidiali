@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
 import TopBar from '@/components/home/TopBar';
+import { generateReportSchedaCliente, type ReportSchedaClienteData } from '@/lib/pdf';
 
 // Tipi
 type ClientData = {
@@ -32,6 +33,7 @@ type Visit = {
   durata: number | null;
   importo_vendita: number | null;
   notes: string;
+  prodotti_discussi: string | null;  // 🆕 Prodotti discussi/venduti
 };
 
 type ClientStats = {
@@ -195,6 +197,7 @@ export default function ClientDetailPage() {
           durata: v.durata,
           importo_vendita: v.importo_vendita,
           notes: v.notes || '',
+          prodotti_discussi: v.prodotti_discussi || null,  // 🆕
         })));
       }
       
@@ -229,6 +232,20 @@ export default function ClientDetailPage() {
     };
   }, [visits]);
 
+  // 🆕 Prodotti trattati (aggregati da tutte le visite)
+  const prodottiTrattati: string[] = useMemo(() => {
+    const allProducts: string[] = [];
+    visits.forEach(v => {
+      if (v.prodotti_discussi) {
+        // Splitta per virgola e pulisce
+        const items = v.prodotti_discussi.split(',').map(p => p.trim()).filter(p => p.length > 0);
+        allProducts.push(...items);
+      }
+    });
+    // Rimuovi duplicati
+    return [...new Set(allProducts)];
+  }, [visits]);
+
   // Salva note
   async function saveNotes() {
     if (!client) return;
@@ -259,9 +276,63 @@ export default function ClientDetailPage() {
     window.location.href = '/login';
   }
 
-  // Export PDF (placeholder - implementazione futura)
-  function exportPDF() {
-    alert('Export PDF in sviluppo - coming soon!');
+  // Export PDF
+  async function exportPDF() {
+    if (!client) return;
+    
+    try {
+      const data: ReportSchedaClienteData = {
+        nomeAgente: '', // TODO: recuperare da profilo utente
+        dataGenerazione: new Date().toLocaleString('it-IT'),
+        cliente: {
+          nome: client.name,
+          contatto: client.contact_name,
+          indirizzo: client.address,
+          citta: client.city,
+          tipoLocale: client.tipo_locale,
+          telefono: client.phone,
+          email: client.email,
+          piva: client.vat_number,
+          clienteDal: new Date(client.created_at).toLocaleDateString('it-IT'),
+          note: client.notes,
+        },
+        stats: {
+          totaleVisite: stats.totaleVisite,
+          totaleChiamate: stats.totaleChiamate,
+          totaleVendite: stats.totaleVendite,
+          ultimaVisita: stats.ultimaVisita 
+            ? new Date(stats.ultimaVisita).toLocaleDateString('it-IT')
+            : null,
+          mediaDurataVisita: stats.mediaDurataVisita,
+          visiteMese: stats.visiteMese,
+          venditeMese: stats.venditeMese,
+        },
+        attivita: visits.map(v => ({
+          data: new Date(v.data_visita).toLocaleDateString('it-IT'),
+          tipo: v.tipo,
+          esito: v.esito,
+          importo: v.importo_vendita,
+          durata: v.durata,
+          note: v.notes,
+        })),
+      };
+      
+      const blob = await generateReportSchedaCliente(data);
+      
+      // Download del file
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `scheda-cliente-${client.name.replace(/[^a-z0-9]/gi, '-').toLowerCase()}-${new Date().toISOString().split('T')[0]}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      
+    } catch (e: any) {
+      console.error('[ClientDetail] PDF error:', e);
+      alert('Errore generazione PDF: ' + e.message);
+    }
   }
 
   // Loading states
@@ -484,6 +555,44 @@ export default function ClientDetailPage() {
           </div>
         </div>
 
+        {/* 🆕 Prodotti Trattati */}
+        {prodottiTrattati.length > 0 && (
+          <div style={{ 
+            padding: 16, 
+            background: '#f0f9ff', 
+            borderRadius: 12, 
+            border: '1px solid #bae6fd',
+            marginBottom: 24,
+          }}>
+            <div style={{ fontSize: 14, fontWeight: 600, color: '#0369a1', marginBottom: 8 }}>
+              📦 Prodotti Trattati ({prodottiTrattati.length})
+            </div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+              {prodottiTrattati.slice(0, 10).map((prod, idx) => (
+                <span 
+                  key={idx}
+                  style={{
+                    display: 'inline-block',
+                    padding: '4px 10px',
+                    background: 'white',
+                    borderRadius: 16,
+                    fontSize: 13,
+                    color: '#0369a1',
+                    border: '1px solid #7dd3fc',
+                  }}
+                >
+                  {prod}
+                </span>
+              ))}
+              {prodottiTrattati.length > 10 && (
+                <span style={{ fontSize: 13, color: '#6b7280', alignSelf: 'center' }}>
+                  +{prodottiTrattati.length - 10} altri
+                </span>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Griglia: Dati Anagrafici + Note */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 24, marginBottom: 24 }}>
           
@@ -654,6 +763,7 @@ export default function ClientDetailPage() {
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Esito</th>
                     <th style={{ padding: '12px 8px', textAlign: 'right', fontWeight: 600 }}>Importo</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Durata</th>
+                    <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Prodotti</th>
                     <th style={{ padding: '12px 8px', textAlign: 'left', fontWeight: 600 }}>Note</th>
                   </tr>
                 </thead>
@@ -687,6 +797,16 @@ export default function ClientDetailPage() {
                       </td>
                       <td style={{ padding: '12px 8px', color: '#6b7280' }}>
                         {v.durata ? `${v.durata} min` : '—'}
+                      </td>
+                      <td style={{ 
+                        padding: '12px 8px', 
+                        color: '#6b7280',
+                        maxWidth: 150,
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }} title={v.prodotti_discussi || ''}>
+                        {v.prodotti_discussi ? `📦 ${v.prodotti_discussi}` : '—'}
                       </td>
                       <td style={{ 
                         padding: '12px 8px', 

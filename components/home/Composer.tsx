@@ -26,39 +26,32 @@ type Props = {
 };
 
 export default function Composer({ value, onChange, onSend, disabled, taRef, voice }: Props) {
-  useEffect(() => {
-    console.error("✅ [Composer] Component mounted");
-  }, []);
-
   const localRef = useRef<HTMLTextAreaElement | null>(null);
   const ref = taRef ?? localRef;
 
-  // Invio con Enter
+  // Invio con Enter (senza Shift) o Ctrl/Cmd+Enter
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
 
     const handler = (e: KeyboardEvent) => {
+      // Shift+Enter → nuova riga
       if (e.key === "Enter" && e.shiftKey) return;
 
+      // Enter senza Shift → invia
       if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         if (!disabled && value.trim()) {
-          console.error("✅ [Composer] Enter key → calling onSend");
           onSend?.();
-        } else {
-          console.error("⚠️ [Composer] Enter key BLOCKED", { disabled, hasText: !!value.trim() });
         }
         return;
       }
 
+      // Ctrl/Cmd+Enter → invia
       if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
         e.preventDefault();
         if (!disabled && value.trim()) {
-          console.error("✅ [Composer] Ctrl/Cmd+Enter → calling onSend");
           onSend?.();
-        } else {
-          console.error("⚠️ [Composer] Ctrl/Cmd+Enter BLOCKED", { disabled, hasText: !!value.trim() });
         }
       }
     };
@@ -154,20 +147,9 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
             type="button"
             className="btn"
             onClick={() => {
-              console.error("🔵 [Composer] Button clicked!");
-              
-              if (!value.trim()) {
-                console.error("⚠️ [Composer] BLOCKED: input is empty");
-                return;
+              if (!disabled && value.trim()) {
+                onSend?.();
               }
-              
-              if (disabled) {
-                console.error("⚠️ [Composer] BLOCKED: component is disabled");
-                return;
-              }
-              
-              console.error("✅ [Composer] Calling onSend with text:", value.trim());
-              onSend?.();
             }}
             disabled={!value.trim() || !!disabled}
           >

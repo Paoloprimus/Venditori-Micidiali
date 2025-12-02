@@ -224,12 +224,25 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
         if (!cancelled) setUserId(uid);
 
         // Auto-unlock: se la pass è in storage, sblocca e prewarm
-        const pass =
-          typeof window !== "undefined"
-            ? sessionStorage.getItem("repping:pph") ||
-              localStorage.getItem("repping:pph") ||
-              ""
-            : "";
+        // 🔧 FIX: Ritenta fino a 3 volte con delay (per gestire redirect su Android)
+        let pass = "";
+        let attempts = 0;
+        const maxAttempts = 3;
+        
+        while (!pass && attempts < maxAttempts) {
+          pass =
+            typeof window !== "undefined"
+              ? sessionStorage.getItem("repping:pph") ||
+                localStorage.getItem("repping:pph") ||
+                ""
+              : "";
+          
+          if (!pass && attempts < maxAttempts - 1) {
+            console.log(`[CryptoProvider] Passphrase non trovata, attendo... (tentativo ${attempts + 1}/${maxAttempts})`);
+            await new Promise(resolve => setTimeout(resolve, 200 * (attempts + 1))); // 200ms, 400ms, 600ms
+          }
+          attempts++;
+        }
 
         if (pass) {
           try {
@@ -250,6 +263,8 @@ try {
               console.error("[CryptoProvider] unlock/prewarm failed:", e);
             }
           }
+        } else {
+          console.warn("[CryptoProvider] ⚠️ Passphrase non trovata in storage dopo", maxAttempts, "tentativi");
         }
       } catch {
         // niente
@@ -279,24 +294,60 @@ try {
   }, [cryptoService]);
 
   // 🔄 FORCE AUTO-UNLOCK: se ready è false ma la passphrase esiste, sblocca
+  // ✅ FIX: Aggiunto retry con backoff per gestire timing issues su Android
   useEffect(() => {
     if (ready) return; // già sbloccato
     if (typeof window === "undefined") return;
 
-    const pass = sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph");
-    if (!pass) return; // nessuna passphrase salvata
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 5;
 
-    console.log("[CryptoProvider] 🔄 FORCE AUTO-UNLOCK: passphrase trovata ma crypto non ready");
-    
-    (async () => {
-      try {
-        await unlock(pass);
-        await prewarm(DEFAULT_SCOPES);
-        console.log("[CryptoProvider] ✅ FORCE AUTO-UNLOCK completato");
-      } catch (e) {
-        console.error("[CryptoProvider] ❌ FORCE AUTO-UNLOCK failed:", e);
+    const tryUnlock = async () => {
+      while (!cancelled && attempts < MAX_ATTEMPTS) {
+        attempts++;
+        
+        const pass = sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph");
+        
+        if (!pass) {
+          // Aspetta un po' e riprova (lo storage potrebbe non essere ancora pronto)
+          if (attempts < MAX_ATTEMPTS) {
+            console.log(`[CryptoProvider] 🔄 Attempt ${attempts}/${MAX_ATTEMPTS}: nessuna passphrase, riprovo...`);
+            await new Promise(r => setTimeout(r, 200 * attempts)); // backoff: 200ms, 400ms, 600ms...
+            continue;
+          }
+          console.log("[CryptoProvider] ❌ Nessuna passphrase dopo tutti i tentativi");
+          return;
+        }
+
+        console.log(`[CryptoProvider] 🔄 FORCE AUTO-UNLOCK attempt ${attempts}/${MAX_ATTEMPTS}`);
+        
+        try {
+          await unlock(pass);
+          await prewarm(DEFAULT_SCOPES);
+          console.log("[CryptoProvider] ✅ FORCE AUTO-UNLOCK completato");
+          return; // successo, esci
+        } catch (e) {
+          const msg = String((e as any)?.message || e || "");
+          console.error(`[CryptoProvider] ❌ Attempt ${attempts} failed:`, msg);
+          
+          // Se è un OperationError (chiavi corrotte), non riprovare
+          if (/OperationError/i.test(msg)) {
+            console.error("[CryptoProvider] ❌ OperationError - chiavi incompatibili, stop");
+            return;
+          }
+          
+          // Altrimenti aspetta e riprova
+          if (attempts < MAX_ATTEMPTS) {
+            await new Promise(r => setTimeout(r, 300 * attempts));
+          }
+        }
       }
-    })();
+    };
+
+    tryUnlock();
+
+    return () => { cancelled = true; };
   }, [ready, unlock, prewarm]);
 
   // 🧰 Gancio esplicito per sbloccare/prewarmare dal browser (senza toccare /clients)

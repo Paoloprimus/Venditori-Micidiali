@@ -83,7 +83,7 @@ export interface DocumentMetadata {
 export interface DocumentRecord {
   id: string;
   user_id: string;
-  document_type: 'report_planning' | 'lista_clienti';
+  document_type: 'report_planning' | 'lista_clienti' | 'scheda_cliente';
   title: string;
   filename: string;
   file_path: string;
@@ -94,4 +94,48 @@ export interface DocumentRecord {
   backup_at: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/**
+ * Dati per generare Report Scheda Cliente
+ */
+export interface ReportSchedaClienteData {
+  // Header
+  nomeAgente: string;
+  dataGenerazione: string;
+  
+  // Dati cliente
+  cliente: {
+    nome: string;
+    contatto: string;
+    indirizzo: string;
+    citta: string;
+    tipoLocale: string;
+    telefono: string;
+    email: string;
+    piva: string;
+    clienteDal: string;
+    note: string;
+  };
+  
+  // KPI
+  stats: {
+    totaleVisite: number;
+    totaleChiamate: number;
+    totaleVendite: number;
+    ultimaVisita: string | null;
+    mediaDurataVisita: number;
+    visiteMese: number;
+    venditeMese: number;
+  };
+  
+  // Storico attività
+  attivita: Array<{
+    data: string;
+    tipo: 'visita' | 'chiamata';
+    esito: string;
+    importo: number | null;
+    durata: number | null;
+    note: string;
+  }>;
 }

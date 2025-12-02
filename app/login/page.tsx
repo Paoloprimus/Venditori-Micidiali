@@ -97,21 +97,57 @@ export default function Login() {
         try {
           console.log('[Login] Tentativo di sblocco crittografia con la password...');
           await unlock(password); 
-          
-          // ✅ 4. Memorizza la Passphrase in localStorage (PERSISTENZA TOTALE)
-          localStorage.setItem("repping:pph", password); 
-          
-          // ✅ Pulisci la chiave meno persistente (sessionStorage)
-          sessionStorage.removeItem("repping:pph");
-          
+          console.log('[Login] ✅ Unlock completato');
         } catch (cryptoError) {
           console.error('[Login] Unlock fallito (chiavi/passphrase errata):', cryptoError);
-          // Non blocchiamo il redirect qui. L'app si bloccherà nella pagina /clients 
-          // chiedendo di sbloccare (come desiderato).
+          // Non blocchiamo il redirect qui. L'app riproverà in automatico.
+        }
+        
+        // ✅ 4. Memorizza la Passphrase in ENTRAMBI gli storage (più robusto)
+        // Salva PRIMA del redirect per garantire che sia scritto
+        try {
+          // Salva in localStorage PRIMA (più persistente)
+          localStorage.setItem("repping:pph", password);
+          // Poi in sessionStorage
+          sessionStorage.setItem("repping:pph", password);
+          
+          // 🔧 FIX: Verifica che sia stato salvato (Android può fallire silenziosamente)
+          const verifyLocal = localStorage.getItem("repping:pph");
+          const verifySession = sessionStorage.getItem("repping:pph");
+          
+          if (verifyLocal !== password || verifySession !== password) {
+            console.warn('[Login] ⚠️ Storage verification failed, retrying...');
+            // Retry con flush esplicito
+            localStorage.setItem("repping:pph", password);
+            sessionStorage.setItem("repping:pph", password);
+          }
+          
+          console.log('[Login] ✅ Passphrase salvata e verificata in storage');
+        } catch (storageError) {
+          console.error('[Login] ❌ Errore salvataggio storage:', storageError);
+          // Non blocchiamo, ma loggiamo l'errore
+        }
+        
+        // ✅ 5. Delay aumentato per Android (300ms invece di 100ms)
+        // Alcuni browser Android hanno bisogno di più tempo per scrivere nello storage
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // ✅ 6. Verifica finale prima del redirect
+        const finalCheck = localStorage.getItem("repping:pph");
+        if (finalCheck !== password) {
+          console.error('[Login] ❌ CRITICO: Passphrase non persistita dopo delay!');
+          // Salva di nuovo come ultimo tentativo
+          try {
+            localStorage.setItem("repping:pph", password);
+            sessionStorage.setItem("repping:pph", password);
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (e) {
+            console.error('[Login] ❌ Fallito anche il retry finale');
+          }
         }
         
         // redirect "hard" alla home
-        window.location.replace("/"); // Usa /clients se è la tua home
+        window.location.replace("/");
 
       } else {
         // Questo ramo gestisce il caso di signup dove è richiesta conferma email

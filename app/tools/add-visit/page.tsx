@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
@@ -12,21 +12,35 @@ type ClientOption = {
   name: string;
 };
 
+// 🔧 FIX: Wrapper con Suspense per useSearchParams (richiesto da Next.js 14)
 export default function AddVisitPage() {
+  return (
+    <Suspense fallback={<div style={{ padding: 100, textAlign: 'center' }}>Caricamento...</div>}>
+      <AddVisitContent />
+    </Suspense>
+  );
+}
+
+function AddVisitContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const crypto = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
+
+  // 🆕 Leggi client pre-selezionato da query param
+  const preselectedClientId = searchParams.get('client') || '';
 
   const [clients, setClients] = useState<ClientOption[]>([]);
   const [loadingClients, setLoadingClients] = useState(false);
   const [form, setForm] = useState({
-    account_id: '',
+    account_id: preselectedClientId,  // 🆕 Pre-seleziona se presente
     tipo: 'visita' as 'visita' | 'chiamata',
     data_visita: new Date().toISOString().split('T')[0],
     durata: '',
     esito: 'altro' as 'ordine_acquisito' | 'da_richiamare' | 'no_interesse' | 'info_richiesta' | 'altro',
     importo_vendita: '',
     note: '',
+    prodotti_discussi: '',  // 🆕 Prodotti discussi/venduti
   });
   const [busy, setBusy] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -80,8 +94,9 @@ export default function AddVisitPage() {
                 name_iv: hexToBase64(acc.name_iv),
               };
 
+              // 🔧 FIX: Usa acc.id come AAD (Associated Data) per decifratura corretta
               const decAny = await (crypto.crypto as any).decryptFields(
-                "table:accounts", "accounts", '', accountForDecrypt, ["name"]
+                "table:accounts", "accounts", acc.id, accountForDecrypt, ["name"]
               );
               const dec = toObj(decAny);
               clientList.push({
@@ -93,14 +108,20 @@ export default function AddVisitPage() {
             }
           }
         }
-        setClients(clientList.sort((a, b) => a.name.localeCompare(b.name)));
+        const sortedClients = clientList.sort((a, b) => a.name.localeCompare(b.name));
+        setClients(sortedClients);
+        
+        // 🆕 Se c'è un client pre-selezionato da URL, verificalo e impostalo
+        if (preselectedClientId && sortedClients.some(c => c.id === preselectedClientId)) {
+          setForm(prev => ({ ...prev, account_id: preselectedClientId }));
+        }
       } catch (err) {
         console.error('Error loading clients:', err);
       } finally {
         setLoadingClients(false);
       }
     })();
-  }, [crypto]);
+  }, [crypto, preselectedClientId]);
 
   async function handleSubmit() {
     if (!form.account_id) {
@@ -141,6 +162,11 @@ export default function AddVisitPage() {
 
       if (form.note.trim()) {
         payload.notes = form.note.trim();
+      }
+
+      // 🆕 Prodotti discussi/venduti
+      if (form.prodotti_discussi.trim()) {
+        payload.prodotti_discussi = form.prodotti_discussi.trim();
       }
 
       const { error } = await supabase.from('visits').insert(payload);
@@ -240,6 +266,22 @@ export default function AddVisitPage() {
             <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>Note conversazione</label>
             <textarea placeholder="Cosa è successo durante la visita..." value={form.note} onChange={(e) => setForm({ ...form, note: e.target.value })} disabled={busy} rows={5} style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical' }} />
             <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>💡 Le note sono accessibili all'AI per suggerimenti intelligenti</div>
+          </div>
+
+          {/* 🆕 PRODOTTI DISCUSSI/VENDUTI */}
+          <div>
+            <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: 500 }}>📦 Prodotti discussi/venduti</label>
+            <textarea 
+              placeholder="Es: Prodotto A, Prodotto B, codice123..." 
+              value={form.prodotti_discussi} 
+              onChange={(e) => setForm({ ...form, prodotti_discussi: e.target.value })} 
+              disabled={busy} 
+              rows={2} 
+              style={{ width: '100%', padding: '10px 12px', border: '1px solid #d1d5db', borderRadius: 6, fontSize: 14, resize: 'vertical' }} 
+            />
+            <div style={{ fontSize: 12, color: '#6b7280', marginTop: 4 }}>
+              Inserisci i prodotti trattati durante la visita (codici o descrizioni, separati da virgola)
+            </div>
           </div>
 
           <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>

@@ -1,29 +1,50 @@
 // app/chat/planner.ts
 //
-// Planner/Resolver deterministico per Repping (versione NLU ibrida + follow-up resolver + multi-scope).
-// - Usa classifyIntent() + policy (intent chiusi e template).
-// - Riutilizza gli adapter REALI (Supabase) per i dati.
-// - Aggiorna il ConversationContext (memoria breve).
-// - Risposte generate via template della policy.
-// - NOVITÀ v2: multi-scope con stack → ricorda gli ultimi 3 scope per tornare indietro
+// PLANNER v3 - Sistema unificato NLU per Repping
+// ============================================================================
+// 
+// Usa il nuovo parser unificato (lib/nlu/unified.ts) per:
+// - Riconoscere tutti gli intent dell'agente
+// - Estrarre entità (nomi clienti, date, importi)
+// - Gestire il contesto conversazionale
+// - Restituire risposte naturali
+//
+// ============================================================================
 
-import { classifyIntent } from "@/lib/nlu/IntentClassifier";
-import policy from "@/lib/nlu/intent_policy.json";
+import { parseIntent, updateContext, type ParsedIntent, type ConversationContext } from "@/lib/nlu/unified";
 import {
+  // Clienti
   countClients,
   listClientNames,
   listClientEmails,
+  searchClients,
+  // Visite
+  countVisits,
+  getVisitsToday,
+  getLastVisitToClient,
+  getVisitHistoryForClient,
+  // Vendite
+  getSalesSummary,
+  getSalesByClient,
+  // Prodotti
   listMissingProducts,
+  getProductsDiscussedWithClient,
+  // Planning
+  getCallbacks,
+  getTodayPlanning,
   type ClientNamesResult,
 } from "../data/adapters";
 
-// Tipi (soft) per compatibilità col tuo contesto/page.tsx
+// ==================== TIPI ====================
+
 type Scope =
   | "global"
   | "clients"
   | "products"
   | "orders"
   | "sales"
+  | "visits"
+  | "planning"
   | "prodotti"
   | "ordini";
 
@@ -34,7 +55,9 @@ type ConversationContextState = {
   entita_correnti: Record<string, any> | null;
   ultimo_risultato: any | null;
   updated_at: number | null;
-  scope_stack?: Scope[]; // 🆕 stack degli ultimi scope visitati
+  scope_stack?: Scope[];
+  // Nuovo: contesto NLU unificato
+  nluContext?: ConversationContext;
 };
 
 type ConversationApi = {
@@ -62,423 +85,460 @@ export type PlannerResult = {
   usedContext?: ConversationContextState;
 };
 
-// ───────────────────────── Helpers ─────────────────────────
-
-function getTemplate(intentKey: string): string {
-  const row = (policy.intents as any[]).find((i) => i.key === intentKey);
-  return row?.template ?? "";
-}
-
-function applyTemplate(tpl: string, data: Record<string, string>): string {
-  let out = tpl || "";
-  for (const [k, v] of Object.entries(data)) {
-    out = out.replace(new RegExp(`\\{${k}\\}`, "g"), v);
-  }
-  return out;
-}
-
-function scopeForIntent(intent: string): Scope | null {
-  switch (intent) {
-    case "count_clients":
-    case "list_client_names":
-    case "list_client_emails":
-      return "clients";
-    case "list_missing_products":
-      return "products";
-    case "list_orders_recent":
-      return "orders";
-    case "summary_sales":
-      return "sales";
-    default:
-      return null;
-  }
-}
-
-function textNoData(intent: string): string {
-  if (intent === "list_client_names") return "Non ho trovato clienti.";
-  if (intent === "list_client_emails") return "Non ho trovato email clienti.";
-  if (intent === "list_missing_products") return "Al momento non risultano prodotti mancanti.";
-  if (intent === "count_clients") return "Non ho trovato clienti.";
-  return "Non ho trovato dati corrispondenti.";
-}
+// ==================== HELPERS ====================
 
 function needCrypto(): PlannerResult {
   return {
-    text: "Devi sbloccare la sessione per visualizzare i dati.",
+    text: "🔒 Devi sbloccare la sessione per visualizzare i dati.",
     appliedScope: null,
     intent: "crypto_not_ready",
-    usedContext: undefined as any,
   };
 }
 
-// 🆕 Gestione scope stack
-function updateScopeStack(state: ConversationContextState, newScope: Scope): Scope[] {
-  const stack = state.scope_stack || [];
-  const filtered = stack.filter(s => s !== newScope); // rimuovi duplicati
-  return [newScope, ...filtered].slice(0, 3); // mantieni max 3
+function scopeFromIntent(intent: string): Scope {
+  if (intent.startsWith('client')) return 'clients';
+  if (intent.startsWith('visit')) return 'visits';
+  if (intent.startsWith('sales')) return 'sales';
+  if (intent.startsWith('product')) return 'products';
+  if (intent.startsWith('planning')) return 'planning';
+  return 'global';
 }
 
-function inferScopeFromStack(userText: string, state: ConversationContextState): Scope | null {
-  const stack = state.scope_stack || [];
-  if (stack.length === 0) return null;
-
-  const t = userText.toLowerCase().trim();
-  
-  // Parole chiave per clienti
-  if (/\b(client|nome|email|contatt)/i.test(t)) {
-    return stack.find(s => s === "clients") || null;
-  }
-  
-  // Parole chiave per prodotti
-  if (/\b(prodott|mancant|catalog)/i.test(t)) {
-    const prodScope = stack.find(s => s === "products" || s === "prodotti");
-    return prodScope || null;
-  }
-  
-  // Parole chiave per ordini
-  if (/\b(ordin|vendut|recent)/i.test(t)) {
-    const ordScope = stack.find(s => s === "orders" || s === "ordini");
-    return ordScope || null;
-  }
-  
-  return null;
-}
-
-/**
- * Follow-up resolver:
- * Se l'NLU è incerta o null, prova a inferire l'intent dal contesto + parole chiave.
- */
-function inferFromContext(userText: string, state: ConversationContextState): string | null {
-  const t = userText.toLowerCase().trim();
-
-  const saysNames =
-    /\b(nomi|come si chiamano)\b/.test(t) ||
-    /^come si chiamano\??$/.test(t) ||
-    /^i nomi\??$/.test(t);
-
-  const saysEmails = /\b(email|e[-\s]?mail|mail)\b/.test(t);
-
-  const saysMissing = /\bmancanti?\b/.test(t) && /\bprodott/i.test(t);
-
-  // 🆕 Usa scope_stack per determinare il dominio
-  const scopeStack = state.scope_stack || [];
-  const inClients =
-    state.scope === "clients" ||
-    state.topic_attivo === "clients" ||
-    state.ultimo_intent === "count_clients" ||
-    state.ultimo_intent === "list_client_names" ||
-    state.ultimo_intent === "list_client_emails" ||
-    scopeStack.includes("clients");
-
-  if (inClients) {
-    if (saysNames) return "list_client_names";
-    if (saysEmails) return "list_client_emails";
-  }
-
-  const inProducts =
-    state.scope === "products" ||
-    state.scope === "prodotti" ||
-    state.topic_attivo === "prodotti" ||
-    state.ultimo_intent === "list_missing_products" ||
-    scopeStack.includes("products") ||
-    scopeStack.includes("prodotti");
-
-  if (inProducts && saysMissing) return "list_missing_products";
-
-  // fallback: frasi ellittiche
-  if (/^\s*e (le )?email(s)?\??\s*$/.test(t)) return "list_client_emails";
-  if (/^\s*i nomi\??\s*$/.test(t)) return "list_client_names";
-
-  return null;
-}
-
-function fallbackUnknown(state: ConversationContextState): PlannerResult {
-  if (state.scope === "clients") {
-    return {
-      text:
-        'Non ho capito. Esempi: "Quanti clienti ho?", "Come si chiamano?", "E le email?".',
-      appliedScope: state.scope,
-      intent: "unknown",
-      usedContext: state,
-    };
-  }
-  if (state.scope === "prodotti" || state.scope === "products") {
-    return {
-      text: 'Non ho capito. Esempi: "Prodotti mancanti?".',
-      appliedScope: state.scope,
-      intent: "unknown",
-      usedContext: state,
-    };
-  }
-  return {
-    text:
-      'Non ho capito. Possiamo parlare di **clienti** o **prodotti**. Esempi: "Quanti clienti ho?", "Prodotti mancanti?".',
-    appliedScope: state.scope,
-    intent: "unknown",
-    usedContext: state,
-  };
-}
-
-// ───────────────────────── Planner turn ─────────────────────────
+// ==================== PLANNER PRINCIPALE ====================
 
 export async function runChatTurn_v2(
   userText: string,
   conv: ConversationApi,
   crypto: CryptoLike | null
 ): Promise<PlannerResult> {
-
   const { state, expired } = conv;
-  console.error("[planner_v2:hit]", { input: userText, scope: conv.state.scope, stack: conv.state.scope_stack, expired });
 
-  // 0) Context TTL scaduto → resetta silenziosamente e prosegui
+  // Reset se contesto scaduto
   if (expired) {
-    console.error("[planner] Contesto scaduto, resetto e continuo...");
     conv.reset();
-    // Non bloccare, continua a processare la domanda normalmente
   }
 
-  // 1) NLU ibrida
-  const cls = await classifyIntent(userText);
+  // 1. Parse con NLU unificato
+  const nluContext: ConversationContext = state.nluContext ?? {};
+  const parsed = parseIntent(userText, nluContext);
 
-  console.debug("[planner:cls]", {
+  console.debug("[planner:v3]", {
     input: userText,
-    intent: cls.intent,
-    needsClarification: cls.needsClarification,
-    scope: state.scope,
-    last_intent: state.ultimo_intent,
-    topic: state.topic_attivo,
-    stack: state.scope_stack,
+    intent: parsed.intent,
+    confidence: parsed.confidence,
+    entities: parsed.entities,
+    needsConfirmation: parsed.needsConfirmation,
   });
 
-  let intent: string | null = cls.intent;
-  let shouldClarify = !!cls.needsClarification;
-
-  const inferred = inferFromContext(userText, state);
-  
-  // 🆕 Se non c'è intent chiaro, prova a inferire dallo scope stack
-  const inferredScope = inferScopeFromStack(userText, state);
-  if (inferredScope && !intent) {
-    // Aggiorna temporaneamente lo scope per l'inferenza
-    const tempState = { ...state, scope: inferredScope };
-    intent = inferFromContext(userText, tempState);
-  }
-
-  // HARD OVERRIDE per follow-up comuni
-  const t = userText.toLowerCase().trim();
-  const scopeStack = state.scope_stack || [];
-  
-  // 🆕 Cerca "clients" nello stack, non solo nello scope corrente
-  if (
-    (scopeStack.includes("clients") || state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
-    (/\b(nomi|come si chiamano)\b/.test(t) || /^come si chiamano\??$/.test(t) || /^i nomi\??$/.test(t))
-  ) {
-    intent = "list_client_names";
-    shouldClarify = false;
-  } else if (
-    (scopeStack.includes("clients") || state.scope === "clients" || state.topic_attivo === "clients" || state.ultimo_intent === "count_clients") &&
-    (/\b(email|e[-\s]?mail|mail)\b/.test(t) || /^\s*e (le )?email(s)?\??\s*$/.test(t))
-  ) {
-    intent = "list_client_emails";
-    shouldClarify = false;
-  } else {
-    if (!intent && inferred) intent = inferred;
-    if (shouldClarify && inferred) {
-      intent = inferred;
-      shouldClarify = false;
-    }
-  }
-
-  if (!intent) {
-    console.debug("[planner:decide]", { action: "fallback_unknown" });
-    return fallbackUnknown(state);
-  }
-
-  if (shouldClarify) {
-    const clar = (policy as any).speech?.clarify_prompt_short
-      ? "Nomi o email?"
-      : "Vuoi i nomi o le email?";
+  // 2. Se ha una risposta suggerita (greet, help, thanks, cancel)
+  if (parsed.suggestedResponse && ['greet', 'help', 'thanks', 'cancel'].includes(parsed.intent)) {
     return {
-      text: clar,
+      text: parsed.suggestedResponse,
       appliedScope: state.scope,
-      intent: "clarify",
+      intent: parsed.intent,
       usedContext: state,
     };
   }
 
-  // 2) Determina scope target
-  let scopeToUse: Scope = scopeForIntent(intent) ?? state.scope;
-  if (state.scope === "global") scopeToUse = scopeForIntent(intent) ?? "clients";
+  // 3. Router per intent
+  const scope = scopeFromIntent(parsed.intent);
+  
+  try {
+    const result = await handleIntent(parsed, crypto, state);
+    
+    // Aggiorna contesto
+    const newNluContext = updateContext(nluContext, parsed);
+    conv.remember({
+      topic_attivo: scope,
+      ultimo_intent: parsed.intent,
+      entita_correnti: parsed.entities,
+      nluContext: newNluContext,
+    });
 
-  // 3) Router deterministico sugli intent chiusi
+    return {
+      ...result,
+      appliedScope: scope,
+      usedContext: conv.state,
+    };
+  } catch (error) {
+    console.error("[planner:error]", error);
+    return {
+      text: "❌ Si è verificato un errore. Riprova tra poco.",
+      appliedScope: state.scope,
+      intent: "error",
+      usedContext: state,
+    };
+  }
+}
+
+// ==================== HANDLER INTENT ====================
+
+async function handleIntent(
+  parsed: ParsedIntent,
+  crypto: CryptoLike | null,
+  state: ConversationContextState
+): Promise<{ text: string; intent: string }> {
+  const { intent, entities } = parsed;
+
   switch (intent) {
-    // ——— CLIENTS ———
-    case "count_clients": {
+    // ═══════════════════════════════════════════════════════════════
+    // CLIENTI
+    // ═══════════════════════════════════════════════════════════════
+    
+    case 'client_count': {
       const n = await countClients();
-      if (!n || n < 0) {
-        return {
-          text: textNoData(intent),
-          appliedScope: scopeToUse,
-          intent,
-          usedContext: state,
-        };
-      }
-      const text = applyTemplate(getTemplate(intent), { N: String(n) });
-      
-      // 🆕 Aggiorna scope stack
-      const newStack = updateScopeStack(state, scopeToUse);
-      
-      conv.remember({
-        topic_attivo: "clients",
-        ultimo_intent: intent,
-        entita_correnti: {},
-        ultimo_risultato: { N: n },
-        scope_stack: newStack,
-      });
-      return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
+      return {
+        text: `Hai **${n}** ${n === 1 ? 'cliente' : 'clienti'} in archivio.`,
+        intent,
+      };
     }
 
-    case "list_client_names": {
-      if (!crypto) return needCrypto();
-      
+    case 'client_list': {
+      if (!crypto) return { ...needCrypto(), intent };
       const result = await listClientNames(crypto);
       const { names, withoutName } = result;
       
-      if (!names || names.length === 0) {
-        const text = withoutName > 0 
-          ? `Hai ${withoutName} ${withoutName === 1 ? 'cliente' : 'clienti'} senza nome.`
-          : textNoData(intent);
-        
-        const newStack = updateScopeStack(state, scopeToUse);
-        
-        conv.remember({
-          topic_attivo: "clients",
-          ultimo_intent: intent,
-          entita_correnti: { clientIds: [] },
-          ultimo_risultato: { names: [], withoutName },
-          scope_stack: newStack,
-        });
-        
-        return {
-          text,
-          appliedScope: scopeToUse,
-          intent,
-          usedContext: conv.state,
-        };
+      if (names.length === 0) {
+        return { text: "Non hai ancora clienti in archivio.", intent };
       }
-      
-      // 🆕 Formatta risposta con info clienti senza nome
-      let text = names.length <= 2 
-        ? names.join(" e ") + "."
-        : `${names.slice(0, -1).join(", ")} e ${names[names.length - 1]}.`;
+
+      let text: string;
+      if (names.length <= 10) {
+        // Pochi clienti: li elenco tutti
+        text = `I tuoi **${names.length}** clienti:\n${names.map(n => `• ${n}`).join('\n')}`;
+      } else {
+        // Tanti clienti: mostro i primi 10 + offro di aprire la pagina
+        text = `Hai **${names.length}** clienti. Ecco i primi 10:\n${names.slice(0, 10).map(n => `• ${n}`).join('\n')}`;
+        text += `\n\n📋 **Vuoi la lista completa?** Vai su [/clients](/clients) oppure dimmi "apri clienti"`;
+      }
       
       if (withoutName > 0) {
-        text += ` (${withoutName} ${withoutName === 1 ? 'cliente' : 'clienti'} senza nome)`;
+        text += `\n\n_(${withoutName} clienti senza nome)_`;
       }
       
-      const newStack = updateScopeStack(state, scopeToUse);
-      
-      conv.remember({
-        topic_attivo: "clients",
-        ultimo_intent: intent,
-        entita_correnti: { clientIds: [] },
-        ultimo_risultato: { names, withoutName },
-        scope_stack: newStack,
-      });
-      
-      return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
+      return { text, intent };
     }
 
-    case "list_client_emails": {
-      if (!crypto) return needCrypto();
-      const emails = await listClientEmails(crypto);
-      if (!emails || emails.length === 0) {
-        return {
-          text: textNoData(intent),
-          appliedScope: scopeToUse,
-          intent,
-          usedContext: state,
+    case 'client_search': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const query = entities.clientName || '';
+      if (!query) {
+        return { text: "Chi vuoi cercare? Dimmi il nome del cliente.", intent };
+      }
+      const result = await searchClients(crypto, query);
+      return { text: result.message, intent };
+    }
+
+    case 'client_detail': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+      if (!clientName) {
+        return { text: "Di quale cliente vuoi le informazioni?", intent };
+      }
+      // Mostra info base + ultima visita + vendite
+      const [visitResult, salesResult] = await Promise.all([
+        getLastVisitToClient(crypto, clientName),
+        getSalesByClient(crypto, clientName)
+      ]);
+      
+      if (!visitResult.found) {
+        return { text: visitResult.message, intent };
+      }
+
+      let text = `📋 **${visitResult.clientName}**\n\n`;
+      text += visitResult.message + '\n';
+      if (salesResult.found && salesResult.totalAmount > 0) {
+        text += `\n💰 Totale vendite: €${salesResult.totalAmount.toLocaleString('it-IT')}`;
+      }
+      
+      return { text, intent };
+    }
+
+    case 'client_create': {
+      const clientName = entities.clientName;
+      if (!clientName) {
+        return { 
+          text: "Come si chiama il nuovo cliente? Puoi dire: \"Nuovo cliente Mario Rossi\"", 
+          intent 
         };
       }
-      const text = applyTemplate(getTemplate(intent), { EMAILS: emails.join(", ") });
-      
-      const newStack = updateScopeStack(state, scopeToUse);
-      
-      conv.remember({
-        topic_attivo: "clients",
-        ultimo_intent: intent,
-        entita_correnti: { clientIds: [] },
-        ultimo_risultato: emails,
-        scope_stack: newStack,
-      });
-      return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
+      // Non creiamo direttamente, suggeriamo di usare lo strumento
+      return {
+        text: `Per creare il cliente **${clientName}**, usa lo strumento "Nuovo Cliente" nel menu laterale, oppure vai su /tools/quick-add-client`,
+        intent,
+      };
     }
 
-    // ——— PRODUCTS ———
-    case "list_missing_products": {
-      if (!crypto) return needCrypto();
+    // ═══════════════════════════════════════════════════════════════
+    // VISITE
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'visit_count': {
+      // Mappa quarter a month per ora (countVisits non supporta quarter)
+      const period = entities.period === 'quarter' ? 'month' : entities.period;
+      const n = await countVisits(period as 'today' | 'week' | 'month' | 'year' | undefined);
+      const periodLabel = entities.period === 'today' ? 'oggi' : 
+                          entities.period === 'week' ? 'questa settimana' :
+                          entities.period === 'month' ? 'questo mese' :
+                          entities.period === 'quarter' ? 'questo trimestre' :
+                          entities.period === 'year' ? "quest'anno" : 'in totale';
+      return {
+        text: `Hai fatto **${n}** ${n === 1 ? 'visita' : 'visite'} ${periodLabel}.`,
+        intent,
+      };
+    }
+
+    case 'visit_today': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const visits = await getVisitsToday(crypto);
+      
+      if (visits.length === 0) {
+        return { text: "Non hai ancora registrato visite oggi.", intent };
+      }
+
+      const lines = visits.map(v => {
+        let line = `• **${v.clientName}** (${v.tipo})`;
+        if (v.importo_vendita) line += ` - €${v.importo_vendita}`;
+        return line;
+      });
+
+      const total = visits.reduce((sum, v) => sum + (v.importo_vendita ?? 0), 0);
+      let text = `📍 **Visite di oggi** (${visits.length}):\n${lines.join('\n')}`;
+      if (total > 0) {
+        text += `\n\n💰 Totale: €${total.toLocaleString('it-IT')}`;
+      }
+      
+      return { text, intent };
+    }
+
+    case 'visit_last': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+      if (!clientName) {
+        return { text: "Di quale cliente vuoi sapere l'ultima visita?", intent };
+      }
+      const result = await getLastVisitToClient(crypto, clientName);
+      return { text: result.message, intent };
+    }
+
+    case 'visit_history': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+      if (!clientName) {
+        return { text: "Di quale cliente vuoi lo storico visite?", intent };
+      }
+      const result = await getVisitHistoryForClient(crypto, clientName);
+      return { text: result.message, intent };
+    }
+
+    case 'visit_create': {
+      const clientName = entities.clientName;
+      const amount = entities.amount;
+      
+      let text = "Per registrare una visita, usa lo strumento \"Nuova Visita\" nel menu laterale";
+      if (clientName || amount) {
+        text += ".\n\nHo capito:";
+        if (clientName) text += `\n• Cliente: ${clientName}`;
+        if (amount) text += `\n• Importo: €${amount}`;
+        text += "\n\n👉 Vai su /tools/add-visit per completare la registrazione.";
+      }
+      
+      return { text, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // VENDITE
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'sales_summary':
+    case 'sales_month': {
+      // Mappa quarter a month per ora (getSalesSummary non supporta quarter)
+      const rawPeriod = entities.period ?? 'month';
+      const period = rawPeriod === 'quarter' ? 'month' : rawPeriod;
+      const result = await getSalesSummary(period as 'today' | 'week' | 'month' | 'year' | undefined);
+      return { text: result.message, intent };
+    }
+
+    case 'sales_today': {
+      const result = await getSalesSummary('today');
+      return { text: result.message, intent };
+    }
+
+    case 'sales_by_client': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+      if (!clientName) {
+        return { text: "Di quale cliente vuoi le vendite?", intent };
+      }
+      const result = await getSalesByClient(crypto, clientName);
+      return { text: result.message, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PRODOTTI
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'product_discussed': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+      if (!clientName) {
+        return { text: "Con quale cliente vuoi sapere i prodotti discussi?", intent };
+      }
+      const result = await getProductsDiscussedWithClient(crypto, clientName);
+      return { text: result.message, intent };
+    }
+
+    case 'product_missing': {
+      if (!crypto) return { ...needCrypto(), intent };
       const missing = await listMissingProducts(crypto);
-      if (!missing || missing.length === 0) {
+      if (missing.length === 0) {
+        return { text: "Non ci sono prodotti mancanti al momento.", intent };
+      }
+      return { 
+        text: `⚠️ Prodotti mancanti: ${missing.join(", ")}`,
+        intent 
+      };
+    }
+
+    case 'product_search': {
+      const productName = entities.productName;
+      if (!productName) {
+        return { text: "Quale prodotto vuoi cercare?", intent };
+      }
+      return { 
+        text: `La ricerca prodotti nel catalogo non è ancora implementata. Cercavi: "${productName}"`,
+        intent 
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // PLANNING
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'planning_today': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getTodayPlanning(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'planning_callbacks': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getCallbacks(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'planning_week': {
+      return { 
+        text: "Il planning settimanale non è ancora implementato. Prova con \"Cosa devo fare oggi?\"",
+        intent 
+      };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // NAVIGAZIONE
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'navigate': {
+      const target = entities.targetPage;
+      const pages: Record<string, { url: string; name: string }> = {
+        clients: { url: '/clients', name: 'Lista Clienti' },
+        visits: { url: '/visits', name: 'Lista Visite' },
+        products: { url: '/products', name: 'Prodotti' },
+        documents: { url: '/documents', name: 'Documenti' },
+        settings: { url: '/settings', name: 'Impostazioni' },
+      };
+      
+      if (target && pages[target]) {
+        const { url, name } = pages[target];
         return {
-          text: textNoData(intent),
-          appliedScope: scopeToUse,
+          text: `📂 **${name}**\n\n👉 [Clicca qui per aprire](${url})\n\nOppure usa il menu laterale destro.`,
           intent,
-          usedContext: state,
         };
       }
-      const text = applyTemplate(getTemplate(intent), { PRODOTTI: missing.join(", ") });
       
-      const newStack = updateScopeStack(state, scopeToUse);
-      
-      conv.remember({
-        topic_attivo: "prodotti",
-        ultimo_intent: intent,
-        entita_correnti: {},
-        ultimo_risultato: missing,
-        scope_stack: newStack,
-      });
-      return { text, appliedScope: scopeToUse, intent, usedContext: conv.state };
-    }
-
-    // ——— non ancora implementati ———
-    case "list_orders_recent": {
       return {
-        text: "Gli **ordini recenti** non sono ancora disponibili in questo ambiente.",
-        appliedScope: scopeToUse,
+        text: "Dove vuoi andare? Posso aprirti: clienti, visite, prodotti, documenti o impostazioni.",
         intent,
-        usedContext: state,
       };
     }
 
-    case "summary_sales": {
-      return {
-        text: "Le **statistiche di vendita** non sono ancora disponibili in questo ambiente.",
-        appliedScope: scopeToUse,
-        intent,
-        usedContext: state,
-      };
+    // ═══════════════════════════════════════════════════════════════
+    // CONFERME
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'confirm': {
+      // Gestisce conferme basate sull'ultimo intent
+      const lastIntent = state.ultimo_intent;
+      if (lastIntent === 'visit_create') {
+        return { 
+          text: "Perfetto! Vai su /tools/add-visit per completare la registrazione della visita.",
+          intent 
+        };
+      }
+      return { text: "Ok! Come posso aiutarti?", intent };
     }
 
-    case "greet": {
-      return {
-        text: "Ciao! Posso aiutarti con informazioni su clienti, prodotti o ordini.",
-        appliedScope: state.scope,
-        intent,
-        usedContext: state,
-      };
-    }
+    // ═══════════════════════════════════════════════════════════════
+    // UNKNOWN
+    // ═══════════════════════════════════════════════════════════════
 
-    case "help": {
-      return {
-        text: "Puoi chiedermi di: contare i clienti, mostrare nomi ed email, verificare prodotti mancanti.",
-        appliedScope: state.scope,
-        intent,
-        usedContext: state,
-      };
-    }
-
+    case 'unknown':
     default: {
-      console.debug("[planner:unknown_intent]", intent);
-      return fallbackUnknown(state);
+      return {
+        text: parsed.suggestedResponse || getContextualHelp(state),
+        intent: 'unknown',
+      };
     }
   }
+}
+
+// ==================== AIUTO CONTESTUALE ====================
+
+function getContextualHelp(state: ConversationContextState): string {
+  const topic = state.topic_attivo;
+  
+  const examples: Record<string, string[]> = {
+    clients: [
+      "Quanti clienti ho?",
+      "Cerca cliente Rossi",
+      "Lista clienti",
+    ],
+    visits: [
+      "Quando ho visto Rossi?",
+      "Visite di oggi",
+      "Quante visite ho fatto questo mese?",
+    ],
+    sales: [
+      "Quanto ho venduto questo mese?",
+      "Vendite a Rossi",
+      "Vendite di oggi",
+    ],
+    products: [
+      "Prodotti mancanti",
+      "Cosa ho discusso con Rossi?",
+    ],
+    planning: [
+      "Cosa devo fare oggi?",
+      "Chi devo richiamare?",
+    ],
+  };
+
+  let text = "Non ho capito. Ecco cosa puoi chiedermi:\n\n";
+  
+  if (topic && examples[topic]) {
+    text += `**${topic.charAt(0).toUpperCase() + topic.slice(1)}:**\n`;
+    text += examples[topic].map(e => `• "${e}"`).join('\n');
+    text += "\n\n";
+  }
+
+  // Aggiungi sempre qualche esempio generico
+  const allTopics = Object.keys(examples);
+  const otherTopics = topic ? allTopics.filter(t => t !== topic) : allTopics;
+  
+  text += "**Altri argomenti:**\n";
+  for (const t of otherTopics.slice(0, 3)) {
+    text += `• "${examples[t][0]}"\n`;
+  }
+
+  return text;
 }

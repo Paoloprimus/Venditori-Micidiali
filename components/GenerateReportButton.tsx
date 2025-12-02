@@ -47,8 +47,11 @@ function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: numbe
   return R * c;
 }
 
-// Format durata
+// Format durata (con fallback per valori invalidi)
 function formatDuration(minutes: number): string {
+  // Gestisce NaN, undefined, null
+  if (!minutes || isNaN(minutes) || minutes <= 0) return "0m";
+  
   const h = Math.floor(minutes / 60);
   const m = Math.round(minutes % 60);
   if (h === 0) return `${m}m`;
@@ -72,16 +75,19 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error('Non autenticato');
 
-      // 2. Recupera Piano per orario inizio (se disponibile)
+      // 2. Recupera Piano per orario inizio UFFICIALE (started_at in route_data)
       let dayStartTime: Date | null = null;
       const { data: plan } = await supabase
           .from('daily_plans')
-          .select('updated_at')
+          .select('route_data')
           .eq('user_id', user.id)
           .eq('data', data)
           .single();
-      if (plan?.updated_at) {
-          dayStartTime = new Date(plan.updated_at);
+      
+      // Usa started_at dal JSON route_data (impostato quando utente preme "Avvia Giornata")
+      if (plan?.route_data?.started_at) {
+          dayStartTime = new Date(plan.route_data.started_at);
+          console.log('[Report] Start Piano (DB):', dayStartTime.toLocaleString());
       }
 
       // 3. Recupera visite della giornata (AGGIUNTO 'durata')
@@ -102,8 +108,25 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
         return;
       }
 
+      // 🔧 FIX BUG #4: Deduplicazione visite (prende solo la prima per ogni cliente)
+      // Questo previene duplicati nel report anche se esistono nel DB
+      const seenAccountIds = new Set<string>();
+      const uniqueVisits = visitsData.filter(v => {
+        if (seenAccountIds.has(v.account_id)) {
+          console.warn('[Report] ⚠️ Visita duplicata trovata per account:', v.account_id);
+          return false;
+        }
+        seenAccountIds.add(v.account_id);
+        return true;
+      });
+      
+      console.log(`[Report] Visite totali: ${visitsData.length}, Uniche: ${uniqueVisits.length}`);
+      
+      // Usa le visite deduplicate per il resto del processo
+      const processedVisits = uniqueVisits;
+
       // 4. Recupera dati clienti (AGGIUNTO lat/long)
-      const clientIds = [...new Set(visitsData.map(v => v.account_id))];
+      const clientIds = [...new Set(processedVisits.map(v => v.account_id))];
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
         .select('id, name_enc, name_iv, city, latitude, longitude')
@@ -166,17 +189,40 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
       let prevLon: number | undefined;
       let totalVisitMinutes = 0;
 
-      // Calcolo tempi totali
-      const firstVisitEnd = new Date(visitsData[0].data_visita);
-      const lastVisitEnd = new Date(visitsData[visitsData.length - 1].data_visita);
-      
-      // Se non abbiamo l'orario di inizio piano, stimiamo basandoci sulla fine della prima visita
-      const startTime = dayStartTime || new Date(firstVisitEnd.getTime() - ((visitsData[0].durata || 15) * 60000));
-      const endTime = lastVisitEnd;
-      
-      const totalWorkMinutes = Math.max(0, Math.round((endTime.getTime() - startTime.getTime()) / 60000));
+      // --- LOGICA TEMPI ROBUSTA ---
+      const firstVisit = processedVisits[0];
+      const lastVisit = processedVisits[processedVisits.length - 1];
 
-      for (const visit of visitsData) {
+      // Calcoliamo quando è iniziata effettivamente la prima visita
+      const firstVisitEndTime = new Date(firstVisit.data_visita).getTime();
+      const firstVisitStartTime = firstVisitEndTime - ((firstVisit.durata || 0) * 60000);
+      
+      // L'inizio della giornata è il MINIMO tra "Avvia Piano" e "Inizio Prima Visita"
+      let startDayMs = firstVisitStartTime;
+      
+      if (dayStartTime) {
+         const planStartMs = dayStartTime.getTime();
+         // Se il piano è stato avviato PRIMA della prima visita (caso normale), usiamo quello
+         if (planStartMs < firstVisitStartTime) {
+            startDayMs = planStartMs; 
+         } else {
+            console.warn('[Report] Start Piano successivo alla prima visita, uso inizio visita.');
+         }
+      }
+
+      // Fine giornata = Fine ultima visita
+      const endDayMs = new Date(lastVisit.data_visita).getTime();
+      
+      // Tempo totale lavoro = Fine - Inizio
+      const totalWorkMinutes = Math.max(0, Math.round((endDayMs - startDayMs) / 60000));
+      
+      console.log('[Report] Tempi calcolati:', {
+        startDayMs: new Date(startDayMs).toLocaleTimeString(),
+        endDayMs: new Date(endDayMs).toLocaleTimeString(),
+        totalWorkMinutes
+      });
+
+      for (const visit of processedVisits) {
         const account = accountsMap.get(visit.account_id);
         
         // Km
@@ -196,7 +242,7 @@ export default function GenerateReportButton({ data, accountIds, onSuccess }: Pr
       const travelMinutes = Math.max(0, totalWorkMinutes - totalVisitMinutes);
 
       // 7. Prepara dati per report
-      const visite: VisitaDetail[] = visitsData.map((v) => {
+      const visite: VisitaDetail[] = processedVisits.map((v) => {
         const client = accountsMap.get(v.account_id);
         const dataOra = new Date(v.data_visita).toLocaleTimeString('it-IT', {
           hour: '2-digit',

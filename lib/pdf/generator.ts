@@ -3,7 +3,7 @@
 
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import type { ReportVisiteData, ReportListaClientiData } from './types';
+import type { ReportVisiteData, ReportListaClientiData, ReportSchedaClienteData } from './types';
 
 /**
  * Genera PDF per Report Visite (giornaliero, settimanale o periodo)
@@ -296,4 +296,185 @@ function formatEsito(esito: string): string {
   };
   
   return esitoMap[esito] || esito;
+}
+
+/**
+ * Genera PDF per Scheda Cliente
+ * @returns Blob del PDF generato
+ */
+export async function generateReportSchedaCliente(data: ReportSchedaClienteData): Promise<Blob> {
+  const doc = new jsPDF();
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  let yPos = 20;
+
+  // ============== HEADER ==============
+  doc.setFontSize(20);
+  doc.setFont('Times', 'bold');
+  doc.text('REPING', pageWidth / 2, yPos, { align: 'center' });
+  
+  yPos += 10;
+  doc.setFontSize(16);
+  doc.text('Scheda Cliente', pageWidth / 2, yPos, { align: 'center' });
+  
+  yPos += 8;
+  doc.setFontSize(14);
+  doc.setFont('Times', 'normal');
+  doc.text(data.cliente.nome || 'Cliente', pageWidth / 2, yPos, { align: 'center' });
+  
+  yPos += 6;
+  doc.setFontSize(10);
+  doc.setTextColor(100);
+  doc.text(`Generato il: ${data.dataGenerazione}`, pageWidth / 2, yPos, { align: 'center' });
+  
+  yPos += 10;
+  
+  // Linea separatore
+  doc.setDrawColor(200);
+  doc.line(15, yPos, pageWidth - 15, yPos);
+  yPos += 10;
+
+  // ============== KPI ==============
+  doc.setFontSize(12);
+  doc.setFont('Times', 'bold');
+  doc.setTextColor(0);
+  doc.text('Riepilogo', 15, yPos);
+  yPos += 8;
+
+  doc.setFontSize(10);
+  doc.setFont('Times', 'normal');
+  
+  const col1X = 20;
+  const col2X = 80;
+  const col3X = 140;
+  
+  // Riga 1
+  doc.text(`Vendite Totali: EUR ${data.stats.totaleVendite.toFixed(2)}`, col1X, yPos);
+  doc.text(`Visite: ${data.stats.totaleVisite}`, col2X, yPos);
+  doc.text(`Chiamate: ${data.stats.totaleChiamate}`, col3X, yPos);
+  
+  // Riga 2
+  yPos += 6;
+  doc.text(`Vendite Mese: EUR ${data.stats.venditeMese.toFixed(2)}`, col1X, yPos);
+  doc.text(`Attivita Mese: ${data.stats.visiteMese}`, col2X, yPos);
+  doc.text(`Durata Media: ${data.stats.mediaDurataVisita} min`, col3X, yPos);
+  
+  // Riga 3
+  yPos += 6;
+  doc.text(`Ultima Attivita: ${data.stats.ultimaVisita || 'Nessuna'}`, col1X, yPos);
+  
+  yPos += 12;
+
+  // ============== DATI ANAGRAFICI ==============
+  doc.setFontSize(12);
+  doc.setFont('Times', 'bold');
+  doc.text('Dati Anagrafici', 15, yPos);
+  yPos += 8;
+
+  doc.setFontSize(10);
+  doc.setFont('Times', 'normal');
+  
+  const anagrafici = [
+    ['Nome Azienda:', data.cliente.nome || '-'],
+    ['Contatto:', data.cliente.contatto || '-'],
+    ['Tipo Locale:', data.cliente.tipoLocale || '-'],
+    ['Indirizzo:', `${data.cliente.indirizzo || '-'}${data.cliente.citta ? ', ' + data.cliente.citta : ''}`],
+    ['Telefono:', data.cliente.telefono || '-'],
+    ['Email:', data.cliente.email || '-'],
+    ['P.IVA:', data.cliente.piva || '-'],
+    ['Cliente dal:', data.cliente.clienteDal || '-'],
+  ];
+  
+  anagrafici.forEach(([label, value]) => {
+    doc.setFont('Times', 'bold');
+    doc.text(label, 20, yPos);
+    doc.setFont('Times', 'normal');
+    doc.text(value, 55, yPos);
+    yPos += 5;
+  });
+  
+  yPos += 5;
+
+  // ============== NOTE ==============
+  if (data.cliente.note) {
+    doc.setFontSize(12);
+    doc.setFont('Times', 'bold');
+    doc.text('Note', 15, yPos);
+    yPos += 6;
+    
+    doc.setFontSize(9);
+    doc.setFont('Times', 'normal');
+    
+    // Wrap text for notes
+    const noteLines = doc.splitTextToSize(data.cliente.note, pageWidth - 40);
+    doc.text(noteLines, 20, yPos);
+    yPos += noteLines.length * 4 + 8;
+  }
+
+  // ============== STORICO ATTIVITA ==============
+  doc.setFontSize(12);
+  doc.setFont('Times', 'bold');
+  doc.text('Storico Attivita', 15, yPos);
+  yPos += 5;
+
+  if (data.attivita.length === 0) {
+    doc.setFontSize(10);
+    doc.setFont('Times', 'italic');
+    doc.text('Nessuna attivita registrata.', 20, yPos + 5);
+  } else {
+    const tableData = data.attivita.map((a) => [
+      a.data,
+      a.tipo === 'visita' ? 'Visita' : 'Chiamata',
+      formatEsito(a.esito),
+      a.importo ? `EUR ${a.importo.toFixed(2)}` : '-',
+      a.durata ? `${a.durata}m` : '-',
+      a.note || '-'
+    ]);
+
+    autoTable(doc, {
+      startY: yPos,
+      head: [['Data', 'Tipo', 'Esito', 'Importo', 'Durata', 'Note']],
+      body: tableData,
+      theme: 'striped',
+      styles: { 
+        font: 'Times',
+        fontSize: 8,
+        cellPadding: 3,
+        overflow: 'linebreak'
+      },
+      headStyles: { 
+        fillColor: [37, 99, 235],
+        textColor: 255,
+        fontStyle: 'bold',
+        font: 'Times'
+      },
+      columnStyles: {
+        0: { cellWidth: 22 },  // Data
+        1: { cellWidth: 20 },  // Tipo
+        2: { cellWidth: 25 },  // Esito
+        3: { cellWidth: 25 },  // Importo
+        4: { cellWidth: 18 },  // Durata
+        5: { cellWidth: 'auto' } // Note
+      },
+      didDrawPage: () => {
+        // Footer con numero pagina
+        const pageCount = (doc as any).internal.getNumberOfPages();
+        const currentPage = (doc as any).internal.getCurrentPageInfo().pageNumber;
+        
+        doc.setFontSize(8);
+        doc.setFont('Times', 'normal');
+        doc.setTextColor(150);
+        doc.text(
+          `${data.cliente.nome} - Generato il ${data.dataGenerazione} - Pagina ${currentPage}/${pageCount}`,
+          pageWidth / 2,
+          pageHeight - 10,
+          { align: 'center' }
+        );
+      }
+    });
+  }
+
+  // Genera blob
+  const pdfBlob = doc.output('blob');
+  return pdfBlob;
 }

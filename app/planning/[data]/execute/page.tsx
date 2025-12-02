@@ -16,7 +16,7 @@
  */
 
 import { useRouter, useParams } from 'next/navigation';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
 import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
@@ -68,6 +68,9 @@ export default function ExecutePlanPage() {
   const [ordine, setOrdine] = useState('');
   const [noteVisita, setNoteVisita] = useState('');
   const [saving, setSaving] = useState(false);
+  
+  // ✅ FIX: Ref per prevenire doppi salvataggi (race condition)
+  const savingRef = useRef(false);
 
   // Stats
   const [completed, setCompleted] = useState(0);
@@ -212,8 +215,16 @@ export default function ExecutePlanPage() {
   }
 
   // MODIFICATO: Salva visita con tempi reali
+  // ✅ FIX: Aggiunto lock con ref per prevenire doppi salvataggi
   async function saveVisit(esito: 'ordine_acquisito' | 'altro', ordineValue?: string) {
     if (!currentClient) return;
+    
+    // ✅ Controllo doppio-click con ref (più veloce dello state)
+    if (savingRef.current) {
+      console.log('[Execute] ⚠️ Salvataggio già in corso, ignoro');
+      return;
+    }
+    savingRef.current = true;
 
     setSaving(true);
     try {
@@ -221,6 +232,29 @@ export default function ExecutePlanPage() {
       if (!user) throw new Error('Non autenticato');
 
       const now = new Date();
+
+      // 🔧 FIX BUG #4: Controlla se esiste già una visita per questo cliente oggi
+      // Questo previene duplicati anche in caso di race condition o bug
+      const todayStart = `${dataStr}T00:00:00`;
+      const todayEnd = `${dataStr}T23:59:59`;
+      
+      const { data: existingVisits, error: checkError } = await supabase
+        .from('visits')
+        .select('id')
+        .eq('user_id', user.id)
+        .eq('account_id', currentClient.id)
+        .gte('data_visita', todayStart)
+        .lte('data_visita', todayEnd)
+        .limit(1);
+      
+      if (checkError) {
+        console.error('[Execute] Errore check duplicati:', checkError);
+      } else if (existingVisits && existingVisits.length > 0) {
+        console.warn('[Execute] ⚠️ Visita già registrata per questo cliente oggi, salto duplicato');
+        // Non mostriamo errore all'utente, procediamo silenziosamente
+        setCurrentIndex(prev => prev + 1);
+        return;
+      }
 
       // Calcolo durata in minuti
       let durataMinuti = 0;
@@ -268,6 +302,7 @@ export default function ExecutePlanPage() {
       alert(`Errore: ${e.message}`);
     } finally {
       setSaving(false);
+      savingRef.current = false; // ✅ Reset del lock
     }
   }
 

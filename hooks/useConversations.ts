@@ -296,6 +296,7 @@ export function useConversations(opts: Options = {}) {
   const [serverError, setServerError] = useState<string | null>(null);
   const [modelBadge, setModelBadge] = useState<string>("…");
   const [currentConv, setCurrentConv] = useState<Conv | null>(null);
+  const [isSending, setIsSending] = useState(false);  // 🆕 Stato per typing indicator
 
   const taRef = useRef<HTMLTextAreaElement | null>(null);
   const threadRef = useRef<HTMLDivElement>(null);
@@ -384,6 +385,7 @@ export function useConversations(opts: Options = {}) {
     const conv = await ensureConversation();
 
     setBubbles((b) => [...b, { role: "user", content: txt }]);
+    setIsSending(true);  // 🆕 Mostra typing indicator
 
     try {
       const replyText = await sendMessage({ 
@@ -412,6 +414,8 @@ export function useConversations(opts: Options = {}) {
       }
       setServerError(e?.message || "Errore invio messaggio");
       setBubbles((b) => b.filter((m) => m.role !== "user" || m.content !== txt));
+    } finally {
+      setIsSending(false);  // 🆕 Nascondi typing indicator
     }
   }
 
@@ -482,6 +486,7 @@ export function useConversations(opts: Options = {}) {
     modelBadge,
     currentConv,
     setCurrentConv,
+    isSending,  // 🆕 Per typing indicator
     taRef,
     threadRef,
     endRef,

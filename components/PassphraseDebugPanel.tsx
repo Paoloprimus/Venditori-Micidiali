@@ -42,7 +42,7 @@ export default function PassphraseDebugPanel() {
   const [sessionHas, setSessionHas] = useState(false);
   const [localHas, setLocalHas] = useState(false);
   const [lastCheck, setLastCheck] = useState<string>("");
-  const [isMinimized, setIsMinimized] = useState(false);
+  const [isMinimized, setIsMinimized] = useState(true); // ✅ Minimizzato di default
   const [autoRefresh, setAutoRefresh] = useState(true);
 
   // Controlla lo stato della passphrase

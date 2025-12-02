@@ -27,6 +27,7 @@ import PromemoriaList from './PromemoriaList';
 import PromemoriaForm from './PromemoriaForm';
 import { geocodeAddress } from '@/lib/geocoding';
 import { supabase } from '@/lib/supabase/client';
+import ClientSearchBox from './ClientSearchBox';
 
 /* ----------------------- Hook stato drawer sx/dx ----------------------- */
 export type RightDrawerContent = 'dati' | 'docs' | 'impostazioni' | null;
@@ -75,6 +76,18 @@ export function LeftDrawer({
       // Default: chiudi drawer e vai alla home con la conversazione
       onClose();
       if (typeof window !== 'undefined') {
+        // 🔔 Forza la modalità "chat" quando si seleziona una conversazione
+        // Salva in localStorage (così persiste dopo il reload)
+        try {
+          const saved = localStorage.getItem('repping_settings');
+          const data = saved ? JSON.parse(saved) : {};
+          data.homePageMode = 'chat';
+          localStorage.setItem('repping_settings', JSON.stringify(data));
+        } catch {}
+        // Dispatch evento (per aggiornamento immediato se non c'è reload)
+        window.dispatchEvent(new CustomEvent('repping:homePageModeChanged', { 
+          detail: { mode: 'chat' } 
+        }));
         window.location.href = '/';
       }
     }
@@ -259,40 +272,8 @@ export function DrawersWithBackdrop({
 function DrawerDati({ onClose }: { onClose: () => void }) {
   const [tab, setTab] = useState<'clienti' | 'prodotti' | 'uscite'>('uscite');
   
-  // 🆕 Stato per ricerca scheda cliente
+  // 🆕 Stato per accordion ricerca cliente
   const [showClientSearch, setShowClientSearch] = useState(false);
-  const [clientQuery, setClientQuery] = useState('');
-  const [clientResults, setClientResults] = useState<Array<{id: string, name: string, city: string}>>([]);
-  const [searchingClients, setSearchingClients] = useState(false);
-  
-  // Cerca clienti (per city/tipo_locale in chiaro)
-  async function searchClients(query: string) {
-    if (!query.trim() || query.length < 2) {
-      setClientResults([]);
-      return;
-    }
-    
-    setSearchingClients(true);
-    try {
-      const { data } = await supabase
-        .from('accounts')
-        .select('id, city, tipo_locale')
-        .or(`city.ilike.%${query}%,tipo_locale.ilike.%${query}%`)
-        .limit(10);
-      
-      const results = (data || []).map((c: any) => ({
-        id: c.id,
-        name: c.tipo_locale || 'Cliente',
-        city: c.city || '',
-      }));
-      
-      setClientResults(results);
-    } catch (e) {
-      console.error('[DrawerDati] Search error:', e);
-    } finally {
-      setSearchingClients(false);
-    }
-  }
   
   function goToClientDetail(clientId: string) {
     onClose();
@@ -491,7 +472,7 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
               📋 Lista clienti
             </button>
             
-            {/* 🆕 Accordion per ricerca scheda cliente */}
+            {/* 🆕 Accordion per ricerca scheda cliente (con nome decifrato) */}
             <div style={{ border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
               <button 
                 className="btn"
@@ -512,64 +493,10 @@ function DrawerDati({ onClose }: { onClose: () => void }) {
               
               {showClientSearch && (
                 <div style={{ padding: 12, background: '#f9fafb', borderTop: '1px solid #e5e7eb' }}>
-                  <input
-                    type="text"
-                    placeholder="Cerca per città o tipo locale..."
-                    value={clientQuery}
-                    onChange={(e) => {
-                      setClientQuery(e.target.value);
-                      searchClients(e.target.value);
-                    }}
-                    style={{
-                      width: '100%',
-                      padding: '8px 12px',
-                      borderRadius: 6,
-                      border: '1px solid #d1d5db',
-                      fontSize: 14,
-                      marginBottom: 8,
-                    }}
+                  <ClientSearchBox 
+                    onSelect={goToClientDetail}
+                    placeholder="Cerca per nome, città o tipo..."
                   />
-                  
-                  {searchingClients && (
-                    <div style={{ fontSize: 12, color: '#6b7280', padding: 8 }}>Cerco...</div>
-                  )}
-                  
-                  {!searchingClients && clientResults.length > 0 && (
-                    <div style={{ maxHeight: 200, overflowY: 'auto' }}>
-                      {clientResults.map((c) => (
-                        <button
-                          key={c.id}
-                          onClick={() => goToClientDetail(c.id)}
-                          style={{
-                            width: '100%',
-                            padding: '8px 12px',
-                            textAlign: 'left',
-                            background: 'white',
-                            border: '1px solid #e5e7eb',
-                            borderRadius: 6,
-                            marginBottom: 4,
-                            cursor: 'pointer',
-                            fontSize: 13,
-                          }}
-                        >
-                          <div style={{ fontWeight: 500 }}>{c.name}</div>
-                          {c.city && <div style={{ fontSize: 11, color: '#6b7280' }}>📍 {c.city}</div>}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {!searchingClients && clientQuery.length >= 2 && clientResults.length === 0 && (
-                    <div style={{ fontSize: 12, color: '#9ca3af', padding: 8, textAlign: 'center' }}>
-                      Nessun risultato. Prova dalla <a href="/clients" style={{ color: '#2563eb' }}>lista completa</a>.
-                    </div>
-                  )}
-                  
-                  {clientQuery.length < 2 && (
-                    <div style={{ fontSize: 11, color: '#9ca3af', textAlign: 'center' }}>
-                      Digita almeno 2 caratteri
-                    </div>
-                  )}
                 </div>
               )}
             </div>
@@ -969,6 +896,10 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
   const [saving, setSaving] = useState(false);
   const [savedCoords, setSavedCoords] = useState<string | null>(null);
 
+  // 🆕 Stato Pagina Iniziale (chat o dashboard)
+  const [homePageExpanded, setHomePageExpanded] = useState(false);
+  const [homePageMode, setHomePageMode] = useState<'chat' | 'dashboard'>('chat');
+
   // Carica profilo utente
   useEffect(() => {
     async function loadProfile() {
@@ -1000,7 +931,7 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
     loadProfile();
   }, []);
 
-  // Carica impostazioni indirizzo salvate
+  // Carica impostazioni salvate (indirizzo + pagina iniziale)
   useEffect(() => {
     const saved = localStorage.getItem('repping_settings');
     if (saved) {
@@ -1011,9 +942,27 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
         if (data.homeLat && data.homeLon) {
           setSavedCoords(`${data.homeLat}, ${data.homeLon}`);
         }
+        // 🆕 Carica preferenza pagina iniziale
+        if (data.homePageMode === 'dashboard' || data.homePageMode === 'chat') {
+          setHomePageMode(data.homePageMode);
+        }
       } catch {}
     }
   }, []);
+
+  // 🆕 Salva preferenza pagina iniziale + notifica cambio
+  function handleHomePageModeChange(mode: 'chat' | 'dashboard') {
+    setHomePageMode(mode);
+    try {
+      const saved = localStorage.getItem('repping_settings');
+      const data = saved ? JSON.parse(saved) : {};
+      data.homePageMode = mode;
+      localStorage.setItem('repping_settings', JSON.stringify(data));
+      
+      // 🔔 Notifica il cambio a HomeClient tramite evento custom
+      window.dispatchEvent(new CustomEvent('repping:homePageModeChanged', { detail: { mode } }));
+    } catch {}
+  }
 
   // Salva profilo
   async function handleSaveProfile() {
@@ -1252,7 +1201,14 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
               color: '#111827',
             }}
           >
-            <span>📍 Punto di Partenza</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+              <span>📍 Punto di Partenza</span>
+              {homeAddress && homeCity && !addressExpanded && (
+                <span style={{ fontSize: 11, color: '#059669', fontWeight: 400 }}>
+                  ✓ {homeAddress}, {homeCity}
+                </span>
+              )}
+            </div>
             <span style={{ fontSize: 12 }}>{addressExpanded ? '▲' : '▼'}</span>
           </button>
           
@@ -1264,8 +1220,29 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
               borderRadius: '0 0 8px 8px',
               background: 'white',
             }}>
+              {homeAddress && homeCity && savedCoords && (
+                <div style={{ 
+                  padding: 12, 
+                  background: '#f0fdf4', 
+                  borderRadius: 8, 
+                  marginBottom: 16,
+                  border: '1px solid #bbf7d0',
+                }}>
+                  <div style={{ fontSize: 12, color: '#166534', fontWeight: 600, marginBottom: 4 }}>
+                    ✓ Indirizzo salvato
+                  </div>
+                  <div style={{ fontSize: 13, color: '#166534' }}>
+                    {homeAddress}, {homeCity}
+                  </div>
+                  <div style={{ fontSize: 11, color: '#6b7280', marginTop: 4 }}>
+                    Coordinate: {savedCoords}
+                  </div>
+                </div>
+              )}
               <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
-                Imposta il tuo indirizzo di casa o ufficio. Verrà usato per ottimizzare i percorsi giornalieri.
+                {homeAddress && homeCity 
+                  ? 'Modifica il tuo indirizzo di partenza se necessario.'
+                  : 'Imposta il tuo indirizzo di casa o ufficio. Verrà usato per ottimizzare i percorsi giornalieri.'}
               </p>
               
               <div style={{ display: 'grid', gap: 12 }}>
@@ -1313,6 +1290,119 @@ function DrawerImpostazioni({ onClose }: { onClose: () => void }) {
                     ✅ Coordinate salvate: {savedCoords}
                   </div>
                 )}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ========== 🆕 SEZIONE PAGINA INIZIALE ========== */}
+        <div style={{ marginBottom: 16 }}>
+          <button
+            onClick={() => setHomePageExpanded(!homePageExpanded)}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '12px 16px',
+              background: '#f9fafb',
+              border: '1px solid #e5e7eb',
+              borderRadius: homePageExpanded ? '8px 8px 0 0' : 8,
+              cursor: 'pointer',
+              fontSize: 16,
+              fontWeight: 600,
+              color: '#111827',
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+              <span>🏠 Pagina Iniziale</span>
+              {!homePageExpanded && (
+                <span style={{ fontSize: 11, color: '#6b7280', fontWeight: 400 }}>
+                  {homePageMode === 'chat' ? '💬 Chat' : '📊 Dashboard'}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 12 }}>{homePageExpanded ? '▲' : '▼'}</span>
+          </button>
+          
+          {homePageExpanded && (
+            <div style={{
+              padding: 16,
+              border: '1px solid #e5e7eb',
+              borderTop: 'none',
+              borderRadius: '0 0 8px 8px',
+              background: 'white',
+            }}>
+              <p style={{ fontSize: 13, color: '#6b7280', marginBottom: 16 }}>
+                Scegli cosa vedere quando apri l'app:
+              </p>
+              
+              <div style={{ display: 'grid', gap: 12 }}>
+                {/* Opzione Chat */}
+                <button
+                  onClick={() => handleHomePageModeChange('chat')}
+                  style={{
+                    padding: 16,
+                    borderRadius: 12,
+                    border: homePageMode === 'chat' ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                    background: homePageMode === 'chat' ? '#eff6ff' : 'white',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontSize: 28 }}>💬</div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#111827', marginBottom: 2 }}>Chat Assistente</div>
+                      <div style={{ fontSize: 12, color: '#6b7280' }}>
+                        Parla con l'assistente AI per cercare clienti, prodotti, info
+                      </div>
+                    </div>
+                    {homePageMode === 'chat' && (
+                      <div style={{ marginLeft: 'auto', color: '#2563eb', fontWeight: 600 }}>✓</div>
+                    )}
+                  </div>
+                </button>
+
+                {/* Opzione Dashboard */}
+                <button
+                  onClick={() => handleHomePageModeChange('dashboard')}
+                  style={{
+                    padding: 16,
+                    borderRadius: 12,
+                    border: homePageMode === 'dashboard' ? '2px solid #2563eb' : '1px solid #e5e7eb',
+                    background: homePageMode === 'dashboard' ? '#eff6ff' : 'white',
+                    cursor: 'pointer',
+                    textAlign: 'left',
+                    transition: 'all 0.15s',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div style={{ fontSize: 28 }}>📊</div>
+                    <div>
+                      <div style={{ fontWeight: 600, color: '#111827', marginBottom: 2 }}>Dashboard</div>
+                      <div style={{ fontSize: 12, color: '#6b7280' }}>
+                        KPI giornalieri, azioni rapide, riepilogo attività
+                      </div>
+                    </div>
+                    {homePageMode === 'dashboard' && (
+                      <div style={{ marginLeft: 'auto', color: '#2563eb', fontWeight: 600 }}>✓</div>
+                    )}
+                  </div>
+                </button>
+              </div>
+
+              <div style={{ 
+                marginTop: 16, 
+                padding: 12, 
+                background: '#fef3c7', 
+                borderRadius: 8, 
+                fontSize: 12, 
+                color: '#92400e',
+                border: '1px solid #fde68a',
+              }}>
+                💡 Puoi sempre accedere all'altra vista dal menu laterale
               </div>
             </div>
           )}

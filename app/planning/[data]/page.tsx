@@ -59,7 +59,14 @@ export default function PlanningEditorPage() {
   const { crypto, ready } = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
-  const actuallyReady = crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked();
+  // 🔧 FIX: Usa `ready` dal provider + controllo isUnlocked per stabilità
+  const actuallyReady = ready || (crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked());
+  
+  // 🔧 FIX: Traccia se i dati sono già stati caricati con successo
+  const [dataLoaded, setDataLoaded] = useState(false);
+  
+  // 🔧 FIX: Contatore tentativi per retry automatico
+  const [loadAttempts, setLoadAttempts] = useState(0);
 
   async function logout() {
     try { sessionStorage.removeItem("repping:pph"); } catch {}
@@ -84,15 +91,55 @@ export default function PlanningEditorPage() {
   const [totalKm, setTotalKm] = useState(0);
 
   const dataStr = params.data as string; // YYYY-MM-DD
+  
+  // ✅ FIX: Controlla se la data è nel passato (read-only mode)
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const isPastDate = dataStr < todayStr;
 
-  // Carica dati
+  // 🔧 FIX: Carica dati quando crypto diventa pronto, oppure ri-carica se cambia data
   useEffect(() => {
-    if (actuallyReady) {
-      loadData();
+    console.log('[Planning] useEffect trigger:', { actuallyReady, dataLoaded, dataStr, loadAttempts });
+    
+    if (actuallyReady && !dataLoaded) {
+      console.log('[Planning] ✅ Crypto pronto, carico dati...');
+      loadData().then(() => {
+        setDataLoaded(true);
+        console.log('[Planning] ✅ Dati caricati con successo');
+      }).catch((e) => {
+        console.error('[Planning] ❌ Errore caricamento:', e);
+      });
     }
-  }, [actuallyReady, dataStr]);
+  }, [actuallyReady, dataStr, loadAttempts]);
+  
+  // 🔧 FIX: Se crypto non è pronto dopo 2 secondi, riprova
+  useEffect(() => {
+    if (dataLoaded || actuallyReady) return;
+    
+    const timeout = setTimeout(() => {
+      if (!actuallyReady && loadAttempts < 3) {
+        console.log('[Planning] ⏳ Crypto non ancora pronto, tentativo', loadAttempts + 1);
+        setLoadAttempts(prev => prev + 1);
+        
+        // Prova a leggere la passphrase manualmente e sbloccare
+        const pass = sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph');
+        if (pass && crypto && typeof (crypto as any).unlockWithPassphrase === 'function') {
+          console.log('[Planning] 🔓 Tentativo sblocco manuale...');
+          (crypto as any).unlockWithPassphrase(pass).catch(() => {});
+        }
+      }
+    }, 2000);
+    
+    return () => clearTimeout(timeout);
+  }, [actuallyReady, dataLoaded, loadAttempts, crypto]);
+  
+  // 🔧 FIX: Reset dataLoaded quando cambia la data del piano
+  useEffect(() => {
+    setDataLoaded(false);
+    setLoadAttempts(0);
+  }, [dataStr]);
 
-  // Calcolo KM in tempo reale
+  // Calcolo KM in tempo reale (incluso ritorno a casa)
   useEffect(() => {
     if (selectedIds.length === 0) {
       setTotalKm(0);
@@ -100,15 +147,15 @@ export default function PlanningEditorPage() {
     }
 
     // Recupera coordinate CASA dalle impostazioni
-    let startLat: number | undefined;
-    let startLon: number | undefined;
+    let homeLat: number | undefined;
+    let homeLon: number | undefined;
     try {
       const settings = localStorage.getItem('repping_settings');
       if (settings) {
         const parsed = JSON.parse(settings);
         if (parsed.homeLat && parsed.homeLon) {
-          startLat = parseFloat(parsed.homeLat);
-          startLon = parseFloat(parsed.homeLon);
+          homeLat = parseFloat(parsed.homeLat);
+          homeLon = parseFloat(parsed.homeLon);
         }
       }
     } catch {}
@@ -119,8 +166,8 @@ export default function PlanningEditorPage() {
       .filter((c): c is Client => !!c);
 
     let km = 0;
-    let prevLat = startLat;
-    let prevLon = startLon;
+    let prevLat = homeLat;
+    let prevLon = homeLon;
 
     // Se manca casa, assumiamo partenza dal primo cliente (quindi il primo tratto è 0 km)
     if (prevLat === undefined || prevLon === undefined) {
@@ -139,46 +186,68 @@ export default function PlanningEditorPage() {
       prevLon = client.longitude;
     }
 
+    // 🔧 FIX BUG #6: Aggiungi ritorno a casa
+    if (homeLat !== undefined && homeLon !== undefined && prevLat !== undefined && prevLon !== undefined) {
+      km += calculateDistance(prevLat, prevLon, homeLat, homeLon);
+    }
+
     setTotalKm(km);
   }, [selectedIds, clients]);
 
   async function loadData() {
+    console.log('[Planning] 🚀 loadData() iniziato');
     setLoading(true);
     try {
       if (!crypto || typeof crypto.decryptFields !== 'function') {
-        console.error('Crypto non disponibile o decryptFields non presente');
+        console.error('[Planning] ❌ Crypto non disponibile o decryptFields non presente');
         return;
       }
+      console.log('[Planning] ✅ Crypto disponibile, isUnlocked:', (crypto as any).isUnlocked?.());
 
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
+        console.log('[Planning] ❌ User non autenticato, redirect a login');
         router.push('/login');
         return;
       }
+      console.log('[Planning] ✅ User ID:', user.id);
 
       // 🔴 FIX CRITICO: Inizializza le chiavi di cifratura per la tabella accounts
       // Senza questo, decryptFields fallisce silenziosamente
       try {
+        console.log('[Planning] 🔑 Inizializzo scope keys...');
         await (crypto as any).getOrCreateScopeKeys('table:accounts');
+        console.log('[Planning] ✅ Scope keys inizializzate');
       } catch (e) {
-        console.error('Errore inizializzazione scope keys:', e);
+        console.error('[Planning] ❌ Errore inizializzazione scope keys:', e);
       }
 
-      // Carica clienti (Aggiunto created_at per coerenza con lista clienti)
+      // Carica clienti (Allineato con pagina Clienti per query e decifratura)
       const { data: clientsData, error: clientsError } = await supabase
         .from('accounts')
-        .select('id, created_at, name_enc, name_iv, city, tipo_locale, latitude, longitude, ultimo_esito, ultimo_esito_at, volume_attuale, custom')
+        .select(
+          "id,created_at," +
+          "name_enc,name_iv," +
+          "city,tipo_locale," +
+          "latitude,longitude," +
+          "ultimo_esito,ultimo_esito_at," +
+          "volume_attuale,custom"
+        )
         .eq('user_id', user.id)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null);
 
       if (clientsError) throw clientsError;
+      
+      console.log('[Planning] 📊 Clienti trovati dal DB:', clientsData?.length || 0);
 
       const decryptedClients: Client[] = [];
       
+      // 🔧 FIX: Converti hex-string in base64 (allineato con pagina Clienti)
       const hexToBase64 = (hexStr: any): string => {
         if (!hexStr || typeof hexStr !== 'string') return '';
         if (!hexStr.startsWith('\\x')) return hexStr;
+        
         const hex = hexStr.slice(2);
         const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
         return bytes;
@@ -192,7 +261,25 @@ export default function PlanningEditorPage() {
             }, {})
           : ((x ?? {}) as Record<string, unknown>);
       
-      for (const c of clientsData || []) {
+      // 🔧 FIX: Cast esplicito come in pagina Clienti
+      const rowsAny = (clientsData ?? []) as any[];
+      
+      for (const r0 of rowsAny) {
+        const c = r0 as {
+          id: string;
+          created_at: string;
+          name_enc?: any;
+          name_iv?: any;
+          city?: string;
+          tipo_locale?: string;
+          latitude?: any;
+          longitude?: any;
+          ultimo_esito?: string;
+          ultimo_esito_at?: string;
+          volume_attuale?: any;
+          custom?: any;
+        };
+        
         try {
           const recordForDecrypt = {
             ...c,
@@ -200,8 +287,26 @@ export default function PlanningEditorPage() {
             name_iv: hexToBase64(c.name_iv),
           };
           
-          // Decrypt usando l'ID del cliente come AD (Corretto)
-          const decAny = await crypto.decryptFields(
+          // 🔧 FIX: Verifica che i campi cifrati esistano prima di decifrare
+          if (!c.name_enc || !c.name_iv) {
+            console.warn('[Planning] Record senza campi cifrati:', c.id);
+            decryptedClients.push({
+              id: c.id,
+              name: `Cliente #${c.id.slice(0, 8)}`,
+              city: c.city || '',
+              tipo_locale: c.tipo_locale || '',
+              latitude: parseFloat(c.latitude),
+              longitude: parseFloat(c.longitude),
+              ultimo_esito: c.ultimo_esito || null,
+              ultimo_esito_at: c.ultimo_esito_at || null,
+              volume_attuale: c.volume_attuale ? parseFloat(c.volume_attuale) : null,
+              custom: c.custom || {},
+            });
+            continue;
+          }
+          
+          // Decrypt usando l'ID del cliente come AD (allineato con pagina Clienti)
+          const decAny = await (crypto as any).decryptFields(
             'table:accounts',
             'accounts',
             c.id,
@@ -211,6 +316,16 @@ export default function PlanningEditorPage() {
           
           const dec = toObj(decAny);
           
+          // 🔍 DEBUG: Log primo cliente per vedere se decifratura funziona
+          if (decryptedClients.length === 0) {
+            console.log('[Planning] 🔓 Primo cliente decifrato:', {
+              id: c.id,
+              name_enc_exists: !!c.name_enc,
+              decrypted_name: dec.name,
+              dec_obj: dec
+            });
+          }
+          
           decryptedClients.push({
             id: c.id,
             name: String(dec.name ?? 'Cliente senza nome'),
@@ -218,13 +333,13 @@ export default function PlanningEditorPage() {
             tipo_locale: c.tipo_locale || '',
             latitude: parseFloat(c.latitude),
             longitude: parseFloat(c.longitude),
-            ultimo_esito: c.ultimo_esito,
-            ultimo_esito_at: c.ultimo_esito_at,
+            ultimo_esito: c.ultimo_esito || null,
+            ultimo_esito_at: c.ultimo_esito_at || null,
             volume_attuale: c.volume_attuale ? parseFloat(c.volume_attuale) : null,
             custom: c.custom || {},
           });
         } catch (e) {
-          console.error('[Planning] Errore decrypt cliente:', e);
+          console.error('[Planning] Errore decrypt cliente:', c.id, e);
           decryptedClients.push({
             id: c.id,
             name: `Cliente #${c.id.slice(0, 8)}`,
@@ -232,8 +347,8 @@ export default function PlanningEditorPage() {
             tipo_locale: c.tipo_locale || '',
             latitude: parseFloat(c.latitude),
             longitude: parseFloat(c.longitude),
-            ultimo_esito: c.ultimo_esito,
-            ultimo_esito_at: c.ultimo_esito_at,
+            ultimo_esito: c.ultimo_esito || null,
+            ultimo_esito_at: c.ultimo_esito_at || null,
             volume_attuale: c.volume_attuale ? parseFloat(c.volume_attuale) : null,
             custom: c.custom || {},
           });
@@ -241,6 +356,14 @@ export default function PlanningEditorPage() {
       }
 
       setClients(decryptedClients);
+      
+      // 📊 Riepilogo decifratura
+      const withNames = decryptedClients.filter(c => c.name && !c.name.includes('Cliente #') && c.name !== 'Cliente senza nome');
+      console.log('[Planning] 📊 Riepilogo:', {
+        totale: decryptedClients.length,
+        conNomiDecifrati: withNames.length,
+        senzaNomi: decryptedClients.length - withNames.length
+      });
 
       // Carica piano esistente
       const { data: planData, error: planError } = await supabase
@@ -394,7 +517,7 @@ export default function PlanningEditorPage() {
     setIsDirty(true);
   }
 
-  // Ottimizza percorso (TSP semplificato + Partenza da Casa)
+  // Ottimizza percorso (TSP semplificato + Partenza/Ritorno a Casa)
   function optimizeRoute() {
     if (selectedIds.length <= 1) return;
 
@@ -407,8 +530,8 @@ export default function PlanningEditorPage() {
     const remaining = [...selectedClientsList];
     
     // 1. Cerca coordinate casa nelle impostazioni
-    let startLat: number | undefined;
-    let startLon: number | undefined;
+    let homeLat: number | undefined;
+    let homeLon: number | undefined;
 
     if (typeof window !== 'undefined') {
       try {
@@ -416,8 +539,8 @@ export default function PlanningEditorPage() {
         if (settings) {
           const parsed = JSON.parse(settings);
           if (parsed.homeLat && parsed.homeLon) {
-            startLat = parseFloat(parsed.homeLat);
-            startLon = parseFloat(parsed.homeLon);
+            homeLat = parseFloat(parsed.homeLat);
+            homeLon = parseFloat(parsed.homeLon);
           }
         }
       } catch (e) {
@@ -425,14 +548,14 @@ export default function PlanningEditorPage() {
       }
     }
 
-    // 2. Determina il primo cliente
-    if (startLat && startLon) {
+    // 2. Determina il primo cliente (più vicino a casa)
+    if (homeLat && homeLon) {
       // Se abbiamo casa, troviamo il cliente più vicino a casa
       let nearestIdx = -1;
       let nearestDist = Infinity;
 
       for (let i = 0; i < remaining.length; i++) {
-        const dist = calculateDistance(startLat, startLon, remaining[i].latitude, remaining[i].longitude);
+        const dist = calculateDistance(homeLat, homeLon, remaining[i].latitude, remaining[i].longitude);
         if (dist < nearestDist) {
           nearestDist = dist;
           nearestIdx = i;
@@ -448,6 +571,25 @@ export default function PlanningEditorPage() {
     } else {
       // Senza casa, partiamo dal primo della lista corrente
       ordered.push(remaining.shift()!);
+    }
+    
+    // 🔧 FIX BUG #6: Se abbiamo casa, riserva l'ultimo slot per il cliente più vicino a casa
+    // Così minimizziamo il ritorno
+    let lastClient: Client | null = null;
+    if (homeLat && homeLon && remaining.length > 1) {
+      let closestToHomeIdx = 0;
+      let closestToHomeDist = Infinity;
+      
+      for (let i = 0; i < remaining.length; i++) {
+        const dist = calculateDistance(homeLat, homeLon, remaining[i].latitude, remaining[i].longitude);
+        if (dist < closestToHomeDist) {
+          closestToHomeDist = dist;
+          closestToHomeIdx = i;
+        }
+      }
+      
+      // Rimuovi il cliente più vicino a casa e salvalo per metterlo alla fine
+      lastClient = remaining.splice(closestToHomeIdx, 1)[0];
     }
     
     // 3. Algoritmo nearest neighbor per i successivi
@@ -473,6 +615,11 @@ export default function PlanningEditorPage() {
       }
       
       ordered.push(remaining.splice(nearestIdx, 1)[0]);
+    }
+    
+    // 4. Aggiungi il cliente riservato per ultimo (più vicino a casa per il ritorno)
+    if (lastClient) {
+      ordered.push(lastClient);
     }
     
     // Aggiorna ordine
@@ -659,9 +806,31 @@ export default function PlanningEditorPage() {
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12 }}>
           🔐 Sblocco crittografia...
         </h2>
-        <p style={{ color: '#6b7280' }}>
+        <p style={{ color: '#6b7280', marginBottom: 16 }}>
           Attendere il caricamento del sistema di cifratura.
+          {loadAttempts > 0 && ` (Tentativo ${loadAttempts}/3)`}
         </p>
+        {loadAttempts >= 3 && (
+          <div style={{ marginTop: 16 }}>
+            <p style={{ color: '#ef4444', marginBottom: 12 }}>
+              ⚠️ Impossibile sbloccare la crittografia.
+            </p>
+            <button
+              onClick={() => window.location.href = '/login'}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 8,
+                border: 'none',
+                background: '#2563eb',
+                color: 'white',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              🔄 Torna al Login
+            </button>
+          </div>
+        )}
       </div>
     );
   }
@@ -719,6 +888,28 @@ export default function PlanningEditorPage() {
             ← Torna al Calendario
           </button>
 
+          {/* 🔒 BANNER DATA PASSATA */}
+          {isPastDate && (
+            <div style={{
+              padding: '12px 16px',
+              background: '#fef3c7',
+              border: '1px solid #f59e0b',
+              borderRadius: 8,
+              marginBottom: 16,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}>
+              <span style={{ fontSize: 20 }}>🔒</span>
+              <div>
+                <div style={{ fontWeight: 600, color: '#92400e' }}>Modalità Solo Lettura</div>
+                <div style={{ fontSize: 13, color: '#a16207' }}>
+                  Questa data è nel passato. Puoi solo visualizzare i dati e generare report.
+                </div>
+              </div>
+            </div>
+          )}
+
           <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 8 }}>
             {formatDate(dataStr)}
           </h1>
@@ -727,15 +918,16 @@ export default function PlanningEditorPage() {
             <span style={{ 
               padding: '4px 12px', 
               borderRadius: 6, 
-              background: plan?.status === 'active' ? '#dbeafe' : '#f3f4f6',
-              color: plan?.status === 'active' ? '#1e40af' : '#6b7280',
+              background: isPastDate ? '#fee2e2' : (plan?.status === 'active' ? '#dbeafe' : '#f3f4f6'),
+              color: isPastDate ? '#991b1b' : (plan?.status === 'active' ? '#1e40af' : '#6b7280'),
               fontSize: 13,
               fontWeight: 600,
             }}>
-              {plan?.status === 'draft' && '📝 Bozza'}
-              {plan?.status === 'active' && '▶️ Attivo'}
-              {plan?.status === 'completed' && '✅ Completato'}
-              {!plan && '📝 Nuovo Piano'}
+              {isPastDate && '🔒 Archiviato'}
+              {!isPastDate && plan?.status === 'draft' && '📝 Bozza'}
+              {!isPastDate && plan?.status === 'active' && '▶️ Attivo'}
+              {!isPastDate && plan?.status === 'completed' && '✅ Completato'}
+              {!isPastDate && !plan && '📝 Nuovo Piano'}
             </span>
 
             <span style={{ fontSize: 14, color: '#6b7280' }}>
@@ -744,7 +936,8 @@ export default function PlanningEditorPage() {
           </div>
         </div>
 
-        {/* Modalità */}
+        {/* Modalità - Nascoste se data passata */}
+        {!isPastDate && (
         <div style={{ marginBottom: 32 }}>
           <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
             <button onClick={() => setMode('smart')} style={{ padding: '12px 24px', borderRadius: 8, border: mode === 'smart' ? '2px solid #2563eb' : '1px solid #d1d5db', background: mode === 'smart' ? '#eff6ff' : 'white', color: mode === 'smart' ? '#1e40af' : '#6b7280', fontWeight: 600, cursor: 'pointer' }}>🤖 Piano Smart</button>
@@ -838,6 +1031,7 @@ export default function PlanningEditorPage() {
             </div>
           )}
         </div>
+        )}
 
         {/* Clienti Selezionati */}
         {selectedIds.length > 0 && (
@@ -846,10 +1040,11 @@ export default function PlanningEditorPage() {
               <h2 style={{ fontSize: 20, fontWeight: 600 }}>
                 📍 Visite Pianificate ({selectedIds.length})
                 <span style={{ marginLeft: 12, fontSize: 16, color: '#6b7280', fontWeight: 400 }}>
-                  • 🚗 ~{totalKm.toFixed(1)} km
+                  • 🚗 ~{totalKm.toFixed(1)} km (A/R)
                 </span>
               </h2>
 
+              {!isPastDate && (
               <button
                 onClick={optimizeRoute}
                 disabled={selectedIds.length <= 1}
@@ -865,6 +1060,7 @@ export default function PlanningEditorPage() {
               >
                 🗺️ Ottimizza Percorso
               </button>
+              )}
             </div>
 
             <div style={{ display: 'grid', gap: 12 }}>
@@ -889,11 +1085,13 @@ export default function PlanningEditorPage() {
                       {idx + 1}
                     </div>
 
-                    {/* Controlli Riordino */}
+                    {/* Controlli Riordino - nascosti se data passata */}
+                    {!isPastDate && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                       <button onClick={() => moveUp(idx)} disabled={idx === 0} style={{ opacity: idx === 0 ? 0.3 : 1, cursor: idx === 0 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▲</button>
                       <button onClick={() => moveDown(idx)} disabled={idx === selectedClients.length - 1} style={{ opacity: idx === selectedClients.length - 1 ? 0.3 : 1, cursor: idx === selectedClients.length - 1 ? 'default' : 'pointer', border: 'none', background: 'none', fontSize: 10 }}>▼</button>
                     </div>
+                    )}
 
                     <div>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>{client.name}</div>
@@ -906,6 +1104,7 @@ export default function PlanningEditorPage() {
                     </div>
                   </div>
 
+                  {!isPastDate && (
                   <button
                     onClick={() => toggleClient(client.id)}
                     style={{
@@ -920,6 +1119,7 @@ export default function PlanningEditorPage() {
                   >
                     Rimuovi
                   </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -929,7 +1129,23 @@ export default function PlanningEditorPage() {
         {/* Note Giornata */}
         <div style={{ marginBottom: 32 }}>
           <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 16 }}>📝 Note Giornata</h2>
-          <textarea value={planNotes} onChange={(e) => { setPlanNotes(e.target.value); setIsDirty(true); }} placeholder="Es. Focus su zona Verona Est, consegne nuovi prodotti..." rows={4} style={{ width: '100%', padding: 12, borderRadius: 8, border: '1px solid #d1d5db', fontSize: 14, resize: 'vertical' }} />
+          <textarea 
+            value={planNotes} 
+            onChange={(e) => { if (!isPastDate) { setPlanNotes(e.target.value); setIsDirty(true); } }} 
+            placeholder={isPastDate ? "Note della giornata (sola lettura)" : "Es. Focus su zona Verona Est, consegne nuovi prodotti..."} 
+            rows={4} 
+            readOnly={isPastDate}
+            style={{ 
+              width: '100%', 
+              padding: 12, 
+              borderRadius: 8, 
+              border: '1px solid #d1d5db', 
+              fontSize: 14, 
+              resize: 'vertical',
+              background: isPastDate ? '#f9fafb' : 'white',
+              cursor: isPastDate ? 'not-allowed' : 'text',
+            }} 
+          />
         </div>
 
         {/* Azioni */}
@@ -950,8 +1166,8 @@ export default function PlanningEditorPage() {
             ← Annulla
           </button>
 
-          {/* 🗑️ ELIMINA PIANO (Rosso, visibile solo se il piano esiste) */}
-          {plan?.id && (
+          {/* 🗑️ ELIMINA PIANO (Rosso, visibile solo se il piano esiste e NON è passato) */}
+          {plan?.id && !isPastDate && (
             <button
               onClick={deletePlan}
               disabled={saving}
@@ -975,23 +1191,23 @@ export default function PlanningEditorPage() {
 
           <button
             onClick={savePlan}
-            disabled={saving || selectedIds.length === 0 || !isDirty}
+            disabled={saving || selectedIds.length === 0 || !isDirty || isPastDate}
             style={{
               padding: '12px 24px',
               borderRadius: 8,
               border: 'none',
-              background: saving || selectedIds.length === 0 || !isDirty ? '#9ca3af' : '#10b981',
+              background: saving || selectedIds.length === 0 || !isDirty || isPastDate ? '#9ca3af' : '#10b981',
               color: 'white',
               fontSize: 14,
               fontWeight: 600,
-              cursor: saving || selectedIds.length === 0 || !isDirty ? 'not-allowed' : 'pointer',
+              cursor: saving || selectedIds.length === 0 || !isDirty || isPastDate ? 'not-allowed' : 'pointer',
             }}
           >
-            {saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano')}
+            {isPastDate ? '🔒 Solo Lettura' : (saving ? '⏳ Salvataggio...' : (!isDirty && plan?.id ? '✅ Piano Salvato' : '💾 Salva Piano'))}
           </button>
 
-          {/* Bottone Avvia Giornata (solo se draft) */}
-          {plan?.id && plan?.status === 'draft' && (
+          {/* Bottone Avvia Giornata (solo se draft e NON passato) */}
+          {plan?.id && plan?.status === 'draft' && !isPastDate && (
             <button
               onClick={activatePlan}
               disabled={saving || selectedIds.length === 0}

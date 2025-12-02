@@ -131,6 +131,13 @@ function handleSortClick(key: SortKey) {
   const [editingCell, setEditingCell] = useState<{rowId: string, field: string} | null>(null);
   const [tempValue, setTempValue] = useState("");
 
+  // 🆕 STATO PER MODAL ELIMINAZIONE
+  const [deleteModal, setDeleteModal] = useState<{open: boolean, clientId: string | null, clientName: string}>({
+    open: false,
+    clientId: null,
+    clientName: ''
+  });
+
 // Logout
 async function logout() {
   // Pulisci la passphrase
@@ -592,24 +599,33 @@ async function updateTipoLocale(clientId: string, newTipoLocale: string) {
   }
 }
   
-  // 🆕 DELETE CLIENTE
-  async function deleteClient(clientId: string) {
-    if (!userId) return;
-    
-    if (!confirm("Eliminare definitivamente questo cliente?")) return;
+  // 🆕 APRI MODAL ELIMINAZIONE
+  function openDeleteModal(clientId: string, clientName: string) {
+    setDeleteModal({ open: true, clientId, clientName });
+  }
+
+  // 🆕 CHIUDI MODAL ELIMINAZIONE
+  function closeDeleteModal() {
+    setDeleteModal({ open: false, clientId: null, clientName: '' });
+  }
+
+  // 🆕 CONFERMA ELIMINAZIONE
+  async function confirmDelete() {
+    if (!userId || !deleteModal.clientId) return;
     
     try {
       const { error } = await supabase
         .from("accounts")
         .delete()
-        .eq("id", clientId);
+        .eq("id", deleteModal.clientId);
       
       if (error) throw error;
       
       // Rimuovi dalla lista locale
-      setRows(prev => prev.filter(r => r.id !== clientId));
+      setRows(prev => prev.filter(r => r.id !== deleteModal.clientId));
       
-      console.log(`✅ Cliente ${clientId} eliminato`);
+      console.log(`✅ Cliente ${deleteModal.clientId} eliminato`);
+      closeDeleteModal();
     } catch (e) {
       console.error("❌ Errore delete:", e);
       alert(`Errore durante l'eliminazione: ${e}`);
@@ -756,6 +772,13 @@ return (
               onChange={(e) => setQ(e.target.value)}
             />
             <button className="px-3 py-2 rounded border" onClick={() => setQ("")}>Pulisci</button>
+            <button 
+              className="px-4 py-2 rounded border-none text-white font-medium"
+              style={{ background: '#2563eb', whiteSpace: 'nowrap' }}
+              onClick={() => window.location.href = '/tools/quick-add-client'}
+            >
+              ➕ Nuovo Cliente
+            </button>
           </div>
 
           <div className="overflow-auto border rounded">
@@ -880,7 +903,7 @@ return (
                     {/* Azioni - CANCELLAZIONE */}
                     <td className="px-3 py-2">
                       <button
-                        onClick={() => deleteClient(r.id)}
+                        onClick={() => openDeleteModal(r.id, r.name)}
                         className="text-red-600 hover:text-red-800"
                         title="Elimina cliente"
                       >
@@ -913,6 +936,79 @@ return (
         onCloseLeft={closeLeft}
         onCloseRight={closeRight}
       />
+
+      {/* 🆕 MODAL CONFERMA ELIMINAZIONE */}
+      {deleteModal.open && (
+        <div 
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+          }}
+          onClick={closeDeleteModal}
+        >
+          <div 
+            style={{
+              background: 'white',
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 400,
+              width: '90%',
+              boxShadow: '0 20px 50px rgba(0,0,0,0.3)',
+            }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 40, textAlign: 'center', marginBottom: 16 }}>⚠️</div>
+            <h3 style={{ fontSize: 18, fontWeight: 600, textAlign: 'center', marginBottom: 8 }}>
+              Eliminare questo cliente?
+            </h3>
+            <p style={{ fontSize: 14, color: '#6b7280', textAlign: 'center', marginBottom: 8 }}>
+              Stai per eliminare:
+            </p>
+            <p style={{ fontSize: 16, fontWeight: 600, textAlign: 'center', marginBottom: 16, color: '#111827' }}>
+              {deleteModal.clientName || 'Cliente senza nome'}
+            </p>
+            <p style={{ fontSize: 13, color: '#ef4444', textAlign: 'center', marginBottom: 24 }}>
+              ⚠️ Questa azione è irreversibile. Tutti i dati del cliente verranno persi.
+            </p>
+            <div style={{ display: 'flex', gap: 12 }}>
+              <button
+                onClick={closeDeleteModal}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: '1px solid #d1d5db',
+                  background: 'white',
+                  fontWeight: 500,
+                  cursor: 'pointer',
+                }}
+              >
+                Annulla
+              </button>
+              <button
+                onClick={confirmDelete}
+                style={{
+                  flex: 1,
+                  padding: '12px 16px',
+                  borderRadius: 8,
+                  border: 'none',
+                  background: '#dc2626',
+                  color: 'white',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                🗑️ Elimina
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 
