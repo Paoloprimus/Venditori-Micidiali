@@ -124,6 +124,10 @@ export function useVoice({
   const [dialogMode, setDialogMode] = useState(false);
   const dialogBufRef = useRef<string>("");
   const dialogSendingRef = useRef<boolean>(false);
+  
+  // 🆕 Auto-send dopo pausa: timer per rilevare silenzio
+  const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const AUTO_SEND_DELAY_MS = 1500; // 1.5 secondi di silenzio → invio automatico
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
@@ -177,32 +181,61 @@ export function useVoice({
           // In Dialogo: NO scrittura live nella textarea
           dialogBufRef.current = live;
 
-          // Cue "invia"
+          // 🆕 Cancella timer precedente
+          if (autoSendTimerRef.current) {
+            clearTimeout(autoSendTimerRef.current);
+            autoSendTimerRef.current = null;
+          }
+
+          // Cue esplicito "invia" → invio immediato
           if (hasSubmitCue(live)) {
-            // evita invii doppi
             if (dialogSendingRef.current) return;
             const raw = stripSubmitCue(live).trim();
 
             if (!raw) {
-              if (speakerEnabledRef.current) onSpeak("Dimmi il messaggio e poi dì 'invia'.");
+              if (speakerEnabledRef.current) onSpeak("Ti ascolto.");
               dialogBufRef.current = "";
               finalAccumRef.current = "";
               micActiveRef.current = true;
               return;
             }
 
-            dialogSendingRef.current = true; // 🔒 lock durante l'invio
+            dialogSendingRef.current = true;
             const payload = normalizeInterrogative(raw);
-
-            // pulizia buffer
             dialogBufRef.current = "";
             finalAccumRef.current = "";
-
-            // pausa mic mentre parte la risposta
             micActiveRef.current = false;
             try { sr.stop?.(); } catch {}
-
             onSendDirectly(payload).catch(() => {});
+            return;
+          }
+
+          // 🆕 AUTO-SEND: avvia timer per invio automatico dopo pausa
+          // Solo se c'è contenuto significativo (almeno 3 parole o 10 caratteri)
+          const content = finalAccumRef.current.trim();
+          if (content && (content.split(/\s+/).length >= 2 || content.length >= 10)) {
+            autoSendTimerRef.current = setTimeout(() => {
+              // Verifica che siamo ancora in dialogo e non stiamo già inviando
+              if (!dialogMode || dialogSendingRef.current || isTtsSpeaking()) return;
+              
+              const finalContent = finalAccumRef.current.trim();
+              if (!finalContent) return;
+
+              // Evita invii doppi
+              dialogSendingRef.current = true;
+              const payload = normalizeInterrogative(finalContent);
+              
+              // Pulizia buffer
+              dialogBufRef.current = "";
+              finalAccumRef.current = "";
+              
+              // Pausa mic
+              micActiveRef.current = false;
+              try { sr.stop?.(); } catch {}
+              
+              console.log('[Voice] Auto-send dopo pausa:', payload);
+              onSendDirectly(payload).catch(() => {});
+            }, AUTO_SEND_DELAY_MS);
           }
         } else {
           // Tap-to-talk: live nella textarea
@@ -351,7 +384,8 @@ export function useVoice({
     if (speakerEnabledRef.current || true) {
       // dopo setSpeakerEnabled, l'effetto aggiorna speakerEnabledRef in coda al tick;
       // qui siamo comunque in Dialogo (speaker ON) → ok dare un breve prompt
-      onSpeak("Dialogo attivo. Di' la frase e termina con 'invia'.");
+      // 🆕 Messaggio aggiornato: non serve più dire "invia"
+      onSpeak("Dialogo attivo. Parla normalmente, invio automatico dopo la pausa.");
     }
   }
 
@@ -361,6 +395,13 @@ export function useVoice({
     dialogBufRef.current = "";
     dialogSendingRef.current = false;
     micActiveRef.current = false;
+    
+    // 🆕 Cancella timer auto-send
+    if (autoSendTimerRef.current) {
+      clearTimeout(autoSendTimerRef.current);
+      autoSendTimerRef.current = null;
+    }
+    
     stopAll();
     setSpeakerEnabled(false);          // ✅ ritorno a OFF/ OFF quando esco dal Dialogo
   }
@@ -370,6 +411,11 @@ export function useVoice({
     return () => {
       micActiveRef.current = false;
       stopAll();
+      // 🆕 Cancella timer auto-send
+      if (autoSendTimerRef.current) {
+        clearTimeout(autoSendTimerRef.current);
+        autoSendTimerRef.current = null;
+      }
     };
   }, []);
 
