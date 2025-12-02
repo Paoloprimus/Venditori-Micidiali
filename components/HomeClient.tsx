@@ -75,6 +75,15 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     return () => window.removeEventListener('repping:homePageModeChanged', handleModeChange as EventListener);
   }, []);
 
+  // Ascolta click su banner Promemoria dalla Dashboard
+  useEffect(() => {
+    function handleOpenPromemoria() {
+      openDocs(); // Apre il drawer Documenti (che contiene i promemoria)
+    }
+    window.addEventListener('open-promemoria', handleOpenPromemoria);
+    return () => window.removeEventListener('open-promemoria', handleOpenPromemoria);
+  }, [openDocs]);
+
   // Listener per generazione PDF
   useEffect(() => {
     async function handleGeneratePdf(e: CustomEvent<any>) {
