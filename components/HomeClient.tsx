@@ -10,6 +10,7 @@ import Thread from "./home/Thread";
 import Composer from "./home/Composer";
 import HomeDashboard from "./home/Dashboard";
 import PassphraseDebugPanel from "./PassphraseDebugPanel";
+import WelcomeModal from "./WelcomeModal";
 
 import { useConversation } from "../app/context/ConversationContext";
 import { useConversations, type Bubble, decryptClientPlaceholders } from "../hooks/useConversations";
@@ -479,6 +480,9 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           conv.handleSelectConv(c);
         }}
       />
+
+      {/* 👋 Welcome Modal (primo accesso) */}
+      <WelcomeModal userName={userName} />
     </>
   );
 }
