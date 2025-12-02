@@ -154,7 +154,9 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
 
   const roleLabels: Record<string, string> = {
     admin: '👑 Amministratore',
-    venditore: '💼 Venditore',
+    agente: '💼 Agente',
+    agente_premium: '⭐ Agente Premium',
+    venditore: '💼 Agente', // Legacy fallback
   };
 
   const accordionButtonStyle = (isExpanded: boolean) => ({

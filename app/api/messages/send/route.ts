@@ -1,5 +1,5 @@
 // app/api/messages/send/route.ts
-// VERSIONE 3.1 - Refactored (tools e executor estratti in lib/ai/)
+// VERSIONE 3.2 - Con limiti di servizio per ruolo
 
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
@@ -15,6 +15,55 @@ const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 const MODEL = process.env.OPENAI_CHAT_MODEL || "gpt-4o-mini";
 const CONVERSATIONS_TABLE = "conversations";
 const MESSAGES_TABLE = "messages";
+
+// 🆕 Helper per check limiti (server-side)
+async function checkChatLimit(userId: string): Promise<{ allowed: boolean; remaining?: number }> {
+  const supabase = getSupabaseAdmin();
+  
+  // Ottieni ruolo e limiti
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', userId)
+    .single();
+  
+  const role = profile?.role || 'agente';
+  
+  // Admin ha sempre accesso
+  if (role === 'admin') return { allowed: true };
+  
+  // Ottieni limite per ruolo
+  const { data: limits } = await supabase
+    .from('service_limits')
+    .select('max_chat_queries_day')
+    .eq('role', role)
+    .single();
+  
+  const maxQueries = limits?.max_chat_queries_day || 30;
+  
+  // Conta uso oggi
+  const today = new Date().toISOString().split('T')[0];
+  const { data: usage } = await supabase
+    .from('usage_tracking')
+    .select('count')
+    .eq('user_id', userId)
+    .eq('usage_type', 'chat_query')
+    .eq('usage_date', today)
+    .single();
+  
+  const currentCount = usage?.count || 0;
+  const remaining = maxQueries - currentCount;
+  
+  return { allowed: remaining > 0, remaining };
+}
+
+// 🆕 Incrementa contatore uso
+async function trackChatUsage(userId: string): Promise<void> {
+  const supabase = getSupabaseAdmin();
+  const today = new Date().toISOString().split('T')[0];
+  
+  await supabase.rpc('increment_usage', { p_type: 'chat_query' });
+}
 
 // ==================== MAIN HANDLER ====================
 
@@ -55,6 +104,16 @@ export async function POST(req: NextRequest) {
     }
 
     const userId = conv.user_id;
+
+    // 🆕 CHECK LIMITI DI SERVIZIO
+    const limitCheck = await checkChatLimit(userId);
+    if (!limitCheck.allowed) {
+      return NextResponse.json({ 
+        error: "LIMITE_RAGGIUNTO",
+        message: `Hai raggiunto il limite giornaliero di domande. Riprova domani o passa a Premium per 300 domande/giorno!`,
+        remaining: 0
+      }, { status: 429 });
+    }
 
     // Save user message
     const userEnc = encryptText(content);
@@ -181,7 +240,10 @@ REGOLE:
       content: null
     });
 
-    return NextResponse.json({ reply });
+    // 🆕 TRACCIA USO (dopo risposta riuscita)
+    await trackChatUsage(userId);
+
+    return NextResponse.json({ reply, remaining: limitCheck.remaining ? limitCheck.remaining - 1 : undefined });
 
   } catch (err: any) {
     console.error("[/api/messages/send] ERROR:", err);
