@@ -28,6 +28,7 @@ import {
   // Visite
   countVisits,
   getVisitsToday,
+  getVisitsByDay,
   getLastVisitToClient,
   getVisitHistoryForClient,
   // Vendite
@@ -36,9 +37,13 @@ import {
   // Prodotti
   listMissingProducts,
   getProductsDiscussedWithClient,
+  getVisitsByProduct,
   // Planning
   getCallbacks,
   getTodayPlanning,
+  getInactiveClients,
+  // Note
+  searchInNotes,
 } from "../data/adapters";
 
 // ==================== TIPI ====================
@@ -336,27 +341,8 @@ async function handleIntent(
       if (!crypto) return { ...needCrypto(), intent };
       const days = entities.inactivityDays ?? 30;
       
-      // Per ora usiamo getCallbacks come proxy - in futuro implementare query dedicata
-      const result = await getCallbacks(crypto);
-      
-      if (result.items.length === 0) {
-        return { 
-          text: `Ottimo! Non hai clienti trascurati da più di ${days} giorni. 🎉`,
-          intent 
-        };
-      }
-
-      let text = `⚠️ **Clienti da ricontattare** (inattivi da ${days}+ giorni):\n\n`;
-      const items = result.items.slice(0, 5);
-      text += items.map(i => `• **${i.clientName}** - ${i.reason}`).join('\n');
-      
-      if (result.items.length > 5) {
-        text += `\n\n...e altri ${result.items.length - 5}`;
-      }
-      
-      text += `\n\n📞 Vuoi partire dal primo?`;
-      
-      return { text, intent };
+      const result = await getInactiveClients(crypto, days);
+      return { text: result.message, intent };
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -376,28 +362,9 @@ async function handleIntent(
         };
       }
 
-      // Se abbiamo un cliente specifico, mostra le sue note
-      if (clientName) {
-        const visitResult = await getLastVisitToClient(crypto, clientName);
-        if (!visitResult.found) {
-          return { text: visitResult.message, intent };
-        }
-        
-        // TODO: implementare ricerca nelle note reali
-        // Per ora mostriamo un messaggio placeholder
-        let text = `📝 **Note su ${visitResult.clientName}:**\n\n`;
-        text += `_La ricerca nelle note per termine specifico è in arrivo._\n\n`;
-        text += `Intanto posso dirti:\n`;
-        text += visitResult.message;
-        
-        return { text, intent };
-      }
-
-      // Ricerca generica nelle note
-      return { 
-        text: `🔍 Ricerca "${searchTerm}" nelle note...\n\n_Funzionalità in arrivo! Per ora prova: "Rossi paga contanti?"_`,
-        intent 
-      };
+      // Usa il nuovo adapter
+      const result = await searchInNotes(crypto, searchTerm ?? '', clientName);
+      return { text: result.message, intent };
     }
 
     // ═══════════════════════════════════════════════════════════════
@@ -470,8 +437,7 @@ async function handleIntent(
       const position = entities.position ?? 1;
       const isYesterday = entities.period === 'yesterday';
       
-      // Per ora usiamo getVisitsToday - TODO: implementare getVisitsByDay
-      const visits = await getVisitsToday(crypto);
+      const visits = await getVisitsByDay(crypto, isYesterday ? 'yesterday' : 'today');
       
       if (visits.length === 0) {
         return { 
@@ -585,11 +551,14 @@ async function handleIntent(
         };
       }
 
-      // TODO: implementare ricerca visite per prodotto
-      return { 
-        text: `🔍 Ricerca clienti che comprano "${productName}"...\n\n_Funzionalità in arrivo! Per ora posso dirti i prodotti discussi con un cliente specifico._`,
-        intent 
-      };
+      // Mappa periodo
+      let period = entities.period;
+      if (period === 'yesterday') period = 'today';
+      if (period === 'last_week') period = 'week';
+      if (period === 'last_month') period = 'month';
+
+      const result = await getVisitsByProduct(crypto, productName, period as any);
+      return { text: result.message, intent };
     }
 
     // ═══════════════════════════════════════════════════════════════

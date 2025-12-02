@@ -768,3 +768,407 @@ export async function getProductsDiscussedWithClient(crypto: CryptoLike, clientN
 
   return { found: true, clientName: matchedAccount.name, products: uniqueProducts, message };
 }
+
+// ───────────────────────────────────────────────────────────────
+// 🆕 RICERCA NELLE NOTE
+// ───────────────────────────────────────────────────────────────
+
+export type NotesSearchResult = {
+  clientId: string;
+  clientName: string;
+  snippet: string;
+  matchedTerm: string;
+};
+
+/**
+ * Cerca un termine nelle note di tutti i clienti o di un cliente specifico
+ */
+export async function searchInNotes(
+  crypto: CryptoLike, 
+  searchTerm: string, 
+  clientNameHint?: string
+): Promise<{
+  found: boolean;
+  results: NotesSearchResult[];
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  // Se c'è un hint sul cliente, cerca solo quello
+  if (clientNameHint) {
+    const { data: accounts } = await supabase
+      .from("accounts")
+      .select("id,name,name_enc,name_iv,notes");
+
+    const searchLower = clientNameHint.toLowerCase();
+    let matchedAccount: { id: string; name: string; notes: string } | null = null;
+
+    for (const acc of (accounts ?? [])) {
+      let name = acc.name;
+      if (!name && acc.name_enc) {
+        try {
+          const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+          name = dec?.name;
+        } catch { continue; }
+      }
+      if (name && name.toLowerCase().includes(searchLower)) {
+        matchedAccount = { id: acc.id, name, notes: acc.notes ?? '' };
+        break;
+      }
+    }
+
+    if (!matchedAccount) {
+      return { found: false, results: [], message: `Non ho trovato nessun cliente con "${clientNameHint}".` };
+    }
+
+    const notes = matchedAccount.notes.toLowerCase();
+    const termLower = searchTerm.toLowerCase();
+    
+    if (notes.includes(termLower)) {
+      // Estrai snippet intorno al termine
+      const idx = notes.indexOf(termLower);
+      const start = Math.max(0, idx - 30);
+      const end = Math.min(notes.length, idx + termLower.length + 50);
+      const snippet = (start > 0 ? '...' : '') + 
+                      matchedAccount.notes.substring(start, end) + 
+                      (end < notes.length ? '...' : '');
+
+      return {
+        found: true,
+        results: [{
+          clientId: matchedAccount.id,
+          clientName: matchedAccount.name,
+          snippet,
+          matchedTerm: searchTerm
+        }],
+        message: `📝 **${matchedAccount.name}** - trovato "${searchTerm}":\n\n"${snippet}"`
+      };
+    }
+
+    return {
+      found: false,
+      results: [],
+      message: `Non ho trovato "${searchTerm}" nelle note di ${matchedAccount.name}.`
+    };
+  }
+
+  // Ricerca globale nelle note di tutti i clienti
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id,name,name_enc,name_iv,notes")
+    .ilike("notes", `%${searchTerm}%`);
+
+  if (!accounts?.length) {
+    return { found: false, results: [], message: `Nessun cliente con "${searchTerm}" nelle note.` };
+  }
+
+  const results: NotesSearchResult[] = [];
+
+  for (const acc of accounts) {
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+    if (!name) continue;
+
+    const notes = acc.notes ?? '';
+    const idx = notes.toLowerCase().indexOf(searchTerm.toLowerCase());
+    const start = Math.max(0, idx - 20);
+    const end = Math.min(notes.length, idx + searchTerm.length + 40);
+    const snippet = (start > 0 ? '...' : '') + notes.substring(start, end) + (end < notes.length ? '...' : '');
+
+    results.push({
+      clientId: acc.id,
+      clientName: name,
+      snippet,
+      matchedTerm: searchTerm
+    });
+  }
+
+  if (results.length === 0) {
+    return { found: false, results: [], message: `Nessun cliente con "${searchTerm}" nelle note.` };
+  }
+
+  const lines = results.slice(0, 5).map(r => `• **${r.clientName}**: "${r.snippet}"`).join('\n');
+  const message = results.length === 1
+    ? `📝 Trovato "${searchTerm}" in **${results[0].clientName}**:\n\n"${results[0].snippet}"`
+    : `📝 Trovato "${searchTerm}" in ${results.length} clienti:\n\n${lines}${results.length > 5 ? `\n\n...e altri ${results.length - 5}` : ''}`;
+
+  return { found: true, results, message };
+}
+
+// ───────────────────────────────────────────────────────────────
+// 🆕 CLIENTI INATTIVI
+// ───────────────────────────────────────────────────────────────
+
+/**
+ * Trova clienti che non sono stati visitati da X giorni
+ */
+export async function getInactiveClients(
+  crypto: CryptoLike, 
+  inactiveDays: number = 30
+): Promise<{
+  items: PlanningItem[];
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  const cutoffDate = new Date();
+  cutoffDate.setDate(cutoffDate.getDate() - inactiveDays);
+  const cutoffStr = cutoffDate.toISOString().split('T')[0];
+
+  // Prendi tutti i clienti
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id,name,name_enc,name_iv,created_at");
+
+  if (!accounts?.length) {
+    return { items: [], message: "Non hai clienti in archivio." };
+  }
+
+  // Per ogni cliente, trova l'ultima visita
+  const { data: allVisits } = await supabase
+    .from("visits")
+    .select("account_id,data_visita")
+    .order("data_visita", { ascending: false });
+
+  // Mappa account_id -> ultima visita
+  const lastVisitMap = new Map<string, string>();
+  for (const v of (allVisits ?? [])) {
+    if (!lastVisitMap.has(v.account_id)) {
+      lastVisitMap.set(v.account_id, v.data_visita);
+    }
+  }
+
+  const inactiveItems: PlanningItem[] = [];
+
+  for (const acc of accounts) {
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+    if (!name) continue;
+
+    const lastVisit = lastVisitMap.get(acc.id);
+    
+    // Se non ha mai avuto visite o l'ultima è prima del cutoff
+    if (!lastVisit || lastVisit < cutoffStr) {
+      const daysSince = lastVisit 
+        ? Math.floor((Date.now() - new Date(lastVisit).getTime()) / (1000 * 60 * 60 * 24))
+        : null;
+
+      inactiveItems.push({
+        type: 'inactive_client',
+        clientId: acc.id,
+        clientName: name,
+        reason: daysSince 
+          ? `Ultima visita: ${daysSince} giorni fa`
+          : 'Mai visitato',
+        priority: daysSince && daysSince > 60 ? 'high' : 'medium'
+      });
+    }
+  }
+
+  // Ordina: mai visitati prima, poi per giorni di inattività
+  inactiveItems.sort((a, b) => {
+    if (a.reason === 'Mai visitato' && b.reason !== 'Mai visitato') return -1;
+    if (b.reason === 'Mai visitato' && a.reason !== 'Mai visitato') return 1;
+    return 0;
+  });
+
+  if (inactiveItems.length === 0) {
+    return { 
+      items: [], 
+      message: `🎉 Ottimo! Tutti i tuoi clienti sono stati visitati negli ultimi ${inactiveDays} giorni.` 
+    };
+  }
+
+  const lines = inactiveItems.slice(0, 5).map(i => `• **${i.clientName}** - ${i.reason}`).join('\n');
+  const message = `⚠️ **${inactiveItems.length} clienti inattivi** (>${inactiveDays} giorni):\n\n${lines}${inactiveItems.length > 5 ? `\n\n...e altri ${inactiveItems.length - 5}` : ''}\n\n📞 Vuoi partire dal primo?`;
+
+  return { items: inactiveItems, message };
+}
+
+// ───────────────────────────────────────────────────────────────
+// 🆕 VISITE PER PRODOTTO
+// ───────────────────────────────────────────────────────────────
+
+export type VisitByProductResult = {
+  clientId: string;
+  clientName: string;
+  date: string;
+  importo?: number;
+  allProducts: string;
+};
+
+/**
+ * Trova clienti a cui è stato venduto/discusso un prodotto
+ */
+export async function getVisitsByProduct(
+  crypto: CryptoLike,
+  productName: string,
+  period?: 'today' | 'week' | 'month' | 'year'
+): Promise<{
+  found: boolean;
+  product: string;
+  results: VisitByProductResult[];
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  let query = supabase
+    .from("visits")
+    .select("id,account_id,data_visita,importo_vendita,prodotti_discussi")
+    .ilike("prodotti_discussi", `%${productName}%`)
+    .order("data_visita", { ascending: false });
+
+  // Filtro periodo
+  if (period) {
+    const now = new Date();
+    let fromDate: Date;
+    switch (period) {
+      case 'today':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        break;
+      case 'week':
+        fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        break;
+      case 'month':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        break;
+      case 'year':
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        break;
+    }
+    query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+  }
+
+  const { data: visits, error } = await query.limit(20);
+  
+  if (error) throw error;
+  if (!visits?.length) {
+    return { 
+      found: false, 
+      product: productName,
+      results: [], 
+      message: `Nessuna visita trovata con "${productName}" nei prodotti discussi.` 
+    };
+  }
+
+  // Carica nomi clienti
+  const accountIds = [...new Set(visits.map(v => v.account_id))];
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id,name,name_enc,name_iv")
+    .in("id", accountIds);
+
+  const accountMap = new Map<string, string>();
+  for (const acc of (accounts ?? [])) {
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+    if (name) accountMap.set(acc.id, name);
+  }
+
+  const results: VisitByProductResult[] = visits.map(v => ({
+    clientId: v.account_id,
+    clientName: accountMap.get(v.account_id) ?? 'Cliente sconosciuto',
+    date: v.data_visita,
+    importo: v.importo_vendita ?? undefined,
+    allProducts: v.prodotti_discussi ?? ''
+  }));
+
+  // Raggruppa per cliente (mostra solo l'ultima visita per cliente)
+  const uniqueClients = new Map<string, VisitByProductResult>();
+  for (const r of results) {
+    if (!uniqueClients.has(r.clientId)) {
+      uniqueClients.set(r.clientId, r);
+    }
+  }
+  const uniqueResults = [...uniqueClients.values()];
+
+  const periodLabel = period === 'today' ? ' oggi' :
+                      period === 'week' ? ' questa settimana' :
+                      period === 'month' ? ' questo mese' :
+                      period === 'year' ? " quest'anno" : '';
+
+  const lines = uniqueResults.slice(0, 8).map(r => {
+    const date = new Date(r.date).toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+    let line = `• **${r.clientName}** (${date})`;
+    if (r.importo) line += ` - €${r.importo.toLocaleString('it-IT')}`;
+    return line;
+  }).join('\n');
+
+  const message = `🛒 **"${productName}"** - ${uniqueResults.length} clienti${periodLabel}:\n\n${lines}${uniqueResults.length > 8 ? `\n\n...e altri ${uniqueResults.length - 8}` : ''}`;
+
+  return { found: true, product: productName, results: uniqueResults, message };
+}
+
+// ───────────────────────────────────────────────────────────────
+// 🆕 VISITE PER GIORNO SPECIFICO
+// ───────────────────────────────────────────────────────────────
+
+/**
+ * Ottieni visite di un giorno specifico (per visit_by_position)
+ */
+export async function getVisitsByDay(
+  crypto: CryptoLike,
+  day: 'today' | 'yesterday'
+): Promise<VisitWithClient[]> {
+  assertCrypto(crypto);
+
+  const now = new Date();
+  let targetDate: Date;
+  
+  if (day === 'yesterday') {
+    targetDate = new Date(now);
+    targetDate.setDate(targetDate.getDate() - 1);
+  } else {
+    targetDate = now;
+  }
+
+  const dateStr = targetDate.toISOString().split('T')[0];
+
+  const { data: visits, error } = await supabase
+    .from("visits")
+    .select("*")
+    .eq("data_visita", dateStr)
+    .order("created_at", { ascending: true }); // Ordine cronologico per posizione
+
+  if (error) throw error;
+  if (!visits?.length) return [];
+
+  // Carica nomi clienti
+  const accountIds = [...new Set(visits.map(v => v.account_id))];
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id,name,name_enc,name_iv")
+    .in("id", accountIds);
+
+  const accountMap = new Map<string, string>();
+  for (const acc of (accounts ?? [])) {
+    if (acc.name) {
+      accountMap.set(acc.id, acc.name);
+    } else if (acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        if (dec?.name) accountMap.set(acc.id, dec.name);
+      } catch { /* ignora */ }
+    }
+  }
+
+  return visits.map(v => ({
+    ...v,
+    clientName: accountMap.get(v.account_id) ?? "Cliente sconosciuto"
+  }));
+}
