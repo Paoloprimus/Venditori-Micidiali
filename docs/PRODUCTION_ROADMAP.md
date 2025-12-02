@@ -11,7 +11,7 @@
 | Fase | Descrizione | Status | Priority |
 |------|-------------|--------|----------|
 | 1 | Semantica Avanzata | ✅ 100% | 🔴 CRITICA |
-| 2 | Voce & Dialogo | ⬜ 0% | 🔴 CRITICA |
+| 2 | Voce & Dialogo | 🟡 80% | 🔴 CRITICA |
 | 3 | Ruoli & Credenziali | ⬜ 0% | 🟡 ALTA |
 | 4 | Dashboard Admin | ⬜ 0% | 🟡 ALTA |
 | 5 | Legal & Privacy | ⬜ 0% | 🔴 CRITICA |
@@ -50,19 +50,26 @@ L'assistente deve capire il linguaggio naturale come un umano, non solo pattern 
 ---
 
 ## 2️⃣ VOCE & DIALOGO
-**Priority: 🔴 CRITICA**
+**Priority: 🔴 CRITICA** 🟡 80%
 
 ### Obiettivo
 Uso hands-free completo: l'agente parla, l'app risponde, senza toccare lo schermo.
 
 ### Tasks
-- [ ] **2.1** Wake word detection ("Hey Repping")
-- [ ] **2.2** Continuous listening mode
-- [ ] **2.3** Voice feedback per ogni azione ("Cliente salvato", "Visita registrata")
-- [ ] **2.4** Gestione interruzioni ("Stop", "Aspetta", "Ripeti")
-- [ ] **2.5** Multi-turn dialoghi vocali
+- [ ] **2.1** Wake word detection ("Hey Repping") - *opzionale*
+- [x] **2.2** Continuous listening mode (auto-send dopo 1.5s pausa)
+- [x] **2.3** Voice feedback per ogni azione (TTS automatico + beep mic ready)
+- [x] **2.4** Gestione interruzioni ("Stop", "Aspetta", "Ripeti", "Basta", "Aiuto")
+- [x] **2.5** Multi-turn dialoghi vocali (context retention dalla Fase 1)
 - [ ] **2.6** Test con rumore ambientale (auto, bar, strada)
 - [ ] **2.7** Accenti regionali italiani
+
+### 🆕 Implementazioni Extra
+- [x] **Driving Mode UI** - Schermo `/driving` ottimizzato per guida
+  - Bottone gigante 280px, waveform audio, zero tastiera
+  - Comandi vocali: "Torna a casa" per uscire
+- [x] Accesso rapido da Dashboard e Impostazioni
+- [x] Beep audio (880Hz) quando mic pronto
 
 ### Metriche
 - Speech recognition accuracy: >90% in ambiente rumoroso
