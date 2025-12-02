@@ -4,6 +4,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import OpenAI from "openai";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
+import { createSupabaseServer } from "@/lib/supabase/server";
 import { encryptText } from "@/lib/crypto/serverEncryption";
 
 export const runtime = "nodejs";
@@ -521,6 +522,14 @@ function formatToolResult(name: string, result: any): string {
 
 export async function POST(req: NextRequest) {
   try {
+    // 🔐 AUTH CHECK: Verifica utente autenticato
+    const authSupabase = createSupabaseServer();
+    const { data: { user }, error: authError } = await authSupabase.auth.getUser();
+    
+    if (authError || !user) {
+      return NextResponse.json({ error: "Non autenticato" }, { status: 401 });
+    }
+
     const body = await req.json().catch(() => ({}));
     const content = String(body?.content ?? "").trim();
     const conversationId = body?.conversationId;
@@ -540,6 +549,11 @@ export async function POST(req: NextRequest) {
 
     if (convError || !conv) {
       return NextResponse.json({ error: "conversation_not_found" }, { status: 404 });
+    }
+
+    // 🔐 AUTHORIZATION CHECK: Verifica che l'utente sia il proprietario
+    if (conv.user_id !== user.id) {
+      return NextResponse.json({ error: "Non autorizzato" }, { status: 403 });
     }
 
     const userId = conv.user_id;
