@@ -38,7 +38,7 @@ export default function CookiePolicyPage() {
               sulla tua navigazione per migliorare l'esperienza utente.
             </p>
             <p className="mt-2">
-              REPPING utilizza cookie per far funzionare correttamente l'applicazione e, 
+              REPING utilizza cookie per far funzionare correttamente l'applicazione e, 
               con il tuo consenso, per analizzare l'utilizzo del servizio.
             </p>
           </section>
@@ -49,7 +49,7 @@ export default function CookiePolicyPage() {
             <div className="bg-green-50 border border-green-200 rounded p-4">
               <p className="font-medium text-green-800 mb-2">✅ Non richiedono consenso</p>
               <p className="text-green-700">
-                Questi cookie sono indispensabili per il funzionamento di REPPING e non possono 
+                Questi cookie sono indispensabili per il funzionamento di REPING e non possono 
                 essere disattivati senza compromettere l'uso dell'applicazione.
               </p>
             </div>
@@ -90,7 +90,7 @@ export default function CookiePolicyPage() {
             <div className="bg-blue-50 border border-blue-200 rounded p-4">
               <p className="font-medium text-blue-800 mb-2">📊 Richiedono il tuo consenso</p>
               <p className="text-blue-700">
-                Questi cookie ci aiutano a capire come gli utenti utilizzano REPPING, 
+                Questi cookie ci aiutano a capire come gli utenti utilizzano REPING, 
                 permettendoci di migliorare il servizio. Raccolgono informazioni in forma 
                 anonima e aggregata.
               </p>
@@ -130,7 +130,7 @@ export default function CookiePolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">4. Cookie di Terze Parti</h2>
             <p>
-              REPPING non utilizza cookie di profilazione pubblicitaria o cookie di social media. 
+              REPING non utilizza cookie di profilazione pubblicitaria o cookie di social media. 
               Non vendiamo dati a terze parti per scopi pubblicitari.
             </p>
             <p className="mt-2">
@@ -143,7 +143,7 @@ export default function CookiePolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">5. Come Gestire i Cookie</h2>
             
-            <h3 className="font-medium text-slate-800 mt-4 mb-2">Tramite REPPING:</h3>
+            <h3 className="font-medium text-slate-800 mt-4 mb-2">Tramite REPING:</h3>
             <p>
               Puoi modificare le tue preferenze sui cookie in qualsiasi momento cliccando sul 
               link "Gestisci Cookie" nel footer dell'applicazione o visitando questa pagina.
@@ -183,7 +183,7 @@ export default function CookiePolicyPage() {
             <div className="bg-amber-50 border border-amber-200 rounded p-4 mt-4">
               <p className="font-medium text-amber-800 mb-2">⚠️ Attenzione</p>
               <p className="text-amber-700 text-xs">
-                Disabilitare i cookie tecnici impedirà il funzionamento di REPPING. 
+                Disabilitare i cookie tecnici impedirà il funzionamento di REPING. 
                 In particolare, i cookie di autenticazione (sb-*-auth-token) sono 
                 indispensabili per mantenere la sessione di login.
               </p>
@@ -194,7 +194,7 @@ export default function CookiePolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">6. Consenso e Revoca</h2>
             <p>
-              Al primo accesso a REPPING, ti viene mostrato un banner per scegliere quali 
+              Al primo accesso a REPING, ti viene mostrato un banner per scegliere quali 
               cookie accettare. Le tue preferenze sono salvate e rispettate per 12 mesi.
             </p>
             <p className="mt-2">
@@ -207,7 +207,7 @@ export default function CookiePolicyPage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">7. Altre Tecnologie di Storage</h2>
             <p>
-              Oltre ai cookie, REPPING utilizza altre tecnologie di memorizzazione locale:
+              Oltre ai cookie, REPING utilizza altre tecnologie di memorizzazione locale:
             </p>
             <ul className="list-disc list-inside space-y-2 ml-2 mt-2">
               <li>

@@ -91,7 +91,7 @@ export default function CookieBanner() {
             <div className="flex-1">
               <p className="text-sm text-slate-700">
                 <span className="text-lg mr-2">🍪</span>
-                Utilizziamo cookie tecnici necessari e, con il tuo consenso, cookie analytics per migliorare REPPING.{" "}
+                Utilizziamo cookie tecnici necessari e, con il tuo consenso, cookie analytics per migliorare REPING.{" "}
                 <Link href="/legal/cookies" className="text-blue-600 hover:underline">
                   Leggi la Cookie Policy
                 </Link>
@@ -147,7 +147,7 @@ export default function CookieBanner() {
                     <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">Obbligatori</span>
                   </div>
                   <p className="text-xs text-slate-600 mt-1">
-                    Indispensabili per il funzionamento di REPPING. Includono autenticazione e preferenze.
+                    Indispensabili per il funzionamento di REPING. Includono autenticazione e preferenze.
                   </p>
                 </div>
               </div>

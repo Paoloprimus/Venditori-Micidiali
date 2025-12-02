@@ -36,7 +36,7 @@ export default function PrivacyPolicyPage() {
               Il Titolare del trattamento dei dati personali è:
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded p-3 mt-2">
-              <p><strong>REPPING</strong></p>
+              <p><strong>REPING</strong></p>
               <p>Email: privacy@repping.it</p>
               <p>PEC: repping@pec.it</p>
             </div>
@@ -48,7 +48,7 @@ export default function PrivacyPolicyPage() {
           {/* 2. Dati raccolti */}
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">2. Categorie di Dati Raccolti</h2>
-            <p>REPPING raccoglie le seguenti categorie di dati personali:</p>
+            <p>REPING raccoglie le seguenti categorie di dati personali:</p>
             
             <h3 className="font-medium text-slate-800 mt-4 mb-2">Dati forniti dall'utente:</h3>
             <ul className="list-disc list-inside space-y-1 ml-2">
@@ -97,14 +97,14 @@ export default function PrivacyPolicyPage() {
             <div className="bg-amber-50 border border-amber-200 rounded p-4">
               <p className="font-medium text-amber-800 mb-2">⚠️ Importante: Crittografia Client-Side</p>
               <p className="text-amber-700">
-                REPPING utilizza un sistema di <strong>crittografia end-to-end</strong> per proteggere 
+                REPING utilizza un sistema di <strong>crittografia end-to-end</strong> per proteggere 
                 i dati sensibili dei tuoi clienti. I dati vengono cifrati sul tuo dispositivo prima 
                 di essere inviati ai nostri server.
               </p>
               <p className="text-amber-700 mt-2">
                 <strong>La tua password funge da chiave di cifratura.</strong> Se perdi la password 
                 e non riesci a recuperarla, i dati cifrati saranno <strong>irrecuperabili</strong>. 
-                Né REPPING né terze parti possono decifrare i tuoi dati senza la password.
+                Né REPING né terze parti possono decifrare i tuoi dati senza la password.
               </p>
             </div>
           </section>
@@ -203,13 +203,13 @@ export default function PrivacyPolicyPage() {
             <div className="bg-purple-50 border border-purple-200 rounded p-4">
               <p className="font-medium text-purple-800 mb-2">🤖 Disclaimer AI</p>
               <p className="text-purple-700">
-                REPPING utilizza modelli di intelligenza artificiale (OpenAI GPT) per fornire 
+                REPING utilizza modelli di intelligenza artificiale (OpenAI GPT) per fornire 
                 assistenza e suggerimenti. Le risposte dell'AI sono generate automaticamente e 
                 potrebbero contenere errori o imprecisioni.
               </p>
               <p className="text-purple-700 mt-2">
                 <strong>L'utente è responsabile</strong> della verifica delle informazioni fornite 
-                dall'assistente prima di prendere decisioni commerciali. REPPING non garantisce 
+                dall'assistente prima di prendere decisioni commerciali. REPING non garantisce 
                 l'accuratezza, completezza o idoneità delle risposte AI per scopi specifici.
               </p>
             </div>

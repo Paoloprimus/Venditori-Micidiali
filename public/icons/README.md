@@ -1,4 +1,4 @@
-# Icone PWA REPPING
+# Icone PWA REPING
 
 Aggiungi qui le icone dell'app:
 
@@ -9,7 +9,7 @@ Aggiungi qui le icone dell'app:
 
 ## Come crearle
 
-1. Parti da un'immagine quadrata (es. logo REPPING)
+1. Parti da un'immagine quadrata (es. logo REPING)
 2. Usa un tool come:
    - https://www.pwabuilder.com/imageGenerator
    - https://realfavicongenerator.net/

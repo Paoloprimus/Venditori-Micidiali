@@ -160,7 +160,7 @@ export default function MyDataPage() {
           notes,
         },
         metadata: {
-          app: "REPPING",
+          app: "REPING",
           version: "Beta 1.0",
           gdpr_article: "Art. 20 - Diritto alla portabilità dei dati",
         },

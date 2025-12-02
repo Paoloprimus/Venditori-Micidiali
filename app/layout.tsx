@@ -12,13 +12,13 @@ const SHOW_TEST_PANEL = process.env.NEXT_PUBLIC_SHOW_TEST_PANEL === "1";
 
 // ✅ PWA Metadata
 export const metadata: Metadata = {
-  title: "REPPING",
+  title: "REPING",
   description: "Assistente AI per agenti di commercio HoReCa",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "REPPING",
+    title: "REPING",
   },
   icons: {
     icon: "/icons/icon-192.png",

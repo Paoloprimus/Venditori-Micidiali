@@ -20,7 +20,7 @@ export default function TermsOfServicePage() {
           <header>
             <h1 className="text-2xl font-bold text-slate-900 mb-2">Termini e Condizioni di Servizio</h1>
             <p className="text-slate-500 text-xs">
-              Contratto di licenza d'uso per l'applicazione REPPING
+              Contratto di licenza d'uso per l'applicazione REPING
             </p>
             <p className="text-slate-500 text-xs mt-1">
               Ultimo aggiornamento: 2 Dicembre 2025
@@ -33,7 +33,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">1. Oggetto del Servizio</h2>
             <p>
-              REPPING è un'applicazione web che fornisce agli agenti di commercio del settore 
+              REPING è un'applicazione web che fornisce agli agenti di commercio del settore 
               HoReCa (Hotel, Restaurant, Catering) strumenti per:
             </p>
             <ul className="list-disc list-inside space-y-1 ml-2 mt-2">
@@ -49,7 +49,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">2. Accettazione dei Termini</h2>
             <p>
-              Registrandoti e utilizzando REPPING, accetti integralmente questi Termini di Servizio 
+              Registrandoti e utilizzando REPING, accetti integralmente questi Termini di Servizio 
               e la nostra <Link href="/legal/privacy" className="text-blue-600 hover:underline">Privacy Policy</Link>. 
               Se non accetti, non puoi utilizzare il servizio.
             </p>
@@ -63,7 +63,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">3. Account e Sicurezza</h2>
             <p>
-              Per utilizzare REPPING devi creare un account fornendo dati veritieri e aggiornati.
+              Per utilizzare REPING devi creare un account fornendo dati veritieri e aggiornati.
             </p>
             <ul className="list-disc list-inside space-y-2 ml-2 mt-2">
               <li>Sei responsabile della riservatezza delle tue credenziali</li>
@@ -106,14 +106,14 @@ export default function TermsOfServicePage() {
             <ul className="list-disc list-inside space-y-1 ml-2 mt-2">
               <li>Avere titolo legittimo per trattare tali dati</li>
               <li>Rispettare gli obblighi GDPR come titolare/responsabile</li>
-              <li>Manlevare REPPING da qualsiasi contestazione relativa</li>
+              <li>Manlevare REPING da qualsiasi contestazione relativa</li>
             </ul>
           </section>
 
           {/* 5. Piani e pagamenti */}
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">5. Piani e Pagamenti</h2>
-            <p>REPPING offre diversi piani di abbonamento:</p>
+            <p>REPING offre diversi piani di abbonamento:</p>
             
             <div className="grid gap-4 mt-4">
               <div className="bg-slate-50 border border-slate-200 rounded p-4">
@@ -145,7 +145,7 @@ export default function TermsOfServicePage() {
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">6. Proprietà Intellettuale</h2>
             <p>
-              Il marchio REPPING, il logo, il codice sorgente, il design e tutti i contenuti 
+              Il marchio REPING, il logo, il codice sorgente, il design e tutti i contenuti 
               originali sono di proprietà esclusiva del titolare.
             </p>
             <ul className="list-disc list-inside space-y-2 ml-2 mt-2">
@@ -161,7 +161,7 @@ export default function TermsOfServicePage() {
             <div className="bg-purple-50 border border-purple-200 rounded p-4">
               <p className="font-medium text-purple-800 mb-2">🤖 Disclaimer AI - IMPORTANTE</p>
               <p className="text-purple-700">
-                L'assistente AI di REPPING utilizza modelli di linguaggio (LLM) che:
+                L'assistente AI di REPING utilizza modelli di linguaggio (LLM) che:
               </p>
               <ul className="list-disc list-inside mt-2 text-purple-700 space-y-1">
                 <li>Possono generare risposte errate, incomplete o fuorvianti</li>
@@ -171,7 +171,7 @@ export default function TermsOfServicePage() {
               </ul>
               <p className="text-purple-700 mt-3 font-medium">
                 L'utente è l'unico responsabile delle decisioni prese sulla base delle 
-                risposte dell'AI. REPPING non risponde di danni derivanti dall'affidamento 
+                risposte dell'AI. REPING non risponde di danni derivanti dall'affidamento 
                 su informazioni generate automaticamente.
               </p>
             </div>
@@ -191,7 +191,7 @@ export default function TermsOfServicePage() {
                 Non garantiamo disponibilità continua, assenza di errori o sicurezza assoluta
               </li>
               <li>
-                REPPING non è responsabile per danni indiretti, perdita di profitti o dati
+                REPING non è responsabile per danni indiretti, perdita di profitti o dati
               </li>
               <li>
                 La responsabilità massima è limitata all'importo pagato negli ultimi 12 mesi
