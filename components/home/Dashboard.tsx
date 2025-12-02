@@ -14,6 +14,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import GettingStartedChecklist from './GettingStartedChecklist';
+import { fetchPromemoria } from '@/lib/promemoria';
 
 type DashboardStats = {
   visiteOggi: number;
@@ -23,6 +24,7 @@ type DashboardStats = {
   venduteOggi: number;
   venduteMese: number;
   clientiTotali: number;
+  promemoriaCount: number;
   ultimaAttivita: { tipo: string; cliente: string; data: string } | null;
 };
 
@@ -45,6 +47,7 @@ export default function HomeDashboard({ userName }: { userName: string }) {
     venduteOggi: 0,
     venduteMese: 0,
     clientiTotali: 0,
+    promemoriaCount: 0,
     ultimaAttivita: null,
   });
   const [recentActivities, setRecentActivities] = useState<RecentActivity[]>([]);
@@ -77,6 +80,15 @@ export default function HomeDashboard({ userName }: { userName: string }) {
         .from('accounts')
         .select('id', { count: 'exact', head: true })
         .eq('user_id', user.id);
+
+      // Carica conteggio promemoria
+      let promemoriaCount = 0;
+      try {
+        const promemoriaList = await fetchPromemoria();
+        promemoriaCount = promemoriaList.length;
+      } catch (e) {
+        console.warn('[Dashboard] Errore caricamento promemoria:', e);
+      }
 
       // Calcola statistiche
       const visitsData = visits || [];
@@ -123,6 +135,7 @@ export default function HomeDashboard({ userName }: { userName: string }) {
         venduteOggi,
         venduteMese,
         clientiTotali: clientiCount || 0,
+        promemoriaCount,
         ultimaAttivita: visitsData.length > 0 ? {
           tipo: visitsData[0].tipo,
           cliente: 'Cliente',
@@ -165,7 +178,7 @@ export default function HomeDashboard({ userName }: { userName: string }) {
     <div style={{ padding: '16px', maxWidth: 800, margin: '0 auto' }}>
       
       {/* Header con saluto */}
-      <div style={{ marginBottom: 24 }}>
+      <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 14, color: '#6b7280', marginBottom: 4 }}>
           {dayName.charAt(0).toUpperCase() + dayName.slice(1)}
         </div>
@@ -176,6 +189,111 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           Ecco il riepilogo della tua giornata
         </p>
       </div>
+
+      {/* === BANNER PRINCIPALI (subito dopo saluto) === */}
+      
+      {/* 1. Driving Mode - Sfondo scuro */}
+      <a 
+        href="/driving"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 18px',
+          marginBottom: 12,
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          borderRadius: 14,
+          textDecoration: 'none',
+          color: 'white',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>🚗</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Modalità Guida</div>
+            <div style={{ fontSize: 12, opacity: 0.85 }}>Hands-free per guidare</div>
+          </div>
+        </div>
+        <span style={{ fontSize: 20, opacity: 0.7 }}>→</span>
+      </a>
+
+      {/* 2. Promemoria - Sfondo bianco */}
+      <a 
+        href="#"
+        onClick={(e) => {
+          e.preventDefault();
+          // Dispatch evento per aprire drawer docs con promemoria
+          window.dispatchEvent(new CustomEvent('open-promemoria'));
+        }}
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 18px',
+          marginBottom: 12,
+          background: 'white',
+          borderRadius: 14,
+          textDecoration: 'none',
+          color: '#111827',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>📌</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Promemoria</div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Le tue note importanti</div>
+          </div>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {stats.promemoriaCount > 0 && (
+            <span style={{
+              background: '#ef4444',
+              color: 'white',
+              fontSize: 13,
+              fontWeight: 700,
+              padding: '4px 10px',
+              borderRadius: 20,
+              minWidth: 28,
+              textAlign: 'center',
+            }}>
+              {stats.promemoriaCount}
+            </span>
+          )}
+          <span style={{ fontSize: 20, color: '#9ca3af' }}>→</span>
+        </div>
+      </a>
+
+      {/* 3. Planning Giornata - Sfondo bianco */}
+      <a 
+        href="/planning"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 18px',
+          marginBottom: 24,
+          background: 'white',
+          borderRadius: 14,
+          textDecoration: 'none',
+          color: '#111827',
+          border: '1px solid #e5e7eb',
+          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span style={{ fontSize: 28 }}>🗺️</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Pianifica la Giornata</div>
+            <div style={{ fontSize: 12, color: '#6b7280' }}>Ottimizza il giro visite</div>
+          </div>
+        </div>
+        <span style={{ fontSize: 20, color: '#9ca3af' }}>→</span>
+      </a>
+
+      {/* === FINE BANNER PRINCIPALI === */}
 
       {/* 🚀 Checklist Primi Passi (onboarding) */}
       <GettingStartedChecklist />
@@ -250,33 +368,6 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           />
         </div>
       </div>
-
-      {/* Driving Mode - In evidenza */}
-      <a 
-        href="/driving"
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '16px 20px',
-          marginBottom: 24,
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
-          borderRadius: 16,
-          textDecoration: 'none',
-          color: 'white',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
-          transition: 'transform 0.2s, box-shadow 0.2s',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
-          <span style={{ fontSize: 32 }}>🚗</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 18 }}>Modalità Guida</div>
-            <div style={{ fontSize: 13, opacity: 0.85 }}>Hands-free per guidare in sicurezza</div>
-          </div>
-        </div>
-        <span style={{ fontSize: 24, opacity: 0.7 }}>→</span>
-      </a>
 
       {/* Quick Actions */}
       <div style={{ marginBottom: 24 }}>
