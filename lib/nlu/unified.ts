@@ -23,6 +23,7 @@ export type IntentType =
   | 'client_count'           // "Quanti clienti ho?"
   | 'client_list'            // "Lista clienti" / "Elencali"
   | 'client_search'          // "Cerca cliente Rossi"
+  | 'composite_query'        // "Clienti di Verona che hanno comprato vino" (filtri multipli)
   | 'client_detail'          // "Info su Rossi" / "Dimmi tutto su Bianchi"
   | 'client_create'          // "Nuovo cliente Mario Rossi"
   | 'client_inactive'        // "Chi non vedo da un mese?"
@@ -117,6 +118,13 @@ export type EntityType = {
   // 🆕 Per domande impossibili
   missingData?: string[];    // Dati mancanti (es: ["km", "margini"])
   alternativeIntent?: IntentType; // Intent alternativo suggerito
+  // 🆕 Per query composite (filtri multipli)
+  productBought?: string;    // Prodotto acquistato ("che hanno comprato vino")
+  minAmount?: number;        // Importo minimo ("> 500€")
+  maxAmount?: number;        // Importo massimo ("< 1000€")
+  hasOrdered?: boolean;      // Ha effettuato ordini (true/false)
+  notVisitedDays?: number;   // Non visitato da X giorni
+  filters?: string[];        // Lista filtri applicati per debug/display
 };
 
 // 🆕 Tipo per gestire risposte a domande impossibili
@@ -234,6 +242,152 @@ const LOCALE_TYPES = [
   'stabilimento balneare', 'agriturismo', 'b&b', 'bed and breakfast',
   'mensa', 'catering', 'food truck', 'chiosco'
 ];
+
+// ═══════════════════════════════════════════════════════════════
+// 🆕 ESTRAZIONE FILTRI COMPOSITI
+// ═══════════════════════════════════════════════════════════════
+
+// Lista città italiane comuni per matching
+const ITALIAN_CITIES = [
+  'milano', 'roma', 'torino', 'napoli', 'firenze', 'bologna', 'venezia', 
+  'verona', 'padova', 'genova', 'palermo', 'catania', 'bari', 'brescia',
+  'bergamo', 'modena', 'parma', 'reggio emilia', 'vicenza', 'treviso',
+  'udine', 'trieste', 'trento', 'bolzano', 'ancona', 'perugia', 'pescara',
+  'pisa', 'livorno', 'lucca', 'arezzo', 'siena', 'rimini', 'ravenna',
+  'ferrara', 'piacenza', 'como', 'varese', 'monza', 'lecco', 'mantova',
+  'cremona', 'pavia', 'lodi', 'alessandria', 'novara', 'biella', 'cuneo',
+  'asti', 'savona', 'imperia', 'la spezia', 'massa', 'carrara', 'pistoia',
+  'prato', 'grosseto', 'terni', 'rieti', 'viterbo', 'latina', 'frosinone',
+  'caserta', 'salerno', 'avellino', 'benevento', 'foggia', 'taranto',
+  'brindisi', 'lecce', 'potenza', 'matera', 'cosenza', 'catanzaro',
+  'reggio calabria', 'crotone', 'vibo valentia', 'messina', 'siracusa',
+  'ragusa', 'enna', 'caltanissetta', 'agrigento', 'trapani', 'sassari',
+  'nuoro', 'oristano', 'cagliari', 'olbia', 'tempio pausania',
+];
+
+/**
+ * Estrae tutti i filtri da una query composita
+ * Es: "clienti di Verona che hanno comprato vino il mese scorso"
+ * → { city: 'Verona', productBought: 'vino', period: 'last_month', filters: ['city', 'product', 'period'] }
+ */
+function extractCompositeFilters(text: string): EntityType {
+  const entities: EntityType = {};
+  const filters: string[] = [];
+  const normalized = text.toLowerCase();
+
+  // 1. CITTÀ - "di Verona", "a Milano", "in Roma"
+  const cityPatterns = [
+    /\b(?:di|a|in|da)\s+([A-ZÀ-Ú][a-zà-ú]+(?:\s+[A-ZÀ-Ú][a-zà-ú]+)?)\b/gi,
+    /\b([A-ZÀ-Ú][a-zà-ú]+)\b/gi, // fallback: cerca città note
+  ];
+  
+  for (const pattern of cityPatterns) {
+    const matches = text.matchAll(pattern);
+    for (const m of matches) {
+      const cityCandidate = m[1]?.toLowerCase();
+      if (cityCandidate && ITALIAN_CITIES.includes(cityCandidate)) {
+        entities.city = capitalizeWords(cityCandidate);
+        filters.push('city');
+        break;
+      }
+    }
+    if (entities.city) break;
+  }
+
+  // 2. TIPO LOCALE - "bar", "ristoranti", "hotel"
+  for (const tipo of LOCALE_TYPES) {
+    if (normalized.includes(tipo.toLowerCase())) {
+      entities.localeType = tipo;
+      filters.push('localeType');
+      break;
+    }
+  }
+
+  // 3. PRODOTTO ACQUISTATO - "che hanno comprato vino", "che comprano birra"
+  const productPatterns = [
+    /(?:compra(?:to|no)?|acquista(?:to|no)?|ordina(?:to|no)?|vend(?:o|uto))\s+(?:il\s+|la\s+|lo\s+|l')?(\w+)/i,
+    /(?:chi|a chi)\s+(?:compra|vendo|ho venduto)\s+(?:il\s+|la\s+)?(\w+)/i,
+  ];
+  
+  for (const pattern of productPatterns) {
+    const match = text.match(pattern);
+    if (match?.[1]) {
+      const product = match[1].toLowerCase();
+      // Evita parole comuni
+      if (!['un', 'una', 'il', 'la', 'lo', 'gli', 'le', 'di', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra'].includes(product)) {
+        entities.productBought = product;
+        filters.push('productBought');
+        break;
+      }
+    }
+  }
+
+  // 4. IMPORTO MINIMO/MASSIMO - "> 500€", "sopra 1000", "meno di 200"
+  const minAmountMatch = text.match(/(?:>|maggiore\s+di|sopra\s+(?:i\s+)?|più\s+di|almeno)\s*(\d+)\s*€?/i);
+  if (minAmountMatch) {
+    entities.minAmount = parseInt(minAmountMatch[1]);
+    filters.push('minAmount');
+  }
+  
+  const maxAmountMatch = text.match(/(?:<|minore\s+di|sotto\s+(?:i\s+)?|meno\s+di|massimo)\s*(\d+)\s*€?/i);
+  if (maxAmountMatch) {
+    entities.maxAmount = parseInt(maxAmountMatch[1]);
+    filters.push('maxAmount');
+  }
+
+  // 5. NON VISITATO DA X GIORNI/SETTIMANE/MESI
+  const inactivityMatch = text.match(/(?:non\s+(?:vedo|visito)|inattiv[io])\s+(?:da|per)\s+(?:più\s+di\s+)?(\d+)\s*(giorn[oi]|settiman[ae]|mes[ei]|ann[oi])?/i);
+  if (inactivityMatch) {
+    let days = parseInt(inactivityMatch[1]);
+    const unit = inactivityMatch[2]?.toLowerCase() ?? 'giorni';
+    
+    if (unit.startsWith('settiman')) days *= 7;
+    else if (unit.startsWith('mes')) days *= 30;
+    else if (unit.startsWith('ann')) days *= 365;
+    
+    entities.notVisitedDays = days;
+    entities.inactivityDays = days; // Compatibilità con intent esistente
+    filters.push('notVisitedDays');
+  }
+
+  // 6. PERIODO TEMPORALE
+  const periodPatterns: [RegExp, EntityType['period']][] = [
+    [/\b(oggi|today)\b/i, 'today'],
+    [/\b(ieri|yesterday)\b/i, 'yesterday'],
+    [/\b(questa settimana|this week)\b/i, 'week'],
+    [/\b(settimana scorsa|last week)\b/i, 'last_week'],
+    [/\b(questo mese|this month)\b/i, 'month'],
+    [/\b(mese scorso|il mese scorso|last month)\b/i, 'last_month'],
+    [/\b(quest'anno|this year)\b/i, 'year'],
+  ];
+  
+  for (const [pattern, period] of periodPatterns) {
+    if (pattern.test(text)) {
+      entities.period = period;
+      filters.push('period');
+      break;
+    }
+  }
+
+  // 7. HA EFFETTUATO ORDINI
+  if (/\b(che\s+)?(?:hanno|ha|con)\s+(?:fatto\s+)?ordini?\b/i.test(text)) {
+    entities.hasOrdered = true;
+    filters.push('hasOrdered');
+  }
+  if (/\b(che\s+)?(?:non\s+hanno|non\s+ha|senza)\s+ordini?\b/i.test(text)) {
+    entities.hasOrdered = false;
+    filters.push('hasOrdered');
+  }
+
+  // Salva lista filtri applicati
+  if (filters.length > 0) {
+    entities.filters = filters;
+  }
+
+  return entities;
+}
+
+// ═══════════════════════════════════════════════════════════════
 
 // Estrae tutte le entità possibili da un testo
 function extractEntities(text: string, context?: ConversationContext): EntityType {
@@ -398,6 +552,30 @@ const INTENT_MATCHERS: IntentMatcher[] = [
         priority: 'low'
       });
       return suggestions;
+    }
+  },
+
+  // 🆕 QUERY COMPOSITE - Filtri multipli combinati
+  // Esempi: "clienti di Verona che hanno comprato vino"
+  //         "bar di Milano che non vedo da un mese"
+  //         "ristoranti con ordine > 500€ questa settimana"
+  {
+    intent: 'composite_query',
+    patterns: [
+      // Pattern con "che hanno/che non" + condizione
+      /\b(client[ei]|negozi|bar|ristoranti?|locali)\b.*\b(che|quali)\b.*\b(hanno|ha|non|compra|comprato|venduto|ordinato|vedo|visito)\b/i,
+      // Pattern con città + tipo locale
+      /\b(client[ei]|bar|ristoranti?)\b.*\b(di|a|in)\b\s+([A-ZÀ-Ú][a-zà-ú]+)\b.*\b(che|con|dove)\b/i,
+      // Pattern con filtro importo
+      /\b(client[ei]|ordini|vendite)\b.*\b(>|<|maggiore|minore|sopra|sotto)\b.*\b(\d+)\s*€?\b/i,
+      // Pattern "chi compra X" o "a chi vendo X"
+      /\b(chi|a chi)\b.*\b(compra|vendo|ho venduto|acquista)\b.*\b(\w+)\b/i,
+      // Pattern con periodo + condizione
+      /\b(client[ei])\b.*\b(non vedo|non visito|inattiv)\b.*\b(da|per)\b/i,
+    ],
+    confidence: 0.95, // Alta priorità per query composite
+    entityExtractor: (text) => {
+      return extractCompositeFilters(text);
     }
   },
 

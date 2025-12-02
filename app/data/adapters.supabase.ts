@@ -138,6 +138,250 @@ export async function listClientEmails(crypto: CryptoLike): Promise<string[]> {
   return emails;
 }
 
+// ───────────────────────────────────────────────────────────────
+// 🆕 QUERY COMPOSITE - Filtri multipli combinati
+// ───────────────────────────────────────────────────────────────
+
+export type CompositeFilters = {
+  city?: string;
+  localeType?: string;
+  productBought?: string;
+  minAmount?: number;
+  maxAmount?: number;
+  notVisitedDays?: number;
+  hasOrdered?: boolean;
+  period?: 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'quarter' | 'year';
+};
+
+export type CompositeQueryResult = {
+  clients: Array<{
+    id: string;
+    name: string;
+    city?: string;
+    localeType?: string;
+    lastVisit?: string;
+    totalSales?: number;
+  }>;
+  filtersApplied: string[];
+  totalCount: number;
+  message: string;
+};
+
+/**
+ * Query composita con filtri multipli
+ * Es: "clienti di Verona che hanno comprato vino il mese scorso"
+ */
+export async function queryClientsWithFilters(
+  crypto: CryptoLike,
+  filters: CompositeFilters
+): Promise<CompositeQueryResult> {
+  assertCrypto(crypto);
+
+  const filtersApplied: string[] = [];
+
+  // 1. Query base clienti
+  let query = supabase
+    .from("accounts")
+    .select("id, name, name_enc, name_iv, city, tipo_locale");
+
+  // 2. Applica filtro CITTÀ
+  if (filters.city) {
+    query = query.ilike("city", `%${filters.city}%`);
+    filtersApplied.push(`📍 ${filters.city}`);
+  }
+
+  // 3. Applica filtro TIPO LOCALE
+  if (filters.localeType) {
+    query = query.ilike("tipo_locale", `%${filters.localeType}%`);
+    filtersApplied.push(`🏪 ${filters.localeType}`);
+  }
+
+  const { data: accounts, error: accError } = await query;
+  if (accError) throw accError;
+
+  if (!accounts?.length) {
+    return {
+      clients: [],
+      filtersApplied,
+      totalCount: 0,
+      message: `Nessun cliente trovato con questi filtri: ${filtersApplied.join(', ') || 'nessuno'}`
+    };
+  }
+
+  // 4. Decifra nomi
+  const clientsWithNames: Array<{ id: string; name: string; city?: string; localeType?: string }> = [];
+  
+  for (const acc of accounts) {
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+    if (name) {
+      clientsWithNames.push({
+        id: acc.id,
+        name,
+        city: acc.city ?? undefined,
+        localeType: acc.tipo_locale ?? undefined
+      });
+    }
+  }
+
+  // 5. Filtri che richiedono query aggiuntive (visite/vendite)
+  let filteredClients = clientsWithNames;
+
+  // 5a. Filtro PRODOTTO ACQUISTATO
+  if (filters.productBought) {
+    // Cerca nelle visite con prodotti_discussi
+    const { data: visits } = await supabase
+      .from("visits")
+      .select("account_id, prodotti_discussi, importo_vendita")
+      .ilike("prodotti_discussi", `%${filters.productBought}%`);
+
+    const accountsWithProduct = new Set((visits ?? []).map(v => v.account_id));
+    filteredClients = filteredClients.filter(c => accountsWithProduct.has(c.id));
+    filtersApplied.push(`🛒 ${filters.productBought}`);
+  }
+
+  // 5b. Filtro IMPORTO MINIMO/MASSIMO
+  if (filters.minAmount || filters.maxAmount) {
+    let visitQuery = supabase
+      .from("visits")
+      .select("account_id, importo_vendita")
+      .not("importo_vendita", "is", null);
+
+    if (filters.minAmount) {
+      visitQuery = visitQuery.gte("importo_vendita", filters.minAmount);
+      filtersApplied.push(`💰 >${filters.minAmount}€`);
+    }
+    if (filters.maxAmount) {
+      visitQuery = visitQuery.lte("importo_vendita", filters.maxAmount);
+      filtersApplied.push(`💰 <${filters.maxAmount}€`);
+    }
+
+    const { data: visits } = await visitQuery;
+    const accountsWithAmount = new Set((visits ?? []).map(v => v.account_id));
+    filteredClients = filteredClients.filter(c => accountsWithAmount.has(c.id));
+  }
+
+  // 5c. Filtro NON VISITATO DA X GIORNI
+  if (filters.notVisitedDays) {
+    const cutoffDate = new Date();
+    cutoffDate.setDate(cutoffDate.getDate() - filters.notVisitedDays);
+
+    // Trova clienti con ultima visita prima del cutoff O senza visite
+    const { data: recentVisits } = await supabase
+      .from("visits")
+      .select("account_id, data_visita")
+      .gte("data_visita", cutoffDate.toISOString().split('T')[0]);
+
+    const recentlyVisited = new Set((recentVisits ?? []).map(v => v.account_id));
+    filteredClients = filteredClients.filter(c => !recentlyVisited.has(c.id));
+    
+    const days = filters.notVisitedDays;
+    const label = days >= 30 ? `${Math.round(days / 30)} mesi` : `${days} giorni`;
+    filtersApplied.push(`📅 non visti da ${label}`);
+  }
+
+  // 5d. Filtro PERIODO
+  if (filters.period) {
+    const now = new Date();
+    let fromDate: Date;
+    let periodLabel: string;
+
+    switch (filters.period) {
+      case 'today':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        periodLabel = 'oggi';
+        break;
+      case 'yesterday':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+        periodLabel = 'ieri';
+        break;
+      case 'week':
+        fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+        periodLabel = 'questa settimana';
+        break;
+      case 'last_week':
+        fromDate = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000);
+        periodLabel = 'settimana scorsa';
+        break;
+      case 'month':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodLabel = 'questo mese';
+        break;
+      case 'last_month':
+        fromDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+        periodLabel = 'mese scorso';
+        break;
+      default:
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        periodLabel = "quest'anno";
+    }
+
+    const { data: periodVisits } = await supabase
+      .from("visits")
+      .select("account_id")
+      .gte("data_visita", fromDate.toISOString().split('T')[0]);
+
+    const visitedInPeriod = new Set((periodVisits ?? []).map(v => v.account_id));
+    filteredClients = filteredClients.filter(c => visitedInPeriod.has(c.id));
+    filtersApplied.push(`📆 ${periodLabel}`);
+  }
+
+  // 5e. Filtro HA EFFETTUATO ORDINI
+  if (filters.hasOrdered !== undefined) {
+    const { data: orders } = await supabase
+      .from("visits")
+      .select("account_id")
+      .gt("importo_vendita", 0);
+
+    const withOrders = new Set((orders ?? []).map(v => v.account_id));
+    
+    if (filters.hasOrdered) {
+      filteredClients = filteredClients.filter(c => withOrders.has(c.id));
+      filtersApplied.push(`✅ con ordini`);
+    } else {
+      filteredClients = filteredClients.filter(c => !withOrders.has(c.id));
+      filtersApplied.push(`❌ senza ordini`);
+    }
+  }
+
+  // 6. Formatta risultato
+  const count = filteredClients.length;
+  
+  if (count === 0) {
+    return {
+      clients: [],
+      filtersApplied,
+      totalCount: 0,
+      message: `Nessun cliente trovato con questi filtri:\n${filtersApplied.map(f => `• ${f}`).join('\n')}`
+    };
+  }
+
+  const top10 = filteredClients.slice(0, 10);
+  const lines = top10.map((c, i) => {
+    let line = `${i + 1}. **${c.name}**`;
+    if (c.city) line += ` (${c.city})`;
+    if (c.localeType) line += ` - ${c.localeType}`;
+    return line;
+  }).join('\n');
+
+  const message = `📋 **${count} clienti** trovati:\n\n` +
+    `**Filtri:** ${filtersApplied.join(' | ')}\n\n` +
+    `${lines}` +
+    (count > 10 ? `\n\n...e altri ${count - 10}` : '');
+
+  return {
+    clients: filteredClients,
+    filtersApplied,
+    totalCount: count,
+    message
+  };
+}
+
 
 // ───────────────────────────────────────────────────────────────
 // PRODOTTI (best effort)

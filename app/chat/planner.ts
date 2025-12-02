@@ -48,6 +48,9 @@ import {
   analyzeRevenuePerKmByProduct,
   getNearestClients,
   getKmTraveledInPeriod,
+  // 🆕 Query Composite
+  queryClientsWithFilters,
+  type CompositeFilters,
 } from "../data/adapters";
 
 // ==================== TIPI ====================
@@ -277,6 +280,37 @@ async function handleIntent(
       }
       
       return { text, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 QUERY COMPOSITE - Filtri multipli combinati
+    // ═══════════════════════════════════════════════════════════════
+    case 'composite_query': {
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      // Costruisci filtri dal parsed entities
+      const filters: CompositeFilters = {};
+      
+      if (entities.city) filters.city = entities.city;
+      if (entities.localeType) filters.localeType = entities.localeType;
+      if (entities.productBought) filters.productBought = entities.productBought;
+      if (entities.minAmount) filters.minAmount = entities.minAmount;
+      if (entities.maxAmount) filters.maxAmount = entities.maxAmount;
+      if (entities.notVisitedDays) filters.notVisitedDays = entities.notVisitedDays;
+      if (entities.hasOrdered !== undefined) filters.hasOrdered = entities.hasOrdered;
+      if (entities.period) filters.period = entities.period;
+
+      // Verifica che ci sia almeno un filtro
+      const hasFilters = Object.keys(filters).length > 0;
+      if (!hasFilters) {
+        return {
+          text: "🤔 Non ho capito quali filtri applicare.\n\nProva con:\n• \"Clienti di Milano\"\n• \"Bar che hanno comprato vino\"\n• \"Ristoranti che non vedo da un mese\"",
+          intent
+        };
+      }
+
+      const result = await queryClientsWithFilters(crypto, filters);
+      return { text: result.message, intent };
     }
 
     case 'client_list': {
