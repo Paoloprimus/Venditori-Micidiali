@@ -114,6 +114,42 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
       </div>
       <div className="list" style={{ padding: 16 }}>
         
+        {/* SEZIONE PRIVACY E DATI - PRIMA */}
+        <div style={{ marginBottom: 16 }}>
+          <a 
+            href="/settings/my-data"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px',
+              background: '#f8fafc',
+              borderRadius: 12,
+              textDecoration: 'none',
+              color: '#334155',
+              border: '1px solid #e2e8f0',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.background = '#f1f5f9';
+              e.currentTarget.style.borderColor = '#cbd5e1';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.background = '#f8fafc';
+              e.currentTarget.style.borderColor = '#e2e8f0';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>🔐</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>I Miei Dati</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>Visualizza, esporta, cancella (GDPR)</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 16, color: '#94a3b8' }}>→</span>
+          </a>
+        </div>
+
         {/* SEZIONE INDIRIZZO CASA */}
         <div style={{ marginBottom: 16 }}>
           <button onClick={() => setAddressExpanded(!addressExpanded)} style={accordionButtonStyle(addressExpanded)}>
@@ -221,42 +257,6 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
               </div>
             </div>
             <span style={{ fontSize: 20 }}>→</span>
-          </a>
-        </div>
-
-        {/* SEZIONE PRIVACY E DATI */}
-        <div style={{ marginBottom: 16 }}>
-          <a 
-            href="/settings/my-data"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '16px',
-              background: '#f8fafc',
-              borderRadius: 12,
-              textDecoration: 'none',
-              color: '#334155',
-              border: '1px solid #e2e8f0',
-              transition: 'all 0.2s',
-            }}
-            onMouseOver={e => {
-              e.currentTarget.style.background = '#f1f5f9';
-              e.currentTarget.style.borderColor = '#cbd5e1';
-            }}
-            onMouseOut={e => {
-              e.currentTarget.style.background = '#f8fafc';
-              e.currentTarget.style.borderColor = '#e2e8f0';
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 24 }}>🔐</span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 14 }}>I Miei Dati</div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>Visualizza, esporta, cancella (GDPR)</div>
-              </div>
-            </div>
-            <span style={{ fontSize: 16, color: '#94a3b8' }}>→</span>
           </a>
         </div>
 
