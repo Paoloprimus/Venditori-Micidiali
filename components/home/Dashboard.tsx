@@ -13,6 +13,7 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
+import GettingStartedChecklist from './GettingStartedChecklist';
 
 type DashboardStats = {
   visiteOggi: number;
@@ -175,6 +176,9 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           Ecco il riepilogo della tua giornata
         </p>
       </div>
+
+      {/* 🚀 Checklist Primi Passi (onboarding) */}
+      <GettingStartedChecklist />
 
       {/* KPI Cards - Oggi */}
       <div style={{ marginBottom: 24 }}>
