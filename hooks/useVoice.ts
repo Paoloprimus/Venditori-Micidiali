@@ -50,6 +50,10 @@ export function useVoice({
   const srRef = useRef<any>(null);
   const micActiveRef = useRef(false);
   const finalAccumRef = useRef<string>("");
+  
+  // 🆕 Per comandi naturali
+  const lastAssistantResponseRef = useRef<string>(""); // Per "ripeti"
+  const pauseTimerRef = useRef<number | null>(null);   // Per "aspetta"
 
   // ======= MediaRecorder fallback (niente live) =======
   const mrRef = useRef<MediaRecorder | null>(null);
@@ -77,7 +81,23 @@ export function useVoice({
 
   function isStopCommand(t: string) {
     const s = (t || "").trim().toLowerCase();
-    return s === "stop" || s === "esci";
+    return s === "stop" || s === "esci" || s === "basta" || s === "chiudi" || s === "basta così";
+  }
+
+  // 🆕 Comandi naturali per hands-free
+  function isRepeatCommand(t: string) {
+    const s = (t || "").trim().toLowerCase();
+    return /^(ripeti|ridi|ridimmi|non ho capito|cosa hai detto|puoi ripetere)\s*[.!?]*$/i.test(s);
+  }
+
+  function isPauseCommand(t: string) {
+    const s = (t || "").trim().toLowerCase();
+    return /^(aspetta|un momento|un attimo|fermati|pausa)\s*[.!?]*$/i.test(s);
+  }
+
+  function isHelpCommand(t: string) {
+    const s = (t || "").trim().toLowerCase();
+    return /^(aiuto|help|comandi|cosa posso dire)\s*[.!?]*$/i.test(s);
   }
 
   function hasSubmitCue(raw: string) {
@@ -122,10 +142,13 @@ export function useVoice({
 
   // ===== Dialogo: stato, buffer e lock anti-doppio invio =====
   const [dialogMode, setDialogMode] = useState(false);
+  const dialogModeRef = useRef(dialogMode); // Per accesso in setTimeout
+  useEffect(() => { dialogModeRef.current = dialogMode; }, [dialogMode]);
+  
   const dialogBufRef = useRef<string>("");
   const dialogSendingRef = useRef<boolean>(false);
   
-  // 🆕 Auto-send dopo pausa: timer per rilevare silenzio
+  // Auto-send dopo pausa: timer per rilevare silenzio
   const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
   const AUTO_SEND_DELAY_MS = 1500; // 1.5 secondi di silenzio → invio automatico
 
@@ -159,12 +182,62 @@ export function useVoice({
               continue;
             }
 
-            // se dici "stop" o "esci" chiude il dialogo
+            // 🆕 Comandi naturali hands-free
+            
+            // "stop", "esci", "basta", "chiudi" → chiude dialogo
             if (isStopCommand(txt)) {
-              const canSpeak = speakerEnabledRef.current; // ⬅ gate prima dello stop
-              stopDialog();                                // spegne dialogo + speaker
+              const canSpeak = speakerEnabledRef.current;
+              stopDialog();
               if (canSpeak) onSpeak("Dialogo terminato.");
               return;
+            }
+
+            // "ripeti" → rilegge ultima risposta
+            if (isRepeatCommand(txt)) {
+              if (lastAssistantResponseRef.current) {
+                onSpeak(lastAssistantResponseRef.current);
+              } else {
+                onSpeak("Non ho ancora detto nulla.");
+              }
+              finalAccumRef.current = "";
+              dialogBufRef.current = "";
+              continue;
+            }
+
+            // "aspetta", "un momento" → pausa mic 10 secondi
+            if (isPauseCommand(txt)) {
+              const canSpeak = speakerEnabledRef.current;
+              if (canSpeak) onSpeak("Ok, aspetto. Dimmi quando sei pronto.");
+              finalAccumRef.current = "";
+              dialogBufRef.current = "";
+              // Ferma ascolto temporaneamente
+              if (srRef.current) {
+                try { srRef.current.stop(); } catch {}
+              }
+              setIsRecording(false);
+              // Riprendi dopo 10 secondi
+              pauseTimerRef.current = window.setTimeout(() => {
+                if (dialogModeRef.current) {
+                  micActiveRef.current = true;
+                  startNativeSR();
+                  if (speakerEnabledRef.current) onSpeak("Sono pronto, dimmi.");
+                }
+              }, 10000);
+              return;
+            }
+
+            // "aiuto", "comandi" → elenca comandi
+            if (isHelpCommand(txt)) {
+              const helpText = `Ecco i comandi disponibili:
+• "Ripeti" - Rileggo l'ultima risposta
+• "Aspetta" o "Un momento" - Pausa di 10 secondi
+• "Basta" o "Chiudi" - Termino il dialogo
+• "Cancella" - Annullo quello che hai detto
+Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
+              onSpeak(helpText);
+              finalAccumRef.current = "";
+              dialogBufRef.current = "";
+              continue;
             }
 
             finalAccumRef.current = (finalAccumRef.current + " " + txt).trim();
@@ -396,14 +469,20 @@ export function useVoice({
     dialogSendingRef.current = false;
     micActiveRef.current = false;
     
-    // 🆕 Cancella timer auto-send
+    // Cancella timer auto-send
     if (autoSendTimerRef.current) {
       clearTimeout(autoSendTimerRef.current);
       autoSendTimerRef.current = null;
     }
     
+    // 🆕 Cancella timer pausa
+    if (pauseTimerRef.current) {
+      clearTimeout(pauseTimerRef.current);
+      pauseTimerRef.current = null;
+    }
+    
     stopAll();
-    setSpeakerEnabled(false);          // ✅ ritorno a OFF/ OFF quando esco dal Dialogo
+    setSpeakerEnabled(false);
   }
 
   // Cleanup su unmount
@@ -411,10 +490,15 @@ export function useVoice({
     return () => {
       micActiveRef.current = false;
       stopAll();
-      // 🆕 Cancella timer auto-send
+      // Cancella timer auto-send
       if (autoSendTimerRef.current) {
         clearTimeout(autoSendTimerRef.current);
         autoSendTimerRef.current = null;
+      }
+      // Cancella timer pausa
+      if (pauseTimerRef.current) {
+        clearTimeout(pauseTimerRef.current);
+        pauseTimerRef.current = null;
       }
     };
   }, []);
@@ -488,6 +572,11 @@ export function useVoice({
     }
   }
 
+  // 🆕 Callback per tracciare ultima risposta (per "ripeti")
+  function setLastAssistantResponse(text: string) {
+    lastAssistantResponseRef.current = text;
+  }
+
   return {
     isRecording, isTranscribing, voiceError,
     voiceMode, setVoiceMode,
@@ -500,5 +589,8 @@ export function useVoice({
     startDialog,
     stopDialog,
     stopMic,
+    
+    // 🆕 Per comandi naturali
+    setLastAssistantResponse,
   };
 }

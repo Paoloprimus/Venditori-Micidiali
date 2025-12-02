@@ -198,8 +198,10 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
   useEffect(() => {
     if (!lastAssistantText) return;
+    // 🆕 Traccia per comando "ripeti"
+    voice.setLastAssistantResponse(stripMarkdownForTTS(lastAssistantText));
     if (voice.speakerEnabled) speakAssistant(lastAssistantText);
-  }, [lastAssistantText, voice.speakerEnabled, speakAssistant]);
+  }, [lastAssistantText, voice.speakerEnabled, speakAssistant, voice]);
 
   const handleAnyHomeInteraction = useCallback(() => {
     if (leftOpen) closeLeft();
