@@ -25,12 +25,29 @@ export default function DrivingModePage() {
     onAssistantReply: (text) => { setLastAssistantText(text); },
   });
 
+  // 🆕 Comandi speciali per uscire dalla modalità guida
+  const isExitDrivingCommand = (text: string) => {
+    const s = (text || "").trim().toLowerCase();
+    return /^(torna a casa|torna alla home|esci dalla guida|chiudi guida|fine guida)\s*[.!?]*$/i.test(s);
+  };
+
   // Voice
   const voice = useVoice({
     onTranscriptionToInput: () => {},
     onSendDirectly: async (text) => {
       const raw = (text || "").trim();
       if (!raw) return;
+      
+      // 🆕 Intercetta comando uscita guida
+      if (isExitDrivingCommand(raw)) {
+        speakAssistant("Ok, torno alla home.");
+        setTimeout(() => {
+          voice.stopDialog();
+          router.push('/');
+        }, 1500);
+        return;
+      }
+      
       await conv.send(raw);
     },
     onSpeak: (text) => speakAssistant(text),
@@ -236,7 +253,7 @@ export default function DrivingModePage() {
       {/* Quick commands hint */}
       {voice.voiceMode && !ttsSpeaking && (
         <div className="driving-hints">
-          💡 "Ripeti" • "Aspetta" • "Basta"
+          💡 "Ripeti" • "Aspetta" • "Torna a casa"
         </div>
       )}
 

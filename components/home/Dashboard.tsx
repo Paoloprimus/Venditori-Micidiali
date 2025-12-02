@@ -247,6 +247,33 @@ export default function HomeDashboard({ userName }: { userName: string }) {
         </div>
       </div>
 
+      {/* Driving Mode - In evidenza */}
+      <a 
+        href="/driving"
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '16px 20px',
+          marginBottom: 24,
+          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          borderRadius: 16,
+          textDecoration: 'none',
+          color: 'white',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          transition: 'transform 0.2s, box-shadow 0.2s',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <span style={{ fontSize: 32 }}>🚗</span>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 18 }}>Modalità Guida</div>
+            <div style={{ fontSize: 13, opacity: 0.85 }}>Hands-free per guidare in sicurezza</div>
+          </div>
+        </div>
+        <span style={{ fontSize: 24, opacity: 0.7 }}>→</span>
+      </a>
+
       {/* Quick Actions */}
       <div style={{ marginBottom: 24 }}>
         <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>⚡ Azioni rapide</div>
