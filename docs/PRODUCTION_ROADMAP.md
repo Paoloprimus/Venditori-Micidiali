@@ -12,7 +12,7 @@
 |------|-------------|--------|----------|
 | 1 | Semantica Avanzata | ✅ 100% | 🔴 CRITICA |
 | 2 | Voce & Dialogo | 🟡 80% | 🔴 CRITICA |
-| 3 | Ruoli & Credenziali | ⬜ 0% | 🟡 ALTA |
+| 3 | Ruoli & Credenziali | ✅ 100% | 🟡 ALTA |
 | 4 | Dashboard Admin | ⬜ 0% | 🟡 ALTA |
 | 5 | Legal & Privacy | ⬜ 0% | 🔴 CRITICA |
 | 6 | Sito reping.it | ⬜ 0% | 🟢 MEDIA |
@@ -79,26 +79,38 @@ Uso hands-free completo: l'agente parla, l'app risponde, senza toccare lo scherm
 ---
 
 ## 3️⃣ RUOLI & CREDENZIALI
-**Priority: 🟡 ALTA**
+**Priority: 🟡 ALTA** ✅ COMPLETATA
 
 ### Obiettivo
 Sistema di permessi per diversi tipi di utenti.
 
-### Ruoli Previsti
+### Ruoli Implementati
 | Ruolo | Descrizione | Permessi |
 |-------|-------------|----------|
-| `superadmin` | Proprietario piattaforma | Tutto |
-| `admin` | Admin azienda | Gestione team, report aggregati |
-| `manager` | Capo area | Vede dati del suo team |
-| `venditore` | Agente base | Solo i propri dati |
-| `viewer` | Sola lettura | Report, no modifica |
+| `admin` | Amministratore (max 2) | Vede tutto (no decrypt), gestisce ruoli |
+| `agente` | Agente base | Solo i propri dati, limiti servizio base |
+| `agente_premium` | Agente premium | Solo i propri dati, limiti elevati |
 
-### Tasks
-- [ ] **3.1** Tabella `roles` su Supabase
-- [ ] **3.2** RLS policies per ruolo
-- [ ] **3.3** UI per assegnazione ruoli
-- [ ] **3.4** Audit log accessi
-- [ ] **3.5** Inviti email con ruolo preassegnato
+### Limiti di Servizio
+| Funzionalità | Agente | Premium |
+|-------------|--------|---------|
+| Query chat/giorno | 30 | 300 |
+| Storico visibile | 90 giorni | Illimitato |
+| Export PDF/mese | 3 | Illimitato |
+| Analytics avanzati | ❌ | ✅ |
+| Report dettagliati | ❌ | ✅ |
+
+### Tasks Completati
+- [x] **3.1** Tabella `service_limits` e `usage_tracking`
+- [x] **3.2** RLS policies per ruolo (admin vede tutto, agenti solo propri dati)
+- [x] **3.3** UI per assegnazione ruoli (`/admin/users`)
+- [x] **3.4** Trigger max 2 admin
+- [x] **3.5** Funzioni helper: `can_use_feature()`, `increment_usage()`
+
+### Sicurezza
+- ✅ Admin può vedere statistiche aggregate ma NON può decifrare dati clienti
+- ✅ Cifratura client-side mantiene privacy anche con accesso admin
+- ✅ Rate limiting con messaggio upsell Premium
 
 ---
 
