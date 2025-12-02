@@ -10,7 +10,7 @@
 
 | Fase | Descrizione | Status | Priority |
 |------|-------------|--------|----------|
-| 1 | Semantica Avanzata | ⬜ 0% | 🔴 CRITICA |
+| 1 | Semantica Avanzata | ✅ 100% | 🔴 CRITICA |
 | 2 | Voce & Dialogo | ⬜ 0% | 🔴 CRITICA |
 | 3 | Ruoli & Credenziali | ⬜ 0% | 🟡 ALTA |
 | 4 | Dashboard Admin | ⬜ 0% | 🟡 ALTA |
@@ -24,18 +24,23 @@
 ---
 
 ## 1️⃣ SEMANTICA AVANZATA
-**Priority: 🔴 CRITICA**
+**Priority: 🔴 CRITICA** ✅ COMPLETATA
 
 ### Obiettivo
 L'assistente deve capire il linguaggio naturale come un umano, non solo pattern matching.
 
 ### Tasks
-- [ ] **1.1** Migliorare context retention (ricordare ultimi 5-10 scambi)
-- [ ] **1.2** Gestire domande composite ("clienti di Verona che hanno comprato vino")
-- [ ] **1.3** Sinonimi e varianti linguistiche regionali
-- [ ] **1.4** Intent chaining (un intent che ne triggera un altro)
-- [ ] **1.5** Fallback intelligente ("Non ho capito, intendi X o Y?")
-- [ ] **1.6** Suggerimenti proattivi ("Hai 3 clienti da richiamare oggi")
+- [x] **1.1** Migliorare context retention (ricordare ultimi 5-10 scambi)
+- [x] **1.2** Gestire domande composite ("clienti di Verona che hanno comprato vino")
+- [ ] ~~**1.3** Sinonimi e varianti linguistiche regionali~~ (deprioritizzato)
+- [x] **1.4** Intent chaining (un intent che ne triggera un altro)
+- [x] **1.5** Fallback intelligente ("Non ho capito, intendi X o Y?")
+- [x] **1.6** Suggerimenti proattivi ("Hai 3 clienti da richiamare oggi")
+
+### 🆕 Implementazioni Extra
+- [x] Query geografiche (fatturato/km, clienti vicini, km percorsi)
+- [x] Routing stradale reale via OSRM
+- [x] ~40 nuovi intent riconosciuti
 
 ### Metriche
 - Intent recognition accuracy: >95%
