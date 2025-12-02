@@ -14,7 +14,7 @@
 | 2 | Voce & Dialogo | 🟡 80% | 🔴 CRITICA |
 | 3 | Ruoli & Credenziali | ✅ 100% | 🟡 ALTA |
 | 4 | Dashboard Admin | 🟡 50% | 🟡 ALTA |
-| 5 | Legal & Privacy | ⬜ 0% | 🔴 CRITICA |
+| 5 | Legal & Privacy | ✅ 100% | 🔴 CRITICA |
 | 6 | Sito reping.it | ⬜ 0% | 🟢 MEDIA |
 | 7 | Onboarding | ⬜ 0% | 🟡 ALTA |
 | 8 | Mobile UX | ⬜ 0% | 🟡 ALTA |
@@ -142,7 +142,7 @@ La dashboard va arricchita con informazioni realmente utili all'admin:
 ---
 
 ## 5️⃣ LEGAL & PRIVACY
-**Priority: 🔴 CRITICA (bloccante per release)**
+**Priority: 🔴 CRITICA (bloccante per release)** ✅ COMPLETATA
 
 ### Obiettivo
 Conformità GDPR (Reg. UE 2016/679) e normative italiane. 
@@ -260,39 +260,39 @@ CREATE TABLE consents (
 
 ### 📝 5.D - TASK BREAKDOWN
 
-| # | Task | Priorità | Tempo stimato |
-|---|------|----------|---------------|
-| 5.1 | Scrivere Privacy Policy | 🔴 | 2h |
-| 5.2 | Scrivere Cookie Policy | 🔴 | 1h |
-| 5.3 | Scrivere Termini di Servizio | 🔴 | 2h |
-| 5.4 | Componente CookieBanner | 🔴 | 1h |
-| 5.5 | Checkbox consensi in signup | 🔴 | 1h |
-| 5.6 | Tabella `consents` + migrazione | 🔴 | 30min |
-| 5.7 | Pagina `/legal/privacy` | 🟡 | 30min |
-| 5.8 | Pagina `/legal/terms` | 🟡 | 30min |
-| 5.9 | Pagina `/legal/cookies` | 🟡 | 30min |
-| 5.10 | Pagina `/settings/my-data` | 🟡 | 2h |
-| 5.11 | Export dati personali | 🟡 | 1h |
-| 5.12 | Cancellazione account | 🟡 | 1h |
-| 5.13 | Revisione legale (opzionale) | 🟢 | Esterno |
+| # | Task | Priorità | Status |
+|---|------|----------|--------|
+| 5.1 | Scrivere Privacy Policy | 🔴 | ✅ |
+| 5.2 | Scrivere Cookie Policy | 🔴 | ✅ |
+| 5.3 | Scrivere Termini di Servizio | 🔴 | ✅ |
+| 5.4 | Componente CookieBanner | 🔴 | ✅ |
+| 5.5 | Checkbox consensi in signup | 🔴 | ✅ |
+| 5.6 | Tabella `consents` + migrazione | 🔴 | ✅ |
+| 5.7 | Pagina `/legal/privacy` | 🟡 | ✅ |
+| 5.8 | Pagina `/legal/terms` | 🟡 | ✅ |
+| 5.9 | Pagina `/legal/cookies` | 🟡 | ✅ |
+| 5.10 | Pagina `/settings/my-data` | 🟡 | ✅ |
+| 5.11 | Export dati personali | 🟡 | ✅ |
+| 5.12 | Cancellazione account | 🟡 | ✅ |
+| 5.13 | Revisione legale (opzionale) | 🟢 | ⏳ Esterno |
 
-**Tempo totale stimato**: ~12h
+**Completato**: 2 Dicembre 2025
 
 ---
 
 ### ✅ CHECKLIST PRE-RELEASE
 
-- [ ] Privacy Policy online e linkata nel footer
-- [ ] Cookie Policy online e linkata nel banner
-- [ ] Termini di Servizio online e linkati nel footer
-- [ ] Banner cookie funzionante
-- [ ] Consensi obbligatori in registrazione
-- [ ] Pagina "I miei dati" accessibile
-- [ ] Export dati funzionante
-- [ ] Cancellazione account funzionante
-- [ ] Log consensi attivo
-- [ ] DPA con OpenAI verificato
-- [ ] Email PEC per comunicazioni legali
+- [x] Privacy Policy online e linkata nel footer
+- [x] Cookie Policy online e linkata nel banner
+- [x] Termini di Servizio online e linkati nel footer
+- [x] Banner cookie funzionante
+- [x] Consensi obbligatori in registrazione
+- [x] Pagina "I miei dati" accessibile
+- [x] Export dati funzionante
+- [x] Cancellazione account funzionante
+- [x] Log consensi attivo
+- [ ] DPA con OpenAI verificato (⚠️ da verificare manualmente)
+- [ ] Email PEC per comunicazioni legali (⚠️ da configurare)
 
 ---
 

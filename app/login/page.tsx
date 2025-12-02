@@ -3,6 +3,7 @@ import { useState } from "react";
 import { supabase } from "../../lib/supabase/client"; // <- singleton
 import { useRouter } from "next/navigation";
 import { useCrypto } from "@/lib/crypto/CryptoProvider"; // ✅ 1. Import useCrypto
+import Link from "next/link";
 
 export default function Login() {
   const router = useRouter();
@@ -18,6 +19,11 @@ export default function Login() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
+  // ⬇️ consensi GDPR per il signup
+  const [tosAccepted, setTosAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [marketingAccepted, setMarketingAccepted] = useState(false);
+
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -32,6 +38,13 @@ export default function Login() {
 
     try {
       if (mode === "signup") {
+        // 0) Verifica consensi obbligatori
+        if (!tosAccepted || !privacyAccepted) {
+          setMsg("Devi accettare i Termini di Servizio e la Privacy Policy per registrarti.");
+          setLoading(false);
+          return;
+        }
+
         // 1) Registrazione
         const { data, error } = await supabase.auth.signUp({ 
             email, 
@@ -39,6 +52,25 @@ export default function Login() {
             options: { data: { first_name: firstName, last_name: lastName } } 
         });
         if (error) throw error;
+
+        // 1.1) Registra i consensi GDPR
+        if (data.user) {
+          try {
+            await fetch("/api/consents/check-signup", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                user_id: data.user.id,
+                tos_accepted: tosAccepted,
+                privacy_accepted: privacyAccepted,
+                marketing_accepted: marketingAccepted,
+              }),
+            });
+          } catch (consentErr) {
+            console.warn("[Login] Errore salvataggio consensi:", consentErr);
+            // Non blocchiamo il signup per errori di logging
+          }
+        }
 
         // 2) Se sessione immediata (impostazioni Supabase)
         if (data.session) {
@@ -225,7 +257,98 @@ export default function Login() {
           }}
         />
 
-        <button className="btn" type="submit" disabled={loading}>
+        {/* Consensi GDPR - solo in modalità signup */}
+        {mode === "signup" && (
+          <div style={{ 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: 8, 
+            padding: 12, 
+            background: "#0B1220", 
+            borderRadius: 10, 
+            border: "1px solid #1F2937",
+            marginTop: 4 
+          }}>
+            <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+              Per registrarti, accetta i seguenti consensi:
+            </p>
+            
+            {/* ToS - Obbligatorio */}
+            <label style={{ 
+              display: "flex", 
+              alignItems: "flex-start", 
+              gap: 8, 
+              cursor: "pointer",
+              color: "#C9D1E7",
+              fontSize: 13
+            }}>
+              <input
+                type="checkbox"
+                checked={tosAccepted}
+                onChange={(e) => setTosAccepted(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "#3B82F6" }}
+              />
+              <span>
+                Ho letto e accetto i{" "}
+                <Link href="/legal/terms" target="_blank" style={{ color: "#3B82F6", textDecoration: "underline" }}>
+                  Termini di Servizio
+                </Link>
+                <span style={{ color: "#EF4444" }}> *</span>
+              </span>
+            </label>
+
+            {/* Privacy - Obbligatorio */}
+            <label style={{ 
+              display: "flex", 
+              alignItems: "flex-start", 
+              gap: 8, 
+              cursor: "pointer",
+              color: "#C9D1E7",
+              fontSize: 13
+            }}>
+              <input
+                type="checkbox"
+                checked={privacyAccepted}
+                onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "#3B82F6" }}
+              />
+              <span>
+                Ho letto la{" "}
+                <Link href="/legal/privacy" target="_blank" style={{ color: "#3B82F6", textDecoration: "underline" }}>
+                  Privacy Policy
+                </Link>
+                <span style={{ color: "#EF4444" }}> *</span>
+              </span>
+            </label>
+
+            {/* Marketing - Opzionale */}
+            <label style={{ 
+              display: "flex", 
+              alignItems: "flex-start", 
+              gap: 8, 
+              cursor: "pointer",
+              color: "#C9D1E7",
+              fontSize: 13
+            }}>
+              <input
+                type="checkbox"
+                checked={marketingAccepted}
+                onChange={(e) => setMarketingAccepted(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "#3B82F6" }}
+              />
+              <span>
+                Acconsento a ricevere comunicazioni marketing
+                <span style={{ color: "#9CA3AF", fontSize: 11 }}> (opzionale)</span>
+              </span>
+            </label>
+
+            <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 4 }}>
+              <span style={{ color: "#EF4444" }}>*</span> Campi obbligatori
+            </p>
+          </div>
+        )}
+
+        <button className="btn" type="submit" disabled={loading || (mode === "signup" && (!tosAccepted || !privacyAccepted))}>
           {loading ? "Attendere…" : mode === "signin" ? "Accedi" : "Registrati"}
         </button>
 

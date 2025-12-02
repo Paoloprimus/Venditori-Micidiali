@@ -374,9 +374,91 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
           </a>
         </div>
 
+        {/* SEZIONE PRIVACY E DATI */}
+        <div style={{ marginBottom: 16 }}>
+          <a 
+            href="/settings/my-data"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px',
+              background: '#f8fafc',
+              borderRadius: 12,
+              textDecoration: 'none',
+              color: '#334155',
+              border: '1px solid #e2e8f0',
+              transition: 'all 0.2s',
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.background = '#f1f5f9';
+              e.currentTarget.style.borderColor = '#cbd5e1';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.background = '#f8fafc';
+              e.currentTarget.style.borderColor = '#e2e8f0';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 24 }}>🔐</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 14 }}>I Miei Dati</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>Visualizza, esporta, cancella (GDPR)</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 16, color: '#94a3b8' }}>→</span>
+          </a>
+        </div>
+
+        {/* SEZIONE LEGAL */}
+        <div style={{ marginBottom: 16, padding: 16, background: '#f9fafb', borderRadius: 12, border: '1px solid #e5e7eb' }}>
+          <div style={{ fontSize: 12, fontWeight: 600, color: '#6b7280', marginBottom: 12 }}>📄 DOCUMENTI LEGALI</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <a 
+              href="/legal/privacy" 
+              style={{ 
+                fontSize: 13, 
+                color: '#2563eb', 
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              Privacy Policy
+            </a>
+            <a 
+              href="/legal/terms" 
+              style={{ 
+                fontSize: 13, 
+                color: '#2563eb', 
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              Termini di Servizio
+            </a>
+            <a 
+              href="/legal/cookies" 
+              style={{ 
+                fontSize: 13, 
+                color: '#2563eb', 
+                textDecoration: 'none',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6
+              }}
+            >
+              Cookie Policy
+            </a>
+          </div>
+        </div>
+
         {/* Versione App */}
         <div style={{ padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
-          REPING Beta 1.0 • 2025
+          REPPING Beta 1.0 • 2025
         </div>
       </div>
     </>
