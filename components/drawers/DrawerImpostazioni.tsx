@@ -337,6 +337,41 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
           )}
         </div>
 
+        {/* SEZIONE DRIVING MODE */}
+        <div style={{ marginBottom: 16 }}>
+          <a 
+            href="/driving"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '16px',
+              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+              borderRadius: 12,
+              textDecoration: 'none',
+              color: 'white',
+              transition: 'transform 0.2s, box-shadow 0.2s',
+            }}
+            onMouseOver={e => {
+              e.currentTarget.style.transform = 'scale(1.02)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+            }}
+            onMouseOut={e => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = 'none';
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <span style={{ fontSize: 28 }}>🚗</span>
+              <div>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Modalità Guida</div>
+                <div style={{ fontSize: 12, opacity: 0.8 }}>Interfaccia hands-free per guidare</div>
+              </div>
+            </div>
+            <span style={{ fontSize: 20 }}>→</span>
+          </a>
+        </div>
+
         {/* Versione App */}
         <div style={{ padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
           REPING Beta 1.0 • 2025
