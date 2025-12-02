@@ -420,25 +420,73 @@ export function useVoice({
   }, []);
 
   // ===== Pausa mentre parla il TTS e riavvio pulito =====
+  const wasPlayingTTSRef = useRef(false);
+  const micReadyFeedbackGivenRef = useRef(false);
+  
   useEffect(() => {
     const id = setInterval(() => {
       if (!dialogMode) return;
-      if (isTtsSpeaking()) {
+      
+      const ttsPlaying = isTtsSpeaking();
+      
+      if (ttsPlaying) {
+        // TTS sta parlando → pausa mic
         if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; }
         micActiveRef.current = false;
         setIsRecording(false);
+        wasPlayingTTSRef.current = true;
+        micReadyFeedbackGivenRef.current = false;
       } else if (!isRecording && dialogMode && !srRef.current && !mrRef.current) {
-        // 🔄 ripartenza DOPO il TTS: reset completo per evitare duplicazioni
+        // TTS ha finito → riavvia mic
         dialogSendingRef.current = false;
         finalAccumRef.current = "";
         dialogBufRef.current = "";
         micActiveRef.current = true;
+        
+        // 🆕 Feedback audio quando mic si riattiva dopo risposta
+        if (wasPlayingTTSRef.current && !micReadyFeedbackGivenRef.current) {
+          micReadyFeedbackGivenRef.current = true;
+          wasPlayingTTSRef.current = false;
+          // Breve delay per non sovrapporre alla fine del TTS
+          setTimeout(() => {
+            if (dialogMode && speakerEnabledRef.current) {
+              // Beep o breve feedback - usiamo Web Audio API per un tono
+              playReadyBeep();
+            }
+          }, 200);
+        }
+        
         if (supportsNativeSR) startNativeSR();
         else startFallbackRecorder();
       }
     }, 150);
     return () => clearInterval(id);
   }, [dialogMode, supportsNativeSR, isRecording, isTtsSpeaking]);
+
+  // 🆕 Beep audio per indicare che il mic è pronto
+  function playReadyBeep() {
+    try {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      
+      osc.frequency.value = 880; // La nota (A5)
+      osc.type = 'sine';
+      gain.gain.value = 0.1; // Volume basso
+      
+      osc.start();
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.15);
+      osc.stop(ctx.currentTime + 0.15);
+      
+      // Cleanup
+      setTimeout(() => ctx.close(), 200);
+    } catch {
+      // Fallback: niente beep se Web Audio non supportato
+    }
+  }
 
   return {
     isRecording, isTranscribing, voiceError,
