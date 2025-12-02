@@ -473,8 +473,9 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         </>
       )}
 
-      {/* Debug Panel */}
+      {/* Debug Panel - COMMENTATO per Beta
       <PassphraseDebugPanel />
+      */}
 
       {/* Drawer con backdrop */}
       <DrawersWithBackdrop

@@ -43,8 +43,9 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <ConversationProvider>
             {children}
-            {/* 🧪 Test Companion Panel - solo quando attivo */}
+            {/* 🧪 Test Companion Panel - COMMENTATO per Beta
             {SHOW_TEST_PANEL && <TestCompanionPanel />}
+            */}
             {/* 🍪 Cookie Banner GDPR */}
             <CookieBanner />
           </ConversationProvider>
