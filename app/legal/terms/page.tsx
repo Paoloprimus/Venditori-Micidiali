@@ -245,7 +245,7 @@ export default function TermsOfServicePage() {
             <h2 className="text-lg font-semibold text-slate-900 mb-3">12. Contatti</h2>
             <p>Per domande su questi Termini:</p>
             <div className="bg-slate-50 border border-slate-200 rounded p-3 mt-2">
-              <p>Email: <a href="mailto:legal@repping.it" className="text-blue-600">legal@repping.it</a></p>
+              <p>Email: <a href="mailto:info@reping.it" className="text-blue-600">info@reping.it</a></p>
               <p>PEC: <a href="mailto:repping@pec.it" className="text-blue-600">repping@pec.it</a></p>
             </div>
           </section>

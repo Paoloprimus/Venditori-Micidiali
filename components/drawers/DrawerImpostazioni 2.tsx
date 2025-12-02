@@ -4,12 +4,24 @@
 "use client";
 import { useEffect, useState } from "react";
 import { geocodeAddress } from '@/lib/geocoding';
+import { supabase } from '@/lib/supabase/client';
 
 interface DrawerImpostazioniProps {
   onClose: () => void;
 }
 
 export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps) {
+  // Stato Profilo
+  const [profileExpanded, setProfileExpanded] = useState(true);
+  const [profileLoading, setProfileLoading] = useState(true);
+  const [profileEmail, setProfileEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [profileRole, setProfileRole] = useState('');
+  const [profileCreatedAt, setProfileCreatedAt] = useState('');
+  const [profileEditing, setProfileEditing] = useState(false);
+  const [profileSaving, setProfileSaving] = useState(false);
+  
   // Stato Indirizzo Casa
   const [addressExpanded, setAddressExpanded] = useState(false);
   const [homeAddress, setHomeAddress] = useState('');
@@ -20,6 +32,36 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
   // Stato Pagina Iniziale
   const [homePageExpanded, setHomePageExpanded] = useState(false);
   const [homePageMode, setHomePageMode] = useState<'chat' | 'dashboard'>('chat');
+
+  // Carica profilo utente
+  useEffect(() => {
+    async function loadProfile() {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        
+        setProfileEmail(user.email || '');
+        setProfileCreatedAt(user.created_at || '');
+        
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('first_name, last_name, role')
+          .eq('id', user.id)
+          .single();
+        
+        if (profile) {
+          setFirstName(profile.first_name || '');
+          setLastName(profile.last_name || '');
+          setProfileRole(profile.role || 'venditore');
+        }
+      } catch (e) {
+        console.error('[Profile] Errore caricamento:', e);
+      } finally {
+        setProfileLoading(false);
+      }
+    }
+    loadProfile();
+  }, []);
 
   // Carica impostazioni salvate
   useEffect(() => {
@@ -48,6 +90,33 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
       localStorage.setItem('repping_settings', JSON.stringify(data));
       window.dispatchEvent(new CustomEvent('repping:homePageModeChanged', { detail: { mode } }));
     } catch {}
+  }
+
+  async function handleSaveProfile() {
+    if (!firstName.trim() || !lastName.trim()) {
+      alert('Inserisci nome e cognome');
+      return;
+    }
+    
+    setProfileSaving(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non autenticato');
+      
+      const { error } = await supabase
+        .from('profiles')
+        .update({ first_name: firstName.trim(), last_name: lastName.trim() })
+        .eq('id', user.id);
+      
+      if (error) throw error;
+      setProfileEditing(false);
+      alert('✅ Profilo aggiornato!');
+    } catch (e: any) {
+      console.error('[Profile] Errore salvataggio:', e);
+      alert(`Errore: ${e.message}`);
+    } finally {
+      setProfileSaving(false);
+    }
   }
 
   async function handleSaveAddress() {
@@ -83,6 +152,13 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
     }
   }
 
+  const roleLabels: Record<string, string> = {
+    admin: '👑 Amministratore',
+    agente: '💼 Agente',
+    agente_premium: '⭐ Agente Premium',
+    venditore: '💼 Agente', // Legacy fallback
+  };
+
   const accordionButtonStyle = (isExpanded: boolean) => ({
     width: '100%',
     display: 'flex',
@@ -114,6 +190,80 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
       </div>
       <div className="list" style={{ padding: 16 }}>
         
+        {/* SEZIONE PROFILO */}
+        <div style={{ marginBottom: 16 }}>
+          <button onClick={() => setProfileExpanded(!profileExpanded)} style={accordionButtonStyle(profileExpanded)}>
+            <span>👤 Il Mio Profilo</span>
+            <span style={{ fontSize: 12 }}>{profileExpanded ? '▲' : '▼'}</span>
+          </button>
+          
+          {profileExpanded && (
+            <div style={accordionContentStyle}>
+              {profileLoading ? (
+                <div style={{ textAlign: 'center', color: '#6b7280', padding: 20 }}>⏳ Caricamento profilo...</div>
+              ) : (
+                <div style={{ display: 'grid', gap: 16 }}>
+                  {/* Avatar e Nome */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                    <div style={{
+                      width: 60, height: 60, borderRadius: '50%',
+                      background: 'linear-gradient(135deg, #2563eb 0%, #7c3aed 100%)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      color: 'white', fontSize: 24, fontWeight: 700,
+                    }}>
+                      {firstName.charAt(0).toUpperCase()}{lastName.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div style={{ fontSize: 18, fontWeight: 600, color: '#111827' }}>{firstName} {lastName}</div>
+                      <div style={{ fontSize: 13, color: '#6b7280' }}>{roleLabels[profileRole] || profileRole}</div>
+                    </div>
+                  </div>
+                  
+                  {/* Email */}
+                  <div style={{ padding: '12px 16px', background: '#f9fafb', borderRadius: 8 }}>
+                    <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>📧 Email</div>
+                    <div style={{ fontSize: 14, color: '#111827' }}>{profileEmail}</div>
+                  </div>
+                  
+                  {/* Data registrazione */}
+                  {profileCreatedAt && (
+                    <div style={{ padding: '12px 16px', background: '#f9fafb', borderRadius: 8 }}>
+                      <div style={{ fontSize: 12, color: '#6b7280', marginBottom: 4 }}>📅 Membro dal</div>
+                      <div style={{ fontSize: 14, color: '#111827' }}>
+                        {new Date(profileCreatedAt).toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Form modifica nome */}
+                  {profileEditing ? (
+                    <div style={{ display: 'grid', gap: 12, padding: 16, background: '#eff6ff', borderRadius: 8, border: '1px solid #bfdbfe' }}>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#1e40af' }}>Nome</label>
+                        <input value={firstName} onChange={e => setFirstName(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #93c5fd' }} />
+                      </div>
+                      <div>
+                        <label style={{ display: 'block', fontSize: 12, fontWeight: 500, marginBottom: 4, color: '#1e40af' }}>Cognome</label>
+                        <input value={lastName} onChange={e => setLastName(e.target.value)} style={{ width: '100%', padding: '10px', borderRadius: 8, border: '1px solid #93c5fd' }} />
+                      </div>
+                      <div style={{ display: 'flex', gap: 8 }}>
+                        <button onClick={() => setProfileEditing(false)} style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer' }}>Annulla</button>
+                        <button onClick={handleSaveProfile} disabled={profileSaving} style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none', background: '#2563eb', color: 'white', fontWeight: 600, cursor: 'pointer', opacity: profileSaving ? 0.7 : 1 }}>
+                          {profileSaving ? 'Salvo...' : '💾 Salva'}
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <button onClick={() => setProfileEditing(true)} style={{ padding: '10px 16px', borderRadius: 8, border: '1px solid #d1d5db', background: 'white', cursor: 'pointer', fontSize: 14, color: '#374151' }}>
+                      ✏️ Modifica Nome
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+
         {/* SEZIONE INDIRIZZO CASA */}
         <div style={{ marginBottom: 16 }}>
           <button onClick={() => setAddressExpanded(!addressExpanded)} style={accordionButtonStyle(addressExpanded)}>
@@ -308,7 +458,7 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
 
         {/* Versione App */}
         <div style={{ padding: 12, background: '#f9fafb', borderRadius: 8, fontSize: 12, color: '#9ca3af', textAlign: 'center' }}>
-          REPING Beta 1.0 • 2025
+          REPPING Beta 1.0 • 2025
         </div>
       </div>
     </>

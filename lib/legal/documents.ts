@@ -22,7 +22,7 @@ export const PRIVACY_POLICY = {
   controller: {
     name: '[NOME AZIENDA]',
     address: '[INDIRIZZO SEDE LEGALE]',
-    email: 'privacy@repping.it',
+    email: 'info@reping.it',
     pec: '[PEC AZIENDALE]',
   },
   
@@ -37,7 +37,7 @@ export const PRIVACY_POLICY = {
 Il Titolare del trattamento dei dati personali è:
 - **Ragione sociale:** [NOME AZIENDA]
 - **Sede legale:** [INDIRIZZO]
-- **Email:** privacy@repping.it
+- **Email:** info@reping.it
 - **PEC:** [PEC]
 
 ## 2. Quali Dati Raccogliamo
@@ -105,7 +105,7 @@ Hai diritto di:
 - **Opposizione:** opporti a trattamenti basati su legittimo interesse
 - **Revoca consenso:** ritirare i consensi dati in qualsiasi momento
 
-**Come esercitarli:** Dalla pagina "I Miei Dati" nell'app, oppure scrivendo a privacy@repping.it
+**Come esercitarli:** Dalla pagina "I Miei Dati" nell'app, oppure scrivendo a info@reping.it
 
 ## 8. Conservazione dei Dati
 
@@ -145,7 +145,7 @@ Hai diritto di proporre reclamo al Garante per la Protezione dei Dati Personali:
 ## 13. Contatti
 
 Per qualsiasi domanda sulla privacy:
-- **Email:** privacy@repping.it
+- **Email:** info@reping.it
 - **Indirizzo:** [INDIRIZZO SEDE LEGALE]
 `,
 };
@@ -315,7 +315,7 @@ Se una clausola è invalida, le altre rimangono in vigore.
 ## 15. Contatti
 
 Per domande sui Termini di Servizio:
-- **Email:** legal@repping.it
+- **Email:** info@reping.it
 - **Indirizzo:** [INDIRIZZO SEDE LEGALE]
 `,
 };
@@ -417,7 +417,7 @@ In caso di modifiche:
 ## 7. Contatti
 
 Per domande sui cookie:
-- **Email:** privacy@repping.it
+- **Email:** info@reping.it
 
 ## 8. Approfondimenti
 

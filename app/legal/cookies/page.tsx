@@ -239,7 +239,7 @@ export default function CookiePolicyPage() {
             <h2 className="text-lg font-semibold text-slate-900 mb-3">9. Contatti</h2>
             <p>Per domande sui cookie:</p>
             <div className="bg-slate-50 border border-slate-200 rounded p-3 mt-2">
-              <p>Email: <a href="mailto:privacy@repping.it" className="text-blue-600">privacy@repping.it</a></p>
+              <p>Email: <a href="mailto:info@reping.it" className="text-blue-600">info@reping.it</a></p>
             </div>
           </section>
 

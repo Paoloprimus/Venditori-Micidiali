@@ -245,12 +245,12 @@ export default function MyDataPage() {
       sessionStorage.clear();
 
       // Redirect alla home con messaggio
-      alert("I tuoi dati sono stati cancellati. Per eliminare completamente l'account auth, contatta support@repping.it");
+      alert("I tuoi dati sono stati cancellati. Per eliminare completamente l'account auth, contatta info@reping.it");
       window.location.href = "/";
 
     } catch (err) {
       console.error("Errore cancellazione:", err);
-      setError("Errore durante la cancellazione. Contatta support@repping.it");
+      setError("Errore durante la cancellazione. Contatta info@reping.it");
     } finally {
       setDeleting(false);
     }
@@ -398,7 +398,7 @@ export default function MyDataPage() {
 
           <p className="text-xs text-slate-500 mt-4">
             Per modificare i consensi marketing, contatta{" "}
-            <a href="mailto:privacy@repping.it" className="text-blue-600">privacy@repping.it</a>
+            <a href="mailto:info@reping.it" className="text-blue-600">info@reping.it</a>
           </p>
         </section>
 

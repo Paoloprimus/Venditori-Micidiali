@@ -37,7 +37,7 @@ export default function PrivacyPolicyPage() {
             </p>
             <div className="bg-slate-50 border border-slate-200 rounded p-3 mt-2">
               <p><strong>REPING</strong></p>
-              <p>Email: privacy@repping.it</p>
+              <p>Email: info@reping.it</p>
               <p>PEC: repping@pec.it</p>
             </div>
             <p className="mt-3 text-xs text-slate-500">
@@ -178,7 +178,7 @@ export default function PrivacyPolicyPage() {
             <p className="mt-3">
               Per esercitare i tuoi diritti, accedi alla sezione{" "}
               <Link href="/settings/my-data" className="text-blue-600 hover:underline">I Miei Dati</Link>
-              {" "}oppure scrivi a <a href="mailto:privacy@repping.it" className="text-blue-600 hover:underline">privacy@repping.it</a>.
+              {" "}oppure scrivi a <a href="mailto:info@reping.it" className="text-blue-600 hover:underline">info@reping.it</a>.
             </p>
           </section>
 
