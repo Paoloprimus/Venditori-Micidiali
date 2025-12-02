@@ -129,9 +129,10 @@ export default async function AdminPage() {
       {/* Statistiche Utenti */}
       <div style={{ background: '#f9fafb', padding: 20, borderRadius: 12, marginBottom: 24 }}>
         <h2 style={{ fontSize: 16, fontWeight: 600, marginBottom: 16 }}>👥 Utenti per Ruolo</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 16 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: 12 }}>
           <StatCard label="Totali" value={totalUsers || 0} color="#111827" />
           <StatCard label="Admin" value={roleCounts['admin'] || 0} color="#7c3aed" />
+          <StatCard label="Tester" value={roleCounts['tester'] || 0} color="#f59e0b" />
           <StatCard label="Premium" value={roleCounts['agente_premium'] || 0} color="#059669" />
           <StatCard label="Agenti" value={(roleCounts['agente'] || 0) + (roleCounts['venditore'] || 0)} color="#2563eb" />
         </div>
@@ -139,6 +140,7 @@ export default async function AdminPage() {
 
       {/* Azioni */}
       <div style={{ display: 'grid', gap: 12 }}>
+        <AdminAction href="/admin/tokens" icon="🎟️" label="Token Beta" desc="Genera e gestisci inviti per tester" />
         <AdminAction href="/admin/users" icon="👥" label="Gestione Utenti" desc="Modifica ruoli, visualizza attività" />
         <AdminAction href="/admin/usage" icon="📈" label="Statistiche Uso" desc="Query giornaliere, limiti raggiunti" />
         <AdminAction href="/admin/products" icon="📦" label="Catalogo Prodotti" desc="Import/export, modifica prezzi" />

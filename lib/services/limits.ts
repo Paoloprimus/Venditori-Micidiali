@@ -3,7 +3,7 @@
 
 import { supabase } from '@/lib/supabase/client';
 
-export type UserRole = 'admin' | 'agente' | 'agente_premium';
+export type UserRole = 'admin' | 'agente' | 'agente_premium' | 'tester';
 
 export type ServiceLimits = {
   max_chat_queries_day: number;
@@ -147,11 +147,19 @@ export async function isAdmin(): Promise<boolean> {
 }
 
 /**
- * Verifica se l'utente è premium
+ * Verifica se l'utente è premium (include tester per testing completo)
  */
 export async function isPremium(): Promise<boolean> {
   const role = await getUserRole();
-  return role === 'admin' || role === 'agente_premium';
+  return role === 'admin' || role === 'agente_premium' || role === 'tester';
+}
+
+/**
+ * Verifica se l'utente è un tester beta
+ */
+export async function isTester(): Promise<boolean> {
+  const role = await getUserRole();
+  return role === 'tester';
 }
 
 /**

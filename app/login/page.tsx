@@ -19,6 +19,11 @@ export default function Login() {
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
 
+  // ⬇️ Token Beta per registrazione su invito
+  const [betaToken, setBetaToken] = useState("");
+  const [tokenValidated, setTokenValidated] = useState(false);
+  const [validatingToken, setValidatingToken] = useState(false);
+
   // ⬇️ consensi GDPR per il signup
   const [tosAccepted, setTosAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
@@ -26,6 +31,40 @@ export default function Login() {
 
   const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // Funzione per validare il token beta
+  async function validateBetaToken() {
+    if (!betaToken.trim()) {
+      setMsg("Inserisci un codice invito");
+      return;
+    }
+    
+    setValidatingToken(true);
+    setMsg(null);
+    
+    try {
+      const res = await fetch("/api/beta-tokens/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: betaToken.trim() }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.valid) {
+        setTokenValidated(true);
+        setMsg(null);
+      } else {
+        setMsg("Codice invito non valido o già utilizzato");
+        setTokenValidated(false);
+      }
+    } catch (err) {
+      setMsg("Errore nella verifica del codice");
+      setTokenValidated(false);
+    } finally {
+      setValidatingToken(false);
+    }
+  }
 
   // 🗑️ Rimuovi la vecchia funzione savePassphrase
   // La sua logica è stata integrata (e corretta) direttamente in submit().
@@ -38,7 +77,14 @@ export default function Login() {
 
     try {
       if (mode === "signup") {
-        // 0) Verifica consensi obbligatori
+        // 0) Verifica token beta
+        if (!tokenValidated) {
+          setMsg("Devi validare il codice invito per registrarti.");
+          setLoading(false);
+          return;
+        }
+
+        // 0.1) Verifica consensi obbligatori
         if (!tosAccepted || !privacyAccepted) {
           setMsg("Devi accettare i Termini di Servizio e la Privacy Policy per registrarti.");
           setLoading(false);
@@ -53,7 +99,23 @@ export default function Login() {
         });
         if (error) throw error;
 
-        // 1.1) Registra i consensi GDPR
+        // 1.1) Usa il token beta (lo marca come usato)
+        if (data.user) {
+          try {
+            await fetch("/api/beta-tokens/use", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                token: betaToken.trim(),
+                userId: data.user.id,
+              }),
+            });
+          } catch (tokenErr) {
+            console.warn("[Login] Errore uso token beta:", tokenErr);
+          }
+        }
+
+        // 1.2) Registra i consensi GDPR
         if (data.user) {
           try {
             await fetch("/api/consents/check-signup", {
@@ -202,7 +264,68 @@ export default function Login() {
       <p className="helper">Versione Beta 1.0 - Per Utenti Tester - Su Invito</p>
 
       <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        {/* Token Beta - richiesto per la registrazione */}
         {mode === "signup" && (
+          <div style={{ 
+            padding: 16, 
+            background: tokenValidated ? "#0D2818" : "#0B1220", 
+            borderRadius: 12, 
+            border: tokenValidated ? "2px solid #22C55E" : "1px solid #1F2937",
+            transition: "all 0.3s ease"
+          }}>
+            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8, display: "block" }}>
+              🎟️ Codice Invito Beta
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                placeholder="BETA-XXXXXXXX"
+                value={betaToken}
+                onChange={(e) => {
+                  setBetaToken(e.target.value.toUpperCase());
+                  setTokenValidated(false); // Reset validazione se cambia
+                }}
+                disabled={tokenValidated}
+                style={{
+                  flex: 1,
+                  padding: 10, 
+                  border: "1px solid #1F2937", 
+                  borderRadius: 10,
+                  background: tokenValidated ? "#0D2818" : "#0B1220", 
+                  color: tokenValidated ? "#22C55E" : "#C9D1E7",
+                  fontFamily: "monospace",
+                  textTransform: "uppercase"
+                }}
+              />
+              {!tokenValidated && (
+                <button
+                  type="button"
+                  onClick={validateBetaToken}
+                  disabled={validatingToken || !betaToken.trim()}
+                  style={{
+                    padding: "10px 16px",
+                    background: "#3B82F6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 10,
+                    cursor: validatingToken ? "wait" : "pointer",
+                    opacity: validatingToken || !betaToken.trim() ? 0.5 : 1
+                  }}
+                >
+                  {validatingToken ? "..." : "Verifica"}
+                </button>
+              )}
+            </div>
+            {tokenValidated && (
+              <p style={{ color: "#22C55E", fontSize: 12, marginTop: 8 }}>
+                ✅ Codice valido! Completa la registrazione.
+              </p>
+            )}
+          </div>
+        )}
+
+        {/* Campi signup - visibili solo se token validato */}
+        {mode === "signup" && tokenValidated && (
           <>
             <input
               name="firstName" id="firstName" autoComplete="given-name"
@@ -231,34 +354,39 @@ export default function Login() {
           </>
         )}
 
-        <input
-          name="email" id="email" autoComplete="username"
-          type="email"
-          placeholder="la-tua-email@esempio.it"
-          value={email}
-          onChange={e => setEmail(e.target.value)}
-          required
-          style={{
-            padding: 10, border: "1px solid #1F2937", borderRadius: 10,
-            background: "#0B1220", color: "#C9D1E7"
-          }}
-        />
-        <input
-          name="password" id="password"
-          autoComplete={mode === "signup" ? "new-password" : "current-password"}
-          type="password"
-          placeholder="password (min 6)"
-          value={password}
-          onChange={e => setPassword(e.target.value)}
-          required
-          style={{
-            padding: 10, border: "1px solid #1F2937", borderRadius: 10,
-            background: "#0B1220", color: "#C9D1E7"
-          }}
-        />
+        {/* Email e Password - per signin sempre, per signup solo dopo token validato */}
+        {(mode === "signin" || tokenValidated) && (
+          <>
+            <input
+              name="email" id="email" autoComplete="username"
+              type="email"
+              placeholder="la-tua-email@esempio.it"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+            <input
+              name="password" id="password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              type="password"
+              placeholder="password (min 6)"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+          </>
+        )}
 
-        {/* Consensi GDPR - solo in modalità signup */}
-        {mode === "signup" && (
+        {/* Consensi GDPR - solo in modalità signup dopo token validato */}
+        {mode === "signup" && tokenValidated && (
           <div style={{ 
             display: "flex", 
             flexDirection: "column", 
@@ -348,9 +476,16 @@ export default function Login() {
           </div>
         )}
 
-        <button className="btn" type="submit" disabled={loading || (mode === "signup" && (!tosAccepted || !privacyAccepted))}>
-          {loading ? "Attendere…" : mode === "signin" ? "Accedi" : "Registrati"}
-        </button>
+        {/* Bottone submit - per signin sempre visibile, per signup solo dopo token */}
+        {(mode === "signin" || tokenValidated) && (
+          <button 
+            className="btn" 
+            type="submit" 
+            disabled={loading || (mode === "signup" && (!tosAccepted || !privacyAccepted))}
+          >
+            {loading ? "Attendere…" : mode === "signin" ? "Accedi" : "Registrati"}
+          </button>
+        )}
 
         <button
           type="button"
