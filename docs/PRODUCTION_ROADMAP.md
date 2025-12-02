@@ -13,7 +13,7 @@
 | 1 | Semantica Avanzata | ✅ 100% | 🔴 CRITICA |
 | 2 | Voce & Dialogo | 🟡 80% | 🔴 CRITICA |
 | 3 | Ruoli & Credenziali | ✅ 100% | 🟡 ALTA |
-| 4 | Dashboard Admin | ⬜ 0% | 🟡 ALTA |
+| 4 | Dashboard Admin | 🟡 50% | 🟡 ALTA |
 | 5 | Legal & Privacy | ⬜ 0% | 🔴 CRITICA |
 | 6 | Sito reping.it | ⬜ 0% | 🟢 MEDIA |
 | 7 | Onboarding | ⬜ 0% | 🟡 ALTA |
@@ -115,19 +115,29 @@ Sistema di permessi per diversi tipi di utenti.
 ---
 
 ## 4️⃣ DASHBOARD ADMIN
-**Priority: 🟡 ALTA**
+**Priority: 🟡 ALTA** 🟡 50% (base completata, da migliorare)
 
 ### Obiettivo
 Pannello di controllo per admin/manager.
 
-### Funzionalità
-- [ ] **4.1** Overview KPI team (vendite, visite, clienti)
-- [ ] **4.2** Classifica agenti
-- [ ] **4.3** Mappa attività in tempo reale
-- [ ] **4.4** Gestione utenti (CRUD)
-- [ ] **4.5** Configurazione aziendale (logo, colori, termini)
+### Tasks Completati (Base)
+- [x] **4.1** Overview KPI team (vendite, visite, clienti)
+- [x] **4.2** Classifica agenti (top 5 per visite)
+- [x] **4.3** Gestione utenti con cambio ruolo (`/admin/users`)
+- [x] **4.4** Statistiche uso (`/admin/usage`)
+
+### ⚠️ DA RIPENSARE (Post-Beta)
+La dashboard va arricchita con informazioni realmente utili all'admin:
+- [ ] **Tipo di query**: categorizzare le domande (clienti, prodotti, visite, analytics)
+- [ ] **Tentativi ripetuti**: rilevare utenti che fanno la stessa domanda più volte (problema UX?)
+- [ ] **Tipo di PDF**: quali report vengono esportati (clienti, visite, fatturato)
+- [ ] **Query fallite**: domande senza risposta o con errore
+- [ ] **Pattern d'uso**: orari di picco, giorno settimana più attivo
+- [ ] **Funnel conversione**: quanti passano da agente a premium
+- [ ] **4.5** Mappa attività in tempo reale
 - [ ] **4.6** Export dati CSV/Excel
-- [ ] **4.7** Billing & subscription (se SaaS)
+- [ ] **4.7** Configurazione aziendale
+- [ ] **4.8** Billing & subscription (se SaaS)
 
 ---
 
@@ -135,22 +145,154 @@ Pannello di controllo per admin/manager.
 **Priority: 🔴 CRITICA (bloccante per release)**
 
 ### Obiettivo
-Conformità GDPR e normative italiane.
+Conformità GDPR (Reg. UE 2016/679) e normative italiane. 
+**ATTENZIONE**: Questa fase è delicata e richiede precisione legale.
 
-### Documenti Richiesti
-- [ ] **5.1** Privacy Policy (trattamento dati)
-- [ ] **5.2** Cookie Policy
-- [ ] **5.3** Termini di Servizio
-- [ ] **5.4** Consenso esplicito al primo accesso
-- [ ] **5.5** Diritto all'oblio (cancellazione dati)
-- [ ] **5.6** Data Processing Agreement (se B2B)
-- [ ] **5.7** Nomina DPO (se >250 utenti)
+---
 
-### Implementazione
-- [ ] Banner cookie
-- [ ] Checkbox consensi in registrazione
-- [ ] Pagina "I miei dati" con export/delete
-- [ ] Log dei consensi
+### 📋 5.A - DOCUMENTI LEGALI
+
+| Doc | Descrizione | Obbligatorio | Note |
+|-----|-------------|--------------|------|
+| **Privacy Policy** | Come trattiamo i dati personali | ✅ Sì | Art. 13-14 GDPR |
+| **Cookie Policy** | Quali cookie usiamo | ✅ Sì | Direttiva ePrivacy |
+| **Termini di Servizio** | Regole d'uso dell'app | ✅ Sì | Contratto utente |
+| **DPA** | Data Processing Agreement | Solo B2B | Se vendiamo ad aziende |
+
+#### 5.A.1 Privacy Policy - Contenuti minimi
+- [ ] **Titolare del trattamento**: Nome, indirizzo, email, PEC
+- [ ] **DPO**: Nominato se >250 utenti o dati sensibili
+- [ ] **Finalità**: Perché raccogliamo i dati
+- [ ] **Base giuridica**: Consenso, contratto, legittimo interesse
+- [ ] **Categorie dati**: Anagrafici, contatti, geolocalizzazione, uso app
+- [ ] **Destinatari**: Chi riceve i dati (Supabase, OpenAI, Vercel)
+- [ ] **Trasferimenti extra-UE**: OpenAI (USA) → serve clausola SCC
+- [ ] **Periodo conservazione**: Quanto teniamo i dati
+- [ ] **Diritti utente**: Accesso, rettifica, cancellazione, portabilità
+- [ ] **Reclamo al Garante**: Come contattare il Garante Privacy
+
+#### 5.A.2 Cookie Policy - Contenuti minimi
+- [ ] **Cookie tecnici**: Sessione, preferenze (no consenso)
+- [ ] **Cookie analytics**: Google Analytics, Vercel Analytics (consenso)
+- [ ] **Cookie terze parti**: Nessuno previsto
+- [ ] **Come disabilitarli**: Istruzioni per browser
+
+#### 5.A.3 Termini di Servizio - Contenuti minimi
+- [ ] **Descrizione servizio**: Cos'è REPPING
+- [ ] **Requisiti**: Età minima, account aziendale
+- [ ] **Obblighi utente**: Uso lecito, no reverse engineering
+- [ ] **Proprietà intellettuale**: Marchi, codice, contenuti
+- [ ] **Limitazione responsabilità**: Disclaimer AI
+- [ ] **Piani e pagamenti**: Free/Premium, fatturazione
+- [ ] **Risoluzione**: Come cancellare account
+- [ ] **Legge applicabile**: Italia, Foro competente
+- [ ] **Modifiche**: Come notifichiamo cambiamenti
+
+---
+
+### 🛡️ 5.B - IMPLEMENTAZIONE TECNICA
+
+#### 5.B.1 Banner Cookie (Prima visita)
+```
+┌─────────────────────────────────────────────────────────┐
+│ 🍪 Questo sito utilizza cookie tecnici e analytics.    │
+│                                                         │
+│ [Accetta tutti]  [Solo necessari]  [Personalizza]      │
+│                                                         │
+│ Leggi la Cookie Policy                                 │
+└─────────────────────────────────────────────────────────┘
+```
+- [ ] Componente `CookieBanner.tsx`
+- [ ] Salvataggio preferenze in `localStorage`
+- [ ] Blocco script analytics fino a consenso
+- [ ] Non mostrare se già accettato
+
+#### 5.B.2 Consensi in Registrazione
+```
+┌─────────────────────────────────────────────────────────┐
+│ ☐ Ho letto e accetto i Termini di Servizio *           │
+│ ☐ Ho letto la Privacy Policy *                         │
+│ ☐ Acconsento all'invio di comunicazioni marketing      │
+│                                                         │
+│ * Obbligatori per registrarsi                          │
+└─────────────────────────────────────────────────────────┘
+```
+- [ ] Checkbox in `/login` (signup)
+- [ ] Tabella `consents` per log
+- [ ] Timestamp + IP + versione documento
+- [ ] Blocco registrazione senza consensi obbligatori
+
+#### 5.B.3 Pagina "I Miei Dati" (GDPR Art. 15-20)
+- [ ] **Visualizza dati**: Mostra tutti i dati personali
+- [ ] **Export dati**: Download JSON/CSV (portabilità)
+- [ ] **Modifica dati**: Rettifica anagrafici
+- [ ] **Cancella account**: Diritto all'oblio
+- [ ] **Revoca consensi**: Marketing, analytics
+- [ ] **Storico consensi**: Quando hai accettato cosa
+
+#### 5.B.4 Log Consensi (Audit)
+```sql
+CREATE TABLE consents (
+  id UUID PRIMARY KEY,
+  user_id UUID REFERENCES auth.users,
+  consent_type TEXT,  -- 'tos', 'privacy', 'marketing', 'cookie_analytics'
+  granted BOOLEAN,
+  document_version TEXT,  -- es. 'privacy_v1.2'
+  ip_address TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ
+);
+```
+
+---
+
+### ⚠️ 5.C - CRITICITÀ SPECIFICHE REPPING
+
+| Aspetto | Rischio | Mitigazione |
+|---------|---------|-------------|
+| **Dati cifrati client-side** | Utente perde passphrase → perde dati | Disclaimer chiaro + backup opzionale |
+| **OpenAI (USA)** | Trasferimento extra-UE | SCC + DPA con OpenAI |
+| **Geolocalizzazione** | Dato sensibile | Consenso esplicito |
+| **Dati clienti HoReCa** | Sono dati di terzi | L'utente è responsabile |
+| **AI generativa** | Risposte errate | Disclaimer "AI può sbagliare" |
+
+---
+
+### 📝 5.D - TASK BREAKDOWN
+
+| # | Task | Priorità | Tempo stimato |
+|---|------|----------|---------------|
+| 5.1 | Scrivere Privacy Policy | 🔴 | 2h |
+| 5.2 | Scrivere Cookie Policy | 🔴 | 1h |
+| 5.3 | Scrivere Termini di Servizio | 🔴 | 2h |
+| 5.4 | Componente CookieBanner | 🔴 | 1h |
+| 5.5 | Checkbox consensi in signup | 🔴 | 1h |
+| 5.6 | Tabella `consents` + migrazione | 🔴 | 30min |
+| 5.7 | Pagina `/legal/privacy` | 🟡 | 30min |
+| 5.8 | Pagina `/legal/terms` | 🟡 | 30min |
+| 5.9 | Pagina `/legal/cookies` | 🟡 | 30min |
+| 5.10 | Pagina `/settings/my-data` | 🟡 | 2h |
+| 5.11 | Export dati personali | 🟡 | 1h |
+| 5.12 | Cancellazione account | 🟡 | 1h |
+| 5.13 | Revisione legale (opzionale) | 🟢 | Esterno |
+
+**Tempo totale stimato**: ~12h
+
+---
+
+### ✅ CHECKLIST PRE-RELEASE
+
+- [ ] Privacy Policy online e linkata nel footer
+- [ ] Cookie Policy online e linkata nel banner
+- [ ] Termini di Servizio online e linkati nel footer
+- [ ] Banner cookie funzionante
+- [ ] Consensi obbligatori in registrazione
+- [ ] Pagina "I miei dati" accessibile
+- [ ] Export dati funzionante
+- [ ] Cancellazione account funzionante
+- [ ] Log consensi attivo
+- [ ] DPA con OpenAI verificato
+- [ ] Email PEC per comunicazioni legali
 
 ---
 
