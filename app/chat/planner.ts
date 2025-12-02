@@ -790,6 +790,354 @@ async function handleIntent(
     }
 
     // ═══════════════════════════════════════════════════════════════
+    // 🆕 ANALYTICS / BI - Domande analitiche complesse
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'analytics_top_clients': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const limit = entities.limit ?? 10;
+      
+      // TODO: implementare getTopClients()
+      // Per ora usiamo un messaggio che spiega cosa farà
+      return {
+        text: `📊 **Top ${limit} Clienti**\n\n` +
+              `_Funzionalità in arrivo!_\n\n` +
+              `Nel frattempo puoi:\n` +
+              `• Vedere le vendite per cliente: "Vendite a [nome]"\n` +
+              `• Clienti inattivi: "Chi non vedo da un mese?"`,
+        intent
+      };
+    }
+
+    case 'analytics_top_products': {
+      // TODO: implementare getTopProducts()
+      return {
+        text: `📊 **Prodotti più venduti**\n\n` +
+              `_Funzionalità in arrivo!_\n\n` +
+              `Nel frattempo puoi:\n` +
+              `• Vedere chi compra un prodotto: "Chi compra [prodotto]?"\n` +
+              `• Prodotti discussi con un cliente: "Cosa ho discusso con [nome]?"`,
+        intent
+      };
+    }
+
+    case 'analytics_client_trend': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+      
+      if (!clientName) {
+        return { 
+          text: "Di quale cliente vuoi vedere il trend? Dimmi il nome.",
+          intent 
+        };
+      }
+
+      // Mostriamo storico visite + vendite come proxy del trend
+      const [visitResult, salesResult] = await Promise.all([
+        getVisitHistoryForClient(crypto, clientName),
+        getSalesByClient(crypto, clientName)
+      ]);
+
+      if (!visitResult.found) {
+        return { text: visitResult.message, intent };
+      }
+
+      let text = `📈 **Trend di ${visitResult.clientName}**\n\n`;
+      text += `**Attività recenti:**\n${visitResult.message}\n\n`;
+      
+      if (salesResult.found) {
+        text += `**Vendite totali:** €${salesResult.totalAmount.toLocaleString('it-IT')} (${salesResult.visitCount} ordini)`;
+      }
+
+      return { text, intent };
+    }
+
+    case 'analytics_sales_comparison': {
+      const period = entities.period ?? 'month';
+      const comparison = entities.comparisonType ?? 'vs_previous';
+      
+      // Prendiamo i dati del periodo corrente
+      const current = await getSalesSummary(
+        (period === 'last_week' ? 'week' : period === 'last_month' ? 'month' : period) as any
+      );
+
+      let text = `📊 **Confronto vendite**\n\n`;
+      text += `**Periodo attuale:** ${current.message}\n\n`;
+      text += `_Il confronto con il periodo precedente sarà disponibile a breve!_\n\n`;
+      text += `💡 Suggerimento: controlla i clienti in crescita con "Chi sta crescendo?"`;
+
+      return { text, intent };
+    }
+
+    case 'analytics_avg_order': {
+      const period = entities.period ?? 'month';
+      const result = await getSalesSummary(
+        (period === 'last_week' ? 'week' : period === 'last_month' ? 'month' : period) as any
+      );
+
+      const avgOrder = result.visitCount > 0 
+        ? Math.round(result.totalAmount / result.visitCount) 
+        : 0;
+
+      let text = `📊 **Ordine medio ${result.period}**\n\n`;
+      if (avgOrder > 0) {
+        text += `💰 **€${avgOrder.toLocaleString('it-IT')}** per ordine\n`;
+        text += `📦 ${result.visitCount} ordini totali\n`;
+        text += `💵 €${result.totalAmount.toLocaleString('it-IT')} fatturato totale`;
+      } else {
+        text += `Nessun ordine registrato ${result.period}.`;
+      }
+
+      return { text, intent };
+    }
+
+    case 'analytics_best_day': {
+      // TODO: implementare analisi per giorno della settimana
+      return {
+        text: `📅 **Giorno più produttivo**\n\n` +
+              `_Funzionalità in arrivo!_\n\n` +
+              `Nel frattempo puoi vedere:\n` +
+              `• Visite di oggi: "Visite di oggi"\n` +
+              `• Vendite di oggi: "Quanto ho venduto oggi?"`,
+        intent
+      };
+    }
+
+    case 'analytics_zone_performance': {
+      // TODO: implementare analisi per zona/città
+      return {
+        text: `🗺️ **Performance per zona**\n\n` +
+              `_Funzionalità in arrivo!_\n\n` +
+              `Nel frattempo puoi:\n` +
+              `• Cercare clienti per città: "Clienti di [città]"\n` +
+              `• Vedere le vendite totali: "Quanto ho venduto questo mese?"`,
+        intent
+      };
+    }
+
+    case 'analytics_lost_clients': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const days = entities.inactivityDays ?? 90;
+      
+      const result = await getInactiveClients(crypto, days);
+      
+      let text = `⚠️ **Clienti potenzialmente persi** (>${days} giorni)\n\n`;
+      text += result.message;
+      
+      return { text, intent };
+    }
+
+    case 'analytics_growing_clients': {
+      // TODO: implementare analisi trend crescita
+      return {
+        text: `📈 **Clienti in crescita**\n\n` +
+              `_Funzionalità in arrivo!_\n\n` +
+              `Nel frattempo puoi vedere:\n` +
+              `• Top clienti: "Chi sono i miei migliori clienti?"\n` +
+              `• Trend specifico: "Come sta andando [nome]?"`,
+        intent
+      };
+    }
+
+    case 'analytics_forecast': {
+      const currentMonth = await getSalesSummary('month');
+      const today = new Date();
+      const daysInMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+      const daysPassed = today.getDate();
+      const projectedTotal = daysPassed > 0 
+        ? Math.round((currentMonth.totalAmount / daysPassed) * daysInMonth)
+        : 0;
+
+      let text = `🔮 **Previsione fine mese**\n\n`;
+      text += `📊 **Attuale:** €${currentMonth.totalAmount.toLocaleString('it-IT')} (${daysPassed}/${daysInMonth} giorni)\n\n`;
+      
+      if (projectedTotal > 0) {
+        text += `📈 **Proiezione:** €${projectedTotal.toLocaleString('it-IT')}\n\n`;
+        text += `_Basata sul ritmo attuale di vendita_`;
+      } else {
+        text += `Non ci sono ancora dati sufficienti per una previsione.`;
+      }
+
+      return { text, intent };
+    }
+
+    case 'analytics_target_progress': {
+      const currentMonth = await getSalesSummary('month');
+      
+      let text = `🎯 **Progresso obiettivo**\n\n`;
+      text += `📊 **Vendite mese corrente:** €${currentMonth.totalAmount.toLocaleString('it-IT')}\n\n`;
+      text += `_Per impostare un obiettivo mensile, vai su Impostazioni._\n\n`;
+      text += `💡 Vuoi vedere una previsione? Chiedi "Previsione fatturato fine mese"`;
+
+      return { text, intent };
+    }
+
+    case 'analytics_cross_sell': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+
+      if (!clientName) {
+        return {
+          text: `💡 **Opportunità di vendita**\n\n` +
+                `Dimmi il nome del cliente per suggerirti prodotti da proporre.\n\n` +
+                `Esempio: "Cosa posso proporre a Rossi?"`,
+          intent
+        };
+      }
+
+      // Mostra prodotti già discussi come base per suggerimenti
+      const result = await getProductsDiscussedWithClient(crypto, clientName);
+      
+      let text = `💡 **Opportunità per ${result.clientName ?? clientName}**\n\n`;
+      
+      if (result.found && result.products.length > 0) {
+        text += `**Prodotti già acquistati:**\n`;
+        text += result.products.slice(0, 5).map(p => `• ${p}`).join('\n');
+        text += `\n\n_Suggerimento: proponi prodotti complementari o versioni premium!_`;
+      } else {
+        text += `Nessun prodotto registrato per questo cliente.\n\n`;
+        text += `👉 Ottima opportunità per presentare l'intero catalogo!`;
+      }
+
+      return { text, intent };
+    }
+
+    case 'analytics_never_bought': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const productName = entities.productName;
+
+      if (!productName) {
+        return {
+          text: `🔍 **Clienti che non hanno mai comprato...**\n\n` +
+                `Dimmi quale prodotto cerchi.\n\n` +
+                `Esempio: "Chi non ha mai comprato birra?"`,
+          intent
+        };
+      }
+
+      // Per ora invertiamo la logica: mostriamo chi LO compra
+      const result = await getVisitsByProduct(crypto, productName);
+      
+      let text = `🔍 **Analisi "${productName}"**\n\n`;
+      
+      if (result.found) {
+        text += `**${result.results.length} clienti hanno comprato "${productName}"**\n\n`;
+        text += `_Per trovare chi NON lo ha mai comprato, confronta con la tua lista clienti completa._`;
+      } else {
+        text += `Nessun cliente ha mai comprato "${productName}".\n\n`;
+        text += `🎯 Opportunità: proponi questo prodotto a tutti i tuoi clienti!`;
+      }
+
+      return { text, intent };
+    }
+
+    case 'product_price': {
+      const productName = entities.productName;
+      
+      if (!productName) {
+        return { text: "Di quale prodotto vuoi sapere il prezzo?", intent };
+      }
+
+      // TODO: implementare ricerca prezzo da products table
+      return {
+        text: `💰 **Prezzo di "${productName}"**\n\n` +
+              `_Ricerca nel catalogo in arrivo!_\n\n` +
+              `Nel frattempo vai su [Prodotti](/products) per consultare il listino.`,
+        intent
+      };
+    }
+
+    case 'product_stock': {
+      const productName = entities.productName;
+      
+      if (!productName) {
+        return { text: "Di quale prodotto vuoi sapere la giacenza?", intent };
+      }
+
+      // TODO: implementare ricerca giacenza da products table
+      return {
+        text: `📦 **Giacenza di "${productName}"**\n\n` +
+              `_Ricerca nel catalogo in arrivo!_\n\n` +
+              `Nel frattempo vai su [Prodotti](/products) per consultare le disponibilità.`,
+        intent
+      };
+    }
+
+    case 'product_not_proposed': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const clientName = entities.clientName;
+
+      if (!clientName) {
+        return {
+          text: `🆕 **Prodotti mai proposti**\n\n` +
+                `Dimmi il nome del cliente.\n\n` +
+                `Esempio: "Cosa non ho mai proposto a Rossi?"`,
+          intent
+        };
+      }
+
+      // Mostra prodotti già discussi e suggerisci di guardare il catalogo
+      const result = await getProductsDiscussedWithClient(crypto, clientName);
+      
+      let text = `🆕 **Novità per ${result.clientName ?? clientName}**\n\n`;
+      
+      if (result.found && result.products.length > 0) {
+        text += `**Prodotti già proposti:** ${result.products.length}\n`;
+        text += result.products.slice(0, 5).map(p => `• ${p}`).join('\n');
+        text += `\n\n💡 Confronta con il [catalogo](/products) per trovare novità!`;
+      } else {
+        text += `Nessun prodotto registrato.\n\n`;
+        text += `🎯 Hai l'intero catalogo da proporre!`;
+      }
+
+      return { text, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 DOMANDE IMPOSSIBILI - Gestite con alternative intelligenti
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'analytics_impossible': {
+      const missingData = entities.missingData ?? [];
+      
+      let text = `🤔 **Domanda interessante!**\n\n`;
+      text += `Purtroppo non ho i dati necessari per rispondere:\n`;
+      
+      const missingLabels: Record<string, string> = {
+        'km_percorsi': '📍 Chilometri percorsi (no GPS)',
+        'margini_prodotto': '💹 Margini di profitto',
+        'tempo_visita': '⏱️ Durata delle visite',
+        'coordinate_gps': '🗺️ Posizione geografica clienti',
+      };
+      
+      for (const data of missingData) {
+        text += `• ${missingLabels[data] ?? data}\n`;
+      }
+      
+      text += `\n**Però posso aiutarti con:**\n`;
+      
+      // Suggerimenti alternativi basati sui dati mancanti
+      if (missingData.includes('km_percorsi') || missingData.includes('coordinate_gps')) {
+        text += `• 🏙️ "Vendite per città" - analisi per zona\n`;
+        text += `• 📊 "Quali sono i miei migliori clienti?" - per prioritizzare\n`;
+      }
+      
+      if (missingData.includes('margini_prodotto')) {
+        text += `• 💰 "Qual è il prodotto più venduto?" - per volume\n`;
+        text += `• 📈 "Ordine medio" - per valore vendite\n`;
+      }
+      
+      if (missingData.includes('tempo_visita')) {
+        text += `• 📅 "Quante visite ho fatto questo mese?" - frequenza\n`;
+        text += `• 👥 "Clienti inattivi" - da visitare\n`;
+      }
+      
+      text += `\n💡 _Suggerimento: queste metriche potrebbero essere aggiunte in futuro!_`;
+      
+      return { text, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
     // UNKNOWN / DEFAULT
     // ═══════════════════════════════════════════════════════════════
 

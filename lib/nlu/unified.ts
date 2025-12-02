@@ -46,6 +46,9 @@ export type IntentType =
   | 'product_sold_to'        // "Chi compra birra?"
   | 'product_missing'        // "Prodotti mancanti"
   | 'product_search'         // "Cerca prodotto X"
+  | 'product_price'          // "Quanto costa X?" / "Prezzo di Y"
+  | 'product_stock'          // "Quante giacenze di X?"
+  | 'product_not_proposed'   // "Cosa non ho mai proposto a Rossi?"
   // PLANNING
   | 'planning_today'         // "Cosa devo fare oggi?"
   | 'planning_callbacks'     // "Chi devo richiamare?"
@@ -59,6 +62,24 @@ export type IntentType =
   | 'followup_count'         // "Quanti sono?"
   | 'followup_period'        // "E ieri?" / "E la settimana scorsa?"
   | 'followup_detail'        // "Dimmi di più" / "Dettagli"
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 ANALYTICS / BI - Domande analitiche complesse
+  // ═══════════════════════════════════════════════════════════════
+  | 'analytics_top_clients'       // "Chi sono i miei migliori clienti?"
+  | 'analytics_top_products'      // "Qual è il prodotto più venduto?"
+  | 'analytics_client_trend'      // "Come sta andando Rossi?" / "Trend cliente"
+  | 'analytics_sales_comparison'  // "Confronta questo mese con lo scorso"
+  | 'analytics_avg_order'         // "Qual è il mio ordine medio?"
+  | 'analytics_best_day'          // "In che giorno vendo di più?"
+  | 'analytics_zone_performance'  // "Qual è la mia zona migliore?"
+  | 'analytics_lost_clients'      // "Quali clienti ho perso?"
+  | 'analytics_growing_clients'   // "Quali clienti stanno crescendo?"
+  | 'analytics_forecast'          // "Previsione fatturato fine mese"
+  | 'analytics_target_progress'   // "Sono in linea con l'obiettivo?"
+  | 'analytics_cross_sell'        // "Cosa posso proporre a Rossi?"
+  | 'analytics_never_bought'      // "Chi non ha mai comprato X?"
+  // 🆕 DOMANDE IMPOSSIBILI (gestite con alternative)
+  | 'analytics_impossible'        // Domande che richiedono dati non disponibili
   // GENERICI
   | 'greet'                  // "Ciao" / "Buongiorno"
   | 'help'                   // "Aiuto" / "Cosa posso fare?"
@@ -75,6 +96,7 @@ export type EntityType = {
   amount?: number;           // Importo
   productName?: string;      // Nome prodotto
   period?: 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'quarter' | 'year';
+  periodCompare?: 'previous' | 'same_last_year'; // Per confronti
   outcome?: string;          // Esito visita
   targetPage?: 'clients' | 'visits' | 'products' | 'documents' | 'settings';
   position?: number;         // Posizione ordinale (primo=1, secondo=2, etc.)
@@ -83,6 +105,26 @@ export type EntityType = {
   localeType?: string;       // Tipo locale (bar, ristorante, etc.)
   reportType?: 'clients' | 'visits' | 'sales';
   inactivityDays?: number;   // Giorni di inattività
+  // 🆕 Analytics entities
+  metric?: 'revenue' | 'orders' | 'visits' | 'avg_order' | 'volume';
+  sortBy?: 'amount' | 'frequency' | 'recency' | 'growth';
+  limit?: number;            // Top N
+  comparisonType?: 'vs_previous' | 'vs_last_year' | 'trend';
+  // 🆕 Per domande impossibili
+  missingData?: string[];    // Dati mancanti (es: ["km", "margini"])
+  alternativeIntent?: IntentType; // Intent alternativo suggerito
+};
+
+// 🆕 Tipo per gestire risposte a domande impossibili
+export type ImpossibleQueryResponse = {
+  originalQuestion: string;
+  reason: string;              // Perché non possiamo rispondere
+  missingData: string[];       // Quali dati mancano
+  alternativeQuestions: {
+    question: string;
+    intent: IntentType;
+    entities?: EntityType;
+  }[];
 };
 
 export type ProactiveSuggestion = {
@@ -849,6 +891,265 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /^(e|cosa|quali)\s+(altro|altri)(\?)?$/i,
     ],
     confidence: 0.85,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 ANALYTICS / BI - Domande analitiche complesse
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    intent: 'analytics_top_clients',
+    patterns: [
+      /\b(chi|qual[ei])\b.*\b(miglior[ei]|top|principal[ei])\b.*\b(client[ei])\b/i,
+      /\b(client[ei])\b.*\b(miglior[ei]|top|principal[ei]|più important[ei])\b/i,
+      /\b(chi)\b.*\b(fattura|compra|ordina)\b.*\b(di più|maggiormente)\b/i,
+      /\b(classifica|ranking)\b.*\b(client[ei])\b/i,
+      /\b(top)\s*(\d+)?\s*(client[ei])\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: (text) => {
+      const match = text.match(/top\s*(\d+)/i);
+      return { 
+        limit: match ? parseInt(match[1]) : 10,
+        sortBy: 'amount' as const,
+        metric: 'revenue' as const
+      };
+    },
+    proactiveAfter: () => [{
+      text: "Vuoi vedere anche il trend di crescita?",
+      intent: 'analytics_growing_clients',
+      priority: 'medium'
+    }]
+  },
+
+  {
+    intent: 'analytics_top_products',
+    patterns: [
+      /\b(qual[ei]?|che)\b.*\b(prodott[oi])\b.*\b(più vendut[oi]|vend[eo] di più|migliore?)\b/i,
+      /\b(prodott[oi])\b.*\b(più vendut[oi]|bestseller|top)\b/i,
+      /\b(cosa)\b.*\b(vendo|venduto)\b.*\b(di più|maggiormente)\b/i,
+      /\b(classifica|ranking)\b.*\b(prodott[oi])\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: () => ({ metric: 'revenue' as const, sortBy: 'amount' as const })
+  },
+
+  {
+    intent: 'analytics_client_trend',
+    patterns: [
+      /\b(come)\b.*\b(sta andando|va|procede)\b/i,
+      /\b(trend|andamento|evoluzione)\b.*\b(di|del|della)?\s*([\wÀ-ÿ]+)?\b/i,
+      /\b(sta|stanno)\b.*\b(crescendo|calando|migliorando|peggiorando)\b/i,
+    ],
+    confidence: 0.85,
+    entityExtractor: (text) => {
+      const nameMatch = text.match(/(?:di|del|della|con)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]{2,20})/i);
+      return nameMatch ? { clientName: nameMatch[1].trim() } : {};
+    }
+  },
+
+  {
+    intent: 'analytics_sales_comparison',
+    patterns: [
+      /\b(confronta|compara|paragona)\b.*\b(mese|settimana|periodo)\b/i,
+      /\b(rispetto|vs|versus|contro)\b.*\b(scorso|precedente|anno)\b/i,
+      /\b(differenza|variazione)\b.*\b(tra|fra|rispetto)\b/i,
+      /\b(questo mese)\b.*\b(vs|rispetto|contro)\b.*\b(scorso)\b/i,
+      /\b(come)\b.*\b(rispetto|confronto)\b.*\b(prima|scorso|precedente)\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: (text) => {
+      if (/anno\s+scorso|stesso\s+periodo/i.test(text)) {
+        return { comparisonType: 'vs_last_year' as const };
+      }
+      return { comparisonType: 'vs_previous' as const };
+    }
+  },
+
+  {
+    intent: 'analytics_avg_order',
+    patterns: [
+      /\b(qual[ei]?|quanto)\b.*\b(ordine|scontrino|vendita)\b.*\b(medi[oa])\b/i,
+      /\b(medi[oa])\b.*\b(ordine|scontrino|vendita|importo)\b/i,
+      /\b(average|avg)\b.*\b(order)\b/i,
+      /\b(in media)\b.*\b(quanto|vendo|fattur)\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: () => ({ metric: 'avg_order' as const })
+  },
+
+  {
+    intent: 'analytics_best_day',
+    patterns: [
+      /\b(in che|quale)\b.*\b(giorno)\b.*\b(vendo|fattur|lavoro)\b.*\b(di più|meglio)\b/i,
+      /\b(giorno|giornata)\b.*\b(miglior[ei]|più produttiv[oa])\b/i,
+      /\b(quando)\b.*\b(vendo|fattur)\b.*\b(di più|meglio)\b/i,
+    ],
+    confidence: 0.85,
+  },
+
+  {
+    intent: 'analytics_zone_performance',
+    patterns: [
+      /\b(qual[ei]?)\b.*\b(zona|città|area|territorio)\b.*\b(miglior[ei]|rend[ei]|più)\b/i,
+      /\b(zona|città|area)\b.*\b(più produttiv[oa]|miglior[ei]|rend[ei] di più)\b/i,
+      /\b(dove)\b.*\b(vendo|fattur)\b.*\b(di più|meglio)\b/i,
+      /\b(performance|rendimento)\b.*\b(per zona|territoriale)\b/i,
+    ],
+    confidence: 0.9,
+  },
+
+  {
+    intent: 'analytics_lost_clients',
+    patterns: [
+      /\b(qual[ei]?|chi)\b.*\b(client[ei])\b.*\b(pers[oi]|perso|abbandona)\b/i,
+      /\b(client[ei])\b.*\b(pers[oi]|non compra più|sparit[oi])\b/i,
+      /\b(chi)\b.*\b(non (compra|ordina) più|smesso)\b/i,
+      /\b(client[ei])\b.*\b(inattiv[ei]|dormient[ei])\b.*\b(da tempo|da molto)\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: () => ({ inactivityDays: 90, sortBy: 'recency' as const })
+  },
+
+  {
+    intent: 'analytics_growing_clients',
+    patterns: [
+      /\b(qual[ei]?|chi)\b.*\b(client[ei])\b.*\b(cresc|miglior|aumenta)\b/i,
+      /\b(client[ei])\b.*\b(in crescita|che crescono|stanno migliorando)\b/i,
+      /\b(chi)\b.*\b(sta comprando di più|ordina più di prima)\b/i,
+      /\b(trend positiv[oi])\b.*\b(client[ei])\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: () => ({ sortBy: 'growth' as const })
+  },
+
+  {
+    intent: 'analytics_forecast',
+    patterns: [
+      /\b(previsione|forecast|stima)\b.*\b(fatturato|vendite|fine mese)\b/i,
+      /\b(quanto)\b.*\b(chiuder[òo]|farò|prevedo)\b.*\b(mese|fine)\b/i,
+      /\b(arriver[òo]|raggiunger[òo])\b.*\b(obiettivo|target|budget)\b/i,
+      /\b(proiezione|proiettare)\b.*\b(vendite|fatturato)\b/i,
+    ],
+    confidence: 0.85,
+    proactiveAfter: () => [{
+      text: "Vuoi vedere i clienti da spingere per raggiungere l'obiettivo?",
+      intent: 'analytics_cross_sell',
+      priority: 'high'
+    }]
+  },
+
+  {
+    intent: 'analytics_target_progress',
+    patterns: [
+      /\b(sono)\b.*\b(in linea|allineato|pari)\b.*\b(obiettivo|target|budget)\b/i,
+      /\b(come)\b.*\b(sto andando|vado)\b.*\b(obiettivo|rispetto al)?\b/i,
+      /\b(quanto)\b.*\b(manca|manc[ao])\b.*\b(obiettivo|target|budget)\b/i,
+      /\b(percentuale|%)\b.*\b(obiettivo|target|raggiunto)\b/i,
+      /\b(a che punto)\b.*\b(sono|siamo)\b/i,
+    ],
+    confidence: 0.85,
+  },
+
+  {
+    intent: 'analytics_cross_sell',
+    patterns: [
+      /\b(cosa)\b.*\b(posso|potrei|dovrei)\b.*\b(proporre|vendere|suggerire)\b/i,
+      /\b(opportunità|occasion[ei])\b.*\b(vendita|cross.?sell|up.?sell)\b/i,
+      /\b(cosa)\b.*\b(non ho mai proposto|manca|potrebbe interessare)\b/i,
+      /\b(sugger|consigli)\b.*\b(prodott[oi])\b.*\b(per|da proporre)\b/i,
+    ],
+    confidence: 0.85,
+    entityExtractor: (text) => {
+      const nameMatch = text.match(/(?:a|per|da)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]{2,20})/i);
+      return nameMatch ? { clientName: nameMatch[1].trim() } : {};
+    }
+  },
+
+  {
+    intent: 'analytics_never_bought',
+    patterns: [
+      /\b(chi)\b.*\b(non ha mai|mai)\b.*\b(comprato|ordinato|preso)\b/i,
+      /\b(client[ei])\b.*\b(non comprano|mai comprato|senza)\b.*\b([\wÀ-ÿ]+)\b/i,
+      /\b(a chi)\b.*\b(non ho mai venduto|mai proposto)\b/i,
+    ],
+    confidence: 0.85,
+    entityExtractor: (text) => {
+      const prodMatch = text.match(/(?:comprato|ordinato|venduto|proposto)\s+([\wÀ-ÿ\s]{2,20})/i);
+      return prodMatch ? { productName: prodMatch[1].trim() } : {};
+    }
+  },
+
+  {
+    intent: 'product_price',
+    patterns: [
+      /\b(quanto)\b.*\b(costa|prezzo|listino)\b/i,
+      /\b(prezzo|costo|listino)\b.*\b(di|del|della)\b/i,
+      /\b(a quanto)\b.*\b(vend[oi]|è)\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: (text) => {
+      const match = text.match(/(?:costa|prezzo|di|del)\s+([\wÀ-ÿ\s]{2,30})/i);
+      return match ? { productName: match[1].trim() } : {};
+    }
+  },
+
+  {
+    intent: 'product_stock',
+    patterns: [
+      /\b(quant[eio])\b.*\b(giacenz[ae]|disponibil[ei]|scorte|magazzino)\b/i,
+      /\b(giacenz[ae]|disponibilità|stock)\b.*\b(di|del|della)\b/i,
+      /\b(ne abbiamo|ce n'è|c'è)\b.*\b(ancora|disponibile)\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: (text) => {
+      const match = text.match(/(?:giacenz\w*|di|del)\s+([\wÀ-ÿ\s]{2,30})/i);
+      return match ? { productName: match[1].trim() } : {};
+    }
+  },
+
+  {
+    intent: 'product_not_proposed',
+    patterns: [
+      /\b(cosa|che|quali)\b.*\b(non ho mai proposto|mai venduto|manca)\b/i,
+      /\b(prodott[oi])\b.*\b(mai propost[oi]|da proporre|nuov[oi])\b.*\b(a|per)\b/i,
+      /\b(cosa potrei vendere)\b.*\b(a|di nuovo)\b/i,
+    ],
+    confidence: 0.85,
+    entityExtractor: (text) => {
+      const nameMatch = text.match(/(?:a|per)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]{2,20})/i);
+      return nameMatch ? { clientName: nameMatch[1].trim() } : {};
+    }
+  },
+
+  // 🆕 DOMANDE IMPOSSIBILI - intercettate e reindirizzate
+  {
+    intent: 'analytics_impossible',
+    patterns: [
+      // Richiedono KM (non disponibili)
+      /\b(km|chilometr|distanz[ae])\b.*\b(percors[oi]|fatt[oi]|giornalier)\b/i,
+      /\b(fatturato|vendite|resa)\b.*\b(per|al)\b.*\b(km|chilometro)\b/i,
+      /\b(ottimizza|migliora)\b.*\b(giro|percorso|tragitto)\b/i,
+      /\b(route|routing)\b/i,
+      // Richiedono margini (non disponibili)
+      /\b(margin[ei]|profitto|guadagno)\b.*\b(per|su|del)\b/i,
+      /\b(prodott[oi])\b.*\b(più redditi[tz]i[oi]|margine maggiore)\b/i,
+      /\b(guadagn[oi]|netto)\b.*\b(su|per|con)\b/i,
+      // Richiedono tempo per visita (non disponibile)
+      /\b(tempo|durata|minuti|ore)\b.*\b(per visita|medio|impiegat[oi])\b/i,
+      // Richiedono coordinate GPS
+      /\b(gps|coordinate|mappa|geolocalizza)\b/i,
+      /\b(più vicino|vicini a me|nella zona)\b.*\b(client[ei])\b/i,
+    ],
+    confidence: 0.95,
+    entityExtractor: (text) => {
+      const missingData: string[] = [];
+      if (/km|chilometr|distanz|percors|giro|tragitto|route/i.test(text)) missingData.push('km_percorsi');
+      if (/margin|profitt|guadagn|netto|redditi/i.test(text)) missingData.push('margini_prodotto');
+      if (/tempo|durata|minuti|ore/i.test(text)) missingData.push('tempo_visita');
+      if (/gps|coordinate|mappa|geolocal|vicin/i.test(text)) missingData.push('coordinate_gps');
+      return { missingData };
+    }
   },
 
   // ═══════════════════════════════════════════════════════════════
