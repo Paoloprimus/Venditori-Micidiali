@@ -19,6 +19,7 @@ import { useDrawers, DrawersWithBackdrop } from '@/components/Drawers';
 import TopBar from '@/components/home/TopBar';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
+import { getMultiStopRoute } from '@/lib/routing';
 
 type Client = {
   id: string;
@@ -87,8 +88,11 @@ export default function PlanningEditorPage() {
   const [saving, setSaving] = useState(false);
   const [isDirty, setIsDirty] = useState(false);
   
-  // Stato per i KM stimati
-  const [totalKm, setTotalKm] = useState(0);
+  // Stato per i KM stimati e reali
+  const [totalKm, setTotalKm] = useState(0);           // Stima veloce (Haversine × 1.3)
+  const [realKm, setRealKm] = useState<number | null>(null);  // Km stradali reali (OSRM)
+  const [realMinutes, setRealMinutes] = useState<number | null>(null);
+  const [calculatingRoute, setCalculatingRoute] = useState(false);
 
   const dataStr = params.data as string; // YYYY-MM-DD
   
@@ -192,6 +196,9 @@ export default function PlanningEditorPage() {
     }
 
     setTotalKm(km);
+    // Reset km reali quando cambia l'ordine (va ricalcolato)
+    setRealKm(null);
+    setRealMinutes(null);
   }, [selectedIds, clients]);
 
   async function loadData() {
@@ -496,7 +503,7 @@ export default function PlanningEditorPage() {
     };
   }
 
-  // Calcola distanza tra due punti GPS (km)
+  // Calcola distanza tra due punti GPS (km) - Haversine × 1.3 per approssimare distanza stradale
   function calculateDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
     const R = 6371; // Raggio Terra in km
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -506,7 +513,68 @@ export default function PlanningEditorPage() {
       Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
       Math.sin(dLon/2) * Math.sin(dLon/2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-    return R * c;
+    const haversine = R * c;
+    return haversine * 1.3; // Moltiplica × 1.3 per approssimare distanza stradale
+  }
+
+  // Calcola percorso stradale REALE con OSRM
+  async function calculateRealRoute() {
+    if (selectedIds.length === 0) return;
+    
+    // Recupera coordinate casa
+    let homeLat: number | undefined;
+    let homeLon: number | undefined;
+    try {
+      const saved = localStorage.getItem('repping_settings');
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.homeLat && data.homeLon) {
+          homeLat = data.homeLat;
+          homeLon = data.homeLon;
+        }
+      }
+    } catch {}
+
+    if (!homeLat || !homeLon) {
+      alert('⚠️ Imposta il punto di partenza in Impostazioni per calcolare il percorso reale.');
+      return;
+    }
+
+    // Costruisci waypoints
+    const waypoints: Array<{ lat: number; lon: number; name?: string }> = [
+      { lat: homeLat, lon: homeLon, name: '🏠 Partenza' }
+    ];
+
+    for (const id of selectedIds) {
+      const client = clients.find(c => c.id === id);
+      if (client && client.latitude && client.longitude) {
+        waypoints.push({ lat: client.latitude, lon: client.longitude, name: client.name });
+      }
+    }
+
+    // Ritorno a casa
+    waypoints.push({ lat: homeLat, lon: homeLon, name: '🏠 Ritorno' });
+
+    if (waypoints.length < 3) {
+      alert('⚠️ Nessun cliente con coordinate GPS nel piano.');
+      return;
+    }
+
+    setCalculatingRoute(true);
+    try {
+      const result = await getMultiStopRoute(waypoints);
+      if (result.success) {
+        setRealKm(result.totalKm);
+        setRealMinutes(result.totalMinutes);
+      } else {
+        alert('❌ Errore nel calcolo del percorso. Riprova.');
+      }
+    } catch (e) {
+      console.error('[Planning] Errore OSRM:', e);
+      alert('❌ Errore di connessione al servizio routing.');
+    } finally {
+      setCalculatingRoute(false);
+    }
   }
 
   // Genera suggerimenti Smart
@@ -1040,7 +1108,31 @@ export default function PlanningEditorPage() {
               <h2 style={{ fontSize: 20, fontWeight: 600 }}>
                 📍 Visite Pianificate ({selectedIds.length})
                 <span style={{ marginLeft: 12, fontSize: 16, color: '#6b7280', fontWeight: 400 }}>
-                  • 🚗 ~{totalKm.toFixed(1)} km (A/R)
+                  • 🚗 {realKm !== null ? (
+                    <span style={{ color: '#059669' }}>
+                      {realKm.toFixed(1)} km (~{Math.floor((realMinutes ?? 0) / 60)}h {(realMinutes ?? 0) % 60}min)
+                    </span>
+                  ) : (
+                    <span>~{totalKm.toFixed(0)} km</span>
+                  )}
+                  {realKm === null && selectedIds.length > 0 && (
+                    <button
+                      onClick={calculateRealRoute}
+                      disabled={calculatingRoute}
+                      style={{
+                        marginLeft: 8,
+                        padding: '2px 8px',
+                        fontSize: 12,
+                        background: calculatingRoute ? '#9ca3af' : '#3b82f6',
+                        color: 'white',
+                        border: 'none',
+                        borderRadius: 4,
+                        cursor: calculatingRoute ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {calculatingRoute ? '⏳' : '🛣️ Calcola'}
+                    </button>
+                  )}
                 </span>
               </h2>
 
