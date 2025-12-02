@@ -14,6 +14,7 @@
 // 
 
 import { supabase } from "../../lib/supabase/client";
+import { getDistancesToMany, getMultiStopRoute, haversineDistance } from "../../lib/routing";
 
 // Tipi delle righe che selezioniamo (minimi e tolleranti)
 type AccountRow = {
@@ -1174,26 +1175,8 @@ export async function getVisitsByDay(
 }
 
 // ───────────────────────────────────────────────────────────────
-// 🆕 ANALISI GEOGRAFICHE
+// 🆕 ANALISI GEOGRAFICHE - CON ROUTING STRADALE REALE (OSRM)
 // ───────────────────────────────────────────────────────────────
-
-/**
- * Formula Haversine per calcolare distanza in km tra due punti GPS
- */
-function haversineDistance(
-  lat1: number, lon1: number,
-  lat2: number, lon2: number
-): number {
-  const R = 6371; // Raggio Terra in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
 
 /**
  * Tipo per risultato analisi prodotto/km
@@ -1204,10 +1187,12 @@ type ProductKmAnalysis = {
   totalKm: number;
   revenuePerKm: number;
   visitCount: number;
+  avgMinutes?: number;
 };
 
 /**
  * Analisi fatturato per km per prodotto
+ * USA DISTANZE STRADALI REALI via OSRM!
  * Risponde a: "quale prodotto mi assicura il maggior fatturato a parità di km percorsi?"
  */
 export async function analyzeRevenuePerKmByProduct(
@@ -1272,7 +1257,7 @@ export async function analyzeRevenuePerKmByProduct(
   if (accError) throw accError;
 
   // Mappa clienti con coordinate
-  const accountMap = new Map<string, { name: string; lat: number; lon: number }>();
+  const clientsWithCoords: Array<{ id: string; name: string; lat: number; lon: number }> = [];
   
   for (const acc of (accounts ?? [])) {
     if (acc.latitude == null || acc.longitude == null) continue;
@@ -1286,7 +1271,8 @@ export async function analyzeRevenuePerKmByProduct(
     }
     
     if (name) {
-      accountMap.set(acc.id, { 
+      clientsWithCoords.push({ 
+        id: acc.id,
         name, 
         lat: acc.latitude, 
         lon: acc.longitude 
@@ -1294,37 +1280,63 @@ export async function analyzeRevenuePerKmByProduct(
     }
   }
 
-  // 3. Aggrega per prodotto
-  const productStats = new Map<string, { revenue: number; km: number; visits: number }>();
+  if (clientsWithCoords.length === 0) {
+    return {
+      success: false,
+      analysis: [],
+      message: `Non ho clienti con coordinate GPS. Usa 🗺️ Geocode Clienti per aggiungerle.`
+    };
+  }
+
+  // 3. Calcola DISTANZE STRADALI REALI con OSRM
+  console.log(`[Routing] Calcolo distanze stradali per ${clientsWithCoords.length} clienti...`);
+  
+  const distanceMap = await getDistancesToMany(
+    { lat: homeCoords.lat, lon: homeCoords.lon },
+    clientsWithCoords
+  );
+
+  // Fallback a Haversine per clienti senza risposta OSRM
+  const getDistance = (clientId: string, clientLat: number, clientLon: number): number => {
+    const osrmResult = distanceMap.get(clientId);
+    if (osrmResult?.distanceKm) return osrmResult.distanceKm;
+    // Fallback Haversine * 1.3 (stima strada vs linea d'aria)
+    return haversineDistance(homeCoords.lat, homeCoords.lon, clientLat, clientLon) * 1.3;
+  };
+
+  // 4. Aggrega per prodotto
+  const productStats = new Map<string, { revenue: number; km: number; visits: number; minutes: number }>();
+  const clientMap = new Map(clientsWithCoords.map(c => [c.id, c]));
 
   for (const visit of visits) {
-    const client = accountMap.get(visit.account_id);
-    if (!client) continue; // Cliente senza coordinate
+    const client = clientMap.get(visit.account_id);
+    if (!client) continue;
 
-    // Calcola distanza dal punto di partenza
-    const distance = haversineDistance(homeCoords.lat, homeCoords.lon, client.lat, client.lon);
+    const distance = getDistance(client.id, client.lat, client.lon);
+    const osrmResult = distanceMap.get(client.id);
+    const minutes = osrmResult?.durationMinutes ?? 0;
     
-    // Estrai prodotti discussi (separati da virgola o spazio)
+    // Estrai prodotti discussi
     const products = (visit.prodotti_discussi ?? 'Generale')
       .split(/[,;]/)
       .map((p: string) => p.trim())
       .filter((p: string) => p.length > 0);
 
-    // Distribuisci fatturato equamente tra prodotti
     const revenuePerProduct = (visit.importo_vendita ?? 0) / Math.max(products.length, 1);
 
     for (const product of products) {
       const key = product.toLowerCase();
-      const existing = productStats.get(key) ?? { revenue: 0, km: 0, visits: 0 };
+      const existing = productStats.get(key) ?? { revenue: 0, km: 0, visits: 0, minutes: 0 };
       productStats.set(key, {
         revenue: existing.revenue + revenuePerProduct,
         km: existing.km + distance,
-        visits: existing.visits + 1
+        visits: existing.visits + 1,
+        minutes: existing.minutes + minutes
       });
     }
   }
 
-  // 4. Calcola metriche e ordina
+  // 5. Calcola metriche e ordina
   const analysis: ProductKmAnalysis[] = [];
   
   for (const [product, stats] of productStats.entries()) {
@@ -1334,43 +1346,46 @@ export async function analyzeRevenuePerKmByProduct(
         totalRevenue: Math.round(stats.revenue),
         totalKm: Math.round(stats.km * 10) / 10,
         revenuePerKm: Math.round((stats.revenue / stats.km) * 100) / 100,
-        visitCount: stats.visits
+        visitCount: stats.visits,
+        avgMinutes: stats.visits > 0 ? Math.round(stats.minutes / stats.visits) : undefined
       });
     }
   }
 
-  // Ordina per revenue/km decrescente
   analysis.sort((a, b) => b.revenuePerKm - a.revenuePerKm);
 
   if (analysis.length === 0) {
     return {
       success: false,
       analysis: [],
-      message: `Non ho abbastanza dati geografici ${periodLabel}. Verifica che i clienti abbiano le coordinate GPS.`
+      message: `Non ho abbastanza dati ${periodLabel}.`
     };
   }
 
   const bestProduct = analysis[0];
   const top3 = analysis.slice(0, 3);
 
-  const lines = top3.map((p, i) => 
-    `${i + 1}. **${p.product}**: €${p.revenuePerKm.toFixed(2)}/km (€${p.totalRevenue} in ${p.totalKm}km, ${p.visitCount} visite)`
-  ).join('\n');
+  const lines = top3.map((p, i) => {
+    let line = `${i + 1}. **${p.product}**: €${p.revenuePerKm.toFixed(2)}/km`;
+    line += ` (€${p.totalRevenue} in ${p.totalKm}km, ${p.visitCount} visite)`;
+    return line;
+  }).join('\n');
 
-  const message = `📊 **Fatturato per km** ${periodLabel}:\n\n${lines}${analysis.length > 3 ? `\n\n...e altri ${analysis.length - 3} prodotti.` : ''}\n\n🏆 **${bestProduct.product}** è il più redditizio: €${bestProduct.revenuePerKm.toFixed(2)} per ogni km percorso!`;
+  const message = `🛣️ **Fatturato per km** ${periodLabel} (distanze stradali):\n\n${lines}${analysis.length > 3 ? `\n\n...e altri ${analysis.length - 3} prodotti.` : ''}\n\n🏆 **${bestProduct.product}** è il più redditizio: €${bestProduct.revenuePerKm.toFixed(2)}/km!`;
 
   return { success: true, analysis, bestProduct, message };
 }
 
 /**
  * Clienti più vicini al punto di partenza
+ * USA DISTANZE STRADALI REALI via OSRM!
  */
 export async function getNearestClients(
   crypto: CryptoLike,
   homeCoords: { lat: number; lon: number },
   limit: number = 10
 ): Promise<{
-  clients: Array<{ id: string; name: string; distance: number; city?: string }>;
+  clients: Array<{ id: string; name: string; distance: number; duration?: number; city?: string }>;
   message: string;
 }> {
   assertCrypto(crypto);
@@ -1383,7 +1398,8 @@ export async function getNearestClients(
 
   if (error) throw error;
 
-  const clientsWithDistance: Array<{ id: string; name: string; distance: number; city?: string }> = [];
+  // Prepara lista clienti con coordinate
+  const clientsToRoute: Array<{ id: string; name: string; lat: number; lon: number; city?: string }> = [];
 
   for (const acc of (accounts ?? [])) {
     if (acc.latitude == null || acc.longitude == null) continue;
@@ -1397,39 +1413,66 @@ export async function getNearestClients(
     }
 
     if (name) {
-      const distance = haversineDistance(homeCoords.lat, homeCoords.lon, acc.latitude, acc.longitude);
-      clientsWithDistance.push({
+      clientsToRoute.push({
         id: acc.id,
         name,
-        distance: Math.round(distance * 10) / 10,
+        lat: acc.latitude,
+        lon: acc.longitude,
         city: acc.city ?? undefined
       });
     }
   }
 
-  // Ordina per distanza crescente
-  clientsWithDistance.sort((a, b) => a.distance - b.distance);
-  const nearest = clientsWithDistance.slice(0, limit);
-
-  if (nearest.length === 0) {
+  if (clientsToRoute.length === 0) {
     return { 
       clients: [], 
-      message: "Nessun cliente con coordinate GPS trovato. Usa il tool Geocode Clienti per aggiungere le coordinate."
+      message: "Nessun cliente con coordinate GPS trovato. Usa 🗺️ Geocode Clienti per aggiungerle."
     };
   }
 
-  const lines = nearest.map((c, i) => 
-    `${i + 1}. **${c.name}**${c.city ? ` (${c.city})` : ''} - ${c.distance} km`
-  ).join('\n');
+  // Calcola DISTANZE STRADALI REALI
+  console.log(`[Routing] Calcolo distanze stradali per ${clientsToRoute.length} clienti...`);
+  
+  const distanceMap = await getDistancesToMany(
+    { lat: homeCoords.lat, lon: homeCoords.lon },
+    clientsToRoute
+  );
+
+  // Costruisci risultato con distanze reali (fallback Haversine se OSRM fallisce)
+  const clientsWithDistance = clientsToRoute.map(c => {
+    const osrmResult = distanceMap.get(c.id);
+    const distance = osrmResult?.distanceKm ?? 
+                     (haversineDistance(homeCoords.lat, homeCoords.lon, c.lat, c.lon) * 1.3);
+    return {
+      id: c.id,
+      name: c.name,
+      distance: Math.round(distance * 10) / 10,
+      duration: osrmResult?.durationMinutes,
+      city: c.city
+    };
+  });
+
+  // Ordina per distanza stradale crescente
+  clientsWithDistance.sort((a, b) => a.distance - b.distance);
+  const nearest = clientsWithDistance.slice(0, limit);
+
+  const lines = nearest.map((c, i) => {
+    let line = `${i + 1}. **${c.name}**`;
+    if (c.city) line += ` (${c.city})`;
+    line += ` - ${c.distance} km`;
+    if (c.duration) line += ` (~${c.duration} min)`;
+    return line;
+  }).join('\n');
 
   return {
     clients: nearest,
-    message: `📍 **Clienti più vicini a te**:\n\n${lines}`
+    message: `📍 **Clienti più vicini** (distanze stradali):\n\n${lines}`
   };
 }
 
 /**
  * Stima km percorsi per un giro di visite
+ * USA ROUTING STRADALE REALE via OSRM!
  */
 export async function estimateRouteKm(
   crypto: CryptoLike,
@@ -1437,13 +1480,14 @@ export async function estimateRouteKm(
   clientIds: string[]
 ): Promise<{
   totalKm: number;
-  route: Array<{ name: string; kmFromPrevious: number }>;
+  totalMinutes: number;
+  route: Array<{ name: string; kmFromPrevious: number; minutes?: number }>;
   message: string;
 }> {
   assertCrypto(crypto);
 
   if (clientIds.length === 0) {
-    return { totalKm: 0, route: [], message: "Nessun cliente nel percorso." };
+    return { totalKm: 0, totalMinutes: 0, route: [], message: "Nessun cliente nel percorso." };
   }
 
   const { data: accounts, error } = await supabase
@@ -1453,7 +1497,11 @@ export async function estimateRouteKm(
 
   if (error) throw error;
 
-  // Mappa clienti con coordinate (mantiene ordine input)
+  // Costruisci waypoints
+  const waypoints: Array<{ lat: number; lon: number; name?: string }> = [
+    { lat: homeCoords.lat, lon: homeCoords.lon, name: '🏠 Partenza' }
+  ];
+  
   const clientMap = new Map<string, { name: string; lat: number; lon: number }>();
   
   for (const acc of (accounts ?? [])) {
@@ -1472,39 +1520,48 @@ export async function estimateRouteKm(
     }
   }
 
-  // Calcola percorso nell'ordine dato
-  let totalKm = 0;
-  const route: Array<{ name: string; kmFromPrevious: number }> = [];
-  let prevLat = homeCoords.lat;
-  let prevLon = homeCoords.lon;
-
+  // Aggiungi clienti nell'ordine richiesto
   for (const id of clientIds) {
     const client = clientMap.get(id);
-    if (!client) continue;
-
-    const km = haversineDistance(prevLat, prevLon, client.lat, client.lon);
-    totalKm += km;
-    route.push({ name: client.name, kmFromPrevious: Math.round(km * 10) / 10 });
-    
-    prevLat = client.lat;
-    prevLon = client.lon;
+    if (client) {
+      waypoints.push({ lat: client.lat, lon: client.lon, name: client.name });
+    }
   }
 
   // Ritorno a casa
-  const returnKm = haversineDistance(prevLat, prevLon, homeCoords.lat, homeCoords.lon);
-  totalKm += returnKm;
+  waypoints.push({ lat: homeCoords.lat, lon: homeCoords.lon, name: '🏠 Ritorno' });
 
-  const lines = route.map((r, i) => `${i + 1}. ${r.name} (+${r.kmFromPrevious} km)`).join('\n');
+  // Calcola percorso con OSRM
+  console.log(`[Routing] Calcolo percorso con ${waypoints.length} tappe...`);
+  const routeResult = await getMultiStopRoute(waypoints);
+
+  // Costruisci messaggio
+  const route = routeResult.legs.slice(0, -1).map(leg => ({
+    name: leg.to,
+    kmFromPrevious: leg.distanceKm,
+    minutes: leg.durationMinutes
+  }));
+
+  const returnLeg = routeResult.legs[routeResult.legs.length - 1];
+
+  const lines = route.map((r, i) => {
+    let line = `${i + 1}. ${r.name} (+${r.kmFromPrevious} km`;
+    if (r.minutes) line += `, ~${r.minutes} min`;
+    line += ')';
+    return line;
+  }).join('\n');
   
   return {
-    totalKm: Math.round(totalKm * 10) / 10,
+    totalKm: routeResult.totalKm,
+    totalMinutes: routeResult.totalMinutes,
     route,
-    message: `🚗 **Percorso stimato**: ${Math.round(totalKm)} km\n\n${lines}\n\n🏠 Ritorno: +${Math.round(returnKm * 10) / 10} km`
+    message: `🚗 **Percorso stimato**: ${routeResult.totalKm} km (~${Math.round(routeResult.totalMinutes / 60)}h ${routeResult.totalMinutes % 60}min)\n\n${lines}\n\n🏠 Ritorno: +${returnLeg?.distanceKm ?? 0} km`
   };
 }
 
 /**
  * Calcola km percorsi in un periodo basandosi sulle visite effettuate
+ * USA DISTANZE STRADALI REALI via OSRM!
  */
 export async function getKmTraveledInPeriod(
   crypto: CryptoLike,
@@ -1512,6 +1569,7 @@ export async function getKmTraveledInPeriod(
   period: 'today' | 'week' | 'month' | 'year'
 ): Promise<{
   totalKm: number;
+  totalMinutes: number;
   visitCount: number;
   avgKmPerVisit: number;
   message: string;
@@ -1553,6 +1611,7 @@ export async function getKmTraveledInPeriod(
   if (!visits?.length) {
     return {
       totalKm: 0,
+      totalMinutes: 0,
       visitCount: 0,
       avgKmPerVisit: 0,
       message: `Nessuna visita ${periodLabel}.`
@@ -1566,33 +1625,58 @@ export async function getKmTraveledInPeriod(
     .select("id, latitude, longitude")
     .in("id", accountIds);
 
-  const coordMap = new Map<string, { lat: number; lon: number }>();
+  const clientsForRouting: Array<{ id: string; lat: number; lon: number }> = [];
   for (const acc of (accounts ?? [])) {
     if (acc.latitude != null && acc.longitude != null) {
-      coordMap.set(acc.id, { lat: acc.latitude, lon: acc.longitude });
+      clientsForRouting.push({ id: acc.id, lat: acc.latitude, lon: acc.longitude });
     }
   }
 
-  // Stima km: somma distanze da casa a ciascun cliente (andata semplice)
-  // Questo è una stima conservativa
+  if (clientsForRouting.length === 0) {
+    return {
+      totalKm: 0,
+      totalMinutes: 0,
+      visitCount: 0,
+      avgKmPerVisit: 0,
+      message: `Nessun cliente con coordinate GPS ${periodLabel}.`
+    };
+  }
+
+  // Calcola distanze stradali reali
+  console.log(`[Routing] Calcolo distanze per ${clientsForRouting.length} clienti...`);
+  const distanceMap = await getDistancesToMany(
+    { lat: homeCoords.lat, lon: homeCoords.lon },
+    clientsForRouting
+  );
+
+  // Somma km (andata e ritorno per ogni visita)
   let totalKm = 0;
+  let totalMinutes = 0;
   let validVisits = 0;
 
+  const coordMap = new Map(clientsForRouting.map(c => [c.id, c]));
+
   for (const visit of visits) {
-    const coords = coordMap.get(visit.account_id);
-    if (coords) {
-      const km = haversineDistance(homeCoords.lat, homeCoords.lon, coords.lat, coords.lon);
-      totalKm += km * 2; // Andata e ritorno semplificato
-      validVisits++;
-    }
+    const client = coordMap.get(visit.account_id);
+    if (!client) continue;
+
+    const osrmResult = distanceMap.get(client.id);
+    const km = osrmResult?.distanceKm ?? 
+               (haversineDistance(homeCoords.lat, homeCoords.lon, client.lat, client.lon) * 1.3);
+    const minutes = osrmResult?.durationMinutes ?? 0;
+
+    totalKm += km * 2; // Andata e ritorno
+    totalMinutes += minutes * 2;
+    validVisits++;
   }
 
   const avgKmPerVisit = validVisits > 0 ? totalKm / validVisits : 0;
 
   return {
     totalKm: Math.round(totalKm),
+    totalMinutes: Math.round(totalMinutes),
     visitCount: validVisits,
     avgKmPerVisit: Math.round(avgKmPerVisit * 10) / 10,
-    message: `🚗 **Km stimati ${periodLabel}**: ~${Math.round(totalKm)} km per ${validVisits} visite (media ${Math.round(avgKmPerVisit)} km/visita)`
+    message: `🚗 **Km ${periodLabel}** (stradali): ~${Math.round(totalKm)} km (~${Math.round(totalMinutes / 60)}h) per ${validVisits} visite\n\n📊 Media: ${Math.round(avgKmPerVisit)} km/visita`
   };
 }
