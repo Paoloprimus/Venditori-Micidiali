@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 
-// Versione documento - aggiornare ad ogni modifica sostanziale
-export const COOKIE_VERSION = "cookie_v1.0";
-
 export default function CookiePolicyPage() {
   return (
     <div className="min-h-screen bg-slate-50">

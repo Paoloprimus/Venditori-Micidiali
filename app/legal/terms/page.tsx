@@ -2,9 +2,6 @@
 
 import Link from "next/link";
 
-// Versione documento - aggiornare ad ogni modifica sostanziale
-export const TOS_VERSION = "tos_v1.0";
-
 export default function TermsOfServicePage() {
   return (
     <div className="min-h-screen bg-slate-50">
