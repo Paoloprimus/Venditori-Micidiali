@@ -1172,3 +1172,427 @@ export async function getVisitsByDay(
     clientName: accountMap.get(v.account_id) ?? "Cliente sconosciuto"
   }));
 }
+
+// ───────────────────────────────────────────────────────────────
+// 🆕 ANALISI GEOGRAFICHE
+// ───────────────────────────────────────────────────────────────
+
+/**
+ * Formula Haversine per calcolare distanza in km tra due punti GPS
+ */
+function haversineDistance(
+  lat1: number, lon1: number,
+  lat2: number, lon2: number
+): number {
+  const R = 6371; // Raggio Terra in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+/**
+ * Tipo per risultato analisi prodotto/km
+ */
+type ProductKmAnalysis = {
+  product: string;
+  totalRevenue: number;
+  totalKm: number;
+  revenuePerKm: number;
+  visitCount: number;
+};
+
+/**
+ * Analisi fatturato per km per prodotto
+ * Risponde a: "quale prodotto mi assicura il maggior fatturato a parità di km percorsi?"
+ */
+export async function analyzeRevenuePerKmByProduct(
+  crypto: CryptoLike,
+  homeCoords: { lat: number; lon: number },
+  period?: 'week' | 'month' | 'year'
+): Promise<{
+  success: boolean;
+  analysis: ProductKmAnalysis[];
+  bestProduct?: ProductKmAnalysis;
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  // 1. Carica visite con vendite nel periodo
+  let query = supabase
+    .from("visits")
+    .select("id, account_id, importo_vendita, prodotti_discussi, data_visita")
+    .not("importo_vendita", "is", null)
+    .gt("importo_vendita", 0);
+
+  const now = new Date();
+  let fromDate: Date;
+  let periodLabel: string;
+
+  switch (period) {
+    case 'week':
+      fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      periodLabel = 'questa settimana';
+      break;
+    case 'year':
+      fromDate = new Date(now.getFullYear(), 0, 1);
+      periodLabel = "quest'anno";
+      break;
+    case 'month':
+    default:
+      fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      periodLabel = 'questo mese';
+      break;
+  }
+
+  query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+
+  const { data: visits, error: visitError } = await query;
+  if (visitError) throw visitError;
+
+  if (!visits?.length) {
+    return {
+      success: false,
+      analysis: [],
+      message: `Nessuna vendita registrata ${periodLabel}.`
+    };
+  }
+
+  // 2. Carica clienti con coordinate
+  const accountIds = [...new Set(visits.map(v => v.account_id))];
+  const { data: accounts, error: accError } = await supabase
+    .from("accounts")
+    .select("id, name, name_enc, name_iv, latitude, longitude")
+    .in("id", accountIds);
+
+  if (accError) throw accError;
+
+  // Mappa clienti con coordinate
+  const accountMap = new Map<string, { name: string; lat: number; lon: number }>();
+  
+  for (const acc of (accounts ?? [])) {
+    if (acc.latitude == null || acc.longitude == null) continue;
+    
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+    
+    if (name) {
+      accountMap.set(acc.id, { 
+        name, 
+        lat: acc.latitude, 
+        lon: acc.longitude 
+      });
+    }
+  }
+
+  // 3. Aggrega per prodotto
+  const productStats = new Map<string, { revenue: number; km: number; visits: number }>();
+
+  for (const visit of visits) {
+    const client = accountMap.get(visit.account_id);
+    if (!client) continue; // Cliente senza coordinate
+
+    // Calcola distanza dal punto di partenza
+    const distance = haversineDistance(homeCoords.lat, homeCoords.lon, client.lat, client.lon);
+    
+    // Estrai prodotti discussi (separati da virgola o spazio)
+    const products = (visit.prodotti_discussi ?? 'Generale')
+      .split(/[,;]/)
+      .map((p: string) => p.trim())
+      .filter((p: string) => p.length > 0);
+
+    // Distribuisci fatturato equamente tra prodotti
+    const revenuePerProduct = (visit.importo_vendita ?? 0) / Math.max(products.length, 1);
+
+    for (const product of products) {
+      const key = product.toLowerCase();
+      const existing = productStats.get(key) ?? { revenue: 0, km: 0, visits: 0 };
+      productStats.set(key, {
+        revenue: existing.revenue + revenuePerProduct,
+        km: existing.km + distance,
+        visits: existing.visits + 1
+      });
+    }
+  }
+
+  // 4. Calcola metriche e ordina
+  const analysis: ProductKmAnalysis[] = [];
+  
+  for (const [product, stats] of productStats.entries()) {
+    if (stats.km > 0) {
+      analysis.push({
+        product: product.charAt(0).toUpperCase() + product.slice(1),
+        totalRevenue: Math.round(stats.revenue),
+        totalKm: Math.round(stats.km * 10) / 10,
+        revenuePerKm: Math.round((stats.revenue / stats.km) * 100) / 100,
+        visitCount: stats.visits
+      });
+    }
+  }
+
+  // Ordina per revenue/km decrescente
+  analysis.sort((a, b) => b.revenuePerKm - a.revenuePerKm);
+
+  if (analysis.length === 0) {
+    return {
+      success: false,
+      analysis: [],
+      message: `Non ho abbastanza dati geografici ${periodLabel}. Verifica che i clienti abbiano le coordinate GPS.`
+    };
+  }
+
+  const bestProduct = analysis[0];
+  const top3 = analysis.slice(0, 3);
+
+  const lines = top3.map((p, i) => 
+    `${i + 1}. **${p.product}**: €${p.revenuePerKm.toFixed(2)}/km (€${p.totalRevenue} in ${p.totalKm}km, ${p.visitCount} visite)`
+  ).join('\n');
+
+  const message = `📊 **Fatturato per km** ${periodLabel}:\n\n${lines}${analysis.length > 3 ? `\n\n...e altri ${analysis.length - 3} prodotti.` : ''}\n\n🏆 **${bestProduct.product}** è il più redditizio: €${bestProduct.revenuePerKm.toFixed(2)} per ogni km percorso!`;
+
+  return { success: true, analysis, bestProduct, message };
+}
+
+/**
+ * Clienti più vicini al punto di partenza
+ */
+export async function getNearestClients(
+  crypto: CryptoLike,
+  homeCoords: { lat: number; lon: number },
+  limit: number = 10
+): Promise<{
+  clients: Array<{ id: string; name: string; distance: number; city?: string }>;
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  const { data: accounts, error } = await supabase
+    .from("accounts")
+    .select("id, name, name_enc, name_iv, latitude, longitude, city")
+    .not("latitude", "is", null)
+    .not("longitude", "is", null);
+
+  if (error) throw error;
+
+  const clientsWithDistance: Array<{ id: string; name: string; distance: number; city?: string }> = [];
+
+  for (const acc of (accounts ?? [])) {
+    if (acc.latitude == null || acc.longitude == null) continue;
+
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+
+    if (name) {
+      const distance = haversineDistance(homeCoords.lat, homeCoords.lon, acc.latitude, acc.longitude);
+      clientsWithDistance.push({
+        id: acc.id,
+        name,
+        distance: Math.round(distance * 10) / 10,
+        city: acc.city ?? undefined
+      });
+    }
+  }
+
+  // Ordina per distanza crescente
+  clientsWithDistance.sort((a, b) => a.distance - b.distance);
+  const nearest = clientsWithDistance.slice(0, limit);
+
+  if (nearest.length === 0) {
+    return { 
+      clients: [], 
+      message: "Nessun cliente con coordinate GPS trovato. Usa il tool Geocode Clienti per aggiungere le coordinate."
+    };
+  }
+
+  const lines = nearest.map((c, i) => 
+    `${i + 1}. **${c.name}**${c.city ? ` (${c.city})` : ''} - ${c.distance} km`
+  ).join('\n');
+
+  return {
+    clients: nearest,
+    message: `📍 **Clienti più vicini a te**:\n\n${lines}`
+  };
+}
+
+/**
+ * Stima km percorsi per un giro di visite
+ */
+export async function estimateRouteKm(
+  crypto: CryptoLike,
+  homeCoords: { lat: number; lon: number },
+  clientIds: string[]
+): Promise<{
+  totalKm: number;
+  route: Array<{ name: string; kmFromPrevious: number }>;
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  if (clientIds.length === 0) {
+    return { totalKm: 0, route: [], message: "Nessun cliente nel percorso." };
+  }
+
+  const { data: accounts, error } = await supabase
+    .from("accounts")
+    .select("id, name, name_enc, name_iv, latitude, longitude")
+    .in("id", clientIds);
+
+  if (error) throw error;
+
+  // Mappa clienti con coordinate (mantiene ordine input)
+  const clientMap = new Map<string, { name: string; lat: number; lon: number }>();
+  
+  for (const acc of (accounts ?? [])) {
+    if (acc.latitude == null || acc.longitude == null) continue;
+
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+
+    if (name) {
+      clientMap.set(acc.id, { name, lat: acc.latitude, lon: acc.longitude });
+    }
+  }
+
+  // Calcola percorso nell'ordine dato
+  let totalKm = 0;
+  const route: Array<{ name: string; kmFromPrevious: number }> = [];
+  let prevLat = homeCoords.lat;
+  let prevLon = homeCoords.lon;
+
+  for (const id of clientIds) {
+    const client = clientMap.get(id);
+    if (!client) continue;
+
+    const km = haversineDistance(prevLat, prevLon, client.lat, client.lon);
+    totalKm += km;
+    route.push({ name: client.name, kmFromPrevious: Math.round(km * 10) / 10 });
+    
+    prevLat = client.lat;
+    prevLon = client.lon;
+  }
+
+  // Ritorno a casa
+  const returnKm = haversineDistance(prevLat, prevLon, homeCoords.lat, homeCoords.lon);
+  totalKm += returnKm;
+
+  const lines = route.map((r, i) => `${i + 1}. ${r.name} (+${r.kmFromPrevious} km)`).join('\n');
+  
+  return {
+    totalKm: Math.round(totalKm * 10) / 10,
+    route,
+    message: `🚗 **Percorso stimato**: ${Math.round(totalKm)} km\n\n${lines}\n\n🏠 Ritorno: +${Math.round(returnKm * 10) / 10} km`
+  };
+}
+
+/**
+ * Calcola km percorsi in un periodo basandosi sulle visite effettuate
+ */
+export async function getKmTraveledInPeriod(
+  crypto: CryptoLike,
+  homeCoords: { lat: number; lon: number },
+  period: 'today' | 'week' | 'month' | 'year'
+): Promise<{
+  totalKm: number;
+  visitCount: number;
+  avgKmPerVisit: number;
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  const now = new Date();
+  let fromDate: Date;
+  let periodLabel: string;
+
+  switch (period) {
+    case 'today':
+      fromDate = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      periodLabel = 'oggi';
+      break;
+    case 'week':
+      fromDate = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+      periodLabel = 'questa settimana';
+      break;
+    case 'year':
+      fromDate = new Date(now.getFullYear(), 0, 1);
+      periodLabel = "quest'anno";
+      break;
+    case 'month':
+    default:
+      fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+      periodLabel = 'questo mese';
+      break;
+  }
+
+  const { data: visits, error: visitError } = await supabase
+    .from("visits")
+    .select("account_id, data_visita")
+    .gte("data_visita", fromDate.toISOString().split('T')[0])
+    .order("data_visita", { ascending: true });
+
+  if (visitError) throw visitError;
+
+  if (!visits?.length) {
+    return {
+      totalKm: 0,
+      visitCount: 0,
+      avgKmPerVisit: 0,
+      message: `Nessuna visita ${periodLabel}.`
+    };
+  }
+
+  // Carica clienti con coordinate
+  const accountIds = [...new Set(visits.map(v => v.account_id))];
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, latitude, longitude")
+    .in("id", accountIds);
+
+  const coordMap = new Map<string, { lat: number; lon: number }>();
+  for (const acc of (accounts ?? [])) {
+    if (acc.latitude != null && acc.longitude != null) {
+      coordMap.set(acc.id, { lat: acc.latitude, lon: acc.longitude });
+    }
+  }
+
+  // Stima km: somma distanze da casa a ciascun cliente (andata semplice)
+  // Questo è una stima conservativa
+  let totalKm = 0;
+  let validVisits = 0;
+
+  for (const visit of visits) {
+    const coords = coordMap.get(visit.account_id);
+    if (coords) {
+      const km = haversineDistance(homeCoords.lat, homeCoords.lon, coords.lat, coords.lon);
+      totalKm += km * 2; // Andata e ritorno semplificato
+      validVisits++;
+    }
+  }
+
+  const avgKmPerVisit = validVisits > 0 ? totalKm / validVisits : 0;
+
+  return {
+    totalKm: Math.round(totalKm),
+    visitCount: validVisits,
+    avgKmPerVisit: Math.round(avgKmPerVisit * 10) / 10,
+    message: `🚗 **Km stimati ${periodLabel}**: ~${Math.round(totalKm)} km per ${validVisits} visite (media ${Math.round(avgKmPerVisit)} km/visita)`
+  };
+}

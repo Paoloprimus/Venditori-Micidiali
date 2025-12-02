@@ -44,6 +44,10 @@ import {
   getInactiveClients,
   // Note
   searchInNotes,
+  // 🆕 Analisi Geografiche
+  analyzeRevenuePerKmByProduct,
+  getNearestClients,
+  getKmTraveledInPeriod,
 } from "../data/adapters";
 
 // ==================== TIPI ====================
@@ -110,6 +114,27 @@ function needCrypto(): { text: string; intent: string } {
     text: "🔒 Devi sbloccare la sessione per visualizzare i dati. Inserisci la passphrase nel pannello laterale.",
     intent: "crypto_not_ready",
   };
+}
+
+/**
+ * Recupera le coordinate del punto di partenza dal localStorage
+ * Salvate in repping_settings da DrawerImpostazioni
+ */
+function getHomeCoords(): { lat: number; lon: number } | null {
+  if (typeof window === 'undefined') return null;
+  
+  try {
+    const saved = localStorage.getItem('repping_settings');
+    if (!saved) return null;
+    
+    const data = JSON.parse(saved);
+    if (data.homeLat && data.homeLon) {
+      return { lat: data.homeLat, lon: data.homeLon };
+    }
+    return null;
+  } catch {
+    return null;
+  }
 }
 
 function scopeFromIntent(intent: string): Scope {
@@ -1094,20 +1119,71 @@ async function handleIntent(
     }
 
     // ═══════════════════════════════════════════════════════════════
-    // 🆕 DOMANDE IMPOSSIBILI - Gestite con alternative intelligenti
+    // 🆕 ANALISI GEOGRAFICHE - Abbiamo coordinate clienti + partenza!
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'revenue_per_km': {
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      // Recupera coordinate punto partenza da localStorage (via stato)
+      const homeCoords = getHomeCoords();
+      if (!homeCoords) {
+        return {
+          text: `📍 **Imposta prima il punto di partenza!**\n\nVai in ⚙️ Impostazioni → 📍 Punto di Partenza e inserisci il tuo indirizzo.\n\nQuesto mi permetterà di calcolare distanze e ottimizzare i tuoi giri.`,
+          intent
+        };
+      }
+      
+      const period = (entities.period as 'week' | 'month' | 'year') || 'month';
+      const result = await analyzeRevenuePerKmByProduct(crypto, homeCoords, period);
+      return { text: result.message, intent };
+    }
+
+    case 'clients_nearby': {
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      const homeCoords = getHomeCoords();
+      if (!homeCoords) {
+        return {
+          text: `📍 **Imposta prima il punto di partenza!**\n\nVai in ⚙️ Impostazioni → 📍 Punto di Partenza.\n\nMi serve per calcolare le distanze dai clienti.`,
+          intent
+        };
+      }
+      
+      const limit = (entities.limit as number) || 10;
+      const result = await getNearestClients(crypto, homeCoords, limit);
+      return { text: result.message, intent };
+    }
+
+    case 'km_traveled': {
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      const homeCoords = getHomeCoords();
+      if (!homeCoords) {
+        return {
+          text: `📍 **Imposta prima il punto di partenza!**\n\nVai in ⚙️ Impostazioni → 📍 Punto di Partenza.\n\nMi serve per stimare i chilometri percorsi.`,
+          intent
+        };
+      }
+      
+      const period = (entities.period as 'today' | 'week' | 'month' | 'year') || 'month';
+      const result = await getKmTraveledInPeriod(crypto, homeCoords, period);
+      return { text: result.message, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 DOMANDE IMPOSSIBILI - Solo quelle che richiedono dati mancanti
     // ═══════════════════════════════════════════════════════════════
 
     case 'analytics_impossible': {
       const missingData = entities.missingData ?? [];
       
       let text = `🤔 **Domanda interessante!**\n\n`;
-      text += `Purtroppo non ho i dati necessari per rispondere:\n`;
+      text += `Purtroppo non ho ancora questi dati:\n`;
       
       const missingLabels: Record<string, string> = {
-        'km_percorsi': '📍 Chilometri percorsi (no GPS)',
-        'margini_prodotto': '💹 Margini di profitto',
-        'tempo_visita': '⏱️ Durata delle visite',
-        'coordinate_gps': '🗺️ Posizione geografica clienti',
+        'margini_prodotto': '💹 Margini di profitto per prodotto',
+        'tempo_visita': '⏱️ Durata delle singole visite',
       };
       
       for (const data of missingData) {
@@ -1116,23 +1192,19 @@ async function handleIntent(
       
       text += `\n**Però posso aiutarti con:**\n`;
       
-      // Suggerimenti alternativi basati sui dati mancanti
-      if (missingData.includes('km_percorsi') || missingData.includes('coordinate_gps')) {
-        text += `• 🏙️ "Vendite per città" - analisi per zona\n`;
-        text += `• 📊 "Quali sono i miei migliori clienti?" - per prioritizzare\n`;
-      }
-      
       if (missingData.includes('margini_prodotto')) {
         text += `• 💰 "Qual è il prodotto più venduto?" - per volume\n`;
-        text += `• 📈 "Ordine medio" - per valore vendite\n`;
+        text += `• 📈 "Quale prodotto rende di più per km?" - ottimizzazione giri\n`;
+        text += `• 🏆 "Top clienti" - per fatturato\n`;
       }
       
       if (missingData.includes('tempo_visita')) {
         text += `• 📅 "Quante visite ho fatto questo mese?" - frequenza\n`;
-        text += `• 👥 "Clienti inattivi" - da visitare\n`;
+        text += `• 👥 "Chi non vedo da un mese?" - clienti da visitare\n`;
+        text += `• 🚗 "Quanti km ho fatto?" - distanze percorse\n`;
       }
       
-      text += `\n💡 _Suggerimento: queste metriche potrebbero essere aggiunte in futuro!_`;
+      text += `\n💡 _Queste metriche potrebbero essere aggiunte in futuro!_`;
       
       return { text, intent };
     }

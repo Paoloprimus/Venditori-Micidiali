@@ -78,8 +78,12 @@ export type IntentType =
   | 'analytics_target_progress'   // "Sono in linea con l'obiettivo?"
   | 'analytics_cross_sell'        // "Cosa posso proporre a Rossi?"
   | 'analytics_never_bought'      // "Chi non ha mai comprato X?"
+  // 🆕 ANALISI GEOGRAFICHE (abbiamo coordinate!)
+  | 'revenue_per_km'              // "Quale prodotto rende di più per km?"
+  | 'clients_nearby'              // "Clienti più vicini a me"
+  | 'km_traveled'                 // "Quanti km ho fatto questo mese?"
   // 🆕 DOMANDE IMPOSSIBILI (gestite con alternative)
-  | 'analytics_impossible'        // Domande che richiedono dati non disponibili
+  | 'analytics_impossible'        // Domande che richiedono dati non disponibili (es: margini)
   // GENERICI
   | 'greet'                  // "Ciao" / "Buongiorno"
   | 'help'                   // "Aiuto" / "Cosa posso fare?"
@@ -1122,32 +1126,83 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     }
   },
 
-  // 🆕 DOMANDE IMPOSSIBILI - intercettate e reindirizzate
+  // 🆕 ANALISI GEOGRAFICHE (abbiamo coordinate clienti + punto partenza!)
+  {
+    intent: 'revenue_per_km',
+    patterns: [
+      // Fatturato per km
+      /\b(fatturato|vendite|resa)\b.*\b(per|al)\b.*\b(km|chilometro)\b/i,
+      /\b(km|chilometr)\b.*\b(percors[oi])\b.*\b(fattur|vend)/i,
+      /\b(prodott[oi])\b.*\b(maggior fatturato|più redditi[tz]io)\b.*\b(km|chilometr|distanz)\b/i,
+      /quale\s+prodott[oi]\s+.*\b(km|chilometr)\b/i,
+      /\b(miglior|ottim)\b.*\b(resa|rendimento)\b.*\b(distanz|km)\b/i,
+    ],
+    confidence: 0.95,
+    entityExtractor: (text) => {
+      const entities: EntityType = {};
+      // Periodo
+      if (/sett|week/i.test(text)) entities.period = 'week';
+      else if (/mese|month/i.test(text)) entities.period = 'month';
+      else if (/anno|year/i.test(text)) entities.period = 'year';
+      else entities.period = 'month'; // default
+      return entities;
+    }
+  },
+  {
+    intent: 'clients_nearby',
+    patterns: [
+      /\b(client[ei])\b.*\b(più vicin[oi]|vicino a me)\b/i,
+      /\b(vicin[oi])\b.*\b(client[ei])\b/i,
+      /\b(nella zona|qui vicino)\b.*\b(client[ei])\b/i,
+      /chi\s+(ho|c'è)\s+.*\b(vicin[oi]|zona)\b/i,
+      /\b(ottimizza|migliora)\b.*\b(giro|percorso)\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: (text) => {
+      const entities: EntityType = {};
+      // Limite risultati
+      const limitMatch = text.match(/\b(prim[io])\s+(\d+)\b|\b(\d+)\s+(più vicin|client)/i);
+      if (limitMatch) {
+        entities.limit = parseInt(limitMatch[2] || limitMatch[3]) || 10;
+      }
+      return entities;
+    }
+  },
+  {
+    intent: 'km_traveled',
+    patterns: [
+      /\b(km|chilometr)\b.*\b(fatt[oi]|percors[oi])\b/i,
+      /\b(quant[io])\b.*\b(km|chilometr)\b/i,
+      /\b(distanz[ae])\b.*\b(percors[ae]|total[ei])\b/i,
+    ],
+    confidence: 0.9,
+    entityExtractor: (text) => {
+      const entities: EntityType = {};
+      if (/oggi|today/i.test(text)) entities.period = 'today';
+      else if (/sett|week/i.test(text)) entities.period = 'week';
+      else if (/mese|month/i.test(text)) entities.period = 'month';
+      else if (/anno|year/i.test(text)) entities.period = 'year';
+      else entities.period = 'month';
+      return entities;
+    }
+  },
+
+  // 🆕 DOMANDE IMPOSSIBILI - solo quelle che richiedono dati non disponibili
   {
     intent: 'analytics_impossible',
     patterns: [
-      // Richiedono KM (non disponibili)
-      /\b(km|chilometr|distanz[ae])\b.*\b(percors[oi]|fatt[oi]|giornalier)\b/i,
-      /\b(fatturato|vendite|resa)\b.*\b(per|al)\b.*\b(km|chilometro)\b/i,
-      /\b(ottimizza|migliora)\b.*\b(giro|percorso|tragitto)\b/i,
-      /\b(route|routing)\b/i,
       // Richiedono margini (non disponibili)
       /\b(margin[ei]|profitto|guadagno)\b.*\b(per|su|del)\b/i,
-      /\b(prodott[oi])\b.*\b(più redditi[tz]i[oi]|margine maggiore)\b/i,
+      /\b(prodott[oi])\b.*\b(margine maggiore)\b/i,
       /\b(guadagn[oi]|netto)\b.*\b(su|per|con)\b/i,
       // Richiedono tempo per visita (non disponibile)
       /\b(tempo|durata|minuti|ore)\b.*\b(per visita|medio|impiegat[oi])\b/i,
-      // Richiedono coordinate GPS
-      /\b(gps|coordinate|mappa|geolocalizza)\b/i,
-      /\b(più vicino|vicini a me|nella zona)\b.*\b(client[ei])\b/i,
     ],
     confidence: 0.95,
     entityExtractor: (text) => {
       const missingData: string[] = [];
-      if (/km|chilometr|distanz|percors|giro|tragitto|route/i.test(text)) missingData.push('km_percorsi');
-      if (/margin|profitt|guadagn|netto|redditi/i.test(text)) missingData.push('margini_prodotto');
+      if (/margin|profitt|guadagn|netto/i.test(text)) missingData.push('margini_prodotto');
       if (/tempo|durata|minuti|ore/i.test(text)) missingData.push('tempo_visita');
-      if (/gps|coordinate|mappa|geolocal|vicin/i.test(text)) missingData.push('coordinate_gps');
       return { missingData };
     }
   },
