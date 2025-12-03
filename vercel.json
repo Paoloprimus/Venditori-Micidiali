@@ -1,0 +1,25 @@
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "reping.it" }],
+      "destination": "/site"
+    },
+    {
+      "source": "/((?!api|_next|static|favicon|icons|manifest).*)",
+      "has": [{ "type": "host", "value": "reping.it" }],
+      "destination": "/site/$1"
+    },
+    {
+      "source": "/",
+      "has": [{ "type": "host", "value": "www.reping.it" }],
+      "destination": "/site"
+    },
+    {
+      "source": "/((?!api|_next|static|favicon|icons|manifest).*)",
+      "has": [{ "type": "host", "value": "www.reping.it" }],
+      "destination": "/site/$1"
+    }
+  ]
+}
+

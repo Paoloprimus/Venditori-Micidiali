@@ -7,35 +7,7 @@ const nextConfig = {
     serverComponentsExternalPackages: ["pdf-parse"],
   },
 
-  // 🌐 Routing multi-dominio: reping.it (marketing) vs reping.app (app)
-  async rewrites() {
-    return {
-      beforeFiles: [
-        // reping.it → serve le pagine /site
-        {
-          source: '/',
-          has: [{ type: 'host', value: 'reping.it' }],
-          destination: '/site',
-        },
-        {
-          source: '/:path*',
-          has: [{ type: 'host', value: 'reping.it' }],
-          destination: '/site/:path*',
-        },
-        // www.reping.it → stessa cosa
-        {
-          source: '/',
-          has: [{ type: 'host', value: 'www.reping.it' }],
-          destination: '/site',
-        },
-        {
-          source: '/:path*',
-          has: [{ type: 'host', value: 'www.reping.it' }],
-          destination: '/site/:path*',
-        },
-      ],
-    };
-  },
+  // 🌐 Routing multi-dominio configurato in vercel.json
 };
 
 export default nextConfig;
