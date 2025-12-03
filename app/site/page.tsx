@@ -3,7 +3,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 
 // Logo Component - Design moderno
@@ -35,141 +35,294 @@ function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg";
   );
 }
 
-// Animated Mockup Frames
+// Animated Demo Presentation with Audio
 function AnimatedMockup() {
-  const [frame, setFrame] = useState(0);
-  
-  const frames = [
-    // Frame 1: Chat domanda
-    {
-      type: "chat",
-      messages: [
-        { role: "user", text: "Quanti clienti ho visitato questa settimana?" },
-        { role: "assistant", text: "Hai visitato 12 clienti questa settimana.\n+3 rispetto alla settimana scorsa 📈" },
-      ]
-    },
-    // Frame 2: Dashboard KPI
-    {
-      type: "dashboard",
-      kpis: [
-        { label: "Clienti", value: "127", trend: "+5" },
-        { label: "Visite Mese", value: "48", trend: "+12" },
-        { label: "Fatturato", value: "€24.5k", trend: "+8%" },
-      ]
-    },
-    // Frame 3: Percorso ottimizzato
-    {
-      type: "route",
-      stops: ["Casa", "Bar Roma", "Rist. Milano", "Caffè Verdi", "Casa"],
-      km: "47 km",
-      time: "1h 20m"
-    },
-    // Frame 4: Altra domanda chat
-    {
-      type: "chat",
-      messages: [
-        { role: "user", text: "Chi devo richiamare oggi?" },
-        { role: "assistant", text: "Hai 3 clienti da richiamare:\n• Bar Sport (scadenza ordine)\n• Pizzeria Napoli (follow-up)\n• Hotel Centrale (nuovo listino)" },
-      ]
-    },
+  const [isPlaying, setIsPlaying] = useState(false);
+  const [scene, setScene] = useState(0);
+  const [subStep, setSubStep] = useState(0);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Scene definitions
+  const scenes = [
+    { id: "morning", duration: 3000 },
+    { id: "dashboard", duration: 4000 },
+    { id: "question", duration: 4000 },
+    { id: "route", duration: 4000 },
+    { id: "driving", duration: 3500 },
+    { id: "report", duration: 3000 },
+    { id: "claim", duration: 3000 },
   ];
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setFrame(f => (f + 1) % frames.length);
-    }, 4000);
-    return () => clearInterval(interval);
-  }, [frames.length]);
+  // Sound effects
+  const playSound = (type: string) => {
+    if (typeof window === "undefined") return;
+    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    
+    if (type === "notification") {
+      osc.frequency.value = 880;
+      gain.gain.value = 0.1;
+      osc.start();
+      setTimeout(() => { osc.frequency.value = 1100; }, 100);
+      setTimeout(() => osc.stop(), 200);
+    } else if (type === "success") {
+      osc.frequency.value = 523;
+      gain.gain.value = 0.1;
+      osc.start();
+      setTimeout(() => { osc.frequency.value = 659; }, 100);
+      setTimeout(() => { osc.frequency.value = 784; }, 200);
+      setTimeout(() => osc.stop(), 300);
+    } else if (type === "click") {
+      osc.frequency.value = 600;
+      gain.gain.value = 0.05;
+      osc.start();
+      setTimeout(() => osc.stop(), 50);
+    }
+  };
 
-  const currentFrame = frames[frame];
+  // Start presentation
+  const startPresentation = () => {
+    setIsPlaying(true);
+    setScene(0);
+    setSubStep(0);
+    playSound("notification");
+  };
+
+  // Scene progression
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    const currentScene = scenes[scene];
+    if (!currentScene) {
+      setIsPlaying(false);
+      setScene(0);
+      return;
+    }
+
+    // Play sound at scene start
+    if (scene === 1 || scene === 2) playSound("click");
+    if (scene === 3) playSound("success");
+
+    const timer = setTimeout(() => {
+      if (scene < scenes.length - 1) {
+        setScene(s => s + 1);
+        setSubStep(0);
+      } else {
+        // Loop or stop
+        setTimeout(() => {
+          setScene(0);
+          setSubStep(0);
+        }, 2000);
+      }
+    }, currentScene.duration);
+
+    return () => clearTimeout(timer);
+  }, [isPlaying, scene]);
+
+  // Sub-step animations within scenes
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setInterval(() => {
+      setSubStep(s => s + 1);
+    }, 800);
+    return () => clearInterval(timer);
+  }, [isPlaying, scene]);
+
+  const currentSceneId = scenes[scene]?.id || "morning";
 
   return (
     <div className="relative">
       <div className="bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-3xl p-4 border border-slate-700">
         <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-2xl">
-          {/* Browser bar */}
-          <div className="p-3 border-b border-slate-800 flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-red-500"></div>
-            <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-            <div className="w-3 h-3 rounded-full bg-green-500"></div>
-            <span className="ml-3 text-slate-500 text-xs">reping.app</span>
+          {/* App bar */}
+          <div className="p-3 border-b border-slate-800 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full bg-red-500"></div>
+              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
+              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+            </div>
+            <span className="text-slate-500 text-xs">reping.app</span>
+            <div className="text-slate-500 text-xs">
+              {isPlaying && <span className="animate-pulse text-red-400">● REC</span>}
+            </div>
           </div>
           
-          {/* Content with animation */}
-          <div className="p-5 min-h-[320px] transition-all duration-500">
-            {currentFrame.type === "chat" && currentFrame.messages && (
-              <div className="space-y-3 animate-fadeIn">
-                {currentFrame.messages.map((msg, i) => (
-                  <div 
-                    key={i}
-                    className={`p-3 rounded-lg text-sm max-w-[85%] ${
-                      msg.role === "user" 
-                        ? "bg-blue-600 text-white ml-auto" 
-                        : "bg-slate-800 text-slate-200"
-                    }`}
-                    style={{ animationDelay: `${i * 0.3}s` }}
-                  >
-                    <pre className="whitespace-pre-wrap font-sans">{msg.text}</pre>
-                  </div>
-                ))}
-              </div>
-            )}
+          {/* Content */}
+          <div className="min-h-[340px] relative overflow-hidden">
             
-            {currentFrame.type === "dashboard" && currentFrame.kpis && (
-              <div className="animate-fadeIn">
-                <p className="text-slate-400 text-xs mb-4">📊 Dashboard</p>
-                <div className="grid grid-cols-3 gap-3">
-                  {currentFrame.kpis.map((kpi, i) => (
-                    <div 
-                      key={i} 
-                      className="bg-slate-800 p-3 rounded-lg text-center"
-                      style={{ animationDelay: `${i * 0.15}s` }}
-                    >
-                      <div className="text-xl font-bold text-white">{kpi.value}</div>
-                      <div className="text-xs text-slate-400">{kpi.label}</div>
-                      <div className="text-xs text-green-400 mt-1">{kpi.trend}</div>
-                    </div>
-                  ))}
+            {/* Scene 0: Morning notification */}
+            {currentSceneId === "morning" && (
+              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-800 to-slate-900 animate-fadeIn">
+                <div className="text-center">
+                  <div className="text-4xl mb-4">☀️</div>
+                  <div className="bg-blue-600/30 border border-blue-500/50 rounded-xl p-4 mx-4">
+                    <p className="text-blue-300 text-sm font-medium">Buongiorno Paolo!</p>
+                    <p className="text-white text-lg font-bold mt-1">Il tuo piano è pronto</p>
+                    <p className="text-blue-400 text-xs mt-2">5 visite ottimali • 47km</p>
+                  </div>
                 </div>
               </div>
             )}
-            
-            {currentFrame.type === "route" && currentFrame.stops && (
-              <div className="animate-fadeIn">
-                <p className="text-slate-400 text-xs mb-4">🗺️ Percorso Ottimizzato</p>
+
+            {/* Scene 1: Dashboard */}
+            {currentSceneId === "dashboard" && (
+              <div className="absolute inset-0 p-4 bg-slate-900 animate-fadeIn">
+                <p className="text-slate-400 text-xs mb-3">📊 Dashboard di oggi</p>
+                <div className="grid grid-cols-3 gap-2 mb-4">
+                  <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 p-3 rounded-lg text-center border border-blue-500/30">
+                    <div className="text-2xl font-bold text-white">{subStep > 0 ? "5" : "0"}</div>
+                    <div className="text-xs text-slate-400">Visite oggi</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 p-3 rounded-lg text-center border border-green-500/30">
+                    <div className="text-2xl font-bold text-white">{subStep > 1 ? "€2.4k" : "€0"}</div>
+                    <div className="text-xs text-slate-400">Target</div>
+                  </div>
+                  <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 p-3 rounded-lg text-center border border-purple-500/30">
+                    <div className="text-2xl font-bold text-white">{subStep > 2 ? "47" : "0"}</div>
+                    <div className="text-xs text-slate-400">Km</div>
+                  </div>
+                </div>
+                {subStep > 3 && (
+                  <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-3 animate-fadeIn">
+                    <p className="text-amber-300 text-xs font-medium">⚠️ Alert</p>
+                    <p className="text-white text-sm">Bar Roma non ordina da 45 giorni</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Scene 2: AI Question */}
+            {currentSceneId === "question" && (
+              <div className="absolute inset-0 p-4 bg-slate-900 animate-fadeIn">
+                <div className="space-y-3">
+                  {subStep > 0 && (
+                    <div className="bg-blue-600 text-white p-3 rounded-lg text-sm ml-auto max-w-[80%] animate-slideInRight">
+                      Quanto ho venduto questo mese?
+                    </div>
+                  )}
+                  {subStep > 1 && (
+                    <div className="bg-slate-800 p-3 rounded-lg max-w-[85%] animate-slideInLeft">
+                      <p className="text-white text-sm font-medium">Questo mese hai fatturato:</p>
+                      <p className="text-3xl font-bold text-green-400 my-2">€18.540</p>
+                      <p className="text-green-400 text-xs">+15% vs mese scorso 📈</p>
+                      {subStep > 2 && (
+                        <div className="mt-3 flex gap-1 h-12">
+                          {[40, 55, 45, 70, 65, 80, 90].map((h, i) => (
+                            <div key={i} className="flex-1 bg-blue-500/30 rounded-t relative">
+                              <div 
+                                className="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t transition-all duration-500"
+                                style={{ height: `${h}%` }}
+                              />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Scene 3: Route optimization */}
+            {currentSceneId === "route" && (
+              <div className="absolute inset-0 p-4 bg-slate-900 animate-fadeIn">
+                <p className="text-slate-400 text-xs mb-3">🗺️ Percorso ottimizzato</p>
                 <div className="space-y-2">
-                  {currentFrame.stops.map((stop, i) => (
-                    <div key={i} className="flex items-center gap-2">
+                  {["🏠 Casa", "☕ Bar Roma", "🍕 Pizzeria Napoli", "🏨 Hotel Centrale", "🍷 Enoteca Verdi", "🏠 Casa"].map((stop, i) => (
+                    <div 
+                      key={i} 
+                      className={`flex items-center gap-2 transition-all duration-300 ${subStep > i ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`}
+                    >
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        i === 0 || i === (currentFrame.stops?.length || 0) - 1 
-                          ? "bg-green-500 text-white" 
-                          : "bg-blue-500 text-white"
-                      }`}>
+                        i === 0 || i === 5 ? "bg-green-500" : "bg-blue-500"
+                      } text-white`}>
                         {i + 1}
                       </div>
                       <span className="text-slate-300 text-sm">{stop}</span>
+                      {i < 5 && <div className="flex-1 border-t border-dashed border-slate-700"></div>}
                     </div>
                   ))}
                 </div>
-                <div className="mt-4 flex gap-4 text-sm">
-                  <span className="text-blue-400">📍 {currentFrame.km || ""}</span>
-                  <span className="text-green-400">⏱️ {currentFrame.time || ""}</span>
+                {subStep > 5 && (
+                  <div className="mt-4 bg-green-500/20 border border-green-500/50 rounded-lg p-2 text-center animate-fadeIn">
+                    <span className="text-green-400 font-bold">-12 km risparmiati!</span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Scene 4: Driving mode */}
+            {currentSceneId === "driving" && (
+              <div className="absolute inset-0 bg-gradient-to-b from-slate-800 to-slate-950 flex flex-col items-center justify-center animate-fadeIn">
+                <div className="text-xs text-slate-500 mb-2">🚗 MODALITÀ GUIDA</div>
+                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mb-4 animate-pulse">
+                  <span className="text-4xl">🎤</span>
+                </div>
+                {subStep > 1 && (
+                  <div className="text-center animate-fadeIn">
+                    <p className="text-slate-400 text-sm">Prossima tappa:</p>
+                    <p className="text-white text-xl font-bold">Bar Roma</p>
+                    <p className="text-blue-400 text-sm mt-1">📍 2.3 km • 5 min</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Scene 5: Report */}
+            {currentSceneId === "report" && (
+              <div className="absolute inset-0 p-4 bg-slate-900 flex flex-col items-center justify-center animate-fadeIn">
+                <div className="text-4xl mb-4">📄</div>
+                <p className="text-slate-400 text-sm mb-2">Fine giornata</p>
+                <div className="bg-green-500/20 border border-green-500/50 rounded-xl p-4 text-center">
+                  <p className="text-green-400 font-bold">✅ Report generato!</p>
+                  <p className="text-white text-sm mt-2">5 visite • €2.850 ordini</p>
+                  <p className="text-slate-400 text-xs mt-1">47 km • 4h 20m</p>
+                </div>
+              </div>
+            )}
+
+            {/* Scene 6: Claim */}
+            {currentSceneId === "claim" && (
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 flex flex-col items-center justify-center animate-fadeIn">
+                <div className="text-center px-4">
+                  <p className="text-white/80 text-sm mb-2">REPING</p>
+                  <p className="text-white text-2xl font-bold leading-tight">
+                    La tua giornata migliore,
+                    <br />ogni giorno.
+                  </p>
+                  <div className="mt-6 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full">
+                    <span className="animate-pulse">●</span>
+                    <span className="text-white text-sm font-medium">Beta disponibile</span>
+                  </div>
                 </div>
               </div>
             )}
           </div>
 
-          {/* Frame indicator */}
-          <div className="p-3 border-t border-slate-800 flex justify-center gap-2">
-            {frames.map((_, i) => (
+          {/* Play button overlay */}
+          {!isPlaying && (
+            <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-2xl">
+              <button 
+                onClick={startPresentation}
+                className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg group"
+              >
+                <span className="text-white text-3xl ml-1 group-hover:scale-110 transition">▶</span>
+              </button>
+            </div>
+          )}
+
+          {/* Progress bar */}
+          {isPlaying && (
+            <div className="h-1 bg-slate-800">
               <div 
-                key={i}
-                className={`w-2 h-2 rounded-full transition-all ${
-                  i === frame ? "bg-blue-500 w-4" : "bg-slate-600"
-                }`}
+                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+                style={{ width: `${((scene + 1) / scenes.length) * 100}%` }}
               />
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
       
@@ -177,9 +330,17 @@ function AnimatedMockup() {
       <div className="absolute -top-3 -right-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1">
         <span className="animate-pulse">●</span> AI Powered
       </div>
+
+      {/* Sound toggle hint */}
+      {!isPlaying && (
+        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-slate-500 text-xs flex items-center gap-1">
+          🔊 Audio attivo • Clicca per avviare
+        </div>
+      )}
     </div>
   );
 }
+
 
 // Beta Banner Component - Riutilizzabile
 function BetaBanner({ variant = "default" }: { variant?: "default" | "large" | "sticky" }) {
@@ -604,8 +765,22 @@ export default function LandingPage() {
           from { opacity: 0; transform: translateY(10px); }
           to { opacity: 1; transform: translateY(0); }
         }
+        @keyframes slideInRight {
+          from { opacity: 0; transform: translateX(20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes slideInLeft {
+          from { opacity: 0; transform: translateX(-20px); }
+          to { opacity: 1; transform: translateX(0); }
+        }
         .animate-fadeIn {
           animation: fadeIn 0.5s ease-out forwards;
+        }
+        .animate-slideInRight {
+          animation: slideInRight 0.4s ease-out forwards;
+        }
+        .animate-slideInLeft {
+          animation: slideInLeft 0.4s ease-out forwards;
         }
       `}</style>
     </div>
