@@ -97,7 +97,7 @@ function AnimatedMockup() {
           
           {/* Content with animation */}
           <div className="p-5 min-h-[320px] transition-all duration-500">
-            {currentFrame.type === "chat" && (
+            {currentFrame.type === "chat" && currentFrame.messages && (
               <div className="space-y-3 animate-fadeIn">
                 {currentFrame.messages.map((msg, i) => (
                   <div 
@@ -115,7 +115,7 @@ function AnimatedMockup() {
               </div>
             )}
             
-            {currentFrame.type === "dashboard" && (
+            {currentFrame.type === "dashboard" && currentFrame.kpis && (
               <div className="animate-fadeIn">
                 <p className="text-slate-400 text-xs mb-4">📊 Dashboard</p>
                 <div className="grid grid-cols-3 gap-3">
@@ -134,14 +134,14 @@ function AnimatedMockup() {
               </div>
             )}
             
-            {currentFrame.type === "route" && (
+            {currentFrame.type === "route" && currentFrame.stops && (
               <div className="animate-fadeIn">
                 <p className="text-slate-400 text-xs mb-4">🗺️ Percorso Ottimizzato</p>
                 <div className="space-y-2">
                   {currentFrame.stops.map((stop, i) => (
                     <div key={i} className="flex items-center gap-2">
                       <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        i === 0 || i === currentFrame.stops.length - 1 
+                        i === 0 || i === (currentFrame.stops?.length || 0) - 1 
                           ? "bg-green-500 text-white" 
                           : "bg-blue-500 text-white"
                       }`}>
@@ -152,8 +152,8 @@ function AnimatedMockup() {
                   ))}
                 </div>
                 <div className="mt-4 flex gap-4 text-sm">
-                  <span className="text-blue-400">📍 {currentFrame.km}</span>
-                  <span className="text-green-400">⏱️ {currentFrame.time}</span>
+                  <span className="text-blue-400">📍 {currentFrame.km || ""}</span>
+                  <span className="text-green-400">⏱️ {currentFrame.time || ""}</span>
                 </div>
               </div>
             )}
