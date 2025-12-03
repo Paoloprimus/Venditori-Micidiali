@@ -35,51 +35,52 @@ function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg";
   );
 }
 
-// Animated Demo Presentation with Audio
+// Animated Demo Presentation with Voice
 function AnimatedMockup() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [scene, setScene] = useState(0);
   const [subStep, setSubStep] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const synthRef = useRef<SpeechSynthesis | null>(null);
 
-  // Scene definitions
+  // Scene definitions - RALLENTATE
   const scenes = [
-    { id: "morning", duration: 3000 },
-    { id: "dashboard", duration: 4000 },
-    { id: "question", duration: 4000 },
-    { id: "route", duration: 4000 },
-    { id: "driving", duration: 3500 },
-    { id: "report", duration: 3000 },
-    { id: "claim", duration: 3000 },
+    { id: "morning", duration: 5000 },
+    { id: "dashboard", duration: 8000 },
+    { id: "question", duration: 10000 },
+    { id: "route", duration: 9000 },
+    { id: "driving", duration: 7000 },
+    { id: "report", duration: 6000 },
+    { id: "claim", duration: 5000 },
   ];
 
-  // Sound effects
-  const playSound = (type: string) => {
-    if (typeof window === "undefined") return;
-    const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
+  // Text-to-Speech
+  const speak = (text: string, isUser: boolean = false) => {
+    if (typeof window === "undefined" || !window.speechSynthesis) return;
     
-    if (type === "notification") {
-      osc.frequency.value = 880;
-      gain.gain.value = 0.1;
-      osc.start();
-      setTimeout(() => { osc.frequency.value = 1100; }, 100);
-      setTimeout(() => osc.stop(), 200);
-    } else if (type === "success") {
-      osc.frequency.value = 523;
-      gain.gain.value = 0.1;
-      osc.start();
-      setTimeout(() => { osc.frequency.value = 659; }, 100);
-      setTimeout(() => { osc.frequency.value = 784; }, 200);
-      setTimeout(() => osc.stop(), 300);
-    } else if (type === "click") {
-      osc.frequency.value = 600;
-      gain.gain.value = 0.05;
-      osc.start();
-      setTimeout(() => osc.stop(), 50);
+    // Stop any current speech
+    window.speechSynthesis.cancel();
+    
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "it-IT";
+    utterance.rate = 0.9; // Leggermente più lento
+    utterance.pitch = isUser ? 0.9 : 1.1; // User più grave, App più acuta
+    utterance.volume = 0.8;
+    
+    // Prova a usare voci italiane
+    const voices = window.speechSynthesis.getVoices();
+    const italianVoice = voices.find(v => v.lang.startsWith("it"));
+    if (italianVoice) utterance.voice = italianVoice;
+    
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Stop everything
+  const stopPresentation = () => {
+    setIsPlaying(false);
+    setScene(0);
+    setSubStep(0);
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.cancel();
     }
   };
 
@@ -88,8 +89,47 @@ function AnimatedMockup() {
     setIsPlaying(true);
     setScene(0);
     setSubStep(0);
-    playSound("notification");
   };
+
+  // Voice for each scene
+  useEffect(() => {
+    if (!isPlaying) return;
+    
+    // Trigger voice based on scene and substep
+    if (scene === 0 && subStep === 0) {
+      setTimeout(() => speak("Buongiorno Paolo! Il tuo piano di oggi è pronto."), 500);
+    }
+    if (scene === 1 && subStep === 0) {
+      setTimeout(() => speak("Ecco la tua dashboard. Oggi hai 5 visite programmate."), 500);
+    }
+    if (scene === 1 && subStep === 4) {
+      speak("Attenzione: Bar Roma non ordina da 45 giorni.");
+    }
+    if (scene === 2 && subStep === 1) {
+      speak("Quanto ho venduto questo mese?", true); // User voice
+    }
+    if (scene === 2 && subStep === 3) {
+      speak("Questo mese hai fatturato 18.540 euro, con un incremento del 15% rispetto al mese scorso.");
+    }
+    if (scene === 3 && subStep === 0) {
+      setTimeout(() => speak("Ho ottimizzato il tuo percorso per oggi."), 500);
+    }
+    if (scene === 3 && subStep === 6) {
+      speak("Risparmierai 12 chilometri!");
+    }
+    if (scene === 4 && subStep === 0) {
+      setTimeout(() => speak("Modalità guida attivata. Mani libere, in sicurezza."), 500);
+    }
+    if (scene === 4 && subStep === 2) {
+      speak("Prossima tappa: Bar Roma, a 5 minuti.");
+    }
+    if (scene === 5 && subStep === 0) {
+      setTimeout(() => speak("Ottimo lavoro! Ecco il report della tua giornata."), 500);
+    }
+    if (scene === 6 && subStep === 0) {
+      setTimeout(() => speak("REPING. La tua giornata migliore, ogni giorno."), 800);
+    }
+  }, [isPlaying, scene, subStep]);
 
   // Scene progression
   useEffect(() => {
@@ -97,24 +137,18 @@ function AnimatedMockup() {
     
     const currentScene = scenes[scene];
     if (!currentScene) {
-      setIsPlaying(false);
-      setScene(0);
+      stopPresentation();
       return;
     }
-
-    // Play sound at scene start
-    if (scene === 1 || scene === 2) playSound("click");
-    if (scene === 3) playSound("success");
 
     const timer = setTimeout(() => {
       if (scene < scenes.length - 1) {
         setScene(s => s + 1);
         setSubStep(0);
       } else {
-        // Loop or stop
+        // Fine - non loop automatico
         setTimeout(() => {
-          setScene(0);
-          setSubStep(0);
+          stopPresentation();
         }, 2000);
       }
     }, currentScene.duration);
@@ -122,12 +156,12 @@ function AnimatedMockup() {
     return () => clearTimeout(timer);
   }, [isPlaying, scene]);
 
-  // Sub-step animations within scenes
+  // Sub-step animations within scenes - RALLENTATE
   useEffect(() => {
     if (!isPlaying) return;
     const timer = setInterval(() => {
       setSubStep(s => s + 1);
-    }, 800);
+    }, 1500); // Era 800, ora 1500
     return () => clearInterval(timer);
   }, [isPlaying, scene]);
 
@@ -314,6 +348,17 @@ function AnimatedMockup() {
             </div>
           )}
 
+          {/* Stop button when playing */}
+          {isPlaying && (
+            <button 
+              onClick={stopPresentation}
+              className="absolute top-16 right-4 w-10 h-10 bg-red-500/80 hover:bg-red-600 rounded-full flex items-center justify-center transition shadow-lg z-10"
+              title="Ferma presentazione"
+            >
+              <span className="text-white text-lg font-bold">■</span>
+            </button>
+          )}
+
           {/* Progress bar */}
           {isPlaying && (
             <div className="h-1 bg-slate-800">
@@ -331,10 +376,10 @@ function AnimatedMockup() {
         <span className="animate-pulse">●</span> AI Powered
       </div>
 
-      {/* Sound toggle hint */}
+      {/* Voice hint */}
       {!isPlaying && (
         <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-slate-500 text-xs flex items-center gap-1">
-          🔊 Audio attivo • Clicca per avviare
+          🔊 Con voce • Clicca ▶ per avviare
         </div>
       )}
     </div>
