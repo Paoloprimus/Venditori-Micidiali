@@ -35,38 +35,39 @@ function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg";
   );
 }
 
-// Animated Demo Presentation with Voice
+// Animated Demo Presentation - iPhone Style
 function AnimatedMockup() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [scene, setScene] = useState(0);
   const [subStep, setSubStep] = useState(0);
-  const synthRef = useRef<SpeechSynthesis | null>(null);
+  const [typingText, setTypingText] = useState("");
+  const [isFading, setIsFading] = useState(false);
 
-  // Scene definitions - RALLENTATE
+  // Scene definitions
   const scenes = [
-    { id: "morning", duration: 5000 },
-    { id: "dashboard", duration: 8000 },
-    { id: "question", duration: 10000 },
-    { id: "route", duration: 9000 },
-    { id: "driving", duration: 7000 },
-    { id: "report", duration: 6000 },
-    { id: "claim", duration: 5000 },
+    { id: "dashboard", duration: 4000 },
+    { id: "click-chat", duration: 2000 },
+    { id: "user-question", duration: 5000 },
+    { id: "ai-plan", duration: 10000 },
+    { id: "fade1", duration: 1500 },
+    { id: "visit-dictation", duration: 8000 },
+    { id: "fade2", duration: 1500 },
+    { id: "daily-report", duration: 6000 },
+    { id: "claim", duration: 6000 },
   ];
 
-  // Text-to-Speech
-  const speak = (text: string, isUser: boolean = false) => {
+  // Text-to-Speech with gender
+  const speak = (text: string, isMale: boolean = false) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     
-    // Stop any current speech
     window.speechSynthesis.cancel();
     
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "it-IT";
-    utterance.rate = 0.9; // Leggermente più lento
-    utterance.pitch = isUser ? 0.9 : 1.1; // User più grave, App più acuta
-    utterance.volume = 0.8;
+    utterance.rate = 0.95;
+    utterance.pitch = isMale ? 0.8 : 1.3; // Maschile più grave, Femminile più acuta
+    utterance.volume = 0.9;
     
-    // Prova a usare voci italiane
     const voices = window.speechSynthesis.getVoices();
     const italianVoice = voices.find(v => v.lang.startsWith("it"));
     if (italianVoice) utterance.voice = italianVoice;
@@ -74,60 +75,90 @@ function AnimatedMockup() {
     window.speechSynthesis.speak(utterance);
   };
 
-  // Stop everything
+  // Typing animation
+  const typeText = (fullText: string, duration: number) => {
+    setTypingText("");
+    const chars = fullText.split("");
+    const interval = duration / chars.length;
+    chars.forEach((char, i) => {
+      setTimeout(() => {
+        setTypingText(prev => prev + char);
+      }, i * interval);
+    });
+  };
+
+  // Stop
   const stopPresentation = () => {
     setIsPlaying(false);
     setScene(0);
     setSubStep(0);
+    setTypingText("");
+    setIsFading(false);
     if (typeof window !== "undefined" && window.speechSynthesis) {
       window.speechSynthesis.cancel();
     }
   };
 
-  // Start presentation
+  // Start
   const startPresentation = () => {
     setIsPlaying(true);
     setScene(0);
     setSubStep(0);
+    setTypingText("");
   };
 
-  // Voice for each scene
+  // Scene-specific actions
   useEffect(() => {
     if (!isPlaying) return;
     
-    // Trigger voice based on scene and substep
-    if (scene === 0 && subStep === 0) {
-      setTimeout(() => speak("Buongiorno Paolo! Il tuo piano di oggi è pronto."), 500);
+    const sceneId = scenes[scene]?.id;
+    
+    // Scene 2: User asks question
+    if (sceneId === "user-question" && subStep === 0) {
+      typeText("Qual è il programma di oggi?", 2500);
+      setTimeout(() => speak("Qual è il programma di oggi?", true), 500);
     }
-    if (scene === 1 && subStep === 0) {
-      setTimeout(() => speak("Ecco la tua dashboard. Oggi hai 5 visite programmate."), 500);
+    
+    // Scene 3: AI responds with plan
+    if (sceneId === "ai-plan" && subStep === 0) {
+      setTimeout(() => {
+        speak("Oggi hai 5 visite programmate. Prima tappa: Bar Roma alle 9. Poi Pizzeria Napoli, Hotel Centrale, Enoteca Verdi e Ristorante Milano. Percorso ottimizzato: 38 chilometri. Consiglio: Bar Roma non ordina da 45 giorni, proponi la nuova linea aperitivi. Vuoi che avviamo le attività?");
+      }, 800);
     }
-    if (scene === 1 && subStep === 4) {
-      speak("Attenzione: Bar Roma non ordina da 45 giorni.");
+    
+    // Scene 4: Fade
+    if (sceneId === "fade1") {
+      setIsFading(true);
+      setTimeout(() => setIsFading(false), 1000);
     }
-    if (scene === 2 && subStep === 1) {
-      speak("Quanto ho venduto questo mese?", true); // User voice
+    
+    // Scene 5: Visit dictation
+    if (sceneId === "visit-dictation" && subStep === 0) {
+      setTypingText("");
+      setTimeout(() => {
+        speak("210 euro di fatturato. Note: non è contento della qualità dei sandwich.", true);
+        typeText("210€ ordine • Note: non contento qualità sandwich", 4000);
+      }, 1000);
     }
-    if (scene === 2 && subStep === 3) {
-      speak("Questo mese hai fatturato 18.540 euro, con un incremento del 15% rispetto al mese scorso.");
+    
+    // Scene 6: Fade
+    if (sceneId === "fade2") {
+      setIsFading(true);
+      setTimeout(() => setIsFading(false), 1000);
     }
-    if (scene === 3 && subStep === 0) {
-      setTimeout(() => speak("Ho ottimizzato il tuo percorso per oggi."), 500);
+    
+    // Scene 7: Daily report
+    if (sceneId === "daily-report" && subStep === 0) {
+      setTimeout(() => {
+        speak("Ottima giornata! Hai completato 5 visite su 5. Fatturato totale: 1.850 euro. Hai superato il target del 12%. Report inviato.");
+      }, 800);
     }
-    if (scene === 3 && subStep === 6) {
-      speak("Risparmierai 12 chilometri!");
-    }
-    if (scene === 4 && subStep === 0) {
-      setTimeout(() => speak("Modalità guida attivata. Mani libere, in sicurezza."), 500);
-    }
-    if (scene === 4 && subStep === 2) {
-      speak("Prossima tappa: Bar Roma, a 5 minuti.");
-    }
-    if (scene === 5 && subStep === 0) {
-      setTimeout(() => speak("Ottimo lavoro! Ecco il report della tua giornata."), 500);
-    }
-    if (scene === 6 && subStep === 0) {
-      setTimeout(() => speak("REPING. La tua giornata migliore, ogni giorno. Incremento fatturato previsto: più 24%. ROI mensile: 5,5 volte."), 800);
+    
+    // Scene 8: Claim
+    if (sceneId === "claim" && subStep === 0) {
+      setTimeout(() => {
+        speak("REPING. La tua giornata migliore, ogni giorno. Incremento fatturato previsto: più 24%. ROI: 5,5 volte.");
+      }, 800);
     }
   }, [isPlaying, scene, subStep]);
 
@@ -145,251 +176,320 @@ function AnimatedMockup() {
       if (scene < scenes.length - 1) {
         setScene(s => s + 1);
         setSubStep(0);
+        setTypingText("");
       } else {
-        // Fine - non loop automatico
-        setTimeout(() => {
-          stopPresentation();
-        }, 2000);
+        setTimeout(() => stopPresentation(), 2000);
       }
     }, currentScene.duration);
 
     return () => clearTimeout(timer);
   }, [isPlaying, scene]);
 
-  // Sub-step animations within scenes - RALLENTATE
+  // Sub-steps
   useEffect(() => {
     if (!isPlaying) return;
-    const timer = setInterval(() => {
-      setSubStep(s => s + 1);
-    }, 1500); // Era 800, ora 1500
+    const timer = setInterval(() => setSubStep(s => s + 1), 1200);
     return () => clearInterval(timer);
   }, [isPlaying, scene]);
 
-  const currentSceneId = scenes[scene]?.id || "morning";
+  const currentSceneId = scenes[scene]?.id || "dashboard";
 
   return (
     <div className="relative">
-      <div className="bg-gradient-to-br from-blue-600/20 to-purple-600/20 rounded-3xl p-4 border border-slate-700">
-        <div className="bg-slate-900 rounded-2xl overflow-hidden shadow-2xl">
-          {/* App bar */}
-          <div className="p-3 border-b border-slate-800 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <div className="w-3 h-3 rounded-full bg-red-500"></div>
-              <div className="w-3 h-3 rounded-full bg-yellow-500"></div>
-              <div className="w-3 h-3 rounded-full bg-green-500"></div>
+      {/* iPhone Frame */}
+      <div className="relative mx-auto" style={{ width: "280px" }}>
+        {/* iPhone outer shell */}
+        <div className="bg-slate-800 rounded-[3rem] p-2 shadow-2xl border-4 border-slate-700">
+          {/* iPhone inner bezel */}
+          <div className="bg-black rounded-[2.5rem] overflow-hidden relative">
+            {/* Dynamic Island / Notch */}
+            <div className="absolute top-2 left-1/2 -translate-x-1/2 w-24 h-6 bg-black rounded-full z-20 flex items-center justify-center">
+              <div className="w-2 h-2 rounded-full bg-slate-700"></div>
             </div>
-            <span className="text-slate-500 text-xs">reping.app</span>
-            <div className="text-slate-500 text-xs">
-              {isPlaying && <span className="animate-pulse text-red-400">● REC</span>}
-            </div>
-          </div>
-          
-          {/* Content */}
-          <div className="min-h-[340px] relative overflow-hidden">
             
-            {/* Scene 0: Morning notification */}
-            {currentSceneId === "morning" && (
-              <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-slate-800 to-slate-900 animate-fadeIn">
-                <div className="text-center">
-                  <div className="text-4xl mb-4">☀️</div>
-                  <div className="bg-blue-600/30 border border-blue-500/50 rounded-xl p-4 mx-4">
-                    <p className="text-blue-300 text-sm font-medium">Buongiorno Paolo!</p>
-                    <p className="text-white text-lg font-bold mt-1">Il tuo piano è pronto</p>
-                    <p className="text-blue-400 text-xs mt-2">5 visite ottimali • 47km</p>
-                  </div>
+            {/* Screen content */}
+            <div className={`min-h-[480px] bg-slate-900 relative transition-opacity duration-500 ${isFading ? "opacity-0" : "opacity-100"}`}>
+              
+              {/* Status bar */}
+              <div className="pt-8 px-6 pb-2 flex justify-between items-center text-xs text-white">
+                <span>9:41</span>
+                <div className="flex gap-1 items-center">
+                  {isPlaying && <span className="text-red-400 animate-pulse text-[10px]">●REC</span>}
+                  <span>📶</span>
+                  <span>🔋</span>
                 </div>
               </div>
-            )}
 
-            {/* Scene 1: Dashboard */}
-            {currentSceneId === "dashboard" && (
-              <div className="absolute inset-0 p-4 bg-slate-900 animate-fadeIn">
-                <p className="text-slate-400 text-xs mb-3">📊 Dashboard di oggi</p>
-                <div className="grid grid-cols-3 gap-2 mb-4">
-                  <div className="bg-gradient-to-br from-blue-600/20 to-blue-800/20 p-3 rounded-lg text-center border border-blue-500/30">
-                    <div className="text-2xl font-bold text-white">{subStep > 0 ? "5" : "0"}</div>
-                    <div className="text-xs text-slate-400">Visite oggi</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-green-600/20 to-green-800/20 p-3 rounded-lg text-center border border-green-500/30">
-                    <div className="text-2xl font-bold text-white">{subStep > 1 ? "€2.4k" : "€0"}</div>
-                    <div className="text-xs text-slate-400">Target</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-purple-600/20 to-purple-800/20 p-3 rounded-lg text-center border border-purple-500/30">
-                    <div className="text-2xl font-bold text-white">{subStep > 2 ? "47" : "0"}</div>
-                    <div className="text-xs text-slate-400">Km</div>
-                  </div>
-                </div>
-                {subStep > 3 && (
-                  <div className="bg-amber-500/20 border border-amber-500/50 rounded-lg p-3 animate-fadeIn">
-                    <p className="text-amber-300 text-xs font-medium">⚠️ Alert</p>
-                    <p className="text-white text-sm">Bar Roma non ordina da 45 giorni</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Scene 2: AI Question */}
-            {currentSceneId === "question" && (
-              <div className="absolute inset-0 p-4 bg-slate-900 animate-fadeIn">
-                <div className="space-y-3">
-                  {subStep > 0 && (
-                    <div className="bg-blue-600 text-white p-3 rounded-lg text-sm ml-auto max-w-[80%] animate-slideInRight">
-                      Quanto ho venduto questo mese?
+              {/* Scene 0: Dashboard */}
+              {currentSceneId === "dashboard" && (
+                <div className="px-4 animate-fadeIn">
+                  <p className="text-white text-lg font-semibold mb-1">Buongiorno, Paolo!</p>
+                  <p className="text-slate-400 text-xs mb-4">Mercoledì 4 Dicembre</p>
+                  
+                  <div className="grid grid-cols-3 gap-2 mb-4">
+                    <div className="bg-blue-600/20 p-2 rounded-xl text-center border border-blue-500/30">
+                      <div className="text-xl font-bold text-white">5</div>
+                      <div className="text-[10px] text-slate-400">Visite</div>
                     </div>
-                  )}
-                  {subStep > 1 && (
-                    <div className="bg-slate-800 p-3 rounded-lg max-w-[85%] animate-slideInLeft">
-                      <p className="text-white text-sm font-medium">Questo mese hai fatturato:</p>
-                      <p className="text-3xl font-bold text-green-400 my-2">€18.540</p>
-                      <p className="text-green-400 text-xs">+15% vs mese scorso 📈</p>
-                      {subStep > 2 && (
-                        <div className="mt-3 flex gap-1 h-12">
-                          {[40, 55, 45, 70, 65, 80, 90].map((h, i) => (
-                            <div key={i} className="flex-1 bg-blue-500/30 rounded-t relative">
-                              <div 
-                                className="absolute bottom-0 left-0 right-0 bg-blue-500 rounded-t transition-all duration-500"
-                                style={{ height: `${h}%` }}
-                              />
-                            </div>
-                          ))}
+                    <div className="bg-green-600/20 p-2 rounded-xl text-center border border-green-500/30">
+                      <div className="text-xl font-bold text-white">€1.8k</div>
+                      <div className="text-[10px] text-slate-400">Target</div>
+                    </div>
+                    <div className="bg-purple-600/20 p-2 rounded-xl text-center border border-purple-500/30">
+                      <div className="text-xl font-bold text-white">38km</div>
+                      <div className="text-[10px] text-slate-400">Percorso</div>
+                    </div>
+                  </div>
+
+                  <div className="bg-amber-500/20 border border-amber-500/40 rounded-xl p-3 mb-4">
+                    <p className="text-amber-300 text-xs font-medium">⚠️ Promemoria</p>
+                    <p className="text-white text-sm">Bar Roma: non ordina da 45gg</p>
+                  </div>
+                  
+                  {/* Bottom nav hint */}
+                  <div className="absolute bottom-16 left-0 right-0 flex justify-center">
+                    <div className={`bg-blue-500 text-white px-4 py-2 rounded-full text-xs font-medium ${subStep > 1 ? "animate-pulse ring-2 ring-blue-400" : ""}`}>
+                      💬 Chat con REPING
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Scene 1: Click chat transition */}
+              {currentSceneId === "click-chat" && (
+                <div className="px-4 animate-fadeIn flex flex-col items-center justify-center h-[380px]">
+                  <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center animate-ping">
+                    <span className="text-2xl">💬</span>
+                  </div>
+                  <p className="text-slate-400 text-sm mt-4">Avvio chat...</p>
+                </div>
+              )}
+
+              {/* Scene 2: User question */}
+              {currentSceneId === "user-question" && (
+                <div className="px-4 animate-fadeIn">
+                  <div className="flex items-center gap-2 mb-4">
+                    <span className="text-lg">💬</span>
+                    <span className="text-white font-medium">Chat</span>
+                    <div className="ml-auto bg-green-500/20 px-2 py-0.5 rounded-full">
+                      <span className="text-green-400 text-[10px]">🎤 Voce attiva</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-3 mb-4">
+                    {typingText && (
+                      <div className="bg-blue-600 text-white p-3 rounded-2xl rounded-br-sm text-sm ml-auto max-w-[85%] animate-slideInRight">
+                        {typingText}
+                        <span className="animate-pulse">|</span>
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Input field simulation */}
+                  <div className="absolute bottom-16 left-4 right-4">
+                    <div className="bg-slate-800 rounded-full px-4 py-2 flex items-center gap-2 border border-slate-700">
+                      <span className="text-slate-500 text-sm flex-1">{typingText || "Scrivi o parla..."}</span>
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center animate-pulse">
+                        <span className="text-sm">🎤</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Scene 3: AI responds with plan */}
+              {currentSceneId === "ai-plan" && (
+                <div className="px-4 animate-fadeIn">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">💬</span>
+                    <span className="text-white font-medium text-sm">Chat</span>
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <div className="bg-blue-600 text-white p-2 rounded-2xl rounded-br-sm text-xs ml-auto max-w-[75%]">
+                      Qual è il programma di oggi?
+                    </div>
+                    
+                    <div className="bg-slate-800 p-3 rounded-2xl rounded-bl-sm max-w-[90%] animate-slideInLeft">
+                      <p className="text-white text-xs font-medium mb-2">📋 Piano di oggi:</p>
+                      <div className="space-y-1 text-[11px]">
+                        {subStep > 0 && <p className="text-slate-300">• 09:00 - Bar Roma ⚠️</p>}
+                        {subStep > 1 && <p className="text-slate-300">• 10:30 - Pizzeria Napoli</p>}
+                        {subStep > 2 && <p className="text-slate-300">• 12:00 - Hotel Centrale</p>}
+                        {subStep > 3 && <p className="text-slate-300">• 14:30 - Enoteca Verdi</p>}
+                        {subStep > 4 && <p className="text-slate-300">• 16:00 - Rist. Milano</p>}
+                      </div>
+                      {subStep > 5 && (
+                        <div className="mt-2 pt-2 border-t border-slate-700">
+                          <p className="text-blue-400 text-[10px]">💡 Consiglio: proponi nuova linea aperitivi a Bar Roma</p>
                         </div>
                       )}
+                      {subStep > 6 && (
+                        <p className="text-green-400 text-xs mt-2 font-medium">Vuoi che avviamo le attività?</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Scene 4: Fade transition */}
+              {currentSceneId === "fade1" && (
+                <div className="h-[380px] bg-slate-900"></div>
+              )}
+
+              {/* Scene 5: Visit dictation */}
+              {currentSceneId === "visit-dictation" && (
+                <div className="px-4 animate-fadeIn">
+                  <div className="flex items-center gap-2 mb-3">
+                    <span className="text-lg">☕</span>
+                    <span className="text-white font-medium text-sm">Bar Roma</span>
+                    <span className="ml-auto bg-green-500 text-white text-[10px] px-2 py-0.5 rounded-full">In corso</span>
+                  </div>
+                  
+                  <div className="space-y-3">
+                    <div className="bg-slate-800 rounded-xl p-3">
+                      <p className="text-slate-400 text-[10px] mb-1">💰 Ordine</p>
+                      <div className="bg-slate-900 rounded-lg p-2 text-white text-lg font-bold">
+                        {typingText.includes("€") ? "€210" : "€___"}
+                      </div>
+                    </div>
+                    
+                    <div className="bg-slate-800 rounded-xl p-3">
+                      <p className="text-slate-400 text-[10px] mb-1">📝 Note visita</p>
+                      <div className="bg-slate-900 rounded-lg p-2 text-slate-300 text-xs min-h-[60px]">
+                        {typingText.includes("qualità") ? "Non contento qualità sandwich. Valutare cambio fornitore." : (
+                          <span className="text-slate-500">Dettatura in corso...</span>
+                        )}
+                        {!typingText.includes("qualità") && <span className="animate-pulse">|</span>}
+                      </div>
+                    </div>
+                    
+                    {/* Voice indicator */}
+                    <div className="flex justify-center">
+                      <div className="bg-blue-500/20 border border-blue-500/50 rounded-full px-4 py-2 flex items-center gap-2">
+                        <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+                        <span className="text-blue-300 text-xs">Dettatura vocale attiva</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Scene 6: Fade transition */}
+              {currentSceneId === "fade2" && (
+                <div className="h-[380px] bg-slate-900"></div>
+              )}
+
+              {/* Scene 7: Daily report */}
+              {currentSceneId === "daily-report" && (
+                <div className="px-4 animate-fadeIn">
+                  <p className="text-white text-lg font-semibold mb-1">Report Giornata</p>
+                  <p className="text-slate-400 text-xs mb-4">Mercoledì 4 Dicembre</p>
+                  
+                  <div className="bg-green-500/20 border border-green-500/40 rounded-xl p-4 mb-4 text-center">
+                    <p className="text-green-400 font-bold text-lg">✅ Obiettivo superato!</p>
+                    <p className="text-white text-2xl font-bold mt-1">€1.850</p>
+                    <p className="text-green-400 text-xs">+12% vs target</p>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="bg-slate-800 p-3 rounded-xl text-center">
+                      <div className="text-xl font-bold text-white">5/5</div>
+                      <div className="text-[10px] text-slate-400">Visite completate</div>
+                    </div>
+                    <div className="bg-slate-800 p-3 rounded-xl text-center">
+                      <div className="text-xl font-bold text-white">38km</div>
+                      <div className="text-[10px] text-slate-400">Percorsi</div>
+                    </div>
+                  </div>
+                  
+                  {subStep > 2 && (
+                    <div className="mt-4 bg-blue-500/20 border border-blue-500/40 rounded-xl p-3 text-center animate-fadeIn">
+                      <p className="text-blue-300 text-xs">📤 Report inviato automaticamente</p>
                     </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* Scene 3: Route optimization */}
-            {currentSceneId === "route" && (
-              <div className="absolute inset-0 p-4 bg-slate-900 animate-fadeIn">
-                <p className="text-slate-400 text-xs mb-3">🗺️ Percorso ottimizzato</p>
-                <div className="space-y-2">
-                  {["🏠 Casa", "☕ Bar Roma", "🍕 Pizzeria Napoli", "🏨 Hotel Centrale", "🍷 Enoteca Verdi", "🏠 Casa"].map((stop, i) => (
-                    <div 
-                      key={i} 
-                      className={`flex items-center gap-2 transition-all duration-300 ${subStep > i ? "opacity-100 translate-x-0" : "opacity-0 -translate-x-4"}`}
-                    >
-                      <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
-                        i === 0 || i === 5 ? "bg-green-500" : "bg-blue-500"
-                      } text-white`}>
-                        {i + 1}
+              {/* Scene 8: Claim */}
+              {currentSceneId === "claim" && (
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 flex flex-col items-center justify-center animate-fadeIn rounded-[2.5rem]">
+                  <div className="text-center px-6">
+                    <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4">
+                      <span className="text-3xl">🚀</span>
+                    </div>
+                    <p className="text-white/80 text-sm mb-1">REPING</p>
+                    <p className="text-white text-xl font-bold leading-tight">
+                      La tua giornata migliore,
+                      <br />ogni giorno.
+                    </p>
+                    <div className="mt-4 flex gap-2 justify-center text-xs">
+                      <div className="bg-white/20 px-3 py-1.5 rounded-lg">
+                        <span className="text-white/70">Fatturato</span>
+                        <span className="text-white font-bold ml-1">+24%</span>
                       </div>
-                      <span className="text-slate-300 text-sm">{stop}</span>
-                      {i < 5 && <div className="flex-1 border-t border-dashed border-slate-700"></div>}
+                      <div className="bg-white/20 px-3 py-1.5 rounded-lg">
+                        <span className="text-white/70">ROI</span>
+                        <span className="text-white font-bold ml-1">~5,5x</span>
+                      </div>
                     </div>
-                  ))}
-                </div>
-                {subStep > 5 && (
-                  <div className="mt-4 bg-green-500/20 border border-green-500/50 rounded-lg p-2 text-center animate-fadeIn">
-                    <span className="text-green-400 font-bold">-12 km risparmiati!</span>
+                    <div className="mt-4 inline-flex items-center gap-2 bg-white/20 px-3 py-1.5 rounded-full">
+                      <span className="animate-pulse text-xs">●</span>
+                      <span className="text-white text-xs font-medium">Beta disponibile</span>
+                    </div>
                   </div>
-                )}
+                </div>
+              )}
+
+              {/* Home indicator */}
+              <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/30 rounded-full"></div>
+            </div>
+
+            {/* Play button overlay */}
+            {!isPlaying && (
+              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-[2.5rem]">
+                <button 
+                  onClick={startPresentation}
+                  className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg group"
+                >
+                  <span className="text-white text-3xl ml-1 group-hover:scale-110 transition">▶</span>
+                </button>
               </div>
             )}
 
-            {/* Scene 4: Driving mode */}
-            {currentSceneId === "driving" && (
-              <div className="absolute inset-0 bg-gradient-to-b from-slate-800 to-slate-950 flex flex-col items-center justify-center animate-fadeIn">
-                <div className="text-xs text-slate-500 mb-2">🚗 MODALITÀ GUIDA</div>
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center mb-4 animate-pulse">
-                  <span className="text-4xl">🎤</span>
-                </div>
-                {subStep > 1 && (
-                  <div className="text-center animate-fadeIn">
-                    <p className="text-slate-400 text-sm">Prossima tappa:</p>
-                    <p className="text-white text-xl font-bold">Bar Roma</p>
-                    <p className="text-blue-400 text-sm mt-1">📍 2.3 km • 5 min</p>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Scene 5: Report */}
-            {currentSceneId === "report" && (
-              <div className="absolute inset-0 p-4 bg-slate-900 flex flex-col items-center justify-center animate-fadeIn">
-                <div className="text-4xl mb-4">📄</div>
-                <p className="text-slate-400 text-sm mb-2">Fine giornata</p>
-                <div className="bg-green-500/20 border border-green-500/50 rounded-xl p-4 text-center">
-                  <p className="text-green-400 font-bold">✅ Report generato!</p>
-                  <p className="text-white text-sm mt-2">5 visite • €2.850 ordini</p>
-                  <p className="text-slate-400 text-xs mt-1">47 km • 4h 20m</p>
-                </div>
-              </div>
-            )}
-
-            {/* Scene 6: Claim */}
-            {currentSceneId === "claim" && (
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 flex flex-col items-center justify-center animate-fadeIn">
-                <div className="text-center px-4">
-                  <p className="text-white/80 text-sm mb-2">REPING</p>
-                  <p className="text-white text-2xl font-bold leading-tight">
-                    La tua giornata migliore,
-                    <br />ogni giorno.
-                  </p>
-                  <div className="mt-4 flex gap-3 justify-center text-sm">
-                    <div className="bg-white/20 px-3 py-1.5 rounded-lg">
-                      <span className="text-white/70">Fatturato</span>
-                      <span className="text-white font-bold ml-1">+24%</span>
-                    </div>
-                    <div className="bg-white/20 px-3 py-1.5 rounded-lg">
-                      <span className="text-white/70">ROI</span>
-                      <span className="text-white font-bold ml-1">~5,5x</span>
-                    </div>
-                  </div>
-                  <div className="mt-4 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full">
-                    <span className="animate-pulse">●</span>
-                    <span className="text-white text-sm font-medium">Beta disponibile</span>
-                  </div>
-                </div>
-              </div>
+            {/* Stop button */}
+            {isPlaying && (
+              <button 
+                onClick={stopPresentation}
+                className="absolute top-12 right-4 w-8 h-8 bg-red-500/80 hover:bg-red-600 rounded-full flex items-center justify-center transition shadow-lg z-30"
+                title="Ferma"
+              >
+                <span className="text-white text-sm font-bold">■</span>
+              </button>
             )}
           </div>
-
-          {/* Play button overlay */}
-          {!isPlaying && (
-            <div className="absolute inset-0 bg-slate-900/80 flex items-center justify-center rounded-2xl">
-              <button 
-                onClick={startPresentation}
-                className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg group"
-              >
-                <span className="text-white text-3xl ml-1 group-hover:scale-110 transition">▶</span>
-              </button>
-            </div>
-          )}
-
-          {/* Stop button when playing */}
-          {isPlaying && (
-            <button 
-              onClick={stopPresentation}
-              className="absolute top-16 right-4 w-10 h-10 bg-red-500/80 hover:bg-red-600 rounded-full flex items-center justify-center transition shadow-lg z-10"
-              title="Ferma presentazione"
-            >
-              <span className="text-white text-lg font-bold">■</span>
-            </button>
-          )}
-
-          {/* Progress bar */}
-          {isPlaying && (
-            <div className="h-1 bg-slate-800">
-              <div 
-                className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
-                style={{ width: `${((scene + 1) / scenes.length) * 100}%` }}
-              />
-            </div>
-          )}
         </div>
+
+        {/* Progress bar under phone */}
+        {isPlaying && (
+          <div className="mt-3 h-1 bg-slate-700 rounded-full overflow-hidden">
+            <div 
+              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-300"
+              style={{ width: `${((scene + 1) / scenes.length) * 100}%` }}
+            />
+          </div>
+        )}
       </div>
       
       {/* Floating badge */}
-      <div className="absolute -top-3 -right-3 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-3 py-1.5 rounded-full text-sm font-semibold shadow-lg flex items-center gap-1">
-        <span className="animate-pulse">●</span> AI Powered
+      <div className="absolute -top-2 -right-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-lg flex items-center gap-1">
+        <span className="animate-pulse">●</span> AI
       </div>
 
-      {/* Voice hint */}
+      {/* Hint */}
       {!isPlaying && (
-        <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-slate-500 text-xs flex items-center gap-1">
-          🔊 Con voce • Clicca ▶ per avviare
+        <div className="text-center mt-6 text-slate-500 text-xs">
+          🔊 Demo con voce • Clicca ▶ per avviare
         </div>
       )}
     </div>
