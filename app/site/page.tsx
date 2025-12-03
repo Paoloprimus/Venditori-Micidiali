@@ -127,7 +127,7 @@ function AnimatedMockup() {
       setTimeout(() => speak("Ottimo lavoro! Ecco il report della tua giornata."), 500);
     }
     if (scene === 6 && subStep === 0) {
-      setTimeout(() => speak("REPING. La tua giornata migliore, ogni giorno. Incremento fatturato previsto: più 12%. ROI mensile: 1,7 volte."), 800);
+      setTimeout(() => speak("REPING. La tua giornata migliore, ogni giorno. Incremento fatturato previsto: più 12%. ROI mensile: 2,7 volte."), 800);
     }
   }, [isPlaying, scene, subStep]);
 
@@ -334,7 +334,7 @@ function AnimatedMockup() {
                     </div>
                     <div className="bg-white/20 px-3 py-1.5 rounded-lg">
                       <span className="text-white/70">ROI</span>
-                      <span className="text-white font-bold ml-1">~1,7x</span>
+                      <span className="text-white font-bold ml-1">~2,7x</span>
                     </div>
                   </div>
                   <div className="mt-4 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full">
