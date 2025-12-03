@@ -56,7 +56,7 @@ function AnimatedMockup() {
     { id: "claim", duration: 6000 },
   ];
 
-  // Text-to-Speech with gender
+  // Text-to-Speech with better voice selection
   const speak = (text: string, isMale: boolean = false) => {
     if (typeof window === "undefined" || !window.speechSynthesis) return;
     
@@ -64,16 +64,57 @@ function AnimatedMockup() {
     
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "it-IT";
-    utterance.rate = 0.95;
-    utterance.pitch = isMale ? 0.8 : 1.3; // Maschile più grave, Femminile più acuta
+    utterance.rate = 0.92; // Leggermente più lento per naturalezza
     utterance.volume = 0.9;
     
+    // Cerca le voci migliori disponibili
     const voices = window.speechSynthesis.getVoices();
-    const italianVoice = voices.find(v => v.lang.startsWith("it"));
-    if (italianVoice) utterance.voice = italianVoice;
+    
+    // Voci italiane di qualità (in ordine di preferenza)
+    const preferredMaleVoices = ["Luca", "Google italiano", "Microsoft Cosimo", "Diego"];
+    const preferredFemaleVoices = ["Alice", "Federica", "Elsa", "Google italiano", "Microsoft Elsa"];
+    
+    const italianVoices = voices.filter(v => 
+      v.lang.startsWith("it") || v.lang === "it-IT"
+    );
+    
+    let selectedVoice = null;
+    const preferred = isMale ? preferredMaleVoices : preferredFemaleVoices;
+    
+    // Cerca la voce preferita
+    for (const name of preferred) {
+      selectedVoice = italianVoices.find(v => 
+        v.name.toLowerCase().includes(name.toLowerCase())
+      );
+      if (selectedVoice) break;
+    }
+    
+    // Fallback: qualsiasi voce italiana
+    if (!selectedVoice && italianVoices.length > 0) {
+      selectedVoice = italianVoices[isMale ? 0 : Math.min(1, italianVoices.length - 1)];
+    }
+    
+    if (selectedVoice) {
+      utterance.voice = selectedVoice;
+      // Non alterare pitch se abbiamo una voce specifica
+      utterance.pitch = 1.0;
+    } else {
+      // Fallback con pitch per simulare genere
+      utterance.pitch = isMale ? 0.85 : 1.15;
+    }
     
     window.speechSynthesis.speak(utterance);
   };
+  
+  // Precarica voci (necessario su alcuni browser)
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.speechSynthesis) {
+      window.speechSynthesis.getVoices();
+      window.speechSynthesis.onvoiceschanged = () => {
+        window.speechSynthesis.getVoices();
+      };
+    }
+  }, []);
 
   // Typing animation
   const typeText = (fullText: string, duration: number) => {
