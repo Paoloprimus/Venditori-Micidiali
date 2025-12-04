@@ -1,3 +1,8 @@
 .next
 node_modules
 .env*
+
+# Playwright
+tests/.auth/
+playwright-report/
+test-results/
