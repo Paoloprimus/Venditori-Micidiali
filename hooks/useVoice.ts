@@ -142,8 +142,7 @@ export function useVoice({
 
   // ===== Dialogo: stato, buffer e lock anti-doppio invio =====
   const [dialogMode, setDialogMode] = useState(false);
-  const dialogModeRef = useRef(dialogMode); // Per accesso in setTimeout
-  useEffect(() => { dialogModeRef.current = dialogMode; }, [dialogMode]);
+  const dialogModeRef = useRef(false); // Per accesso sincrono (non aspetta re-render)
   
   const dialogBufRef = useRef<string>("");
   const dialogSendingRef = useRef<boolean>(false);
@@ -464,6 +463,8 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     console.log("[useVoice] isIOS:", isIOS);
     
     // ⬇️ attiva modalità dialogo + speaker auto ON
+    // Imposta PRIMA il ref (sincrono), POI lo state (asincrono)
+    dialogModeRef.current = true;
     setDialogMode(true);
     dialogBufRef.current = "";
     dialogSendingRef.current = false;
@@ -481,6 +482,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
   }
 
   function stopDialog() {
+    dialogModeRef.current = false;  // Sincrono
     setDialogMode(false);
     setVoiceMode(false);
     dialogBufRef.current = "";
@@ -527,13 +529,12 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
   
   useEffect(() => {
     const id = setInterval(() => {
-      if (!dialogMode) {
-        // console.log("[useVoice] Interval: dialogMode is false");
+      // Usa il REF per controllo sincrono (lo state è asincrono!)
+      if (!dialogModeRef.current) {
         return;
       }
       
       const ttsPlaying = isTtsSpeaking();
-      // console.log("[useVoice] Interval tick: ttsPlaying=", ttsPlaying, "isRecording=", isRecording);
       
       if (ttsPlaying) {
         // TTS sta parlando → pausa mic
@@ -543,7 +544,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
         setIsRecording(false);
         wasPlayingTTSRef.current = true;
         micReadyFeedbackGivenRef.current = false;
-      } else if (!isRecording && dialogMode && !srRef.current && !mrRef.current) {
+      } else if (!isRecording && dialogModeRef.current && !srRef.current && !mrRef.current) {
         // TTS ha finito → riavvia mic
         console.log("[useVoice] TTS finished, restarting mic");
         dialogSendingRef.current = false;
