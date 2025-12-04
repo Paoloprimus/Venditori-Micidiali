@@ -766,80 +766,194 @@ export default function LandingPage() {
 
       {/* ============ PRICING ============ */}
       <section id="pricing" className="py-20 bg-slate-50">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="text-center mb-12">
-            <BetaBanner />
-            <h2 className="text-3xl font-bold text-slate-900 mt-4 mb-4">
-              Scegli il piano giusto per te
+        <div className="max-w-6xl mx-auto px-4">
+          {/* BETA NOTICE - Very prominent */}
+          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl p-6 mb-10 text-center shadow-lg">
+            <div className="text-2xl font-bold mb-2">🚀 OGGI: Solo BETA GRATUITA su richiesta!</div>
+            <p className="text-white/90">
+              Attualmente è disponibile <strong>solo la versione PREMIUM in Beta gratuita</strong>, 
+              riservata a tester selezionati su richiesta e approvazione.
+            </p>
+            <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-orange-600 rounded-full font-bold hover:bg-orange-50 transition">
+              Richiedi Accesso Beta →
+            </a>
+          </div>
+
+          <div className="text-center mb-10">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">
+              Piani e Prezzi
             </h2>
             <p className="text-slate-600">
-              Inizia gratis, scala quando vuoi.
+              Da Febbraio 2025 saranno disponibili i seguenti piani
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            {/* FREE */}
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 hover:shadow-lg transition">
-              <div className="text-sm font-medium text-slate-500 mb-2">STARTER</div>
-              <div className="text-4xl font-bold text-slate-900 mb-1">€0</div>
-              <div className="text-slate-500 mb-6">per sempre</div>
+          {/* Pricing Grid - 5 columns on desktop */}
+          <div className="grid lg:grid-cols-5 md:grid-cols-2 gap-4">
+            
+            {/* TRIAL */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 hover:shadow-lg transition">
+              <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
+              <div className="text-sm font-bold text-slate-700 mb-2">TRIAL</div>
+              <div className="text-3xl font-bold text-slate-900 mb-0">€0</div>
+              <div className="text-slate-500 text-xs mb-4">3 mesi max</div>
               
-              <ul className="space-y-3 mb-8">
-                {["30 domande/giorno", "Storico 90 giorni", "3 export PDF/mese", "Supporto community"].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-slate-600">
-                    <span className="text-green-500">✓</span> {f}
-                  </li>
-                ))}
+              <ul className="space-y-2 mb-6 text-sm">
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Max 300 clienti
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> 30 interazioni/giorno
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Storico 30 giorni
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> 3 export PDF/mese
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Supporto standard
+                </li>
               </ul>
 
-              <button className="w-full py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:border-slate-400 transition">
-                Inizia Gratis
-              </button>
-            </div>
-
-            {/* PREMIUM */}
-            <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-8 rounded-2xl shadow-xl transform md:-translate-y-4 relative overflow-hidden">
-              <div className="absolute top-4 right-4">
-                <span className="bg-amber-400 text-amber-900 text-xs font-bold px-2 py-1 rounded">BETA GRATIS</span>
-              </div>
-              <div className="text-sm font-medium text-blue-200 mb-2">PREMIUM</div>
-              <div className="text-4xl font-bold text-white mb-1">€50</div>
-              <div className="text-blue-200 mb-6">/mese</div>
-              
-              <ul className="space-y-3 mb-8">
-                {["300 domande/giorno", "Storico illimitato", "Export PDF illimitati", "Analytics avanzati", "Supporto prioritario"].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-white">
-                    <span className="text-green-300">✓</span> {f}
-                  </li>
-                ))}
-              </ul>
-
-              <button className="w-full py-3 bg-white text-blue-600 rounded-xl font-semibold hover:bg-blue-50 transition">
-                Scegli Premium
-              </button>
-              
-              <div className="mt-4 text-center text-blue-200 text-sm">
-                ⭐ Il più scelto
+              <div className="text-xs text-slate-400 text-center">
+                Poi upgrade o download dati
               </div>
             </div>
 
-            {/* PRO */}
-            <div className="bg-white p-8 rounded-2xl border border-slate-200 hover:shadow-lg transition">
-              <div className="text-sm font-medium text-slate-500 mb-2">PRO</div>
-              <div className="text-4xl font-bold text-slate-900 mb-1">€150</div>
-              <div className="text-slate-500 mb-6">/mese</div>
-              
-              <ul className="space-y-3 mb-8">
-                {["Domande illimitate", "Tutto Premium +", "API access", "Multi-utente", "Supporto dedicato"].map((f, i) => (
-                  <li key={i} className="flex items-center gap-2 text-slate-600">
-                    <span className="text-green-500">✓</span> {f}
+            {/* PREMIUM - Highlighted as current beta */}
+            <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-5 rounded-2xl shadow-xl relative overflow-hidden transform lg:-translate-y-2">
+              <div className="absolute top-0 left-0 right-0 bg-amber-400 text-amber-900 text-xs font-bold py-1 text-center">
+                ⭐ DISPONIBILE ORA IN BETA GRATUITA
+              </div>
+              <div className="mt-6">
+                <div className="text-xs font-medium text-blue-200 mb-1">DA FEBBRAIO</div>
+                <div className="text-sm font-bold text-white mb-2">PREMIUM</div>
+                <div className="text-3xl font-bold text-white mb-0">€49</div>
+                <div className="text-blue-200 text-xs mb-4">/mese</div>
+                
+                <ul className="space-y-2 mb-6 text-sm">
+                  <li className="flex items-start gap-2 text-white">
+                    <span className="text-green-300 mt-0.5">✓</span> Max 500 clienti
                   </li>
-                ))}
-              </ul>
+                  <li className="flex items-start gap-2 text-white">
+                    <span className="text-green-300 mt-0.5">✓</span> 60 interazioni/giorno
+                  </li>
+                  <li className="flex items-start gap-2 text-white">
+                    <span className="text-green-300 mt-0.5">✓</span> Storico 90 giorni
+                  </li>
+                  <li className="flex items-start gap-2 text-white">
+                    <span className="text-green-300 mt-0.5">✓</span> 9 export PDF/mese
+                  </li>
+                  <li className="flex items-start gap-2 text-white">
+                    <span className="text-green-300 mt-0.5">✓</span> Supporto prioritario
+                  </li>
+                  <li className="flex items-start gap-2 text-white">
+                    <span className="text-green-300 mt-0.5">✓</span> <strong>Chat vocale</strong>
+                  </li>
+                </ul>
 
-              <button className="w-full py-3 border-2 border-slate-300 text-slate-700 rounded-xl font-semibold hover:border-slate-400 transition">
+                <a href="#beta" className="block w-full py-2 bg-white text-blue-600 rounded-xl font-bold text-center hover:bg-blue-50 transition text-sm">
+                  Richiedi Beta Gratis
+                </a>
+              </div>
+            </div>
+
+            {/* BUSINESS */}
+            <div className="bg-white p-5 rounded-2xl border-2 border-blue-200 hover:shadow-lg transition">
+              <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
+              <div className="text-sm font-bold text-slate-700 mb-2">BUSINESS</div>
+              <div className="text-3xl font-bold text-slate-900 mb-0">€99</div>
+              <div className="text-slate-500 text-xs mb-4">/mese</div>
+              
+              <ul className="space-y-2 mb-4 text-sm">
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Max 1000 clienti
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Interazioni illimitate
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Storico illimitato
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Export PDF illimitati
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Supporto dedicato
+                </li>
+              </ul>
+              
+              <div className="border-t border-slate-200 pt-3 space-y-2">
+                <div className="flex items-start gap-2 text-blue-600 text-sm font-medium">
+                  <span className="mt-0.5">✨</span> Modalità Guida
+                  <span className="text-slate-400 text-xs font-normal">lavora mentre guidi</span>
+                </div>
+                <div className="flex items-start gap-2 text-blue-600 text-sm font-medium">
+                  <span className="mt-0.5">✨</span> Analitiche avanzate
+                  <span className="text-slate-400 text-xs font-normal">insights sul tuo business</span>
+                </div>
+              </div>
+            </div>
+
+            {/* MULTIAGENT */}
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 hover:shadow-lg transition">
+              <div className="text-xs font-medium text-orange-500 mb-1">DA APRILE</div>
+              <div className="text-sm font-bold text-slate-700 mb-2">MULTIAGENT</div>
+              <div className="text-3xl font-bold text-slate-900 mb-0">€149</div>
+              <div className="text-slate-500 text-xs mb-4">/utente/mese <span className="text-orange-500">(min 5)</span></div>
+              
+              <div className="text-xs text-slate-500 mb-3 font-medium">Tutto BUSINESS +</div>
+              
+              <ul className="space-y-2 mb-4 text-sm">
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Dashboard Admin
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Pitch & Infografiche
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Community interna
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Gamification
+                </li>
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> Analitiche comparative
+                </li>
+              </ul>
+            </div>
+
+            {/* ENTERPRISE */}
+            <div className="bg-slate-800 p-5 rounded-2xl text-white hover:shadow-lg transition">
+              <div className="text-xs font-medium text-slate-400 mb-1">DA APRILE</div>
+              <div className="text-sm font-bold text-white mb-2">ENTERPRISE</div>
+              <div className="text-2xl font-bold text-white mb-0">Su misura</div>
+              <div className="text-slate-400 text-xs mb-4">contattaci</div>
+              
+              <div className="text-xs text-slate-400 mb-3 font-medium">OPZIONI:</div>
+              
+              <ul className="space-y-2 mb-4 text-sm">
+                <li className="flex items-start gap-2 text-slate-300">
+                  <span className="text-blue-400 mt-0.5">+</span> CRM integrato
+                </li>
+                <li className="flex items-start gap-2 text-slate-300">
+                  <span className="text-blue-400 mt-0.5">+</span> API access
+                </li>
+                <li className="flex items-start gap-2 text-slate-300">
+                  <span className="text-blue-400 mt-0.5">+</span> SSO
+                </li>
+                <li className="flex items-start gap-2 text-slate-300">
+                  <span className="text-blue-400 mt-0.5">+</span> SLA garantito
+                </li>
+                <li className="flex items-start gap-2 text-slate-300">
+                  <span className="text-blue-400 mt-0.5">+</span> Personalizzazioni
+                </li>
+              </ul>
+              
+              <a href="mailto:info@reping.it" className="block w-full py-2 bg-white/10 text-white rounded-xl font-semibold text-center hover:bg-white/20 transition text-sm">
                 Contattaci
-              </button>
+              </a>
             </div>
           </div>
 
