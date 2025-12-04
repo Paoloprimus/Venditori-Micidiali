@@ -1,4 +1,8 @@
 import { defineConfig, devices } from '@playwright/test';
+import * as dotenv from 'dotenv';
+
+// Carica variabili d'ambiente da .env.test
+dotenv.config({ path: '.env.test' });
 
 /**
  * REPING - Playwright E2E Test Configuration
