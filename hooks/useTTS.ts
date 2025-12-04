@@ -97,6 +97,8 @@ export function useTTS(mode: TTSMode = "auto") {
   // ===== OpenAI TTS =====
   async function speakOpenAI(text: string): Promise<boolean> {
     try {
+      console.log("[useTTS] Generating OpenAI TTS for:", text.slice(0, 50) + "...");
+      
       // Check cache first
       const cacheKey = text.slice(0, 200); // Cache key basata sui primi 200 chars
       let audioUrl = cacheRef.current.get(cacheKey);
@@ -108,6 +110,7 @@ export function useTTS(mode: TTSMode = "auto") {
         }
         abortControllerRef.current = new AbortController();
         
+        console.log("[useTTS] Fetching from /api/voice/tts...");
         const response = await fetch("/api/voice/tts", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -116,10 +119,13 @@ export function useTTS(mode: TTSMode = "auto") {
         });
         
         if (!response.ok) {
-          throw new Error(`TTS failed: ${response.status}`);
+          const errorText = await response.text().catch(() => "unknown");
+          console.error("[useTTS] API error:", response.status, errorText);
+          throw new Error(`TTS failed: ${response.status} - ${errorText}`);
         }
         
         const blob = await response.blob();
+        console.log("[useTTS] Received audio blob:", blob.size, "bytes");
         audioUrl = URL.createObjectURL(blob);
         
         // Cache management
@@ -132,6 +138,8 @@ export function useTTS(mode: TTSMode = "auto") {
           }
         }
         cacheRef.current.set(cacheKey, audioUrl);
+      } else {
+        console.log("[useTTS] Using cached audio");
       }
       
       // Play audio
@@ -139,26 +147,42 @@ export function useTTS(mode: TTSMode = "auto") {
         const audio = new Audio(audioUrl);
         audioRef.current = audio;
         
-        audio.onplay = () => setTtsSpeaking(true);
+        audio.onloadeddata = () => {
+          console.log("[useTTS] Audio loaded, duration:", audio.duration);
+        };
+        
+        audio.onplay = () => {
+          console.log("[useTTS] Audio playing");
+          setTtsSpeaking(true);
+        };
+        
         audio.onended = () => {
+          console.log("[useTTS] Audio ended");
           setTtsSpeaking(false);
           resolve(true);
         };
-        audio.onerror = () => {
+        
+        audio.onerror = (e) => {
+          console.error("[useTTS] Audio error:", e);
           setTtsSpeaking(false);
           resolve(false);
         };
         
-        audio.play().catch(() => {
+        console.log("[useTTS] Attempting to play audio...");
+        audio.play().then(() => {
+          console.log("[useTTS] Play started successfully");
+        }).catch((err) => {
+          console.error("[useTTS] Play failed (autoplay blocked?):", err);
           setTtsSpeaking(false);
           resolve(false);
         });
       });
     } catch (err: any) {
       if (err.name === "AbortError") {
+        console.log("[useTTS] Request aborted");
         return false; // Aborted, not an error
       }
-      console.warn("[useTTS] OpenAI TTS failed, falling back to browser:", err);
+      console.error("[useTTS] OpenAI TTS failed:", err);
       return false;
     }
   }
@@ -232,7 +256,12 @@ export function useTTS(mode: TTSMode = "auto") {
   // ===== Main speak function =====
   const speakAssistant = useCallback(async (text?: string) => {
     const toSpeak = (text ?? lastAssistantText ?? "").trim();
-    if (!toSpeak) return;
+    if (!toSpeak) {
+      console.log("[useTTS] speakAssistant called with empty text, skipping");
+      return;
+    }
+
+    console.log("[useTTS] speakAssistant called, text length:", toSpeak.length);
 
     // Stop previous
     stopSpeaking();
@@ -240,10 +269,14 @@ export function useTTS(mode: TTSMode = "auto") {
     // For very short text (< 20 chars), use browser TTS to save API calls
     const useOpenAI = mode === "openai" || (mode === "auto" && toSpeak.length >= 20);
     
+    console.log("[useTTS] Using:", useOpenAI ? "OpenAI" : "Browser");
+    
     if (useOpenAI) {
       const success = await speakOpenAI(toSpeak);
+      console.log("[useTTS] OpenAI result:", success);
       if (!success && mode === "auto") {
         // Fallback to browser
+        console.log("[useTTS] Falling back to browser TTS");
         speakBrowser(toSpeak);
       }
     } else {

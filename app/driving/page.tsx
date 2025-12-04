@@ -69,8 +69,15 @@ export default function DrivingModePage() {
   // Traccia ultima risposta per "ripeti"
   useEffect(() => {
     if (!lastAssistantText) return;
+    console.log("[Driving] New assistant text received, length:", lastAssistantText.length);
+    console.log("[Driving] Speaker enabled:", voice.speakerEnabled);
     voice.setLastAssistantResponse(stripMarkdownForTTS(lastAssistantText));
-    if (voice.speakerEnabled) speakAssistant(lastAssistantText);
+    if (voice.speakerEnabled) {
+      console.log("[Driving] Calling speakAssistant...");
+      speakAssistant(lastAssistantText);
+    } else {
+      console.log("[Driving] Speaker disabled, not speaking");
+    }
   }, [lastAssistantText, voice.speakerEnabled, speakAssistant, voice]);
 
   // Status message
