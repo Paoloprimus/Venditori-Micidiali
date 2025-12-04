@@ -3,76 +3,171 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 /**
- * TTS "più umano" senza costi:
- * - Selezione automatica della miglior voce IT disponibile (Google/Microsoft/macOS).
- * - Prosodia: spezza testo in frasi brevi e inserisce micro-pause.
- * - Mantiene l'API: { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant }.
+ * TTS con OpenAI (qualità alta) + fallback browser (gratis).
+ * 
+ * Flusso:
+ * 1. Prova OpenAI TTS (POST /api/voice/tts)
+ * 2. Se fallisce, usa speechSynthesis del browser
+ * 
+ * API: { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant, stopSpeaking }
  */
-export function useTTS() {
-  const synthRef = useRef<typeof window.speechSynthesis | null>(null);
-  const voicesRef = useRef<SpeechSynthesisVoice[] | null>(null);
+
+type TTSMode = "openai" | "browser" | "auto";
+
+export function useTTS(mode: TTSMode = "auto") {
   const [ttsSpeaking, setTtsSpeaking] = useState(false);
   const [lastAssistantText, setLastAssistantText] = useState("");
+  
+  // Refs per gestione audio
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const synthRef = useRef<typeof window.speechSynthesis | null>(null);
   const currentUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  // Cache per evitare chiamate ripetute
+  const cacheRef = useRef<Map<string, string>>(new Map());
+  const MAX_CACHE_SIZE = 20;
 
-  // Scelta voce: priorità per le migliori voci IT note, poi qualsiasi it-*
+  // ===== Browser TTS setup =====
+  const voicesRef = useRef<SpeechSynthesisVoice[] | null>(null);
+  const bestVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
+
   function pickBestItalianVoice(voices: SpeechSynthesisVoice[] | null | undefined): SpeechSynthesisVoice | null {
     if (!voices || voices.length === 0) return null;
     const namePri = [
-      // Chrome
       "Google italiano", "Google Italiano", "Google IT",
-      // macOS
       "Alice", "Luca",
-      // Windows
       "Microsoft Elsa - Italian (Italy)", "Microsoft Cosimo - Italian (Italy)", "Microsoft Isabella - Italian (Italy)"
     ];
-    // 1) match esatto su priorità
     for (const n of namePri) {
       const v = voices.find(v => (v.name || "").toLowerCase() === n.toLowerCase());
       if (v) return v;
     }
-    // 2) qualsiasi voce con lang "it" (it-IT/it-CH ecc.)
     const anyIt = voices.find(v => (v.lang || "").toLowerCase().startsWith("it"));
     if (anyIt) return anyIt;
-    // 3) fallback qualunque (meglio di niente)
     return voices[0] ?? null;
   }
 
-  const bestVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
-
-  // Inizializza synth e carica voci
   useEffect(() => {
     if (typeof window !== "undefined") {
       synthRef.current = window.speechSynthesis ?? null;
-
+      
       const loadVoices = () => {
         if (!synthRef.current) return;
         const all = synthRef.current.getVoices?.() || [];
         voicesRef.current = all;
         bestVoiceRef.current = pickBestItalianVoice(all);
       };
-
-      // Chrome carica le voci in ritardo → ascoltiamo l'evento
+      
       try {
         window.speechSynthesis?.addEventListener?.("voiceschanged", loadVoices);
       } catch {}
-      // e proviamo subito
       loadVoices();
 
       return () => {
         try { window.speechSynthesis?.removeEventListener?.("voiceschanged", loadVoices); } catch {}
-        try { synthRef.current?.cancel?.(); } catch {}
-        setTtsSpeaking(false);
+        stopSpeaking();
       };
     }
   }, []);
 
-  // Spezza testo in frasi brevi (max ~160 chars) con punteggiatura per pause naturali
+  // ===== Stop all playback =====
+  const stopSpeaking = useCallback(() => {
+    // Stop OpenAI audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    
+    // Abort pending fetch
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    
+    // Stop browser TTS
+    try { synthRef.current?.cancel?.(); } catch {}
+    currentUtterancesRef.current = [];
+    
+    setTtsSpeaking(false);
+  }, []);
+
+  // ===== OpenAI TTS =====
+  async function speakOpenAI(text: string): Promise<boolean> {
+    try {
+      // Check cache first
+      const cacheKey = text.slice(0, 200); // Cache key basata sui primi 200 chars
+      let audioUrl = cacheRef.current.get(cacheKey);
+      
+      if (!audioUrl) {
+        // Abort any previous request
+        if (abortControllerRef.current) {
+          abortControllerRef.current.abort();
+        }
+        abortControllerRef.current = new AbortController();
+        
+        const response = await fetch("/api/voice/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+          signal: abortControllerRef.current.signal,
+        });
+        
+        if (!response.ok) {
+          throw new Error(`TTS failed: ${response.status}`);
+        }
+        
+        const blob = await response.blob();
+        audioUrl = URL.createObjectURL(blob);
+        
+        // Cache management
+        if (cacheRef.current.size >= MAX_CACHE_SIZE) {
+          const firstKey = cacheRef.current.keys().next().value;
+          if (firstKey) {
+            const oldUrl = cacheRef.current.get(firstKey);
+            if (oldUrl) URL.revokeObjectURL(oldUrl);
+            cacheRef.current.delete(firstKey);
+          }
+        }
+        cacheRef.current.set(cacheKey, audioUrl);
+      }
+      
+      // Play audio
+      return new Promise((resolve) => {
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+        
+        audio.onplay = () => setTtsSpeaking(true);
+        audio.onended = () => {
+          setTtsSpeaking(false);
+          resolve(true);
+        };
+        audio.onerror = () => {
+          setTtsSpeaking(false);
+          resolve(false);
+        };
+        
+        audio.play().catch(() => {
+          setTtsSpeaking(false);
+          resolve(false);
+        });
+      });
+    } catch (err: any) {
+      if (err.name === "AbortError") {
+        return false; // Aborted, not an error
+      }
+      console.warn("[useTTS] OpenAI TTS failed, falling back to browser:", err);
+      return false;
+    }
+  }
+
+  // ===== Browser TTS (fallback) =====
   function chunkTextForProsody(raw: string): string[] {
     const text = (raw || "").replace(/\s+/g, " ").trim();
     if (!text) return [];
-    // separa su . ! ? ; : e su newline
-    const coarse = text.split(/([\.!?;:])\s+/).reduce<string[]>((acc, part, i, arr) => {
+    const coarse = text.split(/([\.!?;:])\s+/).reduce<string[]>((acc, part) => {
       if (!part) return acc;
       if (/[\.!?;:]/.test(part) && acc.length) {
         acc[acc.length - 1] = (acc[acc.length - 1] + part).trim();
@@ -82,7 +177,6 @@ export function useTTS() {
       return acc;
     }, []);
 
-    // ricompone in "bocconi" max 160 caratteri
     const chunks: string[] = [];
     let buf = "";
     for (const piece of coarse) {
@@ -97,35 +191,23 @@ export function useTTS() {
     return chunks.filter(Boolean);
   }
 
-  // Stop qualsiasi coda precedente
-  const stopQueue = useCallback(() => {
-    try { synthRef.current?.cancel?.(); } catch {}
-    currentUtterancesRef.current = [];
-    setTtsSpeaking(false);
-  }, []);
-
-  const speakAssistant = useCallback((text?: string) => {
+  function speakBrowser(text: string): void {
     const synth = synthRef.current;
     if (!synth) return;
 
-    const toSpeak = (text ?? lastAssistantText ?? "").trim();
+    const toSpeak = text.trim();
     if (!toSpeak) return;
 
-    // stop precedente
-    stopQueue();
-
-    const voice = bestVoiceRef.current; // può essere null → sistema sceglie
+    const voice = bestVoiceRef.current;
     const chunks = chunkTextForProsody(toSpeak);
     if (chunks.length === 0) return;
 
     setTtsSpeaking(true);
 
-    // Parametri consigliati per voci di sistema (più caldo e naturale)
-    const rate = 0.95;   // leggermente più lento del default
-    const pitch = 1.02;  // un filo più alto (più "umano")
-    const volume = 1.0;  // pieno
+    const rate = 0.95;
+    const pitch = 1.02;
+    const volume = 1.0;
 
-    // Enqueue delle frasi con micro-pause tra gli utterance
     const queueNext = (idx: number) => {
       if (!synth) { setTtsSpeaking(false); return; }
       if (idx >= chunks.length) { setTtsSpeaking(false); return; }
@@ -137,26 +219,43 @@ export function useTTS() {
       u.pitch = pitch;
       u.volume = volume;
 
-      u.onend = () => {
-        // micro-pausa fra frasi per respirare (150–220ms)
-        setTimeout(() => queueNext(idx + 1), 180);
-      };
-      u.onerror = () => {
-        // in caso di errore, proviamo a proseguire
-        setTimeout(() => queueNext(idx + 1), 0);
-      };
+      u.onend = () => setTimeout(() => queueNext(idx + 1), 180);
+      u.onerror = () => setTimeout(() => queueNext(idx + 1), 0);
 
       currentUtterancesRef.current.push(u);
       try { synth.speak(u); } catch { setTtsSpeaking(false); }
     };
 
     queueNext(0);
-  }, [lastAssistantText, stopQueue]);
+  }
+
+  // ===== Main speak function =====
+  const speakAssistant = useCallback(async (text?: string) => {
+    const toSpeak = (text ?? lastAssistantText ?? "").trim();
+    if (!toSpeak) return;
+
+    // Stop previous
+    stopSpeaking();
+
+    // For very short text (< 20 chars), use browser TTS to save API calls
+    const useOpenAI = mode === "openai" || (mode === "auto" && toSpeak.length >= 20);
+    
+    if (useOpenAI) {
+      const success = await speakOpenAI(toSpeak);
+      if (!success && mode === "auto") {
+        // Fallback to browser
+        speakBrowser(toSpeak);
+      }
+    } else {
+      speakBrowser(toSpeak);
+    }
+  }, [lastAssistantText, mode, stopSpeaking]);
 
   return {
     ttsSpeaking,
     lastAssistantText,
     setLastAssistantText,
     speakAssistant,
+    stopSpeaking,
   };
 }
