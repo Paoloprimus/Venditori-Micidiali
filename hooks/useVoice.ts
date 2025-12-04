@@ -471,23 +471,13 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     setVoiceError(null);
     setSpeakerEnabled(true);           // ✅ SPEAKER AUTO ON in Dialogo
     finalAccumRef.current = "";
-    micActiveRef.current = true;
-
-    if (supportsNativeSR) {
-      console.log("[useVoice] Starting native SR");
-      startNativeSR();
-    } else {
-      console.log("[useVoice] Starting fallback recorder");
-      startFallbackRecorder();
-    }
-
-    // feedback iniziale solo se lo speaker è attivo
-    if (speakerEnabledRef.current || true) {
-      // dopo setSpeakerEnabled, l'effetto aggiorna speakerEnabledRef in coda al tick;
-      // qui siamo comunque in Dialogo (speaker ON) → ok dare un breve prompt
-      // 🆕 Messaggio aggiornato: non serve più dire "invia"
-      onSpeak("Dialogo attivo. Parla normalmente, invio automatico dopo la pausa.");
-    }
+    
+    // 🔊 Prima parliamo, POI il mic si attiverà automaticamente quando TTS finisce
+    // (gestito dall'useEffect che monitora ttsSpeaking)
+    console.log("[useVoice] Speaking initial message, SR will start after TTS ends");
+    onSpeak("Dialogo attivo. Parla normalmente, invio automatico dopo la pausa.");
+    
+    // micActive verrà impostato a true dall'useEffect quando TTS finisce
   }
 
   function stopDialog() {
@@ -537,12 +527,17 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
   
   useEffect(() => {
     const id = setInterval(() => {
-      if (!dialogMode) return;
+      if (!dialogMode) {
+        // console.log("[useVoice] Interval: dialogMode is false");
+        return;
+      }
       
       const ttsPlaying = isTtsSpeaking();
+      // console.log("[useVoice] Interval tick: ttsPlaying=", ttsPlaying, "isRecording=", isRecording);
       
       if (ttsPlaying) {
         // TTS sta parlando → pausa mic
+        console.log("[useVoice] TTS playing, pausing mic");
         if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; }
         micActiveRef.current = false;
         setIsRecording(false);
@@ -550,6 +545,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
         micReadyFeedbackGivenRef.current = false;
       } else if (!isRecording && dialogMode && !srRef.current && !mrRef.current) {
         // TTS ha finito → riavvia mic
+        console.log("[useVoice] TTS finished, restarting mic");
         dialogSendingRef.current = false;
         finalAccumRef.current = "";
         dialogBufRef.current = "";
