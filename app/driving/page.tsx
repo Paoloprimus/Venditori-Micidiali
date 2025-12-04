@@ -1,451 +1,398 @@
 // app/driving/page.tsx
-// 🚗 Driving Mode - UI ottimizzata per uso in auto
+// 🚗 Driving Mode - Versione semplificata e robusta
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
-import { useConversations } from "@/hooks/useConversations";
-import { useTTS } from "@/hooks/useTTS";
-import { useVoice } from "@/hooks/useVoice";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
-import { stripMarkdownForTTS } from "@/lib/chat/utils";
 
 export default function DrivingModePage() {
   const router = useRouter();
   const { ready: cryptoReady } = useCrypto();
   
-  // TTS
-  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
-  const ttsSpeakingRef = useRef(false);
-  useEffect(() => { ttsSpeakingRef.current = ttsSpeaking; }, [ttsSpeaking]);
-  const isTtsSpeakingFn = useCallback(() => ttsSpeakingRef.current, []);
-
-  // Conversazioni
-  const conv = useConversations({
-    onAssistantReply: (text) => { setLastAssistantText(text); },
-  });
-
-  // 🆕 Comandi speciali per uscire dalla modalità guida
-  const isExitDrivingCommand = (text: string) => {
-    const s = (text || "").trim().toLowerCase();
-    return /^(torna a casa|torna alla home|esci dalla guida|chiudi guida|fine guida)\s*[.!?]*$/i.test(s);
-  };
-
-  // Voice
-  const voice = useVoice({
-    onTranscriptionToInput: () => {},
-    onSendDirectly: async (text) => {
-      const raw = (text || "").trim();
-      if (!raw) return;
-      
-      // 🆕 Intercetta comando uscita guida
-      if (isExitDrivingCommand(raw)) {
-        speakAssistant("Ok, torno alla home.");
-        setTimeout(() => {
-          voice.stopDialog();
-          router.push('/');
-        }, 1500);
-        return;
-      }
-      
-      await conv.send(raw);
-    },
-    onSpeak: (text) => speakAssistant(text),
-    createNewSession: async (titleAuto: string) => {
-      try { 
-        await conv.createConversation(titleAuto); 
-        return conv.currentConv; 
-      } catch { 
-        return null; 
-      }
-    },
-    autoTitleRome: () => {
-      const d = new Date();
-      return `Guida ${d.toLocaleDateString('it-IT')} ${d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}`;
-    },
-    isTtsSpeaking: isTtsSpeakingFn,
-  });
-
-  // Traccia ultima risposta per "ripeti"
-  useEffect(() => {
-    if (!lastAssistantText) return;
-    console.log("[Driving] New assistant text received, length:", lastAssistantText.length);
-    console.log("[Driving] Speaker enabled:", voice.speakerEnabled);
-    voice.setLastAssistantResponse(stripMarkdownForTTS(lastAssistantText));
-    if (voice.speakerEnabled) {
-      console.log("[Driving] Calling speakAssistant...");
-      speakAssistant(lastAssistantText);
-    } else {
-      console.log("[Driving] Speaker disabled, not speaking");
-    }
-  }, [lastAssistantText, voice.speakerEnabled, speakAssistant, voice]);
-
-  // Status message
-  const [statusMessage, setStatusMessage] = useState("Premi il bottone per parlare");
+  // Stati principali
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [transcript, setTranscript] = useState("");
+  const [lastResponse, setLastResponse] = useState("");
+  const [status, setStatus] = useState("Premi per parlare");
+  const [error, setError] = useState<string | null>(null);
   
-  useEffect(() => {
-    if (!voice.voiceMode) {
-      setStatusMessage("Premi il bottone per parlare");
-    } else if (ttsSpeaking) {
-      setStatusMessage("Sto rispondendo...");
-    } else if (voice.isRecording) {
-      setStatusMessage("Ti ascolto...");
-    } else {
-      setStatusMessage("In attesa...");
+  // Refs
+  const srRef = useRef<any>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isActiveRef = useRef(false); // Per controllo sincrono
+  
+  // Cleanup completo
+  const cleanup = useCallback(() => {
+    console.log("[Driving] Cleanup");
+    isActiveRef.current = false;
+    
+    // Stop speech recognition
+    if (srRef.current) {
+      try { srRef.current.stop(); } catch {}
+      srRef.current = null;
     }
-  }, [voice.voiceMode, voice.isRecording, ttsSpeaking]);
+    
+    // Stop audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    
+    setIsListening(false);
+    setIsSpeaking(false);
+  }, []);
 
-  // Waveform animation
-  const canvasRef = useRef<HTMLCanvasElement>(null);
-  const analyzerRef = useRef<AnalyserNode | null>(null);
-  const animationRef = useRef<number>(0);
-
+  // Cleanup on unmount
   useEffect(() => {
-    if (!voice.isRecording) {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
-      }
-      // Draw flat line when not recording
-      const canvas = canvasRef.current;
-      if (canvas) {
-        const ctx = canvas.getContext('2d');
-        if (ctx) {
-          ctx.fillStyle = '#1a1a2e';
-          ctx.fillRect(0, 0, canvas.width, canvas.height);
-          ctx.strokeStyle = '#4a9eff';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          ctx.moveTo(0, canvas.height / 2);
-          ctx.lineTo(canvas.width, canvas.height / 2);
-          ctx.stroke();
-        }
-      }
+    return cleanup;
+  }, [cleanup]);
+
+  // === TTS con OpenAI ===
+  const speak = useCallback(async (text: string): Promise<void> => {
+    if (!text.trim()) return;
+    
+    console.log("[Driving] Speaking:", text.slice(0, 50));
+    setIsSpeaking(true);
+    setStatus("Rispondo...");
+    
+    try {
+      const response = await fetch("/api/voice/tts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ text }),
+      });
+      
+      if (!response.ok) throw new Error("TTS failed");
+      
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      
+      await new Promise<void>((resolve) => {
+        const audio = new Audio(url);
+        audioRef.current = audio;
+        
+        audio.onended = () => {
+          URL.revokeObjectURL(url);
+          setIsSpeaking(false);
+          resolve();
+        };
+        
+        audio.onerror = () => {
+          URL.revokeObjectURL(url);
+          setIsSpeaking(false);
+          resolve();
+        };
+        
+        audio.play().catch(() => {
+          setIsSpeaking(false);
+          resolve();
+        });
+      });
+    } catch (err) {
+      console.error("[Driving] TTS error:", err);
+      setIsSpeaking(false);
+    }
+  }, []);
+
+  // === Speech Recognition ===
+  const startListening = useCallback(() => {
+    const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SR) {
+      setError("Speech Recognition non supportato");
       return;
     }
-
-    // Get audio stream for visualization
-    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-      const audioContext = new AudioContext();
-      const source = audioContext.createMediaStreamSource(stream);
-      const analyzer = audioContext.createAnalyser();
-      analyzer.fftSize = 256;
-      source.connect(analyzer);
-      analyzerRef.current = analyzer;
-
-      const canvas = canvasRef.current;
-      if (!canvas) return;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-
-      const bufferLength = analyzer.frequencyBinCount;
-      const dataArray = new Uint8Array(bufferLength);
-
-      function draw() {
-        if (!analyzerRef.current || !canvas || !ctx) return;
-        animationRef.current = requestAnimationFrame(draw);
-
-        analyzerRef.current.getByteTimeDomainData(dataArray);
-
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-        ctx.lineWidth = 4;
-        ctx.strokeStyle = voice.isRecording ? '#00ff88' : '#4a9eff';
-        ctx.beginPath();
-
-        const sliceWidth = canvas.width / bufferLength;
-        let x = 0;
-
-        for (let i = 0; i < bufferLength; i++) {
-          const v = dataArray[i] / 128.0;
-          const y = (v * canvas.height) / 2;
-
-          if (i === 0) {
-            ctx.moveTo(x, y);
-          } else {
-            ctx.lineTo(x, y);
-          }
-
-          x += sliceWidth;
+    
+    console.log("[Driving] Starting SR");
+    isActiveRef.current = true;
+    
+    const sr = new SR();
+    sr.lang = "it-IT";
+    sr.interimResults = true;
+    sr.continuous = true;
+    sr.maxAlternatives = 1;
+    
+    let finalTranscript = "";
+    let silenceTimer: NodeJS.Timeout | null = null;
+    
+    sr.onstart = () => {
+      console.log("[Driving] SR started");
+      setIsListening(true);
+      setStatus("Ti ascolto...");
+      setTranscript("");
+    };
+    
+    sr.onresult = (e: any) => {
+      let interim = "";
+      finalTranscript = "";
+      
+      for (let i = 0; i < e.results.length; i++) {
+        const result = e.results[i];
+        if (result.isFinal) {
+          finalTranscript += result[0].transcript + " ";
+        } else {
+          interim += result[0].transcript;
         }
-
-        ctx.lineTo(canvas.width, canvas.height / 2);
-        ctx.stroke();
       }
-
-      draw();
-
-      return () => {
-        stream.getTracks().forEach(t => t.stop());
-        audioContext.close();
-      };
-    }).catch(() => {});
-
-    return () => {
-      if (animationRef.current) {
-        cancelAnimationFrame(animationRef.current);
+      
+      const display = (finalTranscript + interim).trim();
+      setTranscript(display);
+      
+      // Reset silence timer
+      if (silenceTimer) clearTimeout(silenceTimer);
+      
+      // Auto-send after 2 seconds of silence (if we have final text)
+      if (finalTranscript.trim()) {
+        silenceTimer = setTimeout(async () => {
+          if (!isActiveRef.current) return;
+          
+          const textToSend = finalTranscript.trim();
+          console.log("[Driving] Auto-sending:", textToSend);
+          
+          // Stop listening while processing
+          try { sr.stop(); } catch {}
+          setIsListening(false);
+          setStatus("Elaboro...");
+          
+          // Check for exit commands
+          if (/^(esci|torna|chiudi|basta|stop)\b/i.test(textToSend)) {
+            await speak("Ok, torno alla home.");
+            cleanup();
+            router.push("/");
+            return;
+          }
+          
+          // Send to AI
+          try {
+            const response = await fetch("/api/messages/send", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ 
+                message: textToSend,
+                conversationId: null // Will create new or use default
+              }),
+            });
+            
+            const data = await response.json();
+            const aiResponse = data.reply || data.message || "Non ho capito.";
+            
+            setLastResponse(aiResponse);
+            
+            // Speak response
+            await speak(aiResponse);
+            
+            // Restart listening if still active
+            if (isActiveRef.current) {
+              startListening();
+            }
+          } catch (err) {
+            console.error("[Driving] Send error:", err);
+            await speak("Si è verificato un errore.");
+            if (isActiveRef.current) {
+              startListening();
+            }
+          }
+        }, 2000);
       }
     };
-  }, [voice.isRecording]);
+    
+    sr.onerror = (e: any) => {
+      console.error("[Driving] SR error:", e.error);
+      if (e.error === "not-allowed") {
+        setError("Permesso microfono negato");
+        cleanup();
+      } else if (e.error !== "aborted" && isActiveRef.current) {
+        // Retry on other errors
+        setTimeout(() => {
+          if (isActiveRef.current) startListening();
+        }, 500);
+      }
+    };
+    
+    sr.onend = () => {
+      console.log("[Driving] SR ended");
+      setIsListening(false);
+      if (silenceTimer) clearTimeout(silenceTimer);
+    };
+    
+    srRef.current = sr;
+    sr.start();
+  }, [cleanup, router, speak]);
 
-  // Toggle dialog mode
-  const handleMainButton = useCallback(() => {
-    if (voice.voiceMode) {
-      voice.stopDialog();
+  // === Toggle dialog ===
+  const toggleDialog = useCallback(async () => {
+    if (isActiveRef.current) {
+      // Stop
+      console.log("[Driving] Stopping dialog");
+      cleanup();
+      setStatus("Premi per parlare");
     } else {
-      voice.startDialog();
+      // Start
+      console.log("[Driving] Starting dialog");
+      setError(null);
+      await speak("Dialogo attivo. Parla pure.");
+      startListening();
     }
-  }, [voice]);
+  }, [cleanup, speak, startListening]);
 
-  // Exit driving mode
+  // === Exit ===
   const handleExit = useCallback(() => {
-    voice.stopDialog();
-    router.push('/');
-  }, [voice, router]);
+    cleanup();
+    router.push("/");
+  }, [cleanup, router]);
 
   // Crypto check
   if (!cryptoReady) {
     return (
-      <div className="driving-container">
-        <div className="driving-status">🔐 Sblocca prima la passphrase</div>
-        <button className="driving-exit" onClick={() => router.push('/')}>
+      <div style={styles.container}>
+        <div style={styles.status}>🔐 Sblocca prima la passphrase</div>
+        <button style={styles.exitBtn} onClick={() => router.push("/")}>
           Torna alla Home
         </button>
-        <style jsx>{styles}</style>
       </div>
     );
   }
 
   return (
-    <div className="driving-container">
-      {/* Exit button - top left */}
-      <button className="driving-exit" onClick={handleExit}>
-        ✕
-      </button>
-
+    <div style={styles.container}>
+      {/* Exit button */}
+      <button style={styles.exitBtn} onClick={handleExit}>✕</button>
+      
+      {/* Error */}
+      {error && (
+        <div style={styles.error}>{error}</div>
+      )}
+      
       {/* Status */}
-      <div className={`driving-status ${ttsSpeaking ? 'speaking' : ''}`}>
-        {statusMessage}
+      <div style={{
+        ...styles.status,
+        color: isSpeaking ? "#00ff88" : isListening ? "#4a9eff" : "#8899aa"
+      }}>
+        {status}
       </div>
-
-      {/* Last response preview */}
-      {lastAssistantText && (
-        <div className="driving-response">
-          {stripMarkdownForTTS(lastAssistantText).slice(0, 150)}
-          {lastAssistantText.length > 150 ? '...' : ''}
+      
+      {/* Transcript */}
+      {transcript && (
+        <div style={styles.transcript}>
+          🎤 {transcript}
         </div>
       )}
-
-      {/* Waveform */}
-      <canvas 
-        ref={canvasRef} 
-        className="driving-waveform"
-        width={600}
-        height={120}
-      />
-
+      
+      {/* Last response */}
+      {lastResponse && !transcript && (
+        <div style={styles.response}>
+          {lastResponse.slice(0, 200)}{lastResponse.length > 200 ? "..." : ""}
+        </div>
+      )}
+      
       {/* Main button */}
       <button 
-        className={`driving-main-button ${voice.voiceMode ? 'active' : ''} ${ttsSpeaking ? 'speaking' : ''}`}
-        onClick={handleMainButton}
+        style={{
+          ...styles.mainBtn,
+          background: isActiveRef.current 
+            ? (isSpeaking ? "#2e4d1a" : "#1a4d2e")
+            : "#2d3a4f",
+          boxShadow: isActiveRef.current
+            ? "0 0 60px rgba(0, 255, 136, 0.3)"
+            : "0 10px 40px rgba(0,0,0,0.4)",
+        }}
+        onClick={toggleDialog}
+        disabled={isSpeaking}
       >
-        <span className="button-icon">
-          {voice.voiceMode ? (ttsSpeaking ? '🔊' : '🎤') : '🎙️'}
+        <span style={{ fontSize: "4rem" }}>
+          {isSpeaking ? "🔊" : isListening ? "🎤" : "🎙️"}
         </span>
-        <span className="button-text">
-          {voice.voiceMode ? (ttsSpeaking ? 'Rispondo...' : 'Ascolto') : 'Parla'}
+        <span style={{ fontSize: "1.5rem", fontWeight: 600, color: "#fff" }}>
+          {isSpeaking ? "Rispondo..." : isListening ? "Ascolto" : "Parla"}
         </span>
       </button>
-
-      {/* Quick commands hint */}
-      {voice.voiceMode && !ttsSpeaking && (
-        <div className="driving-hints">
-          💡 "Ripeti" • "Aspetta" • "Torna a casa"
+      
+      {/* Hints */}
+      {isListening && (
+        <div style={styles.hints}>
+          💡 Dì "esci" o "torna" per uscire
         </div>
       )}
-
-      <style jsx>{styles}</style>
     </div>
   );
 }
 
-const styles = `
-  .driving-container {
-    position: fixed;
-    inset: 0;
-    background: linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%);
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 2rem;
-    padding: 2rem;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: #ffffff;
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: manipulation;
-  }
-
-  .driving-exit {
-    position: absolute;
-    top: 1.5rem;
-    left: 1.5rem;
-    width: 60px;
-    height: 60px;
-    border-radius: 50%;
-    border: 2px solid rgba(255,255,255,0.3);
-    background: rgba(255,255,255,0.1);
-    color: #fff;
-    font-size: 1.5rem;
-    cursor: pointer;
-    transition: all 0.2s;
-  }
-  .driving-exit:hover {
-    background: rgba(255,255,255,0.2);
-    border-color: rgba(255,255,255,0.5);
-  }
-
-  .driving-status {
-    font-size: 2rem;
-    font-weight: 600;
-    text-align: center;
-    color: #8899aa;
-    transition: color 0.3s;
-  }
-  .driving-status.speaking {
-    color: #00ff88;
-    animation: pulse 1s ease-in-out infinite;
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50% { opacity: 0.6; }
-  }
-
-  .driving-response {
-    max-width: 90%;
-    padding: 1rem 1.5rem;
-    background: rgba(74, 158, 255, 0.15);
-    border-radius: 1rem;
-    font-size: 1.25rem;
-    line-height: 1.5;
-    text-align: center;
-    color: #c0d0e0;
-    border: 1px solid rgba(74, 158, 255, 0.3);
-  }
-
-  .driving-waveform {
-    width: min(90vw, 600px);
-    height: 120px;
-    border-radius: 1rem;
-    background: #1a1a2e;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-  }
-
-  .driving-main-button {
-    width: min(280px, 70vw);
-    height: min(280px, 70vw);
-    border-radius: 50%;
-    border: none;
-    background: linear-gradient(145deg, #2d3a4f, #1e2738);
-    box-shadow: 
-      0 10px 40px rgba(0,0,0,0.4),
-      inset 0 2px 0 rgba(255,255,255,0.1);
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 0.5rem;
-    transition: all 0.3s ease;
-    touch-action: manipulation;
-  }
-
-  .driving-main-button:hover {
-    transform: scale(1.02);
-  }
-
-  .driving-main-button:active {
-    transform: scale(0.98);
-  }
-
-  .driving-main-button.active {
-    background: linear-gradient(145deg, #1a4d2e, #0d3320);
-    box-shadow: 
-      0 0 60px rgba(0, 255, 136, 0.3),
-      inset 0 2px 0 rgba(255,255,255,0.1);
-    animation: glow 2s ease-in-out infinite;
-  }
-
-  .driving-main-button.speaking {
-    background: linear-gradient(145deg, #2e4d1a, #1a3d0d);
-    animation: speakGlow 0.8s ease-in-out infinite;
-  }
-
-  @keyframes glow {
-    0%, 100% { box-shadow: 0 0 40px rgba(0, 255, 136, 0.2); }
-    50% { box-shadow: 0 0 80px rgba(0, 255, 136, 0.4); }
-  }
-
-  @keyframes speakGlow {
-    0%, 100% { box-shadow: 0 0 40px rgba(255, 200, 0, 0.3); }
-    50% { box-shadow: 0 0 60px rgba(255, 200, 0, 0.5); }
-  }
-
-  .button-icon {
-    font-size: 4rem;
-  }
-
-  .button-text {
-    font-size: 1.5rem;
-    font-weight: 600;
-    color: #ffffff;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-  }
-
-  .driving-hints {
-    position: absolute;
-    bottom: 2rem;
-    font-size: 1.1rem;
-    color: rgba(255,255,255,0.5);
-    text-align: center;
-  }
-
-  /* Landscape optimization */
-  @media (orientation: landscape) and (max-height: 500px) {
-    .driving-container {
-      flex-direction: row;
-      flex-wrap: wrap;
-      gap: 1rem;
-      padding: 1rem;
-    }
-    .driving-status {
-      font-size: 1.5rem;
-      width: 100%;
-    }
-    .driving-response {
-      display: none;
-    }
-    .driving-waveform {
-      width: 40%;
-      height: 80px;
-    }
-    .driving-main-button {
-      width: 150px;
-      height: 150px;
-    }
-    .button-icon {
-      font-size: 2.5rem;
-    }
-    .button-text {
-      font-size: 1rem;
-    }
-    .driving-hints {
-      position: static;
-      width: 100%;
-    }
-  }
-`;
-
+const styles: { [key: string]: React.CSSProperties } = {
+  container: {
+    position: "fixed",
+    inset: 0,
+    background: "linear-gradient(180deg, #0d0d1a 0%, #1a1a2e 50%, #16213e 100%)",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "2rem",
+    padding: "2rem",
+    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
+    color: "#ffffff",
+  },
+  exitBtn: {
+    position: "absolute",
+    top: "1.5rem",
+    left: "1.5rem",
+    width: 60,
+    height: 60,
+    borderRadius: "50%",
+    border: "2px solid rgba(255,255,255,0.3)",
+    background: "rgba(255,255,255,0.1)",
+    color: "#fff",
+    fontSize: "1.5rem",
+    cursor: "pointer",
+  },
+  status: {
+    fontSize: "2rem",
+    fontWeight: 600,
+    textAlign: "center",
+  },
+  error: {
+    background: "rgba(255,0,0,0.2)",
+    color: "#ff5555",
+    padding: "1rem",
+    borderRadius: "0.5rem",
+    maxWidth: "90%",
+  },
+  transcript: {
+    background: "rgba(74, 158, 255, 0.2)",
+    padding: "1rem 1.5rem",
+    borderRadius: "1rem",
+    maxWidth: "90%",
+    fontSize: "1.25rem",
+    textAlign: "center",
+  },
+  response: {
+    background: "rgba(0, 255, 136, 0.1)",
+    padding: "1rem 1.5rem",
+    borderRadius: "1rem",
+    maxWidth: "90%",
+    fontSize: "1.1rem",
+    textAlign: "center",
+    color: "#c0d0e0",
+  },
+  mainBtn: {
+    width: "min(280px, 70vw)",
+    height: "min(280px, 70vw)",
+    borderRadius: "50%",
+    border: "none",
+    cursor: "pointer",
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.5rem",
+    transition: "all 0.3s ease",
+  },
+  hints: {
+    position: "absolute",
+    bottom: "2rem",
+    fontSize: "1.1rem",
+    color: "rgba(255,255,255,0.5)",
+    textAlign: "center",
+  },
+};
