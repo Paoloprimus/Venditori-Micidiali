@@ -85,11 +85,11 @@ export default defineConfig({
     },
   ],
 
-  /* Server di sviluppo */
-  webServer: {
+  /* Server di sviluppo - salta se già in esecuzione */
+  webServer: process.env.SKIP_WEBSERVER ? undefined : {
     command: 'npm run dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: true, // Riusa sempre il server esistente
     timeout: 120000,
   },
 });
