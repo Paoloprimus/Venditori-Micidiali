@@ -644,18 +644,22 @@ export default function LandingPage() {
               </div>
 
               {/* Trust badges */}
-              <div className="mt-10 flex flex-wrap items-center gap-6 text-slate-400 text-sm">
-                <div className="flex items-center gap-2">
-                  <span className="text-green-500">🔐</span>
-                  Dati cifrati E2E
+              <div className="mt-10 flex flex-wrap items-center gap-4 text-sm">
+                <div className="flex items-center gap-2 bg-green-500/10 text-green-400 px-3 py-1.5 rounded-full border border-green-500/30">
+                  <span>🔐</span>
+                  <span className="font-medium">Dati cifrati E2E</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">
                   <span>🇮🇹</span>
                   Made in Italy
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">
                   <span>🚗</span>
                   Hands-free
+                </div>
+                <div className="flex items-center gap-2 bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">
+                  <span>🛡️</span>
+                  GDPR compliant
                 </div>
               </div>
             </div>
@@ -720,7 +724,7 @@ export default function LandingPage() {
               { icon: "📝", title: "Note personalizzate", desc: "Appunti e promemoria per vendite mirate. Mai più dimenticare un dettaglio.", bg: "from-purple-50 to-white border-purple-100" },
               { icon: "💡", title: "Consigli strategici", desc: "Indicazioni operative basate sui tuoi dati. L'AI suggerisce, tu decidi.", bg: "from-yellow-50 to-white border-yellow-100" },
               { icon: "🗺️", title: "Percorsi ottimizzati", desc: "Risparmia km e tempo. REPING pianifica i giri più efficienti.", bg: "from-red-50 to-white border-red-100" },
-              { icon: "🚗", title: "Modalità Guida", desc: "Hands-free totale. Parla mentre guidi, REPING ascolta e risponde.", bg: "from-indigo-50 to-white border-indigo-100" },
+              { icon: "🚗", title: "Modalità Guida", desc: "Guida in sicurezza, REPING dialoga con te! Hands-free totale.", bg: "from-indigo-50 to-white border-indigo-100" },
             ].map((feature, i) => (
               <div 
                 key={i} 
@@ -731,6 +735,105 @@ export default function LandingPage() {
                 <p className="text-slate-600">{feature.desc}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ============ SICUREZZA E2E ============ */}
+      <section className="py-16 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="grid md:grid-cols-2 gap-12 items-center">
+            {/* Testo */}
+            <div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 bg-green-500/20 border border-green-500/30 rounded-full text-green-400 text-sm mb-4">
+                <span>🔐</span>
+                Privacy by Design
+              </div>
+              
+              <h2 className="text-3xl font-bold text-white mb-4">
+                I tuoi dati sono <span className="text-green-400">SOLO tuoi</span>
+              </h2>
+              
+              <p className="text-slate-300 mb-6 text-lg leading-relaxed">
+                I dati sensibili dei tuoi clienti meritano la massima protezione. 
+                Con REPING, sono <strong className="text-white">cifrati end-to-end</strong> e leggibili 
+                <strong className="text-white"> esclusivamente sul tuo dispositivo</strong>.
+              </p>
+              
+              <p className="text-slate-400 mb-8">
+                Nemmeno noi di REPING possiamo accedere ai tuoi dati. 
+                È una scelta tecnica complessa, ma necessaria per la tua tranquillità.
+              </p>
+              
+              <ul className="space-y-3">
+                <li className="flex items-center gap-3 text-slate-300">
+                  <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
+                  Crittografia end-to-end (AES-256)
+                </li>
+                <li className="flex items-center gap-3 text-slate-300">
+                  <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
+                  Zero-knowledge: nemmeno noi leggiamo i tuoi dati
+                </li>
+                <li className="flex items-center gap-3 text-slate-300">
+                  <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
+                  Conforme GDPR - Server in Europa
+                </li>
+                <li className="flex items-center gap-3 text-slate-300">
+                  <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
+                  La tua password = la tua chiave di cifratura
+                </li>
+              </ul>
+            </div>
+            
+            {/* Visual */}
+            <div className="relative">
+              <div className="bg-slate-800/50 rounded-2xl p-8 border border-slate-700">
+                <div className="flex items-center justify-center mb-6">
+                  <div className="w-20 h-20 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl flex items-center justify-center shadow-lg">
+                    <span className="text-4xl">🔐</span>
+                  </div>
+                </div>
+                
+                <div className="text-center mb-6">
+                  <p className="text-white font-bold text-lg">Dati sensibili cifrati</p>
+                  <p className="text-slate-400 text-sm">Solo TU puoi decifrarli</p>
+                </div>
+                
+                {/* Visual representation */}
+                <div className="space-y-3">
+                  <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
+                    <span className="text-xl">👤</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-xs">Nome cliente</p>
+                      <p className="text-green-400 font-mono text-sm">████████████</p>
+                    </div>
+                    <span className="text-green-400">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
+                    <span className="text-xl">📍</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-xs">Indirizzo</p>
+                      <p className="text-green-400 font-mono text-sm">████████████████</p>
+                    </div>
+                    <span className="text-green-400">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
+                    <span className="text-xl">📝</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-xs">Note riservate</p>
+                      <p className="text-green-400 font-mono text-sm">██████████████████</p>
+                    </div>
+                    <span className="text-green-400">🔒</span>
+                  </div>
+                </div>
+                
+                <div className="mt-6 text-center">
+                  <p className="text-slate-500 text-xs">
+                    Solo con la TUA password questi dati diventano leggibili
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -887,12 +990,12 @@ export default function LandingPage() {
               <div className="border-t border-slate-200 pt-3 space-y-2">
                 <div className="flex items-start gap-2 text-blue-600 text-sm font-medium">
                   <span className="mt-0.5">✨</span> Modalità Guida
-                  <span className="text-slate-400 text-xs font-normal">lavora mentre guidi</span>
                 </div>
+                <p className="text-slate-500 text-xs ml-5 -mt-1">Guida in sicurezza, REPING dialoga con te!</p>
                 <div className="flex items-start gap-2 text-blue-600 text-sm font-medium">
                   <span className="mt-0.5">✨</span> Analitiche avanzate
-                  <span className="text-slate-400 text-xs font-normal">insights sul tuo business</span>
                 </div>
+                <p className="text-slate-500 text-xs ml-5 -mt-1">Insights sul tuo business</p>
               </div>
             </div>
 
