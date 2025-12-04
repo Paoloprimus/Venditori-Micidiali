@@ -801,20 +801,59 @@ export default function LandingPage() {
                 </div>
                 
                 {/* Visual representation - dati realmente cifrati */}
-                <div className="space-y-3">
-                  <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
-                    <span className="text-xl">👤</span>
+                <div className="space-y-2">
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">🏢</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-xs">Nome contatto cliente</p>
-                      <p className="text-green-400 font-mono text-sm">████████████████</p>
+                      <p className="text-slate-500 text-[10px]">Nome cliente/azienda</p>
+                      <p className="text-green-400 font-mono text-xs">████████████</p>
                     </div>
-                    <span className="text-green-400">🔒</span>
+                    <span className="text-green-400 text-sm">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">👤</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-[10px]">Nome contatto</p>
+                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                    </div>
+                    <span className="text-green-400 text-sm">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">📧</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-[10px]">Email</p>
+                      <p className="text-green-400 font-mono text-xs">████████████████</p>
+                    </div>
+                    <span className="text-green-400 text-sm">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">📞</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-[10px]">Telefono</p>
+                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                    </div>
+                    <span className="text-green-400 text-sm">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">📍</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-[10px]">Indirizzo</p>
+                      <p className="text-green-400 font-mono text-xs">████████████████</p>
+                    </div>
+                    <span className="text-green-400 text-sm">🔒</span>
+                  </div>
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">🏛️</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-[10px]">P.IVA</p>
+                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                    </div>
+                    <span className="text-green-400 text-sm">🔒</span>
                   </div>
                 </div>
                 
-                <div className="mt-6 text-center text-slate-400 text-xs">
-                  <p>Cifrato con AES-256-GCM</p>
-                  <p className="mt-1 text-slate-500">Altri campi sensibili in arrivo</p>
+                <div className="mt-4 text-center">
+                  <p className="text-green-400 text-xs font-medium">Cifrato AES-256-GCM</p>
                 </div>
               </div>
             </div>
