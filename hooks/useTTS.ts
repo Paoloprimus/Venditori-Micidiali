@@ -25,8 +25,8 @@ export function useTTS(mode: TTSMode = "auto") {
   const currentUtterancesRef = useRef<SpeechSynthesisUtterance[]>([]);
   const abortControllerRef = useRef<AbortController | null>(null);
   
-  // Cache per evitare chiamate ripetute
-  const cacheRef = useRef<Map<string, string>>(new Map());
+  // Cache per evitare chiamate ripetute (cache blob, non URL)
+  const cacheRef = useRef<Map<string, Blob>>(new Map());
   const MAX_CACHE_SIZE = 20;
 
   // ===== Browser TTS setup =====
@@ -99,11 +99,11 @@ export function useTTS(mode: TTSMode = "auto") {
     try {
       console.log("[useTTS] Generating OpenAI TTS for:", text.slice(0, 50) + "...");
       
-      // Check cache first
-      const cacheKey = text.slice(0, 200); // Cache key basata sui primi 200 chars
-      let audioUrl = cacheRef.current.get(cacheKey);
+      // Check cache first (cache blob, create fresh URL each time)
+      const cacheKey = text.slice(0, 200);
+      let blob = cacheRef.current.get(cacheKey);
       
-      if (!audioUrl) {
+      if (!blob) {
         // Abort any previous request
         if (abortControllerRef.current) {
           abortControllerRef.current.abort();
@@ -124,23 +124,23 @@ export function useTTS(mode: TTSMode = "auto") {
           throw new Error(`TTS failed: ${response.status} - ${errorText}`);
         }
         
-        const blob = await response.blob();
+        blob = await response.blob();
         console.log("[useTTS] Received audio blob:", blob.size, "bytes");
-        audioUrl = URL.createObjectURL(blob);
         
-        // Cache management
+        // Cache management (cache the blob, not the URL)
         if (cacheRef.current.size >= MAX_CACHE_SIZE) {
           const firstKey = cacheRef.current.keys().next().value;
           if (firstKey) {
-            const oldUrl = cacheRef.current.get(firstKey);
-            if (oldUrl) URL.revokeObjectURL(oldUrl);
             cacheRef.current.delete(firstKey);
           }
         }
-        cacheRef.current.set(cacheKey, audioUrl);
+        cacheRef.current.set(cacheKey, blob);
       } else {
-        console.log("[useTTS] Using cached audio");
+        console.log("[useTTS] Using cached blob");
       }
+      
+      // Create fresh URL from blob each time (fixes reuse issues)
+      const audioUrl = URL.createObjectURL(blob);
       
       // Play audio
       return new Promise((resolve) => {
@@ -159,12 +159,15 @@ export function useTTS(mode: TTSMode = "auto") {
         audio.onended = () => {
           console.log("[useTTS] Audio ended");
           setTtsSpeaking(false);
+          // Revoke URL after playback to free memory
+          URL.revokeObjectURL(audioUrl);
           resolve(true);
         };
         
         audio.onerror = (e) => {
           console.error("[useTTS] Audio error:", e);
           setTtsSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
           resolve(false);
         };
         
@@ -174,13 +177,14 @@ export function useTTS(mode: TTSMode = "auto") {
         }).catch((err) => {
           console.error("[useTTS] Play failed (autoplay blocked?):", err);
           setTtsSpeaking(false);
+          URL.revokeObjectURL(audioUrl);
           resolve(false);
         });
       });
     } catch (err: any) {
       if (err.name === "AbortError") {
         console.log("[useTTS] Request aborted");
-        return false; // Aborted, not an error
+        return false;
       }
       console.error("[useTTS] OpenAI TTS failed:", err);
       return false;
