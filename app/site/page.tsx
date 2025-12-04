@@ -910,7 +910,7 @@ export default function LandingPage() {
               Piani
             </h2>
             <p className="text-slate-600">
-              Da Febbraio 2025 saranno disponibili i seguenti piani
+              Da Febbraio 2026 saranno disponibili i seguenti piani
             </p>
           </div>
 
