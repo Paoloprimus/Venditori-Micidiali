@@ -23,7 +23,7 @@ export default function VoiceTestPage() {
     log(`SpeechRecognition: ${SR ? "✅ Supportato" : "❌ NON supportato"}`);
     
     log(`navigator.mediaDevices: ${navigator.mediaDevices ? "✅ Presente" : "❌ Assente"}`);
-    log(`getUserMedia: ${navigator.mediaDevices?.getUserMedia ? "✅ Presente" : "❌ Assente"}`);
+    log(`getUserMedia: ${typeof navigator.mediaDevices?.getUserMedia === "function" ? "✅ Presente" : "❌ Assente"}`);
     
     log(`isSecureContext: ${window.isSecureContext ? "✅ Sì (HTTPS)" : "❌ No (HTTP)"}`);
     
