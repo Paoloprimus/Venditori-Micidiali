@@ -153,28 +153,37 @@ export function useVoice({
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
-    console.log("[useVoice] startNativeSR called, micActive:", micActiveRef.current);
+    console.log("[useVoice] startNativeSR called, micActive:", micActiveRef.current, "dialogMode:", dialogModeRef.current);
+    
     if (!micActiveRef.current) {
       console.log("[useVoice] micActive is false, aborting");
       return;
     }
+    
+    // Se TTS sta parlando, aspetta
     if (isTtsSpeaking()) {
-      console.log("[useVoice] TTS speaking, waiting 150ms...");
-      setTimeout(startNativeSR, 150);
+      console.log("[useVoice] TTS speaking, waiting 300ms...");
+      setTimeout(startNativeSR, 300);
+      return;
+    }
+    
+    // Se SR già attivo, non ricreare
+    if (srRef.current) {
+      console.log("[useVoice] SR already active, skipping");
       return;
     }
 
     try {
-      console.log("[useVoice] Creating SpeechRecognition instance");
+      console.log("[useVoice] Creating SpeechRecognition instance...");
       const sr = new SR();
       sr.lang = "it-IT";
       sr.interimResults = true;
       sr.continuous = true;
       sr.maxAlternatives = 1;
 
-      setIsRecording(true);
       srRef.current = sr;
-      console.log("[useVoice] SR instance created, isRecording set to true");
+      setIsRecording(true);
+      console.log("[useVoice] SR instance created");
 
       sr.onresult = (e: any) => {
         console.log("[useVoice] SR onresult received, results:", e.results.length);
@@ -463,22 +472,33 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     console.log("[useVoice] isIOS:", isIOS);
     
     // ⬇️ attiva modalità dialogo + speaker auto ON
-    // Imposta PRIMA il ref (sincrono), POI lo state (asincrono)
     dialogModeRef.current = true;
     setDialogMode(true);
     dialogBufRef.current = "";
     dialogSendingRef.current = false;
     setVoiceMode(true);
     setVoiceError(null);
-    setSpeakerEnabled(true);           // ✅ SPEAKER AUTO ON in Dialogo
+    setSpeakerEnabled(true);
     finalAccumRef.current = "";
+    micActiveRef.current = true;
     
-    // 🔊 Prima parliamo, POI il mic si attiverà automaticamente quando TTS finisce
-    // (gestito dall'useEffect che monitora ttsSpeaking)
-    console.log("[useVoice] Speaking initial message, SR will start after TTS ends");
-    onSpeak("Dialogo attivo. Parla normalmente, invio automatico dopo la pausa.");
+    // 🔊 Parla messaggio iniziale
+    onSpeak("Dialogo attivo. Parla normalmente.");
     
-    // micActive verrà impostato a true dall'useEffect quando TTS finisce
+    // ⏱️ Avvia SR dopo un delay fisso (dà tempo al TTS di iniziare/finire)
+    setTimeout(() => {
+      console.log("[useVoice] Delayed SR start, dialogMode:", dialogModeRef.current);
+      if (!dialogModeRef.current) return;
+      
+      micActiveRef.current = true;
+      console.log("[useVoice] Starting SR after delay");
+      
+      if (supportsNativeSR) {
+        startNativeSR();
+      } else {
+        startFallbackRecorder();
+      }
+    }, 3500); // 3.5 secondi - tempo per il TTS
   }
 
   function stopDialog() {
