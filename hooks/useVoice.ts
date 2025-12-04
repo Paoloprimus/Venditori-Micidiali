@@ -154,13 +154,19 @@ export function useVoice({
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
-    if (!micActiveRef.current) return;
+    console.log("[useVoice] startNativeSR called, micActive:", micActiveRef.current);
+    if (!micActiveRef.current) {
+      console.log("[useVoice] micActive is false, aborting");
+      return;
+    }
     if (isTtsSpeaking()) {
+      console.log("[useVoice] TTS speaking, waiting 150ms...");
       setTimeout(startNativeSR, 150);
       return;
     }
 
     try {
+      console.log("[useVoice] Creating SpeechRecognition instance");
       const sr = new SR();
       sr.lang = "it-IT";
       sr.interimResults = true;
@@ -169,8 +175,10 @@ export function useVoice({
 
       setIsRecording(true);
       srRef.current = sr;
+      console.log("[useVoice] SR instance created, isRecording set to true");
 
       sr.onresult = (e: any) => {
+        console.log("[useVoice] SR onresult received, results:", e.results.length);
         let interim = "";
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const res = e.results[i];
@@ -316,7 +324,8 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
         }
       };
 
-      sr.onerror = () => {
+      sr.onerror = (event: any) => {
+        console.error("[useVoice] SR onerror:", event?.error || event);
         if (micActiveRef.current) {
           try { sr.stop?.(); } catch {}
           srRef.current = null;
@@ -328,6 +337,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
       };
 
       sr.onend = () => {
+        console.log("[useVoice] SR onend, micActive:", micActiveRef.current);
         if (micActiveRef.current) {
           srRef.current = null;
           // 🔁 al riavvio azzera i buffer
@@ -339,8 +349,11 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
         }
       };
 
+      console.log("[useVoice] Calling sr.start()...");
       sr.start();
-    } catch {
+      console.log("[useVoice] sr.start() called successfully");
+    } catch (err) {
+      console.error("[useVoice] SR error, falling back:", err);
       srRef.current = null;
       startFallbackRecorder();
     }
@@ -348,13 +361,19 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
 
   // ======= Fallback: registra fino a stop, poi trascrivi =======
   async function startFallbackRecorder() {
+    console.log("[useVoice] startFallbackRecorder called");
     try {
+      console.log("[useVoice] Requesting microphone access...");
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      console.log("[useVoice] Microphone access granted");
       streamRef.current = stream;
-      const mr = new MediaRecorder(stream, { mimeType: pickMime() });
+      const mimeType = pickMime();
+      console.log("[useVoice] Using MIME type:", mimeType);
+      const mr = new MediaRecorder(stream, { mimeType });
       mrRef.current = mr;
       chunksRef.current = [];
       setIsRecording(true);
+      console.log("[useVoice] MediaRecorder created, isRecording set to true");
 
       mr.ondataavailable = (ev) => { if (ev.data?.size) chunksRef.current.push(ev.data); };
 
@@ -440,6 +459,10 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
 
   // ======= Dialogo: attiva/disattiva =======
   async function startDialog() {
+    console.log("[useVoice] startDialog called");
+    console.log("[useVoice] supportsNativeSR:", supportsNativeSR);
+    console.log("[useVoice] isIOS:", isIOS);
+    
     // ⬇️ attiva modalità dialogo + speaker auto ON
     setDialogMode(true);
     dialogBufRef.current = "";
@@ -450,8 +473,13 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     finalAccumRef.current = "";
     micActiveRef.current = true;
 
-    if (supportsNativeSR) startNativeSR();
-    else startFallbackRecorder();
+    if (supportsNativeSR) {
+      console.log("[useVoice] Starting native SR");
+      startNativeSR();
+    } else {
+      console.log("[useVoice] Starting fallback recorder");
+      startFallbackRecorder();
+    }
 
     // feedback iniziale solo se lo speaker è attivo
     if (speakerEnabledRef.current || true) {
