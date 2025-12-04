@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissModals } from './helpers';
 
 /**
  * Test Suite: Chat AI
@@ -8,6 +9,10 @@ import { test, expect } from '@playwright/test';
 test.describe('Chat AI', () => {
   
   test.use({ storageState: 'tests/.auth/user.json' });
+
+  test.beforeEach(async ({ page }) => {
+    await dismissModals(page);
+  });
 
   test.describe('6.1 Conversazioni', () => {
     

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissModals } from './helpers';
 
 /**
  * Test Suite: Planning Visite
@@ -8,6 +9,10 @@ import { test, expect } from '@playwright/test';
 test.describe('Planning Visite', () => {
   
   test.use({ storageState: 'tests/.auth/user.json' });
+
+  test.beforeEach(async ({ page }) => {
+    await dismissModals(page);
+  });
 
   test.describe('4.1 Calendario (/planning)', () => {
     

@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { dismissModals, waitForPageReady } from './helpers';
 
 /**
  * Test Suite: Gestione Clienti
@@ -9,6 +10,11 @@ test.describe('Gestione Clienti', () => {
   
   // Prima di ogni test, assicurati di essere loggato
   test.use({ storageState: 'tests/.auth/user.json' });
+
+  // Chiudi modal prima di ogni test
+  test.beforeEach(async ({ page }) => {
+    await dismissModals(page);
+  });
 
   test.describe('2.1 Lista Clienti (/clients)', () => {
     

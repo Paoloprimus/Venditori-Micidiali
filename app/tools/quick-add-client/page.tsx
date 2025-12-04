@@ -681,25 +681,8 @@ export default function QuickAddClientPage() {
   }, [dialogState]);
 
   // 🔐 Blocco UI se crittografia non è pronta
-  // 🔧 FIX: Mostra loader durante auto-unlock, form completo SOLO se non c'è passphrase
+  // 🔧 FIX: Mostra sempre lo stesso loader per evitare hydration mismatch
   if (!actuallyReady || !crypto) {
-    const hasPassInStorage = typeof window !== 'undefined' && 
-      (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
-    
-    // Se c'è passphrase in storage, mostra loader minimo (auto-unlock in corso)
-    if (hasPassInStorage) {
-      return (
-        <div style={{ padding: 24, textAlign: 'center', marginTop: 100 }}>
-          <div style={{ fontSize: 48, marginBottom: 16 }}>🔓</div>
-          <div style={{ fontSize: 18, color: '#6b7280' }}>Sblocco dati in corso...</div>
-          <div style={{ fontSize: 12, color: '#9ca3af', marginTop: 8 }}>
-            Decifratura automatica attiva
-          </div>
-        </div>
-      );
-    }
-    
-    // Nessuna passphrase → mostra schermata completa di attesa
     return (
       <div style={{ maxWidth: 600, margin: '80px auto', padding: 24, border: '1px solid #e5e7eb', borderRadius: 12 }}>
         <h2 style={{ fontSize: 20, fontWeight: 600, marginBottom: 12, color: '#111827' }}>

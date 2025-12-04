@@ -58,39 +58,27 @@ export default defineConfig({
     viewport: { width: 1280, height: 720 },
   },
 
-  /* Progetti per diversi browser/dispositivi */
+  /* Progetto singolo semplificato */
   projects: [
-    // Setup: autenticazione condivisa
     {
-      name: 'setup',
-      testMatch: /.*\.setup\.ts/,
-    },
-    
-    // Desktop Chrome
-    {
-      name: 'chromium',
+      name: 'tests',
       use: { 
         ...devices['Desktop Chrome'],
+        storageState: 'tests/.auth/user.json',
       },
-      dependencies: ['setup'],
-    },
-    
-    // Mobile Safari (iPhone)
-    {
-      name: 'mobile-safari',
-      use: { 
-        ...devices['iPhone 14'],
-      },
-      dependencies: ['setup'],
     },
   ],
 
-  /* Server di sviluppo - salta se già in esecuzione */
-  webServer: process.env.SKIP_WEBSERVER ? undefined : {
-    command: 'npm run dev',
-    url: 'http://localhost:3000',
-    reuseExistingServer: true, // Riusa sempre il server esistente
-    timeout: 120000,
-  },
+  /* 
+   * Server di sviluppo - DISABILITATO
+   * Avvia l'app manualmente con: npm run dev
+   * Prima di eseguire i test
+   */
+  // webServer: {
+  //   command: 'npm run dev',
+  //   url: 'http://localhost:3000',
+  //   reuseExistingServer: true,
+  //   timeout: 120000,
+  // },
 });
 
