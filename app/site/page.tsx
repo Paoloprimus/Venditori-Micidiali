@@ -596,7 +596,7 @@ export default function LandingPage() {
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-slate-300 hover:text-white transition">Funzionalità</a>
             <a href="#demo" className="text-slate-300 hover:text-white transition">Demo</a>
-            <a href="#pricing" className="text-slate-300 hover:text-white transition">Prezzi</a>
+            <a href="#pricing" className="text-slate-300 hover:text-white transition">Piani</a>
             <a href="#beta" className="text-slate-300 hover:text-white transition">Beta</a>
           </div>
 
@@ -625,7 +625,7 @@ export default function LandingPage() {
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
                 Vendi di più, meglio e in meno tempo.
                 <br />
-                Parla con l'assistente, lui fa il resto.
+                Parla con REPING, al resto pensa l'AI.
               </p>
 
               <div className="flex flex-wrap gap-4">
@@ -687,9 +687,10 @@ export default function LandingPage() {
             {[
               { icon: "⏰", title: "Pianificazione lenta", desc: "Perdo tempo a gestire la pianificazione delle attività" },
               { icon: "📋", title: "Info frammentate", desc: "Non ho tutte le info utili per la vendita a portata di mano" },
-              { icon: "🚗", title: "Guida pericolosa", desc: "Non riesco a lavorare bene mentre guido" },
+              { icon: "🚗", title: "Guida pericolosa", desc: "Rischio incidenti per guardare e maneggiare uno schermo" },
               { icon: "📊", title: "Nessuna visione", desc: "Non ho il polso della situazione e dello storico vendite" },
               { icon: "🗺️", title: "Percorsi inefficienti", desc: "Non so se i miei piani di visita sono razionali ed efficaci" },
+              { icon: "🎯", title: "Scarsa personalizzazione", desc: "Non ho tempo e info sufficienti per migliorare la qualità del servizio clienti" },
             ].map((pain, i) => (
               <div 
                 key={i} 
@@ -713,7 +714,7 @@ export default function LandingPage() {
               REPING risolve tutto questo
             </h2>
             <p className="text-slate-600 max-w-2xl mx-auto">
-              Un assistente AI che capisce il tuo lavoro e ti aiuta ogni giorno.
+              Il tuo AI CoPilot che capisce il tuo lavoro e ti supporta ogni giorno.
             </p>
           </div>
 
@@ -799,38 +800,21 @@ export default function LandingPage() {
                   <p className="text-slate-400 text-sm">Solo TU puoi decifrarli</p>
                 </div>
                 
-                {/* Visual representation */}
+                {/* Visual representation - dati realmente cifrati */}
                 <div className="space-y-3">
                   <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
                     <span className="text-xl">👤</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-xs">Nome cliente</p>
-                      <p className="text-green-400 font-mono text-sm">████████████</p>
-                    </div>
-                    <span className="text-green-400">🔒</span>
-                  </div>
-                  <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
-                    <span className="text-xl">📍</span>
-                    <div className="flex-1">
-                      <p className="text-slate-500 text-xs">Indirizzo</p>
+                      <p className="text-slate-500 text-xs">Nome contatto cliente</p>
                       <p className="text-green-400 font-mono text-sm">████████████████</p>
-                    </div>
-                    <span className="text-green-400">🔒</span>
-                  </div>
-                  <div className="bg-slate-900 rounded-lg p-3 flex items-center gap-3">
-                    <span className="text-xl">📝</span>
-                    <div className="flex-1">
-                      <p className="text-slate-500 text-xs">Note riservate</p>
-                      <p className="text-green-400 font-mono text-sm">██████████████████</p>
                     </div>
                     <span className="text-green-400">🔒</span>
                   </div>
                 </div>
                 
-                <div className="mt-6 text-center">
-                  <p className="text-slate-500 text-xs">
-                    Solo con la TUA password questi dati diventano leggibili
-                  </p>
+                <div className="mt-6 text-center text-slate-400 text-xs">
+                  <p>Cifrato con AES-256-GCM</p>
+                  <p className="mt-1 text-slate-500">Altri campi sensibili in arrivo</p>
                 </div>
               </div>
             </div>
@@ -884,7 +868,7 @@ export default function LandingPage() {
 
           <div className="text-center mb-10">
             <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              Piani e Prezzi
+              Piani
             </h2>
             <p className="text-slate-600">
               Da Febbraio 2025 saranno disponibili i seguenti piani
@@ -1138,7 +1122,7 @@ export default function LandingPage() {
               <h4 className="font-semibold text-white mb-4">Prodotto</h4>
               <ul className="space-y-2 text-slate-400 text-sm">
                 <li><a href="#features" className="hover:text-white transition">Funzionalità</a></li>
-                <li><a href="#pricing" className="hover:text-white transition">Prezzi</a></li>
+                <li><a href="#pricing" className="hover:text-white transition">Piani</a></li>
                 <li><a href="#demo" className="hover:text-white transition">Demo</a></li>
                 <li><a href="#beta" className="hover:text-white transition">Beta</a></li>
               </ul>
