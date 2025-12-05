@@ -1088,36 +1088,61 @@ export default function LandingPage() {
               </ul>
             </div>
 
-            {/* ENTERPRISE */}
-            <div className="bg-slate-800 p-5 rounded-2xl text-white hover:shadow-lg transition">
-              <div className="text-xs font-medium text-slate-400 mb-1">DA APRILE</div>
-              <div className="text-sm font-bold text-white mb-2">ENTERPRISE</div>
-              <div className="text-2xl font-bold text-white mb-0">Su misura</div>
-              <div className="text-slate-400 text-xs mb-4">contattaci</div>
+          </div>
+
+          {/* ENTERPRISE - Banner separato per imprenditori */}
+          <div className="mt-12 bg-gradient-to-r from-slate-100 to-slate-50 rounded-2xl p-8 border border-slate-200">
+            <div className="flex flex-col lg:flex-row items-center gap-8">
+              {/* Left: Text */}
+              <div className="flex-1 text-center lg:text-left">
+                <div className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">
+                  Per aziende con esigenze specifiche
+                </div>
+                <h3 className="text-2xl font-bold text-slate-900 mb-3">
+                  🏢 Soluzioni Enterprise
+                </h3>
+                <p className="text-slate-600 mb-4">
+                  Hai una rete di vendita strutturata? Cerchi integrazioni con i tuoi sistemi esistenti? 
+                  Parliamo delle <strong>soluzioni personalizzate</strong> per la tua azienda.
+                </p>
+                
+                {/* Features grid */}
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span className="text-blue-500">🔗</span> CRM integrato
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span className="text-blue-500">⚡</span> API access
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span className="text-blue-500">🔐</span> SSO aziendale
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span className="text-blue-500">📊</span> BI & Reporting
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span className="text-blue-500">🛡️</span> SLA garantito
+                  </div>
+                  <div className="flex items-center gap-2 text-slate-600">
+                    <span className="text-blue-500">🎨</span> White label
+                  </div>
+                </div>
+              </div>
               
-              <div className="text-xs text-slate-400 mb-3 font-medium">OPZIONI:</div>
-              
-              <ul className="space-y-2 mb-4 text-sm">
-                <li className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400 mt-0.5">+</span> CRM integrato
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400 mt-0.5">+</span> API access
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400 mt-0.5">+</span> SSO
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400 mt-0.5">+</span> SLA garantito
-                </li>
-                <li className="flex items-start gap-2 text-slate-300">
-                  <span className="text-blue-400 mt-0.5">+</span> Personalizzazioni
-                </li>
-              </ul>
-              
-              <a href="mailto:info@reping.it" className="block w-full py-2 bg-white/10 text-white rounded-xl font-semibold text-center hover:bg-white/20 transition text-sm">
-                Contattaci
-              </a>
+              {/* Right: CTA */}
+              <div className="flex flex-col items-center lg:items-end gap-3">
+                <div className="text-slate-500 text-sm">Disponibile da Aprile 2026</div>
+                <a 
+                  href="mailto:enterprise@reping.it?subject=Richiesta informazioni Enterprise" 
+                  className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition flex items-center gap-2"
+                >
+                  <span>Parliamone</span>
+                  <span>→</span>
+                </a>
+                <div className="text-slate-400 text-xs">
+                  enterprise@reping.it
+                </div>
+              </div>
             </div>
           </div>
 
