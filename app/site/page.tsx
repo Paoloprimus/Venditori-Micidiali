@@ -1067,7 +1067,7 @@ export default function LandingPage() {
               <div className="text-xs font-medium text-orange-500 mb-1">DA APRILE</div>
               <div className="text-lg font-bold text-slate-700 mb-2">MULTIAGENT</div>
               <div className="text-4xl font-bold text-slate-900 mb-1">€149</div>
-              <div className="text-slate-500 text-sm mb-2">/utente/mese <span className="text-orange-500">(min 5 utenti)</span></div>
+              <div className="text-slate-500 text-sm mb-2">/utente/mese</div>
               <div className="bg-green-100 text-green-700 text-xs font-medium px-3 py-1 rounded-full inline-block mb-4">
                 🎁 Primo mese gratuito
               </div>
