@@ -890,6 +890,61 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* ============ MODALITÀ D'USO ============ */}
+      <section className="py-16 bg-white">
+        <div className="max-w-5xl mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-slate-900 mb-4">
+              3 Modalità d'Uso
+            </h2>
+            <p className="text-slate-600">
+              Scegli come interagire con REPING in base alle tue esigenze
+            </p>
+          </div>
+          
+          <div className="grid md:grid-cols-3 gap-6">
+            {/* GUI */}
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <div className="text-4xl mb-4">📱</div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">GUI Standard</h3>
+              <p className="text-slate-600 text-sm">
+                Interazione classica con interfaccia grafica, arricchita da <strong>comandi vocali</strong> e 
+                funzioni <strong>proattive</strong> (pianificazione visite, utilizzo note clienti).
+              </p>
+              <div className="mt-4 text-xs text-slate-500">
+                ✅ Tutti i piani
+              </div>
+            </div>
+            
+            {/* Chat */}
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <div className="text-4xl mb-4">💬</div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Chat AI</h3>
+              <p className="text-slate-600 text-sm">
+                GUI + interazione in <strong>linguaggio naturale</strong> per funzioni avanzate: 
+                elaborazioni statistiche, grafici personalizzati, analisi semantiche complesse.
+              </p>
+              <div className="mt-4 text-xs text-slate-500">
+                ✅ Tutti i piani
+              </div>
+            </div>
+            
+            {/* Guida */}
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl border-2 border-blue-200">
+              <div className="text-4xl mb-4">🚗</div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Modalità Guida</h3>
+              <p className="text-slate-600 text-sm">
+                Uso <strong>solo dialogico</strong> (voce + audio) per tutte le funzioni dell'app. 
+                Perfetta per la <strong>guida sicura</strong>: niente schermo, solo conversazione.
+              </p>
+              <div className="mt-4 text-xs text-blue-600 font-medium">
+                ✨ TRIAL (preview) e BUSINESS+
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* ============ PRICING ============ */}
       <section id="pricing" className="py-20 bg-slate-50">
         <div className="max-w-6xl mx-auto px-4">
@@ -898,7 +953,7 @@ export default function LandingPage() {
             <div className="text-2xl font-bold mb-2">🚀 OGGI: Solo BETA GRATUITA su richiesta!</div>
             <p className="text-white/90">
               Attualmente è disponibile <strong>solo la versione PREMIUM in Beta gratuita</strong>, 
-              riservata a tester selezionati su richiesta e approvazione.
+              riservata a tester selezionati. Al termine del trial puoi scegliere qualsiasi piano!
             </p>
             <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-orange-600 rounded-full font-bold hover:bg-orange-50 transition">
               Richiedi Accesso Beta →
@@ -914,17 +969,24 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Pricing Grid - 5 columns on desktop */}
-          <div className="grid lg:grid-cols-5 md:grid-cols-2 gap-4">
+          {/* Pricing Grid - 4 columns on desktop */}
+          <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-5">
             
             {/* TRIAL */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 hover:shadow-lg transition">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
               <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
-              <div className="text-sm font-bold text-slate-700 mb-2">TRIAL</div>
-              <div className="text-3xl font-bold text-slate-900 mb-0">€0</div>
-              <div className="text-slate-500 text-xs mb-4">3 mesi max</div>
+              <div className="text-lg font-bold text-slate-700 mb-2">TRIAL</div>
+              <div className="text-4xl font-bold text-slate-900 mb-0">€0</div>
+              <div className="text-slate-500 text-sm mb-4">3 mesi max</div>
               
-              <ul className="space-y-2 mb-6 text-sm">
+              <div className="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
+                🚗 Include Modalità Guida!
+              </div>
+              
+              <ul className="space-y-2.5 mb-6 text-sm">
+                <li className="flex items-start gap-2 text-slate-600">
+                  <span className="text-green-500 mt-0.5">✓</span> GUI + Chat + Guida
+                </li>
                 <li className="flex items-start gap-2 text-slate-600">
                   <span className="text-green-500 mt-0.5">✓</span> Max 300 clienti
                 </li>
@@ -943,22 +1005,26 @@ export default function LandingPage() {
               </ul>
 
               <div className="text-xs text-slate-400 text-center">
-                Poi upgrade o download dati
+                Dopo 3 mesi: upgrade o export dati
               </div>
             </div>
 
             {/* PREMIUM - Highlighted as current beta */}
-            <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-5 rounded-2xl shadow-xl relative overflow-hidden transform lg:-translate-y-2">
+            <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-6 rounded-2xl shadow-xl relative overflow-hidden transform lg:-translate-y-2">
               <div className="absolute top-0 left-0 right-0 bg-amber-400 text-amber-900 text-xs font-bold py-1 text-center">
                 ⭐ DISPONIBILE ORA IN BETA GRATUITA
               </div>
               <div className="mt-6">
                 <div className="text-xs font-medium text-blue-200 mb-1">DA FEBBRAIO</div>
-                <div className="text-sm font-bold text-white mb-2">PREMIUM</div>
-                <div className="text-3xl font-bold text-white mb-0">€49</div>
-                <div className="text-blue-200 text-xs mb-4">/mese</div>
+                <div className="text-lg font-bold text-white mb-2">PREMIUM</div>
+                <div className="text-4xl font-bold text-white mb-0">€49</div>
+                <div className="text-blue-200 text-sm mb-4">/mese, minimo 3 mesi</div>
                 
-                <ul className="space-y-2 mb-6 text-sm">
+                <div className="bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
+                  📱💬 GUI + Chat
+                </div>
+                
+                <ul className="space-y-2.5 mb-6 text-sm">
                   <li className="flex items-start gap-2 text-white">
                     <span className="text-green-300 mt-0.5">✓</span> Max 500 clienti
                   </li>
@@ -974,25 +1040,29 @@ export default function LandingPage() {
                   <li className="flex items-start gap-2 text-white">
                     <span className="text-green-300 mt-0.5">✓</span> Supporto prioritario
                   </li>
-                  <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> <strong>Chat vocale</strong>
-                  </li>
                 </ul>
 
-                <a href="#beta" className="block w-full py-2 bg-white text-blue-600 rounded-xl font-bold text-center hover:bg-blue-50 transition text-sm">
+                <a href="#beta" className="block w-full py-2.5 bg-white text-blue-600 rounded-xl font-bold text-center hover:bg-blue-50 transition text-sm">
                   Richiedi Beta Gratis
                 </a>
               </div>
             </div>
 
             {/* BUSINESS */}
-            <div className="bg-white p-5 rounded-2xl border-2 border-blue-200 hover:shadow-lg transition">
-              <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
-              <div className="text-sm font-bold text-slate-700 mb-2">BUSINESS</div>
-              <div className="text-3xl font-bold text-slate-900 mb-0">€99</div>
-              <div className="text-slate-500 text-xs mb-4">/mese</div>
+            <div className="bg-white p-6 rounded-2xl border-2 border-emerald-300 hover:shadow-lg transition relative">
+              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">
+                🚗 MODALITÀ GUIDA
+              </div>
+              <div className="text-xs font-medium text-slate-400 mb-1 mt-2">DA FEBBRAIO</div>
+              <div className="text-lg font-bold text-slate-700 mb-2">BUSINESS</div>
+              <div className="text-4xl font-bold text-slate-900 mb-0">€99</div>
+              <div className="text-slate-500 text-sm mb-4">/mese, minimo 3 mesi</div>
               
-              <ul className="space-y-2 mb-4 text-sm">
+              <div className="bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
+                📱💬🚗 GUI + Chat + Guida
+              </div>
+              
+              <ul className="space-y-2.5 mb-4 text-sm">
                 <li className="flex items-start gap-2 text-slate-600">
                   <span className="text-green-500 mt-0.5">✓</span> Max 1000 clienti
                 </li>
@@ -1011,11 +1081,11 @@ export default function LandingPage() {
               </ul>
               
               <div className="border-t border-slate-200 pt-3 space-y-2">
-                <div className="flex items-start gap-2 text-blue-600 text-sm font-medium">
-                  <span className="mt-0.5">✨</span> Modalità Guida
+                <div className="flex items-start gap-2 text-emerald-600 text-sm font-medium">
+                  <span className="mt-0.5">✨</span> Guida in sicurezza
                 </div>
-                <p className="text-slate-500 text-xs ml-5 -mt-1">Guida in sicurezza, REPING dialoga con te!</p>
-                <div className="flex items-start gap-2 text-blue-600 text-sm font-medium">
+                <p className="text-slate-500 text-xs ml-5 -mt-1">REPING dialoga con te mentre guidi!</p>
+                <div className="flex items-start gap-2 text-emerald-600 text-sm font-medium">
                   <span className="mt-0.5">✨</span> Analitiche avanzate
                 </div>
                 <p className="text-slate-500 text-xs ml-5 -mt-1">Insights sul tuo business</p>
@@ -1023,15 +1093,19 @@ export default function LandingPage() {
             </div>
 
             {/* MULTIAGENT */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-200 hover:shadow-lg transition">
+            <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
               <div className="text-xs font-medium text-orange-500 mb-1">DA APRILE</div>
-              <div className="text-sm font-bold text-slate-700 mb-2">MULTIAGENT</div>
-              <div className="text-3xl font-bold text-slate-900 mb-0">€149</div>
-              <div className="text-slate-500 text-xs mb-4">/utente/mese <span className="text-orange-500">(min 5)</span></div>
+              <div className="text-lg font-bold text-slate-700 mb-2">MULTIAGENT</div>
+              <div className="text-4xl font-bold text-slate-900 mb-0">€149</div>
+              <div className="text-slate-500 text-sm mb-4">/utente/mese <span className="text-orange-500">(min 5)</span></div>
+              
+              <div className="bg-orange-50 text-orange-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
+                Prova 3 mesi, poi min 12 mesi
+              </div>
               
               <div className="text-xs text-slate-500 mb-3 font-medium">Tutto BUSINESS +</div>
               
-              <ul className="space-y-2 mb-4 text-sm">
+              <ul className="space-y-2.5 mb-4 text-sm">
                 <li className="flex items-start gap-2 text-slate-600">
                   <span className="text-green-500 mt-0.5">✓</span> Dashboard Admin
                 </li>
