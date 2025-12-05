@@ -1,13 +1,19 @@
 {
-  "name": "REPING - Assistente Agenti HoReCa",
+  "name": "REPING - Il tuo AI CoPilot alle Vendite",
   "short_name": "REPING",
-  "description": "Assistente AI per agenti di commercio del settore HoReCa",
+  "description": "AI CoPilot per agenti di commercio - Vendi di più, meglio e in meno tempo",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
-  "theme_color": "#2563eb",
+  "theme_color": "#3B82F6",
   "orientation": "any",
   "icons": [
+    {
+      "src": "/logo.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "/icons/icon-192.png",
       "sizes": "192x192",

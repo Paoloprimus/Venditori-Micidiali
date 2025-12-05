@@ -21,8 +21,14 @@ export const metadata: Metadata = {
     title: "REPING",
   },
   icons: {
-    icon: "/icons/icon-192.png",
-    apple: "/icons/icon-192.png",
+    icon: [
+      { url: "/logo.svg", type: "image/svg+xml" },
+      { url: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
+    ],
+    apple: [
+      { url: "/icons/icon-192.png", sizes: "192x192" },
+    ],
+    shortcut: "/logo.svg",
   },
 };
 
