@@ -976,7 +976,9 @@ export default function LandingPage() {
             <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
               <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
               <div className="text-lg font-bold text-slate-700 mb-2">PREMIUM</div>
-              <div className="text-4xl font-bold text-slate-900 mb-0">€49</div>
+              <div className="text-4xl font-bold text-slate-900 mb-0">
+                €49 <span className="text-lg font-normal text-green-600">(-20% annuale)</span>
+              </div>
               <div className="text-slate-500 text-sm mb-4">/mese, minimo 3 mesi</div>
               
               <div className="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
@@ -1014,7 +1016,9 @@ export default function LandingPage() {
               <div className="mt-6">
                 <div className="text-xs font-medium text-emerald-200 mb-1">DA FEBBRAIO</div>
                 <div className="text-lg font-bold text-white mb-2">BUSINESS</div>
-                <div className="text-4xl font-bold text-white mb-0">€99</div>
+                <div className="text-4xl font-bold text-white mb-0">
+                  €99 <span className="text-lg font-normal text-amber-300">(-20% annuale)</span>
+                </div>
                 <div className="text-emerald-200 text-sm mb-4">/mese, minimo 3 mesi</div>
                 
                 <div className="bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
@@ -1060,7 +1064,9 @@ export default function LandingPage() {
             <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
               <div className="text-xs font-medium text-orange-500 mb-1">DA APRILE</div>
               <div className="text-lg font-bold text-slate-700 mb-2">MULTIAGENT</div>
-              <div className="text-4xl font-bold text-slate-900 mb-0">€149</div>
+              <div className="text-4xl font-bold text-slate-900 mb-0">
+                €149 <span className="text-lg font-normal text-green-600">(-20% annuale)</span>
+              </div>
               <div className="text-slate-500 text-sm mb-4">/utente/mese <span className="text-orange-500">(min 5)</span></div>
               
               <div className="bg-orange-50 text-orange-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
@@ -1147,7 +1153,7 @@ export default function LandingPage() {
           </div>
 
           <p className="text-center text-slate-500 text-sm mt-8">
-            Tutti i prezzi sono IVA esclusa. Fatturazione mensile o annuale (-20%).
+            Tutti i prezzi sono IVA esclusa.
           </p>
         </div>
       </section>
