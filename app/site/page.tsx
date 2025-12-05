@@ -930,15 +930,15 @@ export default function LandingPage() {
             </div>
             
             {/* Guida */}
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl border-2 border-blue-200">
+            <div className="bg-gradient-to-br from-emerald-50 to-teal-50 p-6 rounded-2xl border-2 border-emerald-200">
               <div className="text-4xl mb-4">🚗</div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">Modalità Guida</h3>
               <p className="text-slate-600 text-sm">
                 Uso <strong>solo dialogico</strong> (voce + audio) per tutte le funzioni dell'app. 
                 Perfetta per la <strong>guida sicura</strong>: niente schermo, solo conversazione.
               </p>
-              <div className="mt-4 text-xs text-blue-600 font-medium">
-                ✨ TRIAL (preview) e BUSINESS+
+              <div className="mt-4 text-xs text-emerald-600 font-medium">
+                ✨ Solo BUSINESS e MULTIAGENT
               </div>
             </div>
           </div>
@@ -949,13 +949,13 @@ export default function LandingPage() {
       <section id="pricing" className="py-20 bg-slate-50">
         <div className="max-w-6xl mx-auto px-4">
           {/* BETA NOTICE - Very prominent */}
-          <div className="bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-2xl p-6 mb-10 text-center shadow-lg">
-            <div className="text-2xl font-bold mb-2">🚀 OGGI: Solo BETA GRATUITA su richiesta!</div>
+          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl p-6 mb-10 text-center shadow-lg">
+            <div className="text-2xl font-bold mb-2">🚀 BETA GRATUITA: Prova BUSINESS fino a Febbraio!</div>
             <p className="text-white/90">
-              Attualmente è disponibile <strong>solo la versione PREMIUM in Beta gratuita</strong>, 
-              riservata a tester selezionati. Al termine del trial puoi scegliere qualsiasi piano!
+              Fino a Febbraio 2026 puoi provare <strong>BUSINESS completo</strong> (valore €99/mese) 
+              gratuitamente su invito. Poi scegli: resta BUSINESS o passa a PREMIUM.
             </p>
-            <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-orange-600 rounded-full font-bold hover:bg-orange-50 transition">
+            <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-emerald-600 rounded-full font-bold hover:bg-emerald-50 transition">
               Richiedi Accesso Beta →
             </a>
           </div>
@@ -969,126 +969,90 @@ export default function LandingPage() {
             </p>
           </div>
 
-          {/* Pricing Grid - 4 columns on desktop */}
-          <div className="grid lg:grid-cols-4 md:grid-cols-2 gap-5">
-            
-            {/* TRIAL */}
+          {/* Pricing Grid - 3 columns on desktop */}
+          <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
+
+            {/* PREMIUM */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
               <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
-              <div className="text-lg font-bold text-slate-700 mb-2">TRIAL</div>
-              <div className="text-4xl font-bold text-slate-900 mb-0">€0</div>
-              <div className="text-slate-500 text-sm mb-4">3 mesi max</div>
+              <div className="text-lg font-bold text-slate-700 mb-2">PREMIUM</div>
+              <div className="text-4xl font-bold text-slate-900 mb-0">€49</div>
+              <div className="text-slate-500 text-sm mb-4">/mese, minimo 3 mesi</div>
               
               <div className="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
-                🚗 Include Modalità Guida!
+                📱💬 GUI + Chat
               </div>
               
               <ul className="space-y-2.5 mb-6 text-sm">
                 <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> GUI + Chat + Guida
+                  <span className="text-green-500 mt-0.5">✓</span> Max 500 clienti
                 </li>
                 <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Max 300 clienti
+                  <span className="text-green-500 mt-0.5">✓</span> 60 interazioni/giorno
                 </li>
                 <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> 30 interazioni/giorno
+                  <span className="text-green-500 mt-0.5">✓</span> Storico 90 giorni
                 </li>
                 <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Storico 30 giorni
+                  <span className="text-green-500 mt-0.5">✓</span> 9 export PDF/mese
                 </li>
                 <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> 3 export PDF/mese
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Supporto standard
+                  <span className="text-green-500 mt-0.5">✓</span> Supporto prioritario
                 </li>
               </ul>
 
               <div className="text-xs text-slate-400 text-center">
-                Dopo 3 mesi: upgrade o export dati
+                Per chi non serve Modalità Guida
               </div>
             </div>
 
-            {/* PREMIUM - Highlighted as current beta */}
-            <div className="bg-gradient-to-br from-blue-600 to-purple-600 p-6 rounded-2xl shadow-xl relative overflow-hidden transform lg:-translate-y-2">
-              <div className="absolute top-0 left-0 right-0 bg-amber-400 text-amber-900 text-xs font-bold py-1 text-center">
+            {/* BUSINESS - Highlighted as current beta */}
+            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-6 rounded-2xl shadow-xl relative overflow-hidden transform lg:-translate-y-3 lg:scale-105">
+              <div className="absolute top-0 left-0 right-0 bg-amber-400 text-amber-900 text-xs font-bold py-1.5 text-center">
                 ⭐ DISPONIBILE ORA IN BETA GRATUITA
               </div>
               <div className="mt-6">
-                <div className="text-xs font-medium text-blue-200 mb-1">DA FEBBRAIO</div>
-                <div className="text-lg font-bold text-white mb-2">PREMIUM</div>
-                <div className="text-4xl font-bold text-white mb-0">€49</div>
-                <div className="text-blue-200 text-sm mb-4">/mese, minimo 3 mesi</div>
+                <div className="text-xs font-medium text-emerald-200 mb-1">DA FEBBRAIO</div>
+                <div className="text-lg font-bold text-white mb-2">BUSINESS</div>
+                <div className="text-4xl font-bold text-white mb-0">€99</div>
+                <div className="text-emerald-200 text-sm mb-4">/mese, minimo 3 mesi</div>
                 
                 <div className="bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
-                  📱💬 GUI + Chat
+                  📱💬🚗 GUI + Chat + Guida
                 </div>
                 
-                <ul className="space-y-2.5 mb-6 text-sm">
+                <ul className="space-y-2.5 mb-4 text-sm">
                   <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Max 500 clienti
+                    <span className="text-green-300 mt-0.5">✓</span> Max 1000 clienti
                   </li>
                   <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> 60 interazioni/giorno
+                    <span className="text-green-300 mt-0.5">✓</span> Interazioni illimitate
                   </li>
                   <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Storico 90 giorni
+                    <span className="text-green-300 mt-0.5">✓</span> Storico illimitato
                   </li>
                   <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> 9 export PDF/mese
+                    <span className="text-green-300 mt-0.5">✓</span> Export PDF illimitati
                   </li>
                   <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Supporto prioritario
+                    <span className="text-green-300 mt-0.5">✓</span> Supporto dedicato
                   </li>
                 </ul>
+                
+                <div className="border-t border-white/20 pt-3 space-y-2 mb-4">
+                  <div className="flex items-start gap-2 text-amber-300 text-sm font-medium">
+                    <span className="mt-0.5">✨</span> Modalità Guida
+                  </div>
+                  <p className="text-white/80 text-xs ml-5 -mt-1">REPING dialoga con te mentre guidi!</p>
+                  <div className="flex items-start gap-2 text-amber-300 text-sm font-medium">
+                    <span className="mt-0.5">✨</span> Analitiche avanzate
+                  </div>
+                  <p className="text-white/80 text-xs ml-5 -mt-1">Insights sul tuo business</p>
+                </div>
 
-                <a href="#beta" className="block w-full py-2.5 bg-white text-blue-600 rounded-xl font-bold text-center hover:bg-blue-50 transition text-sm">
-                  Richiedi Beta Gratis
+                <a href="#beta" className="block w-full py-2.5 bg-white text-emerald-600 rounded-xl font-bold text-center hover:bg-emerald-50 transition text-sm">
+                  🎁 Prova Gratis in Beta
                 </a>
-              </div>
-            </div>
-
-            {/* BUSINESS */}
-            <div className="bg-white p-6 rounded-2xl border-2 border-emerald-300 hover:shadow-lg transition relative">
-              <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-emerald-500 text-white text-xs font-bold px-3 py-1 rounded-full">
-                🚗 MODALITÀ GUIDA
-              </div>
-              <div className="text-xs font-medium text-slate-400 mb-1 mt-2">DA FEBBRAIO</div>
-              <div className="text-lg font-bold text-slate-700 mb-2">BUSINESS</div>
-              <div className="text-4xl font-bold text-slate-900 mb-0">€99</div>
-              <div className="text-slate-500 text-sm mb-4">/mese, minimo 3 mesi</div>
-              
-              <div className="bg-emerald-50 text-emerald-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
-                📱💬🚗 GUI + Chat + Guida
-              </div>
-              
-              <ul className="space-y-2.5 mb-4 text-sm">
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Max 1000 clienti
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Interazioni illimitate
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Storico illimitato
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Export PDF illimitati
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Supporto dedicato
-                </li>
-              </ul>
-              
-              <div className="border-t border-slate-200 pt-3 space-y-2">
-                <div className="flex items-start gap-2 text-emerald-600 text-sm font-medium">
-                  <span className="mt-0.5">✨</span> Guida in sicurezza
-                </div>
-                <p className="text-slate-500 text-xs ml-5 -mt-1">REPING dialoga con te mentre guidi!</p>
-                <div className="flex items-start gap-2 text-emerald-600 text-sm font-medium">
-                  <span className="mt-0.5">✨</span> Analitiche avanzate
-                </div>
-                <p className="text-slate-500 text-xs ml-5 -mt-1">Insights sul tuo business</p>
               </div>
             </div>
 
