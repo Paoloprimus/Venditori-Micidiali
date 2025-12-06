@@ -5,6 +5,117 @@ import { useEffect, useRef, useState } from "react";
 import { transcribeAudio } from "../lib/api/voice";
 import type { Conv } from "../lib/api/conversations";
 
+// ═══════════════════════════════════════════════════════════════
+// 🆕 BROWSER COMPATIBILITY - Export per diagnostica
+// ═══════════════════════════════════════════════════════════════
+
+export type BrowserVoiceSupport = {
+  speechRecognition: boolean;
+  mediaDevices: boolean;
+  secureContext: boolean;
+  isIOS: boolean;
+  isFirefox: boolean;
+  isChrome: boolean;
+  isSafari: boolean;
+  canUseNativeSR: boolean;
+  canUseFallback: boolean;
+  overallSupport: 'full' | 'fallback' | 'none';
+  issues: string[];
+  recommendations: string[];
+};
+
+/**
+ * Verifica il supporto del browser per le funzioni voce
+ */
+export function checkBrowserVoiceSupport(): BrowserVoiceSupport {
+  const issues: string[] = [];
+  const recommendations: string[] = [];
+  
+  // Detect browser
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const isIOS = /iP(hone|od|ad)/.test(ua);
+  const isFirefox = /Firefox/i.test(ua);
+  const isChrome = /Chrome/i.test(ua) && !/Edge|Edg/i.test(ua);
+  const isSafari = /Safari/i.test(ua) && !/Chrome/i.test(ua);
+  
+  // Check secure context
+  const secureContext = typeof window !== 'undefined' ? window.isSecureContext : false;
+  if (!secureContext) {
+    issues.push("Non sei in un contesto sicuro (HTTPS)");
+    recommendations.push("Usa HTTPS o localhost");
+  }
+  
+  // Check SpeechRecognition
+  const SR = typeof window !== 'undefined' 
+    ? (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition 
+    : null;
+  const speechRecognition = !!SR;
+  
+  if (!speechRecognition) {
+    issues.push("SpeechRecognition non supportato");
+    if (isFirefox) {
+      recommendations.push("Firefox non supporta Speech Recognition. Usa Chrome o Edge.");
+    }
+  }
+  
+  // Check mediaDevices
+  const mediaDevices = typeof navigator !== 'undefined' && !!navigator.mediaDevices?.getUserMedia;
+  if (!mediaDevices) {
+    issues.push("MediaDevices API non disponibile");
+  }
+  
+  // iOS specific issues
+  if (isIOS) {
+    issues.push("iOS Safari ha supporto SR molto limitato");
+    recommendations.push("Per la migliore esperienza, usa Chrome su desktop");
+  }
+  
+  // Firefox specific
+  if (isFirefox) {
+    issues.push("Firefox non supporta Web Speech API");
+    recommendations.push("Usa Chrome, Edge o Safari per le funzioni voce");
+  }
+  
+  // Determine native SR capability
+  const canUseNativeSR = speechRecognition && secureContext && !isIOS && !isFirefox;
+  
+  // Determine fallback capability (MediaRecorder + Whisper API)
+  const canUseFallback = mediaDevices && secureContext;
+  
+  // Overall support level
+  let overallSupport: 'full' | 'fallback' | 'none' = 'none';
+  if (canUseNativeSR) {
+    overallSupport = 'full';
+  } else if (canUseFallback) {
+    overallSupport = 'fallback';
+    if (!recommendations.length) {
+      recommendations.push("Trascrizione via API (meno reattiva ma funziona)");
+    }
+  }
+  
+  // Chrome recommendations
+  if (isChrome && canUseNativeSR) {
+    recommendations.push("Ottimo! Chrome ha il miglior supporto per la voce");
+  }
+  
+  return {
+    speechRecognition,
+    mediaDevices,
+    secureContext,
+    isIOS,
+    isFirefox,
+    isChrome,
+    isSafari,
+    canUseNativeSR,
+    canUseFallback,
+    overallSupport,
+    issues,
+    recommendations
+  };
+}
+
+// ═══════════════════════════════════════════════════════════════
+
 type Params = {
   onTranscriptionToInput: (text: string) => void;     // aggiorna textarea
   onSendDirectly: (text: string) => Promise<void>;     // usato in Dialogo

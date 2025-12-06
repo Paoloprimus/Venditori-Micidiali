@@ -1807,6 +1807,475 @@ export async function estimateRouteKm(
  * Calcola km percorsi in un periodo basandosi sulle visite effettuate
  * USA DISTANZE STRADALI REALI via OSRM!
  */
+// ───────────────────────────────────────────────────────────────
+// 🆕 ANALYTICS - TOP CLIENTI E PRODOTTI
+// ───────────────────────────────────────────────────────────────
+
+export type TopClientResult = {
+  id: string;
+  name: string;
+  totalRevenue: number;
+  orderCount: number;
+  avgOrder: number;
+  lastVisit?: string;
+};
+
+/**
+ * Top N clienti per fatturato
+ */
+export async function getTopClients(
+  crypto: CryptoLike,
+  limit: number = 10,
+  period?: 'month' | 'quarter' | 'year'
+): Promise<{
+  clients: TopClientResult[];
+  totalRevenue: number;
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  // Calcola fromDate se specificato un periodo
+  let fromDate: Date | null = null;
+  let periodLabel = 'da sempre';
+  
+  if (period) {
+    const now = new Date();
+    switch (period) {
+      case 'month':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodLabel = 'questo mese';
+        break;
+      case 'quarter':
+        fromDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        periodLabel = 'ultimi 3 mesi';
+        break;
+      case 'year':
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        periodLabel = "quest'anno";
+        break;
+    }
+  }
+
+  // Query visite con vendite
+  let query = supabase
+    .from("visits")
+    .select("account_id, importo_vendita, data_visita")
+    .not("importo_vendita", "is", null)
+    .gt("importo_vendita", 0);
+
+  if (fromDate) {
+    query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+  }
+
+  const { data: visits, error: visitError } = await query;
+  if (visitError) throw visitError;
+
+  if (!visits?.length) {
+    return {
+      clients: [],
+      totalRevenue: 0,
+      message: `Nessuna vendita registrata ${periodLabel}.`
+    };
+  }
+
+  // Aggrega per cliente
+  const clientStats = new Map<string, { revenue: number; orders: number; lastVisit: string }>();
+  
+  for (const v of visits) {
+    const existing = clientStats.get(v.account_id) ?? { revenue: 0, orders: 0, lastVisit: '' };
+    clientStats.set(v.account_id, {
+      revenue: existing.revenue + (v.importo_vendita ?? 0),
+      orders: existing.orders + 1,
+      lastVisit: v.data_visita > existing.lastVisit ? v.data_visita : existing.lastVisit
+    });
+  }
+
+  // Carica nomi clienti
+  const accountIds = [...clientStats.keys()];
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, name, name_enc, name_iv")
+    .in("id", accountIds);
+
+  const nameMap = new Map<string, string>();
+  for (const acc of (accounts ?? [])) {
+    let name = acc.name;
+    if (!name && acc.name_enc) {
+      try {
+        const dec = await crypto.decryptFields("table:accounts", "accounts", acc.id, acc, ["name"]);
+        name = dec?.name;
+      } catch { continue; }
+    }
+    if (name) nameMap.set(acc.id, name);
+  }
+
+  // Costruisci risultato ordinato
+  const results: TopClientResult[] = [];
+  let totalRevenue = 0;
+
+  for (const [id, stats] of clientStats.entries()) {
+    const name = nameMap.get(id);
+    if (!name) continue;
+
+    totalRevenue += stats.revenue;
+    results.push({
+      id,
+      name,
+      totalRevenue: Math.round(stats.revenue),
+      orderCount: stats.orders,
+      avgOrder: Math.round(stats.revenue / stats.orders),
+      lastVisit: stats.lastVisit
+    });
+  }
+
+  // Ordina per fatturato decrescente
+  results.sort((a, b) => b.totalRevenue - a.totalRevenue);
+  const topN = results.slice(0, limit);
+
+  // Formatta messaggio
+  const lines = topN.map((c, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+    return `${medal} **${c.name}**: €${c.totalRevenue.toLocaleString('it-IT')} (${c.orderCount} ordini, media €${c.avgOrder})`;
+  }).join('\n');
+
+  const message = `🏆 **Top ${topN.length} Clienti** ${periodLabel}:\n\n${lines}\n\n💰 Totale: €${Math.round(totalRevenue).toLocaleString('it-IT')}`;
+
+  return { clients: topN, totalRevenue: Math.round(totalRevenue), message };
+}
+
+export type TopProductResult = {
+  name: string;
+  totalRevenue: number;
+  clientCount: number;
+  visitCount: number;
+  avgPerVisit: number;
+};
+
+/**
+ * Top N prodotti per fatturato
+ */
+export async function getTopProducts(
+  crypto: CryptoLike,
+  limit: number = 10,
+  period?: 'month' | 'quarter' | 'year'
+): Promise<{
+  products: TopProductResult[];
+  totalRevenue: number;
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  // Calcola fromDate
+  let fromDate: Date | null = null;
+  let periodLabel = 'da sempre';
+  
+  if (period) {
+    const now = new Date();
+    switch (period) {
+      case 'month':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodLabel = 'questo mese';
+        break;
+      case 'quarter':
+        fromDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        periodLabel = 'ultimi 3 mesi';
+        break;
+      case 'year':
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        periodLabel = "quest'anno";
+        break;
+    }
+  }
+
+  // Query visite con prodotti
+  let query = supabase
+    .from("visits")
+    .select("account_id, importo_vendita, prodotti_discussi, data_visita")
+    .not("prodotti_discussi", "is", null)
+    .not("importo_vendita", "is", null)
+    .gt("importo_vendita", 0);
+
+  if (fromDate) {
+    query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+  }
+
+  const { data: visits, error } = await query;
+  if (error) throw error;
+
+  if (!visits?.length) {
+    return {
+      products: [],
+      totalRevenue: 0,
+      message: `Nessuna vendita con prodotti registrata ${periodLabel}.`
+    };
+  }
+
+  // Aggrega per prodotto
+  const productStats = new Map<string, { revenue: number; clients: Set<string>; visits: number }>();
+
+  for (const v of visits) {
+    const products = (v.prodotti_discussi ?? '')
+      .split(/[,;]/)
+      .map((p: string) => p.trim().toLowerCase())
+      .filter((p: string) => p.length > 0);
+
+    const revenuePerProduct = (v.importo_vendita ?? 0) / Math.max(products.length, 1);
+
+    for (const product of products) {
+      const existing = productStats.get(product) ?? { revenue: 0, clients: new Set(), visits: 0 };
+      existing.revenue += revenuePerProduct;
+      existing.clients.add(v.account_id);
+      existing.visits += 1;
+      productStats.set(product, existing);
+    }
+  }
+
+  // Costruisci risultato
+  const results: TopProductResult[] = [];
+  let totalRevenue = 0;
+
+  for (const [name, stats] of productStats.entries()) {
+    totalRevenue += stats.revenue;
+    results.push({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      totalRevenue: Math.round(stats.revenue),
+      clientCount: stats.clients.size,
+      visitCount: stats.visits,
+      avgPerVisit: Math.round(stats.revenue / stats.visits)
+    });
+  }
+
+  // Ordina per fatturato
+  results.sort((a, b) => b.totalRevenue - a.totalRevenue);
+  const topN = results.slice(0, limit);
+
+  const lines = topN.map((p, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+    return `${medal} **${p.name}**: €${p.totalRevenue.toLocaleString('it-IT')} (${p.clientCount} clienti, ${p.visitCount} vendite)`;
+  }).join('\n');
+
+  const message = `📦 **Top ${topN.length} Prodotti** ${periodLabel}:\n\n${lines}\n\n💰 Totale: €${Math.round(totalRevenue).toLocaleString('it-IT')}`;
+
+  return { products: topN, totalRevenue: Math.round(totalRevenue), message };
+}
+
+/**
+ * Analisi vendite per giorno della settimana
+ */
+export async function getSalesByDayOfWeek(
+  period?: 'month' | 'quarter' | 'year'
+): Promise<{
+  byDay: Array<{ day: string; dayIndex: number; totalRevenue: number; visitCount: number; avgRevenue: number }>;
+  bestDay: { day: string; totalRevenue: number };
+  message: string;
+}> {
+  // Calcola fromDate
+  let fromDate: Date | null = null;
+  let periodLabel = 'da sempre';
+  
+  if (period) {
+    const now = new Date();
+    switch (period) {
+      case 'month':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodLabel = 'questo mese';
+        break;
+      case 'quarter':
+        fromDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        periodLabel = 'ultimi 3 mesi';
+        break;
+      case 'year':
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        periodLabel = "quest'anno";
+        break;
+    }
+  }
+
+  let query = supabase
+    .from("visits")
+    .select("importo_vendita, data_visita")
+    .not("importo_vendita", "is", null)
+    .gt("importo_vendita", 0);
+
+  if (fromDate) {
+    query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+  }
+
+  const { data: visits, error } = await query;
+  if (error) throw error;
+
+  if (!visits?.length) {
+    return {
+      byDay: [],
+      bestDay: { day: '', totalRevenue: 0 },
+      message: `Nessuna vendita ${periodLabel}.`
+    };
+  }
+
+  // Aggrega per giorno settimana
+  const dayNames = ['Domenica', 'Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato'];
+  const dayStats = new Map<number, { revenue: number; count: number }>();
+
+  for (const v of visits) {
+    const date = new Date(v.data_visita);
+    const dayIndex = date.getDay();
+    const existing = dayStats.get(dayIndex) ?? { revenue: 0, count: 0 };
+    dayStats.set(dayIndex, {
+      revenue: existing.revenue + (v.importo_vendita ?? 0),
+      count: existing.count + 1
+    });
+  }
+
+  // Costruisci risultato
+  const byDay = [];
+  for (let i = 1; i <= 6; i++) { // Lunedì a Sabato
+    const stats = dayStats.get(i) ?? { revenue: 0, count: 0 };
+    byDay.push({
+      day: dayNames[i],
+      dayIndex: i,
+      totalRevenue: Math.round(stats.revenue),
+      visitCount: stats.count,
+      avgRevenue: stats.count > 0 ? Math.round(stats.revenue / stats.count) : 0
+    });
+  }
+  // Aggiungi domenica alla fine
+  const domenica = dayStats.get(0) ?? { revenue: 0, count: 0 };
+  byDay.push({
+    day: 'Domenica',
+    dayIndex: 0,
+    totalRevenue: Math.round(domenica.revenue),
+    visitCount: domenica.count,
+    avgRevenue: domenica.count > 0 ? Math.round(domenica.revenue / domenica.count) : 0
+  });
+
+  // Trova giorno migliore
+  const bestDay = byDay.reduce((best, d) => 
+    d.totalRevenue > best.totalRevenue ? { day: d.day, totalRevenue: d.totalRevenue } : best,
+    { day: '', totalRevenue: 0 }
+  );
+
+  const lines = byDay
+    .filter(d => d.visitCount > 0)
+    .sort((a, b) => b.totalRevenue - a.totalRevenue)
+    .map((d, i) => {
+      const bar = '█'.repeat(Math.min(10, Math.round(d.totalRevenue / (bestDay.totalRevenue / 10))));
+      return `${d.day}: ${bar} €${d.totalRevenue.toLocaleString('it-IT')} (${d.visitCount} visite)`;
+    })
+    .join('\n');
+
+  const message = `📅 **Vendite per giorno** ${periodLabel}:\n\n${lines}\n\n🏆 **${bestDay.day}** è il giorno più produttivo!`;
+
+  return { byDay, bestDay, message };
+}
+
+/**
+ * Performance per zona/città
+ */
+export async function getSalesByCity(
+  crypto: CryptoLike,
+  period?: 'month' | 'quarter' | 'year'
+): Promise<{
+  byCity: Array<{ city: string; totalRevenue: number; clientCount: number; visitCount: number }>;
+  bestCity: { city: string; totalRevenue: number };
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  // Calcola fromDate
+  let fromDate: Date | null = null;
+  let periodLabel = 'da sempre';
+  
+  if (period) {
+    const now = new Date();
+    switch (period) {
+      case 'month':
+        fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+        periodLabel = 'questo mese';
+        break;
+      case 'quarter':
+        fromDate = new Date(now.getFullYear(), now.getMonth() - 3, 1);
+        periodLabel = 'ultimi 3 mesi';
+        break;
+      case 'year':
+        fromDate = new Date(now.getFullYear(), 0, 1);
+        periodLabel = "quest'anno";
+        break;
+    }
+  }
+
+  // Carica visite con vendite
+  let query = supabase
+    .from("visits")
+    .select("account_id, importo_vendita, data_visita")
+    .not("importo_vendita", "is", null)
+    .gt("importo_vendita", 0);
+
+  if (fromDate) {
+    query = query.gte("data_visita", fromDate.toISOString().split('T')[0]);
+  }
+
+  const { data: visits, error: visitError } = await query;
+  if (visitError) throw visitError;
+
+  if (!visits?.length) {
+    return {
+      byCity: [],
+      bestCity: { city: '', totalRevenue: 0 },
+      message: `Nessuna vendita ${periodLabel}.`
+    };
+  }
+
+  // Carica città clienti
+  const accountIds = [...new Set(visits.map(v => v.account_id))];
+  const { data: accounts } = await supabase
+    .from("accounts")
+    .select("id, city")
+    .in("id", accountIds);
+
+  const cityMap = new Map<string, string>();
+  for (const acc of (accounts ?? [])) {
+    if (acc.city) cityMap.set(acc.id, acc.city);
+  }
+
+  // Aggrega per città
+  const cityStats = new Map<string, { revenue: number; clients: Set<string>; visits: number }>();
+
+  for (const v of visits) {
+    const city = cityMap.get(v.account_id) ?? 'Non specificata';
+    const existing = cityStats.get(city) ?? { revenue: 0, clients: new Set(), visits: 0 };
+    existing.revenue += v.importo_vendita ?? 0;
+    existing.clients.add(v.account_id);
+    existing.visits += 1;
+    cityStats.set(city, existing);
+  }
+
+  // Costruisci risultato
+  const byCity = [];
+  for (const [city, stats] of cityStats.entries()) {
+    byCity.push({
+      city,
+      totalRevenue: Math.round(stats.revenue),
+      clientCount: stats.clients.size,
+      visitCount: stats.visits
+    });
+  }
+
+  // Ordina per fatturato
+  byCity.sort((a, b) => b.totalRevenue - a.totalRevenue);
+  const top10 = byCity.slice(0, 10);
+
+  const bestCity = byCity[0] ?? { city: '', totalRevenue: 0 };
+
+  const lines = top10.map((c, i) => {
+    const medal = i === 0 ? '🥇' : i === 1 ? '🥈' : i === 2 ? '🥉' : `${i + 1}.`;
+    return `${medal} **${c.city}**: €${c.totalRevenue.toLocaleString('it-IT')} (${c.clientCount} clienti, ${c.visitCount} visite)`;
+  }).join('\n');
+
+  const message = `🗺️ **Vendite per zona** ${periodLabel}:\n\n${lines}\n\n🏆 **${bestCity.city}** è la zona più produttiva!`;
+
+  return { byCity: top10, bestCity, message };
+}
+
 export async function getKmTraveledInPeriod(
   crypto: CryptoLike,
   homeCoords: { lat: number; lon: number },

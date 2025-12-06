@@ -282,6 +282,261 @@ export async function executeFunction(
       };
     }
     
+    // 🆕 ANALYTICS TOOLS
+    case "get_top_clients": {
+      const now = new Date();
+      let fromDate: Date;
+      let periodLabel: string;
+      
+      switch (args.period || "month") {
+        case "quarter":
+          fromDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+          periodLabel = "questo trimestre";
+          break;
+        case "year":
+          fromDate = new Date(now.getFullYear(), 0, 1);
+          periodLabel = "quest'anno";
+          break;
+        default:
+          fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodLabel = "questo mese";
+      }
+      
+      // Get visits with sales in the period
+      const { data: visits, error } = await supabase
+        .from("visits")
+        .select("account_id, importo_vendita")
+        .eq("user_id", userId)
+        .gte("data_visita", fromDate.toISOString().split('T')[0])
+        .gt("importo_vendita", 0);
+      
+      if (error) throw error;
+      
+      // Aggregate by client
+      const clientSales: Record<string, { total: number; count: number }> = {};
+      for (const v of visits || []) {
+        if (!clientSales[v.account_id]) {
+          clientSales[v.account_id] = { total: 0, count: 0 };
+        }
+        clientSales[v.account_id].total += v.importo_vendita || 0;
+        clientSales[v.account_id].count++;
+      }
+      
+      // Sort and limit
+      const sorted = Object.entries(clientSales)
+        .sort((a, b) => b[1].total - a[1].total)
+        .slice(0, args.limit || 10);
+      
+      // Get client details
+      const clientIds = sorted.map(([id]) => id);
+      const { data: clients } = await supabase
+        .from("accounts")
+        .select("id, city, tipo_locale")
+        .in("id", clientIds);
+      
+      const clientMap = new Map((clients || []).map(c => [c.id, c]));
+      
+      return {
+        period: periodLabel,
+        clients: sorted.map(([id, stats], idx) => ({
+          position: idx + 1,
+          client_id: id,
+          city: clientMap.get(id)?.city || "",
+          tipo: clientMap.get(id)?.tipo_locale || "",
+          total: stats.total,
+          orderCount: stats.count
+        }))
+      };
+    }
+    
+    case "get_top_products": {
+      const now = new Date();
+      let fromDate: Date;
+      let periodLabel: string;
+      
+      switch (args.period || "month") {
+        case "quarter":
+          fromDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+          periodLabel = "questo trimestre";
+          break;
+        case "year":
+          fromDate = new Date(now.getFullYear(), 0, 1);
+          periodLabel = "quest'anno";
+          break;
+        default:
+          fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodLabel = "questo mese";
+      }
+      
+      // Get visits with products
+      const { data: visits, error } = await supabase
+        .from("visits")
+        .select("prodotti_discussi, importo_vendita")
+        .eq("user_id", userId)
+        .gte("data_visita", fromDate.toISOString().split('T')[0])
+        .not("prodotti_discussi", "is", null);
+      
+      if (error) throw error;
+      
+      // Aggregate by product
+      const productSales: Record<string, { count: number; revenue: number }> = {};
+      for (const v of visits || []) {
+        const products = (v.prodotti_discussi || "").split(/[,;]+/).map((p: string) => p.trim().toLowerCase()).filter(Boolean);
+        const revenuePerProduct = products.length > 0 ? (v.importo_vendita || 0) / products.length : 0;
+        
+        for (const product of products) {
+          if (!productSales[product]) {
+            productSales[product] = { count: 0, revenue: 0 };
+          }
+          productSales[product].count++;
+          productSales[product].revenue += revenuePerProduct;
+        }
+      }
+      
+      // Sort and limit
+      const sorted = Object.entries(productSales)
+        .sort((a, b) => b[1].revenue - a[1].revenue)
+        .slice(0, args.limit || 10);
+      
+      return {
+        period: periodLabel,
+        products: sorted.map(([name, stats], idx) => ({
+          position: idx + 1,
+          name: name.charAt(0).toUpperCase() + name.slice(1),
+          mentions: stats.count,
+          estimatedRevenue: Math.round(stats.revenue)
+        }))
+      };
+    }
+    
+    case "get_best_selling_day": {
+      const now = new Date();
+      let fromDate: Date;
+      let periodLabel: string;
+      
+      switch (args.period || "month") {
+        case "quarter":
+          fromDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+          periodLabel = "questo trimestre";
+          break;
+        case "year":
+          fromDate = new Date(now.getFullYear(), 0, 1);
+          periodLabel = "quest'anno";
+          break;
+        default:
+          fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodLabel = "questo mese";
+      }
+      
+      // Get visits
+      const { data: visits, error } = await supabase
+        .from("visits")
+        .select("data_visita, importo_vendita")
+        .eq("user_id", userId)
+        .gte("data_visita", fromDate.toISOString().split('T')[0])
+        .gt("importo_vendita", 0);
+      
+      if (error) throw error;
+      
+      // Aggregate by day of week
+      const dayNames = ["Domenica", "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato"];
+      const daySales: Record<number, { total: number; count: number }> = {};
+      
+      for (const v of visits || []) {
+        const date = new Date(v.data_visita);
+        const dayOfWeek = date.getDay();
+        
+        if (!daySales[dayOfWeek]) {
+          daySales[dayOfWeek] = { total: 0, count: 0 };
+        }
+        daySales[dayOfWeek].total += v.importo_vendita || 0;
+        daySales[dayOfWeek].count++;
+      }
+      
+      // Sort by total
+      const sorted = Object.entries(daySales)
+        .map(([day, stats]) => ({
+          dayOfWeek: parseInt(day),
+          dayName: dayNames[parseInt(day)],
+          total: stats.total,
+          count: stats.count,
+          average: stats.count > 0 ? Math.round(stats.total / stats.count) : 0
+        }))
+        .sort((a, b) => b.total - a.total);
+      
+      return {
+        period: periodLabel,
+        days: sorted,
+        bestDay: sorted[0]?.dayName || "N/A"
+      };
+    }
+    
+    case "get_zone_performance": {
+      const now = new Date();
+      let fromDate: Date;
+      let periodLabel: string;
+      
+      switch (args.period || "month") {
+        case "quarter":
+          fromDate = new Date(now.getFullYear(), Math.floor(now.getMonth() / 3) * 3, 1);
+          periodLabel = "questo trimestre";
+          break;
+        case "year":
+          fromDate = new Date(now.getFullYear(), 0, 1);
+          periodLabel = "quest'anno";
+          break;
+        default:
+          fromDate = new Date(now.getFullYear(), now.getMonth(), 1);
+          periodLabel = "questo mese";
+      }
+      
+      // Get visits with sales
+      const { data: visits, error: vError } = await supabase
+        .from("visits")
+        .select("account_id, importo_vendita")
+        .eq("user_id", userId)
+        .gte("data_visita", fromDate.toISOString().split('T')[0])
+        .gt("importo_vendita", 0);
+      
+      if (vError) throw vError;
+      
+      // Get client cities
+      const accountIds = [...new Set((visits || []).map(v => v.account_id))];
+      const { data: accounts } = await supabase
+        .from("accounts")
+        .select("id, city")
+        .in("id", accountIds);
+      
+      const accountCityMap = new Map((accounts || []).map(a => [a.id, a.city]));
+      
+      // Aggregate by city
+      const citySales: Record<string, { total: number; count: number }> = {};
+      for (const v of visits || []) {
+        const city = accountCityMap.get(v.account_id) || "Sconosciuta";
+        if (!citySales[city]) {
+          citySales[city] = { total: 0, count: 0 };
+        }
+        citySales[city].total += v.importo_vendita || 0;
+        citySales[city].count++;
+      }
+      
+      // Sort by total
+      const sorted = Object.entries(citySales)
+        .map(([city, stats]) => ({
+          city,
+          total: stats.total,
+          count: stats.count
+        }))
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 10);
+      
+      return {
+        period: periodLabel,
+        zones: sorted,
+        bestZone: sorted[0]?.city || "N/A"
+      };
+    }
+    
     default:
       return { error: "Funzione non trovata" };
   }
@@ -373,6 +628,59 @@ export function formatToolResult(name: string, result: any): string {
         .join(', ') || 'nessuno';
       
       return `[PDF_COMMAND:${JSON.stringify(result)}]\n\n📄 **Report PDF pronto!**\n\nTipo: ${result.report_type}\nFiltri: ${filterDesc}\n\n👉 Clicca il pulsante qui sotto per scaricare il PDF.`;
+    }
+    
+    // 🆕 ANALYTICS FORMATTERS
+    case "get_top_clients": {
+      if (!result.clients || result.clients.length === 0) {
+        return `Nessun cliente con vendite ${result.period}.`;
+      }
+      let text = `🏆 **Top ${result.clients.length} clienti** (${result.period}):\n\n`;
+      result.clients.forEach((c: any) => {
+        text += `${c.position}. [CLIENT:${c.client_id}]`;
+        if (c.tipo) text += ` - ${c.tipo}`;
+        if (c.city) text += ` - ${c.city}`;
+        text += `\n   💰 €${c.total.toLocaleString('it-IT')} (${c.orderCount} ordini)\n\n`;
+      });
+      return text;
+    }
+    
+    case "get_top_products": {
+      if (!result.products || result.products.length === 0) {
+        return `Nessun prodotto registrato ${result.period}.`;
+      }
+      let text = `📦 **Top ${result.products.length} prodotti** (${result.period}):\n\n`;
+      result.products.forEach((p: any) => {
+        text += `${p.position}. **${p.name}**\n`;
+        text += `   📊 ${p.mentions} menzioni - ~€${p.estimatedRevenue.toLocaleString('it-IT')} stimati\n\n`;
+      });
+      return text;
+    }
+    
+    case "get_best_selling_day": {
+      if (!result.days || result.days.length === 0) {
+        return `Nessun dato vendite ${result.period}.`;
+      }
+      let text = `📅 **Analisi vendite per giorno** (${result.period}):\n\n`;
+      text += `🏆 Il tuo giorno migliore è **${result.bestDay}**!\n\n`;
+      result.days.forEach((d: any, idx: number) => {
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : "  ";
+        text += `${medal} **${d.dayName}**: €${d.total.toLocaleString('it-IT')} (${d.count} ordini, media €${d.average})\n`;
+      });
+      return text;
+    }
+    
+    case "get_zone_performance": {
+      if (!result.zones || result.zones.length === 0) {
+        return `Nessun dato per zona ${result.period}.`;
+      }
+      let text = `🗺️ **Performance per zona** (${result.period}):\n\n`;
+      text += `🏆 La tua zona migliore è **${result.bestZone}**!\n\n`;
+      result.zones.forEach((z: any, idx: number) => {
+        const medal = idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `${idx + 1}.`;
+        text += `${medal} **${z.city}**: €${z.total.toLocaleString('it-IT')} (${z.count} ordini)\n`;
+      });
+      return text;
     }
     
     default:

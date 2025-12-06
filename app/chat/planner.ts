@@ -51,6 +51,11 @@ import {
   // 🆕 Query Composite
   queryClientsWithFilters,
   type CompositeFilters,
+  // 🆕 Analytics
+  getTopClients,
+  getTopProducts,
+  getSalesByDayOfWeek,
+  getSalesByCity,
 } from "../data/adapters";
 
 // ==================== TIPI ====================
@@ -934,28 +939,28 @@ async function handleIntent(
       if (!crypto) return { ...needCrypto(), intent };
       const limit = entities.limit ?? 10;
       
-      // TODO: implementare getTopClients()
-      // Per ora usiamo un messaggio che spiega cosa farà
-      return {
-        text: `📊 **Top ${limit} Clienti**\n\n` +
-              `_Funzionalità in arrivo!_\n\n` +
-              `Nel frattempo puoi:\n` +
-              `• Vedere le vendite per cliente: "Vendite a [nome]"\n` +
-              `• Clienti inattivi: "Chi non vedo da un mese?"`,
-        intent
-      };
+      // Determina periodo da entities
+      let period: 'month' | 'quarter' | 'year' | undefined;
+      if (entities.period === 'month' || entities.period === 'last_month') period = 'month';
+      else if (entities.period === 'quarter') period = 'quarter';
+      else if (entities.period === 'year') period = 'year';
+      
+      const result = await getTopClients(crypto, limit, period);
+      return { text: result.message, intent };
     }
 
     case 'analytics_top_products': {
-      // TODO: implementare getTopProducts()
-      return {
-        text: `📊 **Prodotti più venduti**\n\n` +
-              `_Funzionalità in arrivo!_\n\n` +
-              `Nel frattempo puoi:\n` +
-              `• Vedere chi compra un prodotto: "Chi compra [prodotto]?"\n` +
-              `• Prodotti discussi con un cliente: "Cosa ho discusso con [nome]?"`,
-        intent
-      };
+      if (!crypto) return { ...needCrypto(), intent };
+      const limit = entities.limit ?? 10;
+      
+      // Determina periodo
+      let period: 'month' | 'quarter' | 'year' | undefined;
+      if (entities.period === 'month' || entities.period === 'last_month') period = 'month';
+      else if (entities.period === 'quarter') period = 'quarter';
+      else if (entities.period === 'year') period = 'year';
+      
+      const result = await getTopProducts(crypto, limit, period);
+      return { text: result.message, intent };
     }
 
     case 'analytics_client_trend': {
@@ -1029,27 +1034,29 @@ async function handleIntent(
     }
 
     case 'analytics_best_day': {
-      // TODO: implementare analisi per giorno della settimana
-      return {
-        text: `📅 **Giorno più produttivo**\n\n` +
-              `_Funzionalità in arrivo!_\n\n` +
-              `Nel frattempo puoi vedere:\n` +
-              `• Visite di oggi: "Visite di oggi"\n` +
-              `• Vendite di oggi: "Quanto ho venduto oggi?"`,
-        intent
-      };
+      // Determina periodo
+      let period: 'month' | 'quarter' | 'year' | undefined;
+      if (entities.period === 'month' || entities.period === 'last_month') period = 'month';
+      else if (entities.period === 'quarter') period = 'quarter';
+      else if (entities.period === 'year') period = 'year';
+      else period = 'month'; // default
+      
+      const result = await getSalesByDayOfWeek(period);
+      return { text: result.message, intent };
     }
 
     case 'analytics_zone_performance': {
-      // TODO: implementare analisi per zona/città
-      return {
-        text: `🗺️ **Performance per zona**\n\n` +
-              `_Funzionalità in arrivo!_\n\n` +
-              `Nel frattempo puoi:\n` +
-              `• Cercare clienti per città: "Clienti di [città]"\n` +
-              `• Vedere le vendite totali: "Quanto ho venduto questo mese?"`,
-        intent
-      };
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      // Determina periodo
+      let period: 'month' | 'quarter' | 'year' | undefined;
+      if (entities.period === 'month' || entities.period === 'last_month') period = 'month';
+      else if (entities.period === 'quarter') period = 'quarter';
+      else if (entities.period === 'year') period = 'year';
+      else period = 'month'; // default
+      
+      const result = await getSalesByCity(crypto, period);
+      return { text: result.message, intent };
     }
 
     case 'analytics_lost_clients': {
@@ -1065,13 +1072,38 @@ async function handleIntent(
     }
 
     case 'analytics_growing_clients': {
-      // TODO: implementare analisi trend crescita
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      // Per ora mostriamo i top clienti più recenti come proxy della crescita
+      // In futuro: confronto periodo vs periodo precedente
+      const result = await getTopClients(crypto, 10, 'month');
+      
+      if (result.clients.length === 0) {
+        return { text: "Nessun dato sulle vendite questo mese.", intent };
+      }
+
+      // Filtra clienti con più ordini (segno di attività recente)
+      const activeClients = result.clients
+        .filter(c => c.orderCount >= 2)
+        .slice(0, 5);
+
+      if (activeClients.length === 0) {
+        return {
+          text: `📈 **Clienti più attivi questo mese:**\n\n` +
+                result.clients.slice(0, 5).map((c, i) => 
+                  `${i + 1}. **${c.name}**: €${c.totalRevenue.toLocaleString('it-IT')} (${c.orderCount} ordini)`
+                ).join('\n') +
+                `\n\n💡 _Per analisi di crescita dettagliate serve lo storico di più mesi._`,
+          intent
+        };
+      }
+
       return {
-        text: `📈 **Clienti in crescita**\n\n` +
-              `_Funzionalità in arrivo!_\n\n` +
-              `Nel frattempo puoi vedere:\n` +
-              `• Top clienti: "Chi sono i miei migliori clienti?"\n` +
-              `• Trend specifico: "Come sta andando [nome]?"`,
+        text: `📈 **Clienti più attivi questo mese** (≥2 ordini):\n\n` +
+              activeClients.map((c, i) => 
+                `${i + 1}. **${c.name}**: €${c.totalRevenue.toLocaleString('it-IT')} (${c.orderCount} ordini, media €${c.avgOrder})`
+              ).join('\n') +
+              `\n\n💡 Questi clienti stanno ordinando frequentemente!`,
         intent
       };
     }

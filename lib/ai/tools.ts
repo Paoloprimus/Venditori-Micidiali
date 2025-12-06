@@ -126,6 +126,61 @@ export const chatTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         required: ["report_type"]
       }
     }
+  },
+  // 🆕 ANALYTICS TOOLS
+  {
+    type: "function",
+    function: {
+      name: "get_top_clients",
+      description: "Ottieni i migliori clienti per fatturato. Usa per domande tipo 'chi sono i miei migliori clienti', 'clienti top', 'chi fattura di più'.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["month", "quarter", "year"], description: "Periodo di analisi (default: month)" },
+          limit: { type: "number", description: "Numero di clienti da mostrare (default: 10)" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_top_products",
+      description: "Ottieni i prodotti più venduti per fatturato. Usa per domande tipo 'qual è il prodotto più venduto', 'prodotti top', 'cosa vendo di più'.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["month", "quarter", "year"], description: "Periodo di analisi (default: month)" },
+          limit: { type: "number", description: "Numero di prodotti da mostrare (default: 10)" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_best_selling_day",
+      description: "Trova il giorno della settimana con più vendite. Usa per domande tipo 'in che giorno vendo di più', 'giorno migliore', 'quando lavoro meglio'.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["month", "quarter", "year"], description: "Periodo di analisi (default: month)" }
+        }
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_zone_performance",
+      description: "Analizza le performance per zona/città. Usa per domande tipo 'qual è la mia zona migliore', 'città più produttiva', 'dove vendo di più'.",
+      parameters: {
+        type: "object",
+        properties: {
+          period: { type: "string", enum: ["month", "quarter", "year"], description: "Periodo di analisi (default: month)" }
+        }
+      }
+    }
   }
 ];
 
