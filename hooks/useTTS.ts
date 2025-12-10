@@ -72,6 +72,40 @@ export function useTTS(mode: TTSMode = "auto") {
     }
   }, []);
 
+  // ===== Unlock audio (richiesto per autoplay Chrome) =====
+  const audioUnlockedRef = useRef(false);
+  
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    
+    try {
+      // Crea AudioContext se non esiste
+      if (!audioContextRef.current) {
+        audioContextRef.current = new (window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext)();
+      }
+      
+      // Riproduci suono silente per sbloccare
+      const ctx = audioContextRef.current;
+      const oscillator = ctx.createOscillator();
+      const gainNode = ctx.createGain();
+      gainNode.gain.value = 0; // Silenzioso
+      oscillator.connect(gainNode);
+      gainNode.connect(ctx.destination);
+      oscillator.start(0);
+      oscillator.stop(0.001);
+      
+      // Resume context se sospeso
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      
+      audioUnlockedRef.current = true;
+      console.log('[useTTS] Audio unlocked for autoplay');
+    } catch (e) {
+      console.warn('[useTTS] Failed to unlock audio:', e);
+    }
+  }, []);
+
   // ===== Stop all playback =====
   const stopSpeaking = useCallback(() => {
     // Stop OpenAI audio
@@ -170,6 +204,9 @@ export function useTTS(mode: TTSMode = "auto") {
           URL.revokeObjectURL(audioUrl);
           resolve(false);
         };
+        
+        // Sblocca audio prima del play (Chrome autoplay policy)
+        unlockAudio();
         
         console.log("[useTTS] Attempting to play audio...");
         audio.play().then(() => {
@@ -289,5 +326,6 @@ export function useTTS(mode: TTSMode = "auto") {
     setLastAssistantText,
     speakAssistant,
     stopSpeaking,
+    unlockAudio, // 🔓 Chiamare al primo click per sbloccare autoplay
   };
 }

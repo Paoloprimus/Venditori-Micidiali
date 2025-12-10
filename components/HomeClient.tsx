@@ -53,7 +53,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
   // ---- TTS
-  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant } = useTTS();
+  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant, unlockAudio } = useTTS();
   const ttsSpeakingRef = useRef(false);
   useEffect(() => { ttsSpeakingRef.current = ttsSpeaking; }, [ttsSpeaking]);
   const isTtsSpeakingFn = useCallback(() => ttsSpeakingRef.current, []);
@@ -227,16 +227,30 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
   useAutoResize(conv.taRef, conv.input);
 
+  // 🔧 FIX: Riferimento per evitare loop infiniti
+  const lastSpokenTextRef = useRef<string>('');
+
   useEffect(() => {
     if (!lastAssistantText) return;
+    // Evita di ripetere lo stesso testo (causa loop!)
+    if (lastSpokenTextRef.current === lastAssistantText) return;
+    lastSpokenTextRef.current = lastAssistantText;
+    
     // 🆕 Traccia per comando "ripeti"
     voice.setLastAssistantResponse(stripMarkdownForTTS(lastAssistantText));
-    if (voice.speakerEnabled) speakAssistant(lastAssistantText);
-  }, [lastAssistantText, voice.speakerEnabled, speakAssistant, voice]);
+    if (voice.speakerEnabled) {
+      speakAssistant(stripMarkdownForTTS(lastAssistantText));
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastAssistantText, voice.speakerEnabled]);
+  // ⚠️ NON includere `voice` o `speakAssistant` - causano loop infinito!
 
   // 🎙️ Listener per attivazione Dialogo da Dashboard/Drawer
   useEffect(() => {
     const handleActivateDialog = () => {
+      // 🔓 Sblocca audio PRIMA di qualsiasi TTS (Chrome autoplay policy)
+      unlockAudio();
+      
       // Se siamo nella dashboard, passa alla chat
       setHomePageMode('chat');
       // Attiva dialogo
@@ -585,7 +599,10 @@ export default function HomeClient({ email, userName }: { email: string; userNam
                   error: voice.voiceError,
                   onClick: voice.handleVoiceClick,
                   voiceMode: voice.voiceMode,
-                  onToggleDialog: () => (voice.voiceMode ? voice.stopDialog() : voice.startDialog()),
+                  onToggleDialog: () => {
+                    if (!voice.voiceMode) unlockAudio(); // 🔓 Sblocca prima di TTS
+                    voice.voiceMode ? voice.stopDialog() : voice.startDialog();
+                  },
                   speakerEnabled: voice.speakerEnabled,
                   onToggleSpeaker: () => voice.setSpeakerEnabled((s: boolean) => !s),
                   canRepeat: !!lastAssistantText,
