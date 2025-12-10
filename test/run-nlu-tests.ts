@@ -68,7 +68,7 @@ function runSingleTest(test: TestQuery): TestResult {
   
   if (test.expectedEntities) {
     for (const [key, expectedValue] of Object.entries(test.expectedEntities)) {
-      const actualValue = parsed.entities[key];
+      const actualValue = (parsed.entities as Record<string, unknown>)[key];
       
       if (actualValue === undefined) {
         entitiesMatch = false;
