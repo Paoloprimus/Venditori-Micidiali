@@ -625,6 +625,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         isListening={voice.isRecording}
         isSpeaking={ttsSpeaking}
         transcript={conv.input}
+        messages={mergedBubbles}
         onClose={voice.stopDialog}
       />
     </>

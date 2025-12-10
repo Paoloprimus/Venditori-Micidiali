@@ -271,20 +271,15 @@ export function useTTS(mode: TTSMode = "auto") {
     stopSpeaking();
 
     // Usa sempre OpenAI per qualità migliore (voce italiana più naturale)
-    const useOpenAI = mode === "openai" || mode === "auto";
+    // NO FALLBACK al browser TTS (ha accento inglese su Chrome)
+    console.log("[useTTS] Using OpenAI TTS (no browser fallback)");
     
-    console.log("[useTTS] Using:", useOpenAI ? "OpenAI" : "Browser");
+    const success = await speakOpenAI(toSpeak);
+    console.log("[useTTS] OpenAI result:", success);
     
-    if (useOpenAI) {
-      const success = await speakOpenAI(toSpeak);
-      console.log("[useTTS] OpenAI result:", success);
-      if (!success && mode === "auto") {
-        // Fallback to browser
-        console.log("[useTTS] Falling back to browser TTS");
-        speakBrowser(toSpeak);
-      }
-    } else {
-      speakBrowser(toSpeak);
+    if (!success) {
+      console.error("[useTTS] ⚠️ OpenAI TTS failed - NOT falling back to browser");
+      // NON fare fallback al browser, la voce è peggiore
     }
   }, [lastAssistantText, mode, stopSpeaking]);
 
