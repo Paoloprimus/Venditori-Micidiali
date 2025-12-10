@@ -312,9 +312,9 @@ export function useVoice({
           // (a volte "basta" non viene marcato come isFinal)
           if (isStopCommand(txt)) {
             console.log("[useVoice] STOP command detected:", txt, "isFinal:", res.isFinal);
-            const canSpeak = speakerEnabledRef.current;
+            // 🔇 NON dire "Dialogo terminato" - l'overlay che si chiude è feedback sufficiente
+            // (evita anche messaggi strani del browser quando SR viene interrotta)
             stopDialog();
-            if (canSpeak) onSpeak("Dialogo terminato.");
             return;
           }
           

@@ -295,16 +295,31 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   const [decryptedBubbles, setDecryptedBubbles] = useState<Bubble[]>([]);
 
   useEffect(() => {
+    // 🔍 DEBUG: Log stato crypto
+    console.log('[HomeClient] Decrypt effect - cryptoReady:', cryptoReady);
+    
     if (!cryptoReady) {
+      console.log('[HomeClient] Crypto not ready, skipping decryption');
       setDecryptedBubbles(patchedBubbles);
       return;
     }
 
     async function processPlaceholders() {
+      console.log('[HomeClient] Processing', patchedBubbles.length, 'bubbles for decryption');
+      
       const processed = await Promise.all(
         patchedBubbles.map(async (b: any) => {
           if (b?.role === 'assistant' && b?.content) {
+            const hasPlaceholder = /\[CLIENT:[a-f0-9-]+/i.test(b.content);
+            if (hasPlaceholder) {
+              console.log('[HomeClient] Found placeholder in:', b.content.slice(0, 100));
+            }
             const decrypted = await decryptClientPlaceholders(b.content);
+            if (hasPlaceholder && decrypted !== b.content) {
+              console.log('[HomeClient] ✅ Decrypted to:', decrypted.slice(0, 100));
+            } else if (hasPlaceholder) {
+              console.log('[HomeClient] ❌ Decryption failed, content unchanged');
+            }
             return { ...b, content: decrypted };
           }
           return b;
