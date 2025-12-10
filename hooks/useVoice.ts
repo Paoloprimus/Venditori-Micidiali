@@ -145,6 +145,7 @@ export function useVoice({
   const [voiceMode, setVoiceMode] = useState(false);      // Dialogo ON/OFF
   const [speakerEnabled, setSpeakerEnabled] = useState(false); // 🔈
   const [lastInputWasVoice, setLastInputWasVoice] = useState(false);
+  const [dialogTranscript, setDialogTranscript] = useState("");  // Transcript live in dialogo
 
   // mirror per gating TTS anche dentro callback asincrone
   const speakerEnabledRef = useRef(speakerEnabled);
@@ -380,8 +381,9 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
         if (dialogMode && isTtsSpeaking()) return;
 
         if (dialogMode) {
-          // In Dialogo: NO scrittura live nella textarea
+          // In Dialogo: aggiorna transcript live per UI
           dialogBufRef.current = live;
+          setDialogTranscript(live);  // 🆕 Per mostrare nell'overlay
 
           // 🆕 Cancella timer precedente
           if (autoSendTimerRef.current) {
@@ -405,10 +407,12 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
             dialogSendingRef.current = true;
             const payload = normalizeInterrogative(raw);
             dialogBufRef.current = "";
+            setDialogTranscript("");  // 🆕 Pulisci dopo invio
             finalAccumRef.current = "";
             micActiveRef.current = false;
             try { sr.stop?.(); } catch {}
-            onSendDirectly(payload).catch(() => {});
+            console.log('[useVoice] Sending to AI:', payload);
+            onSendDirectly(payload).catch((e) => console.error('[useVoice] Send error:', e));
             return;
           }
 
@@ -429,14 +433,15 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
               
               // Pulizia buffer
               dialogBufRef.current = "";
+              setDialogTranscript("");  // 🆕 Pulisci dopo invio
               finalAccumRef.current = "";
               
               // Pausa mic
               micActiveRef.current = false;
               try { sr.stop?.(); } catch {}
               
-              console.log('[Voice] Auto-send dopo pausa:', payload);
-              onSendDirectly(payload).catch(() => {});
+              console.log('[useVoice] Auto-send dopo pausa:', payload);
+              onSendDirectly(payload).catch((e) => console.error('[useVoice] Send error:', e));
             }, AUTO_SEND_DELAY_MS);
           }
         } else {
@@ -613,7 +618,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
       } else {
         startFallbackRecorder();
       }
-    }, 3500); // 3.5 secondi - tempo per il TTS
+    }, 2000); // 2 secondi - tempo per il TTS
   }
 
   function stopDialog() {
@@ -621,6 +626,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     setDialogMode(false);
     setVoiceMode(false);
     dialogBufRef.current = "";
+    setDialogTranscript("");  // 🆕 Pulisci transcript
     dialogSendingRef.current = false;
     micActiveRef.current = false;
     
@@ -742,6 +748,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     voiceMode, setVoiceMode,
     speakerEnabled, setSpeakerEnabled,
     lastInputWasVoice, setLastInputWasVoice,
+    dialogTranscript,  // 🆕 Transcript live per overlay
 
     handleVoicePressStart,
     handleVoicePressEnd,
