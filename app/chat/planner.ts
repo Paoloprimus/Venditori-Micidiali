@@ -56,7 +56,40 @@ import {
   getTopProducts,
   getSalesByDayOfWeek,
   getSalesByCity,
+  // 🆕 Fase 1: Elaborazioni Numeriche
+  getDailyAverage,
+  getMonthComparison,
+  getTargetGap,
+  getYearlyForecast,
+  getGrowthLeader,
+  getNewClientsCount,
+  getConversionRate,
+  getVisitFrequency,
+  getRevenuePerKmSummary,
+  // 🆕 Fase 2: Inferenze Strategiche
+  getVisitPriorities,
+  getChurnRiskClients,
+  getRevenueFocusSuggestions,
+  getProductFocusSuggestions,
+  getIdealCustomerProfile,
+  getLostOpportunities,
+  getGrowthPotentialClients,
+  getActionPlan,
+  getBestTimeForLocaleType,
+  // 🆕 Fase 3: Visualizzazioni e Trend
+  getSalesTrend,
+  getYoYComparison,
+  getSalesByWeekdayChart,
+  getSalesByCityChart,
+  getVisitsByTypeChart,
+  getAvgOrderTrend,
+  getClientsByRevenueBand,
+  getSeasonality,
+  getClientGrowth,
 } from "../data/adapters";
+
+// 💡 Napoleone
+import { generateSuggestions, getSuggestions, generateBriefing } from "@/lib/napoleon";
 
 // ==================== TIPI ====================
 
@@ -1351,6 +1384,201 @@ async function handleIntent(
       text += `\n💡 _Queste metriche potrebbero essere aggiunte in futuro!_`;
       
       return { text, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 FASE 1: ELABORAZIONI NUMERICHE AVANZATE
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'analytics_daily_avg': {
+      const period = (entities.period as 'week' | 'month' | 'quarter' | 'year') || 'month';
+      const result = await getDailyAverage(period);
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_month_comparison': {
+      const result = await getMonthComparison();
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_target_gap': {
+      const targetAmount = entities.targetAmount as number | undefined;
+      const period = (entities.period as 'month' | 'quarter' | 'year') || 'month';
+      const result = await getTargetGap(targetAmount, period);
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_yearly_forecast': {
+      const result = await getYearlyForecast();
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_growth_leader': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getGrowthLeader(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_new_clients': {
+      const period = (entities.period as 'week' | 'month' | 'quarter' | 'year') || 'month';
+      const result = await getNewClientsCount(period);
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_conversion_rate': {
+      const period = (entities.period as 'week' | 'month' | 'quarter' | 'year') || 'month';
+      const result = await getConversionRate(period);
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_visit_frequency': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getVisitFrequency(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'analytics_revenue_per_km': {
+      if (!crypto) return { ...needCrypto(), intent };
+      
+      const homeCoords = getHomeCoords();
+      if (!homeCoords) {
+        return {
+          text: `📍 **Imposta prima il punto di partenza!**\n\nVai in ⚙️ Impostazioni → 📍 Punto di Partenza.\n\nMi serve per calcolare il fatturato per km.`,
+          intent
+        };
+      }
+      
+      const period = (entities.period as 'month' | 'quarter' | 'year') || 'month';
+      const result = await getRevenuePerKmSummary(crypto, homeCoords, period);
+      return { text: result.message, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 FASE 2: INFERENZE STRATEGICHE
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'strategy_visit_priority': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getVisitPriorities(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_churn_risk': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getChurnRiskClients(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_revenue_focus': {
+      const result = await getRevenueFocusSuggestions();
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_product_focus': {
+      const result = await getProductFocusSuggestions();
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_ideal_customer': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getIdealCustomerProfile(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_lost_opportunities': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getLostOpportunities(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_growth_potential': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getGrowthPotentialClients(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_action_plan': {
+      const targetAmount = entities.targetAmount as number | undefined;
+      const result = await getActionPlan(targetAmount);
+      return { text: result.message, intent };
+    }
+
+    case 'strategy_best_time': {
+      const localeType = entities.localeType as string || 'bar';
+      const result = await getBestTimeForLocaleType(localeType);
+      return { text: result.message, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 FASE 3: VISUALIZZAZIONI E TREND
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'chart_sales_trend': {
+      const result = await getSalesTrend(6);
+      return { text: result.message, intent };
+    }
+
+    case 'chart_yoy_comparison': {
+      const result = await getYoYComparison();
+      return { text: result.message, intent };
+    }
+
+    case 'chart_sales_by_weekday': {
+      const result = await getSalesByWeekdayChart();
+      return { text: result.message, intent };
+    }
+
+    case 'chart_sales_by_city': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getSalesByCityChart(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'chart_visits_by_type': {
+      const result = await getVisitsByTypeChart();
+      return { text: result.message, intent };
+    }
+
+    case 'chart_avg_order_trend': {
+      const result = await getAvgOrderTrend(6);
+      return { text: result.message, intent };
+    }
+
+    case 'chart_clients_by_revenue': {
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getClientsByRevenueBand(crypto);
+      return { text: result.message, intent };
+    }
+
+    case 'chart_seasonality': {
+      const result = await getSeasonality();
+      return { text: result.message, intent };
+    }
+
+    case 'chart_client_growth': {
+      const result = await getClientGrowth(12);
+      return { text: result.message, intent };
+    }
+
+    // ═══════════════════════════════════════════════════════════════
+    // 💡 NAPOLEONE - Briefing Proattivo
+    // ═══════════════════════════════════════════════════════════════
+
+    case 'napoleon_briefing': {
+      // Ottieni userId
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        return { text: "💡 Non riesco ad accedere ai tuoi dati. Effettua il login.", intent };
+      }
+      
+      // Genera nuovi suggerimenti e recupera tutti
+      if (crypto) {
+        await generateSuggestions(user.id, crypto);
+      }
+      const suggestions = await getSuggestions(user.id);
+      const briefingText = generateBriefing(suggestions);
+      
+      return { text: briefingText, intent };
     }
 
     // ═══════════════════════════════════════════════════════════════

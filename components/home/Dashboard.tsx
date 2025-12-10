@@ -15,6 +15,8 @@ import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import GettingStartedChecklist from './GettingStartedChecklist';
 import { fetchPromemoria } from '@/lib/promemoria';
+import NapoleonCard from '@/components/napoleon/NapoleonCard';
+import DailyFeedbackPopup from '@/components/weekly/DailyFeedbackPopup';
 
 type DashboardStats = {
   visiteOggi: number;
@@ -301,16 +303,18 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           {dayName.charAt(0).toUpperCase() + dayName.slice(1)}
         </div>
         <h1 style={{ fontSize: 24, fontWeight: 700, color: '#111827', marginBottom: 4 }}>
-          {greeting}, {userName.split(' ')[0]}! 👋
+          {greeting}, {userName.split(' ')[0].charAt(0).toUpperCase() + userName.split(' ')[0].slice(1)}! 👋
         </h1>
-        <p style={{ fontSize: 14, color: '#6b7280' }}>
-          Ecco il riepilogo della tua giornata
-        </p>
+      </div>
+
+      {/* 💡 NAPOLEONE - Suggerimenti Proattivi */}
+      <div style={{ marginBottom: 16 }}>
+        <NapoleonCard />
       </div>
 
       {/* === BANNER PRINCIPALI (subito dopo saluto) === */}
       
-      {/* 1. Driving Mode - Sfondo scuro */}
+      {/* 1. Driver - Sfondo grigio sfumato */}
       <a 
         href="/driving"
         style={{
@@ -319,21 +323,21 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           justifyContent: 'space-between',
           padding: '14px 18px',
           marginBottom: 12,
-          background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+          background: 'linear-gradient(135deg, #4b5563 0%, #9ca3af 100%)',
           borderRadius: 14,
           textDecoration: 'none',
           color: 'white',
-          boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+          boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           <span style={{ fontSize: 28 }}>🚗</span>
           <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Modalità Guida</div>
-            <div style={{ fontSize: 12, opacity: 0.85 }}>Hands-free per guidare</div>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Driver</div>
+            <div style={{ fontSize: 12, opacity: 0.9 }}>Hands-free per guidare</div>
           </div>
         </div>
-        <span style={{ fontSize: 20, opacity: 0.7 }}>→</span>
+        <span style={{ fontSize: 20, opacity: 0.8 }}>→</span>
       </a>
 
       {/* 2. Promemoria - Sfondo bianco */}
@@ -761,6 +765,9 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           </div>
         </div>
       )}
+
+      {/* 📊 Feedback giornaliero (popup a fine giornata) */}
+      <DailyFeedbackPopup />
     </div>
   );
 }

@@ -15,7 +15,7 @@ import React, {
 import { CryptoService as CryptoSvcImpl } from "@/lib/crypto/CryptoService";
 import { supabase } from "@/lib/supabase/client";
 
-/** === Tipi esposti al resto dell'app === */
+/** === Tipi esposti al resto dell’app === */
 
 export type CryptoService = {
   unlockWithPassphrase: (passphrase: string) => Promise<void>;
@@ -108,7 +108,7 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   const [userId, setUserId] = useState<string | null>(null);
   const mountedRef = useRef(false);
 
-  // Istanza REALE unica e stabile (DEVE stare prima dell'effetto che la usa)
+  // Istanza REALE unica e stabile (DEVE stare prima degli useEffect che la usano!)
   const cryptoService: CryptoService = useMemo(() => {
     const impl = new (CryptoSvcImpl as any)(supabase) as CryptoService;
 
@@ -136,54 +136,44 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
     return impl;
   }, []);
 
-  // 🩵 Polling continuo: controlla se il servizio è sbloccato e aggiorna ready
-  // ✅ FIX: rimosso il timeout di 3 secondi, ora continua a controllare per sempre
-  // ✅ FIX 2: rimuovo il controllo inverso che resettava a false (causava il bug)
+  // 🩵 Se il servizio è già sbloccato (anche da fuori), forza ready=true
   useEffect(() => {
-    let interval: any = null;
-
+    let t: ReturnType<typeof setInterval> | null = null;
+    let stopped = false;
+    
     const tick = () => {
+      if (stopped) return;
       try {
-        // Solo se isUnlocked esiste E restituisce true, impostiamo ready=true
-        const isUnlockedFn = (cryptoService as any)?.isUnlocked;
-        if (typeof isUnlockedFn === 'function') {
-          const unlocked = isUnlockedFn();
-          if (unlocked && !ready) {
-            console.log("[CryptoProvider] ✅ Detected unlocked service → setReady(true)");
-            setReady(true);
-          }
+        const unlocked = (cryptoService as any)?.isUnlocked?.();
+        if (unlocked && !ready) {
+          console.log("[CryptoProvider] Detected unlocked service → setReady(true)");
+          setReady(true);
+          stopped = true;
+          if (t) clearInterval(t);
         }
       } catch { /* ignore */ }
     };
-
+    
     tick(); // primo check immediato
-    interval = setInterval(tick, 300); // polling ogni 300ms
-
+    t = setInterval(tick, 300);
+    
+    // Ferma dopo 3s per non sprecare risorse
+    const timeout = setTimeout(() => { 
+      stopped = true;
+      if (t) clearInterval(t); 
+    }, 3000);
+    
     return () => { 
-      try { 
-        clearInterval(interval); 
-      } catch {} 
+      stopped = true;
+      if (t) clearInterval(t); 
+      clearTimeout(timeout); 
     };
   }, [cryptoService, ready]);
 
   // unlock reale
   const unlock = useCallback(
     async (passphrase: string) => {
-      console.log("[CryptoProvider] unlock() chiamato");
       await cryptoService.unlockWithPassphrase(passphrase);
-      console.log("[CryptoProvider] unlockWithPassphrase completato, setReady(true)");
-      
-      // ✅ FIX: Salva passphrase in sessionStorage per auto-unlock successivi
-      if (typeof window !== "undefined") {
-        try {
-          sessionStorage.setItem("repping:pph", passphrase);
-          localStorage.setItem("repping:pph", passphrase);     // ✅ Local
-          console.log("[CryptoProvider] ✅ Passphrase salvata in sessionStorage per auto-unlock");
-        } catch (e) {
-          console.error("[CryptoProvider] ❌ Errore salvataggio passphrase:", e);
-        }
-      }
-      
       setReady(true);
     },
     [cryptoService]
@@ -192,13 +182,10 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
   // prewarm reale
   const prewarm = useCallback(
     async (scopes: string[]) => {
-      console.log("[CryptoProvider] prewarm() chiamato per", scopes.length, "scopes");
       await cryptoService.prewarm(scopes);
-      console.log("[CryptoProvider] prewarm completato");
     },
     [cryptoService]
   );
-
 
   // bootstrap userId e auto-unlock
   useEffect(() => {
@@ -223,38 +210,24 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
 
         if (!cancelled) setUserId(uid);
 
-        // Auto-unlock: se la pass è in storage, sblocca e prewarm
-        // 🔧 FIX: Ritenta fino a 3 volte con delay (per gestire redirect su Android)
-        let pass = "";
-        let attempts = 0;
-        const maxAttempts = 3;
-        
-        while (!pass && attempts < maxAttempts) {
-          pass =
-            typeof window !== "undefined"
-              ? sessionStorage.getItem("repping:pph") ||
-                localStorage.getItem("repping:pph") ||
-                ""
-              : "";
-          
-          if (!pass && attempts < maxAttempts - 1) {
-            console.log(`[CryptoProvider] Passphrase non trovata, attendo... (tentativo ${attempts + 1}/${maxAttempts})`);
-            await new Promise(resolve => setTimeout(resolve, 200 * (attempts + 1))); // 200ms, 400ms, 600ms
-          }
-          attempts++;
-        }
+        // Auto-unlock: se la pass è in storage, sblocca e prew arma
+        const pass =
+          typeof window !== "undefined"
+            ? sessionStorage.getItem("repping:pph") ||
+              localStorage.getItem("repping:pph") ||
+              ""
+            : "";
 
         if (pass) {
           try {
-            console.log("[CryptoProvider] Auto-unlock con pass da storage");
             await unlock(pass);
             await prewarm(DEFAULT_SCOPES);
-try {
-  // NON cancelliamo la password - mantienila per tutta la sessione
-  console.log('[CryptoProvider] Password mantenuta in storage per navigazione tra pagine');
-  // sessionStorage.removeItem('repping:pph');
-  // localStorage.removeItem("repping:pph");  // ← COMMENTATA!
-} catch {}
+            try {
+              sessionStorage.removeItem("repping:pph");
+            } catch {}
+            try {
+              localStorage.removeItem("repping:pph");
+            } catch {}
           } catch (e) {
             // Evita rumorosità: OperationError può arrivare da scope racing altrove
             const msg = String((e as any)?.message || e || "");
@@ -263,8 +236,6 @@ try {
               console.error("[CryptoProvider] unlock/prewarm failed:", e);
             }
           }
-        } else {
-          console.warn("[CryptoProvider] ⚠️ Passphrase non trovata in storage dopo", maxAttempts, "tentativi");
         }
       } catch {
         // niente
@@ -277,99 +248,42 @@ try {
   }, [unlock, prewarm, userIdProp]);
 
   // 🔎 DEBUG: esponi l'istanza crypto reale su window per test in console
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    (window as any).cryptoSvc = cryptoService;
-    try {
-      const keys = Array.from(
-        new Set([
-          ...Object.keys(cryptoService),
-          ...Object.getOwnPropertyNames(Object.getPrototypeOf(cryptoService)),
-        ])
-      ).filter((k) => typeof (cryptoService as any)[k] === "function");
-      console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
-    } catch {
-      // ignore
-    }
-  }, [cryptoService]);
-
-  // 🔄 FORCE AUTO-UNLOCK: se ready è false ma la passphrase esiste, sblocca
-  // ✅ FIX: Aggiunto retry con backoff per gestire timing issues su Android
-  useEffect(() => {
-    if (ready) return; // già sbloccato
-    if (typeof window === "undefined") return;
-
-    let cancelled = false;
-    let attempts = 0;
-    const MAX_ATTEMPTS = 5;
-
-    const tryUnlock = async () => {
-      while (!cancelled && attempts < MAX_ATTEMPTS) {
-        attempts++;
-        
-        const pass = sessionStorage.getItem("repping:pph") || localStorage.getItem("repping:pph");
-        
-        if (!pass) {
-          // Aspetta un po' e riprova (lo storage potrebbe non essere ancora pronto)
-          if (attempts < MAX_ATTEMPTS) {
-            console.log(`[CryptoProvider] 🔄 Attempt ${attempts}/${MAX_ATTEMPTS}: nessuna passphrase, riprovo...`);
-            await new Promise(r => setTimeout(r, 200 * attempts)); // backoff: 200ms, 400ms, 600ms...
-            continue;
-          }
-          console.log("[CryptoProvider] ❌ Nessuna passphrase dopo tutti i tentativi");
-          return;
-        }
-
-        console.log(`[CryptoProvider] 🔄 FORCE AUTO-UNLOCK attempt ${attempts}/${MAX_ATTEMPTS}`);
-        
-        try {
-          await unlock(pass);
-          await prewarm(DEFAULT_SCOPES);
-          console.log("[CryptoProvider] ✅ FORCE AUTO-UNLOCK completato");
-          return; // successo, esci
-        } catch (e) {
-          const msg = String((e as any)?.message || e || "");
-          console.error(`[CryptoProvider] ❌ Attempt ${attempts} failed:`, msg);
-          
-          // Se è un OperationError (chiavi corrotte), non riprovare
-          if (/OperationError/i.test(msg)) {
-            console.error("[CryptoProvider] ❌ OperationError - chiavi incompatibili, stop");
-            return;
-          }
-          
-          // Altrimenti aspetta e riprova
-          if (attempts < MAX_ATTEMPTS) {
-            await new Promise(r => setTimeout(r, 300 * attempts));
-          }
-        }
-      }
-    };
-
-    tryUnlock();
-
-    return () => { cancelled = true; };
-  }, [ready, unlock, prewarm]);
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  (window as any).cryptoSvc = cryptoService;
+  try {
+    const keys = Array.from(
+      new Set([
+        ...Object.keys(cryptoService),
+        ...Object.getOwnPropertyNames(Object.getPrototypeOf(cryptoService)),
+      ])
+    ).filter((k) => typeof (cryptoService as any)[k] === "function");
+    console.log("🔐 window.cryptoSvc pronto con metodi:", keys);
+  } catch {
+    // ignore
+  }
+}, [cryptoService]);
 
   // 🧰 Gancio esplicito per sbloccare/prewarmare dal browser (senza toccare /clients)
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    (window as any).reppingUnlock = async (pass: string) => {
-      await unlock(pass);
-      await prewarm([
-        "table:accounts",
-        "table:contacts",
-        "table:products",
-        "table:profiles",
-        "table:notes",
-        "table:conversations",
-        "table:messages",
-        "table:proposals",
-      ]);
-    };
-    return () => {
-      try { delete (window as any).reppingUnlock; } catch {}
-    };
-  }, [unlock, prewarm]);
+useEffect(() => {
+  if (typeof window === "undefined") return;
+  (window as any).reppingUnlock = async (pass: string) => {
+    await unlock(pass);
+    await prewarm([
+      "table:accounts",
+      "table:contacts",
+      "table:products",
+      "table:profiles",
+      "table:notes",
+      "table:conversations",
+      "table:messages",
+      "table:proposals",
+    ]);
+  };
+  return () => {
+    try { delete (window as any).reppingUnlock; } catch {}
+  };
+}, [unlock, prewarm]);
 
   
   const ctxValue = useMemo<CryptoContextType>(

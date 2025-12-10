@@ -6,3 +6,8 @@ node_modules
 tests/.auth/
 playwright-report/
 test-results/
+vm backup/
+migration-pack-mistral.zip
+migration-pack-mistral/
+reping-mobile/
+*.zip

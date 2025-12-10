@@ -1,5 +1,5 @@
 // components/HomeClient.tsx
-// VERSIONE REFACTORED - Utilities estratte in lib/chat/utils.ts
+// VERSIONE REFACTORED v2 - Planner locale integrato (risparmio token OpenAI)
 "use client";
 import { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import { useDrawers, DrawersWithBackdrop } from "./Drawers";
@@ -23,6 +23,15 @@ import { matchIntent } from "@/lib/voice/intents";
 import type { Intent } from "@/lib/voice/intents";
 import { handleIntent } from "@/lib/voice/dispatch";
 
+// 🆕 Planner locale per gestire ~70 intent senza OpenAI
+import { 
+  parseIntent, 
+  updateContext, 
+  createEmptyContext,
+  type ConversationContext 
+} from "@/lib/nlu/unified";
+import { runChatTurn_v2 } from "@/app/chat/planner";
+
 // Utilities estratte
 import { 
   patchPriceReply, 
@@ -31,6 +40,12 @@ import {
   getLocalIntentResponse,
   stripMarkdownForTTS 
 } from "@/lib/chat/utils";
+
+// Intent che DEVONO passare per OpenAI (query complesse)
+const FORCE_OPENAI_INTENTS = ['unknown'];
+
+// Soglia minima di confidence per usare planner locale
+const LOCAL_CONFIDENCE_THRESHOLD = 0.75;
 
 export default function HomeClient({ email, userName }: { email: string; userName: string }) {
   const convCtx = useConversation();
@@ -49,6 +64,10 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   
   // ---- Crypto ready status
   const { ready: cryptoReady, crypto } = useCrypto();
+
+  // 🆕 Contesto NLU persistente per il planner locale
+  const nluContextRef = useRef<ConversationContext>(createEmptyContext());
+  const [isLocalProcessing, setIsLocalProcessing] = useState(false);
 
   // Preferenza pagina iniziale (chat o dashboard)
   const [homePageMode, setHomePageMode] = useState<'chat' | 'dashboard'>('chat');
@@ -300,7 +319,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       }
     }
 
-    // ✅ Voice intents check
+    // ✅ Voice intents check (legacy - per comandi che richiedono conferma)
     const voiceIntent = matchIntent(txt);
     if (voiceIntent.type !== "NONE") {
       setOriginalVoiceCommand(txt);
@@ -308,14 +327,89 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       return;
     }
 
-    // ✅ NLU locale per intent semplici
+    // ═══════════════════════════════════════════════════════════════
+    // 🆕 PLANNER LOCALE - Gestisce ~70 intent SENZA OpenAI
+    // ═══════════════════════════════════════════════════════════════
     try {
-      const { parseIntent } = await import('@/lib/nlu/unified');
-      const parsed = parseIntent(txt);
+      const parsed = parseIntent(txt, nluContextRef.current);
       
-      const localIntents = ['greet', 'help', 'thanks', 'cancel', 'navigate'];
+      console.debug('[HomeClient] NLU parsed:', {
+        input: txt,
+        intent: parsed.intent,
+        confidence: parsed.confidence,
+        entities: parsed.entities
+      });
+
+      // Se confidence alta E non è un intent che richiede OpenAI → planner locale
+      const shouldUseLocal = 
+        parsed.confidence >= LOCAL_CONFIDENCE_THRESHOLD && 
+        !FORCE_OPENAI_INTENTS.includes(parsed.intent) &&
+        cryptoReady; // Serve crypto per query DB
+
+      if (shouldUseLocal) {
+        console.debug('[HomeClient] 🆓 Using LOCAL planner (no OpenAI)');
+        
+        setIsLocalProcessing(true);
+        appendUserLocal(txt);
+        
+        try {
+          // Costruisci contesto per il planner
+          const plannerCtx = {
+            state: {
+              scope: 'global' as const,
+              topic_attivo: null,
+              ultimo_intent: null,
+              entita_correnti: null,
+              ultimo_risultato: null,
+              updated_at: Date.now(),
+              nluContext: nluContextRef.current,
+            },
+            expired: false,
+            setScope: () => {},
+            remember: (partial: any) => {
+              if (partial.nluContext) {
+                nluContextRef.current = partial.nluContext;
+              }
+            },
+            reset: () => { nluContextRef.current = createEmptyContext(); },
+          };
+
+          // Esegui planner locale
+          // Cast crypto per compatibilità con il planner (verifichiamo che decryptFields esista)
+          const cryptoForPlanner = crypto && typeof crypto.decryptFields === 'function' 
+            ? crypto as any 
+            : null;
+          const result = await runChatTurn_v2(txt, plannerCtx, cryptoForPlanner);
+          
+          // Aggiorna contesto NLU
+          nluContextRef.current = updateContext(nluContextRef.current, parsed);
+          
+          // Mostra risposta
+          appendAssistantLocal(result.text);
+          
+          // Salva in DB per persistenza
+          const convId = conv.currentConv?.id;
+          if (convId) {
+            await saveAndReloadMessages(convId, txt, result.text);
+          }
+          
+          speakIfEnabled(stripMarkdownForTTS(result.text));
+          
+        } catch (plannerError) {
+          console.error('[HomeClient] Planner error, fallback to OpenAI:', plannerError);
+          // Fallback a OpenAI in caso di errore
+          setLocalUser(prev => prev.filter(t => t !== txt)); // Rimuovi bolla utente
+          await conv.send(txt);
+        } finally {
+          setIsLocalProcessing(false);
+        }
+        
+        return;
+      }
       
-      if (localIntents.includes(parsed.intent) && parsed.confidence >= 0.8) {
+      // Intent semplici con risposta predefinita (greet, help, thanks, cancel)
+      const simpleLocalIntents = ['greet', 'help', 'thanks', 'cancel', 'navigate'];
+      if (simpleLocalIntents.includes(parsed.intent) && parsed.confidence >= 0.8) {
         const response = getLocalIntentResponse(parsed.intent, parsed.entities);
         
         if (response) {
@@ -331,11 +425,15 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           return;
         }
       }
+      
     } catch (e) {
-      console.error("[nlu-unified] Error:", e);
+      console.error("[HomeClient] NLU error:", e);
     }
 
-    // ✅ Sistema semantico via API
+    // ═══════════════════════════════════════════════════════════════
+    // 🤖 FALLBACK OPENAI - Solo per query complesse/non riconosciute
+    // ═══════════════════════════════════════════════════════════════
+    console.debug('[HomeClient] 💸 Using OpenAI API (fallback)');
     await conv.send(txt);
   }
 
@@ -446,7 +544,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
                 threadRef={conv.threadRef}
                 endRef={conv.endRef}
                 onOpenDrawer={openDocs}
-                isSending={conv.isSending}
+                isSending={conv.isSending || isLocalProcessing}
               />
               <Composer
                 value={conv.input}

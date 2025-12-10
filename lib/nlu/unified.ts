@@ -86,6 +86,45 @@ export type IntentType =
   | 'km_traveled'                 // "Quanti km ho fatto questo mese?"
   // 🆕 DOMANDE IMPOSSIBILI (gestite con alternative)
   | 'analytics_impossible'        // Domande che richiedono dati non disponibili (es: margini)
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FASE 1: ELABORAZIONI NUMERICHE AVANZATE
+  // ═══════════════════════════════════════════════════════════════
+  | 'analytics_daily_avg'         // "Media giornaliera vendite"
+  | 'analytics_month_comparison'  // "Variazione vs mese scorso"
+  | 'analytics_target_gap'        // "Quanto manca al target?"
+  | 'analytics_yearly_forecast'   // "Previsione annuale"
+  | 'analytics_growth_leader'     // "Cliente con crescita maggiore"
+  | 'analytics_new_clients'       // "Nuovi clienti acquisiti"
+  | 'analytics_conversion_rate'   // "Tasso conversione visite/vendite"
+  | 'analytics_visit_frequency'   // "Frequenza visite per cliente"
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FASE 2: INFERENZE STRATEGICHE
+  // ═══════════════════════════════════════════════════════════════
+  | 'strategy_visit_priority'     // "Chi dovrei visitare?"
+  | 'strategy_churn_risk'         // "Chi rischia di andarsene?"
+  | 'strategy_revenue_focus'      // "Dove concentrarmi per vendere di più?"
+  | 'strategy_product_focus'      // "Quali prodotti spingere?"
+  | 'strategy_ideal_customer'     // "Qual è il cliente ideale?"
+  | 'strategy_lost_opportunities' // "Dove sto perdendo?"
+  | 'strategy_growth_potential'   // "Chi può crescere?"
+  | 'strategy_action_plan'        // "Come raggiungere il target?"
+  | 'strategy_best_time'          // "Quando visitare i bar?"
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FASE 3: VISUALIZZAZIONI E TREND
+  // ═══════════════════════════════════════════════════════════════
+  | 'chart_sales_trend'           // "Trend vendite"
+  | 'chart_yoy_comparison'        // "Confronto anno scorso"
+  | 'chart_sales_by_weekday'      // "Vendite per giorno settimana"
+  | 'chart_sales_by_city'         // "Vendite per città"
+  | 'chart_visits_by_type'        // "Visite per tipo locale"
+  | 'chart_avg_order_trend'       // "Andamento ordine medio"
+  | 'chart_clients_by_revenue'    // "Clienti per fascia fatturato"
+  | 'chart_seasonality'           // "Stagionalità vendite"
+  | 'chart_client_growth'         // "Crescita portfolio clienti"
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 NAPOLEONE - Briefing proattivo
+  // ═══════════════════════════════════════════════════════════════
+  | 'napoleon_briefing'           // "Fammi il punto della situazione"
   // GENERICI
   | 'greet'                  // "Ciao" / "Buongiorno"
   | 'help'                   // "Aiuto" / "Cosa posso fare?"
@@ -642,7 +681,7 @@ function extractEntities(text: string, context?: ConversationContext): EntityTyp
 }
 
 // Parole comuni da non confondere con nomi
-function isCommonWord(word: string): boolean {
+function isCommonWord(text: string): boolean {
   const common = new Set([
     'il', 'lo', 'la', 'i', 'gli', 'le', 'un', 'uno', 'una',
     'di', 'a', 'da', 'in', 'con', 'su', 'per', 'tra', 'fra',
@@ -654,9 +693,15 @@ function isCommonWord(word: string): boolean {
     'prodotto', 'prodotti', 'ordine', 'ordini',
     'primo', 'secondo', 'terzo', 'ultimo', 'prossimo',
     'nuovo', 'nuova', 'nuovi', 'nuove',
+    // Parole analytics che non sono nomi clienti
+    'top', 'migliori', 'migliore', 'peggiori', 'peggiore', 'più', 'meno',
+    'venduti', 'venduto', 'comprati', 'comprato', 'medio', 'media',
+    'fatturato', 'previsione', 'forecast', 'trend', 'crescita',
     ...LOCALE_TYPES
   ]);
-  return common.has(word.toLowerCase());
+  // Controlla se QUALSIASI parola del testo è comune
+  const words = text.toLowerCase().split(/\s+/);
+  return words.some(w => common.has(w));
 }
 
 function capitalizeWords(str: string): string {
@@ -733,18 +778,17 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   {
     intent: 'composite_query',
     patterns: [
-      // Pattern con "che hanno/che non" + condizione
-      /\b(client[ei]|negozi|bar|ristoranti?|locali)\b.*\b(che|quali)\b.*\b(hanno|ha|non|compra|comprato|venduto|ordinato|vedo|visito)\b/i,
+      // Pattern con "che hanno/che non" + condizione (richiede "clienti/bar" esplicito)
+      /\b(client[ei]|negozi|bar|ristoranti?|locali)\b.*\b(che|quali)\b.*\b(hanno|ha|non|comprato|venduto|ordinato|vedo|visito)\b/i,
       // Pattern con città + tipo locale
       /\b(client[ei]|bar|ristoranti?)\b.*\b(di|a|in)\b\s+([A-ZÀ-Ú][a-zà-ú]+)\b.*\b(che|con|dove)\b/i,
       // Pattern con filtro importo
       /\b(client[ei]|ordini|vendite)\b.*\b(>|<|maggiore|minore|sopra|sotto)\b.*\b(\d+)\s*€?\b/i,
-      // Pattern "chi compra X" o "a chi vendo X"
-      /\b(chi|a chi)\b.*\b(compra|vendo|ho venduto|acquista)\b.*\b(\w+)\b/i,
+      // NOTA: "chi compra X" gestito da sales_by_product
       // Pattern con periodo + condizione
       /\b(client[ei])\b.*\b(non vedo|non visito|inattiv)\b.*\b(da|per)\b/i,
     ],
-    confidence: 0.95, // Alta priorità per query composite
+    confidence: 0.90, // Ridotto per dare precedenza a intent specifici
     entityExtractor: (text) => {
       return extractCompositeFilters(text);
     }
@@ -775,6 +819,11 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(dov'e|dov e|dove trovo|conosci)\b/i,
     ],
     confidence: 0.9,
+    entityExtractor: (text) => {
+      // Estrai nome cliente da "Cerca cliente Rossi", "trova il cliente Bianchi"
+      const match = text.match(/(?:cerca|trova|cerco)\s+(?:il\s+)?(?:cliente?\s+)?([\wÀ-ÿ][\wÀ-ÿ'\s-]+?)(?:\?|$)/i);
+      return match?.[1] ? { clientName: match[1].trim() } : {};
+    }
   },
 
   {
@@ -853,17 +902,18 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   {
     intent: 'notes_search',
     patterns: [
-      // "Rossi paga contanti?", "Bianchi ha figli?"
-      /^([\wÀ-ÿ][\wÀ-ÿ'\s-]{2,20})\s+(paga|ha|hanno|preferisce|compra|ordina|vuole)/i,
+      // "Rossi paga contanti?", "Bianchi ha figli?" 
+      // ESCLUDI parole interrogative: quanto, chi, cosa, come, quando, quale
+      /^(?!quanto|chi|cosa|come|quando|quale)([A-ZÀ-Ú][a-zà-ÿ][\wÀ-ÿ'\s-]{1,20})\s+(paga|ha|hanno|preferisce|vuole)/i,
       // "cerca nelle note", "nelle note di Rossi"
       /\b(cerca|trova|guarda)\b.*\b(nelle?\s+note)\b/i,
       /\b(note|annotazioni)\b.*\b(di|su|del|della)\b/i,
       // "che tipo di pagamento usa Rossi?"
-      /\b(che\s+tipo|come|quale)\b.*\b(pagament\w*|preferenz\w*)\b/i,
+      /\b(che\s+tipo)\b.*\b(pagament\w*|preferenz\w*)\b/i,
       // "ricordo/ricordi" + cliente
       /\b(non )?ricord[oi]\b.*\b(se|che|cosa)\b/i,
     ],
-    confidence: 0.85,
+    confidence: 0.82,
     entityExtractor: (text) => {
       // Estrae sia il nome che il termine cercato
       const nameMatch = text.match(/^([\wÀ-ÿ][\wÀ-ÿ'\s-]{2,20})\s+/i);
@@ -884,6 +934,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     patterns: [
       /\b(quante|numero|conta|totale)\b.*\b(visite|chiamate|attivita)\b/i,
       /\b(visite|chiamate)\b.*\b(quante|totale|numero)\b/i,
+      // "visite questa settimana/mese" senza "quante"
+      /\b(visite|chiamate)\b.*\b(questa settimana|questo mese|settimana scorsa|mese scorso)\b/i,
     ],
     confidence: 0.95,
     proactiveAfter: (entities) => {
@@ -907,8 +959,16 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     patterns: [
       /\b(quando|ultima volta)\b.*\b(visto|visitato|andato|sentito|passato)\b/i,
       /\b(storico|cronologia|tutte le)\b.*\b(visite|attivita)\b/i,
+      // "storico visite Mario"
+      /\b(storico|cronologia)\b.*\b(visite|di)\b.*\b([\wÀ-ÿ]+)\b/i,
     ],
     confidence: 0.85,
+    entityExtractor: (text) => {
+      // Estrai nome cliente da "quando ho visto Rossi" o "storico visite Mario"
+      const match = text.match(/(?:visto|visitato|andato|sentito|passato|visite|di)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]{1,25}?)(?:\?|$|\s+(?:l['']ultima|questa|quando))/i)
+        || text.match(/(?:visite|storico|cronologia)\s+(?:di\s+)?([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i);
+      return match?.[1] ? { clientName: match[1].trim() } : {};
+    },
     proactiveAfter: (entities) => {
       if (entities.clientName) {
         return [{
@@ -927,8 +987,15 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     patterns: [
       /\b(ultima)\b.*\b(visita|chiamata|volta)\b/i,
       /\b(l'ultima|l ultima)\b.*\b(visita|volta|che ho fatto)\b/i,
+      // "quando ho visto Rossi" = ultima visita (priorità alta)
+      /\b(quando)\b.*\b(ho visto|ho visitato|ho chiamato|sono stato da)\b.*\b([\wÀ-ÿ]+)\b/i,
     ],
-    confidence: 0.9,
+    confidence: 0.92, // Più alto di visit_history
+    entityExtractor: (text) => {
+      // Estrai nome cliente da "ultima visita a Bianchi" o "quando ho visto Rossi"
+      const match = text.match(/(?:visita|volta|visto|visitato|chiamato|stato da)\s+(?:a\s+)?([\wÀ-ÿ][\wÀ-ÿ'\s-]+?)(?:\?|$)/i);
+      return match?.[1] ? { clientName: match[1].trim() } : {};
+    },
   },
 
   // 🆕 Visita per posizione
@@ -938,6 +1005,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(primo|secondo|terzo|quarto|quinto|ultimo)\b.*\b(cliente|visita)\b.*\b(oggi|ieri)\b/i,
       /\b(oggi|ieri)\b.*\b(primo|secondo|terzo|ultimo)\b.*\b(cliente|visita)\b/i,
       /\b(cliente|visita)\s+(numero|n\.?|#)\s*(\d+)\b/i,
+      // "prima/seconda/ultima visita di oggi"
+      /\b(prim[ao]|second[ao]|terz[ao]|quart[ao]|quint[ao]|ultim[ao])\b.*\b(visita|cliente)\b.*\b(di oggi|di ieri|odiern[ao])\b/i,
     ],
     confidence: 0.9,
     entityExtractor: (text) => {
@@ -967,9 +1036,14 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     patterns: [
       /\b(registra|salva|aggiungi|nuova|segna)\b.*\b(visita|chiamata|passaggio)\b/i,
       /\b(visita|chiamata)\b.*\b(registra|nuova|da)\b/i,
-      /\b(sono stato|ho visto|ho chiamato|ho visitato|sono passato)\b/i,
+      // NOTA: "ho visto" senza "chi" davanti = dichiarazione di visita
+      /^(?!.*\bchi\b).*(sono stato|ho visto|ho chiamato|ho visitato|sono passato)\s+(?:da\s+)?([\wÀ-ÿ]+)/i,
     ],
     confidence: 0.9,
+    entityExtractor: (text) => {
+      const match = text.match(/(?:sono stato|ho visto|ho chiamato|ho visitato|sono passato)\s+(?:da\s+)?([\wÀ-ÿ][\wÀ-ÿ'\s-]*)/i);
+      return match?.[1] ? { clientName: match[1].trim() } : {};
+    }
   },
 
   {
@@ -979,6 +1053,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(oggi|stamattina)\b.*\b(visite|chiamate|fatto|clienti visitati)\b/i,
       /\b(cosa ho fatto oggi)\b/i,
       /\b(riepilogo|riassunto)\b.*\b(oggi|giornata)\b/i,
+      // "chi ho visto oggi" = lista visite di oggi
+      /\b(chi)\b.*\b(ho visto|ho visitato|ho chiamato)\b.*\b(oggi|stamattina)\b/i,
     ],
     confidence: 0.95,
     proactiveAfter: (_, context) => {
@@ -1025,8 +1101,16 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(vendite|venduto|fatturato)\b.*\b(a|da|con|per)\s+([\wÀ-ÿ])/i,
       /\b(quanto)\b.*\b(compra|spende|ordina)\b/i,
       /\b(quanto gli|quanto le)\b.*\b(vend\w*|fattur\w*)\b/i,
+      // "quanto ha comprato Bianchi", "quanto ha speso Rossi"
+      /\b(quanto)\b.*\b(ha comprato|ha speso|ha ordinato)\b.*\b([\wÀ-ÿ]+)\b/i,
     ],
-    confidence: 0.85,
+    confidence: 0.88,
+    entityExtractor: (text) => {
+      // Estrai nome cliente da "vendite a Rossi", "quanto ha comprato Bianchi"
+      const match = text.match(/(?:vendite|venduto|fatturato)\s+(?:a|da|con|per)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i)
+        || text.match(/(?:ha comprato|ha speso|ha ordinato)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+)/i);
+      return match?.[1] ? { clientName: match[1].trim() } : {};
+    },
     proactiveAfter: (entities) => {
       if (entities.clientName) {
         return [{
@@ -1044,13 +1128,17 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   {
     intent: 'sales_by_product',
     patterns: [
-      /\b(a chi|chi)\b.*\b(vend\w+|venduto)\b.*\b([\wÀ-ÿ]+)\b/i,
-      /\b(chi)\b.*\b(compra|ordina|prende)\b.*\b([\wÀ-ÿ]+)\b/i,
+      // "chi compra birra", "a chi ho venduto vino"
+      /\b(chi)\b.*\b(compra|ordina|prende|acquista)\b.*\b([\wÀ-ÿ]+)\b/i,
+      /\b(a chi)\b.*\b(vend\w+|venduto)\b.*\b([\wÀ-ÿ]+)\b/i,
       /\b([\wÀ-ÿ]+)\b.*\b(a chi|chi)\b.*\b(vend\w*|preso)\b/i,
+      // "clienti che comprano vino" (ma NON "vendite di oggi")
+      /\b(clienti)\b.*\b(che comprano|che prendono)\b.*\b([\wÀ-ÿ]+)\b/i,
     ],
-    confidence: 0.85,
+    confidence: 0.93,
     entityExtractor: (text) => {
-      const match = text.match(/(?:venduto|compra|ordina|prende)\s+([\wÀ-ÿ\s]{2,20})/i);
+      // Estrai nome prodotto dopo verbo
+      const match = text.match(/(?:compra|ordina|prende|acquista|venduto|che comprano)\s+([\wÀ-ÿ\s]{2,20}?)(?:\?|$)/i);
       return match ? { productName: match[1].trim() } : {};
     }
   },
@@ -1058,10 +1146,14 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   {
     intent: 'sales_today',
     patterns: [
-      /\b(vendite|venduto|fatturato|incassato)\b.*\b(oggi|stamattina)\b/i,
+      /\b(vendite|venduto|fatturato|incassato)\b.*\b(oggi|stamattina|di oggi)\b/i,
       /\b(oggi|stamattina)\b.*\b(venduto|fatturato|incassato)\b/i,
+      // "quanto ho venduto oggi"
+      /\b(quanto)\b.*\b(ho venduto|ho fatturato|ho incassato)\b.*\b(oggi)\b/i,
+      // "vendite di oggi" esplicito
+      /^vendite\s+(di\s+)?oggi$/i,
     ],
-    confidence: 0.95,
+    confidence: 0.96, // Più alto di sales_by_product
   },
 
   {
@@ -1083,8 +1175,15 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(cosa|quali|che)\b.*\b(prodott[oi]|articol[oi])\b.*\b(discusso|parlato|proposto|venduto|trattato)\b/i,
       /\b(prodott[oi])\b.*\b(discussi|trattati|proposti)\b/i,
       /\b(di cosa)\b.*\b(parlato|discusso)\b/i,
+      // "cosa ho discusso con Rossi"
+      /\b(cosa)\b.*\b(ho discusso|ho parlato|ho proposto)\b.*\b(con|a)\s+([\wÀ-ÿ]+)/i,
     ],
     confidence: 0.85,
+    entityExtractor: (text) => {
+      // Estrai nome cliente da "cosa ho discusso con Rossi", "prodotti trattati con Verdi"
+      const match = text.match(/(?:con|a)\s+([\wÀ-ÿ][\wÀ-ÿ'\s-]+?)(?:\?|$)/i);
+      return match?.[1] ? { clientName: match[1].trim() } : {};
+    }
   },
 
   // 🆕 Chi compra un prodotto
@@ -1133,6 +1232,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(oggi)\b.*\b(programma|agenda|fare)\b/i,
       /^cosa (devo fare|faccio)( oggi)?$/i,
       /\b(da dove|come)\b.*\b(comincio|inizio|parto)\b/i,
+      // "appuntamenti oggi", "impegni oggi"
+      /\b(appuntament[oi]|impegn[oi])\b.*\b(oggi|di oggi|odiern[oi])\b/i,
     ],
     confidence: 0.9,
     proactiveAfter: () => [{
@@ -1258,6 +1359,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(chi)\b.*\b(fattura|compra|ordina)\b.*\b(di più|maggiormente)\b/i,
       /\b(classifica|ranking)\b.*\b(client[ei])\b/i,
       /\b(top)\s*(\d+)?\s*(client[ei])\b/i,
+      // "migliori clienti del mese", "migliori clienti"
+      /\b(miglior[ei])\b.*\b(client[ei])\b/i,
     ],
     confidence: 0.9,
     entityExtractor: (text) => {
@@ -1278,12 +1381,16 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   {
     intent: 'analytics_top_products',
     patterns: [
-      /\b(qual[ei]?|che)\b.*\b(prodott[oi])\b.*\b(più vendut[oi]|vend[eo] di più|migliore?)\b/i,
-      /\b(prodott[oi])\b.*\b(più vendut[oi]|bestseller|top)\b/i,
-      /\b(cosa)\b.*\b(vendo|venduto)\b.*\b(di più|maggiormente)\b/i,
+      /\b(qual[ei]?|che)\b.*\b(prodott[oi])\b.*\b(pi[uù] vendut[oi]|vend[eo] di pi[uù]|migliore?)\b/i,
+      /\b(prodott[oi])\b.*\b(pi[uù] vendut[oi]|bestseller|top)\b/i,
+      /\b(cosa)\b.*\b(vendo|venduto)\b.*\b(di pi[uù]|maggiormente)\b/i,
       /\b(classifica|ranking)\b.*\b(prodott[oi])\b/i,
+      // "prodotti più venduti", "top prodotti" (con/senza accento)
+      /\b(prodotti)\s+(pi[uù])\s+(venduti)\b/i,
+      /\b(top)\s+(prodotti)\b/i,
+      /\b(migliori)\s+(prodotti)\b/i,
     ],
-    confidence: 0.9,
+    confidence: 0.92,
     entityExtractor: () => ({ metric: 'revenue' as const, sortBy: 'amount' as const })
   },
 
@@ -1326,6 +1433,9 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(medi[oa])\b.*\b(ordine|scontrino|vendita|importo)\b/i,
       /\b(average|avg)\b.*\b(order)\b/i,
       /\b(in media)\b.*\b(quanto|vendo|fattur)\b/i,
+      // "ordine medio", "ordine medio questo mese"
+      /\b(ordine)\b.*\b(medio)\b/i,
+      /\b(scontrino)\b.*\b(medio)\b/i,
     ],
     confidence: 0.9,
     entityExtractor: () => ({ metric: 'avg_order' as const })
@@ -1433,6 +1543,375 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     }
   },
 
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FASE 1: ELABORAZIONI NUMERICHE AVANZATE
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    intent: 'analytics_daily_avg',
+    patterns: [
+      /\b(media|moyenne)\b.*\b(giornalier[ao]|al giorno|per giorno)\b/i,
+      /\b(quanto)\b.*\b(in media|mediamente)\b.*\b(al giorno|giornalmente)\b/i,
+      /\b(fatturato|vendite)\b.*\b(medi[ao]|in media)\b.*\b(giorn|day)\b/i,
+      /\b(al giorno|per giorno)\b.*\b(quanto|quant[eo])\b/i,
+      // "quanto ho fatturato in media al giorno" - deve vincere su sales_period
+      /\b(quanto)\b.*\b(fatturato|venduto)\b.*\b(media)\b.*\b(giorno)\b/i,
+    ],
+    confidence: 0.96, // Alta precedenza su sales_period (0.95)
+  },
+
+  {
+    intent: 'analytics_month_comparison',
+    patterns: [
+      /\b(variazione|differenza|delta)\b.*\b(mese scorso|mese precedente|ultimo mese)\b/i,
+      /\b(confronto|confronta|paragona)\b.*\b(mese scorso|mese precedente)\b/i,
+      /\b(rispetto|vs|versus)\b.*\b(mese scorso|mese precedente)\b/i,
+      /\b(mese scorso|mese precedente)\b.*\b(confronto|rispetto)\b/i,
+      /\b(come)\b.*\b(sto andando|vado)\b.*\b(rispetto|vs)\b.*\b(scorso|precedente)\b/i,
+      // "variazione vendite rispetto al mese scorso"
+      /\b(variazione|differenza)\b.*\b(vendite|fatturato)\b.*\b(mese scorso|scorso)\b/i,
+    ],
+    confidence: 0.96, // Alta precedenza su sales_period
+  },
+
+  {
+    intent: 'analytics_target_gap',
+    patterns: [
+      /\b(quanto)\b.*\b(manca|manc[ao])\b.*\b(arrivare|raggiungere)\b/i,
+      /\b(quanto)\b.*\b(manca)\b.*\b(\d+)\b/i,
+      /\b(distanza|gap)\b.*\b(target|obiettivo|budget)\b/i,
+      /\b(arrivare a|raggiungere)\b.*\b(\d+)\s*(€|euro)?\b/i,
+      // "quanto manca al target" - deve vincere su target_progress
+      /\b(quanto)\b.*\b(manca)\b.*\b(target|obiettivo|al target)\b/i,
+    ],
+    confidence: 0.92, // Leggermente più alto di target_progress
+    entityExtractor: (text) => {
+      const amountMatch = text.match(/(\d+(?:\.\d{3})*(?:,\d+)?)\s*(€|euro)?/i);
+      return amountMatch ? { targetAmount: parseInt(amountMatch[1].replace(/\./g, '')) } : {};
+    }
+  },
+
+  {
+    intent: 'analytics_yearly_forecast',
+    patterns: [
+      /\b(previsione|forecast|stima)\b.*\b(annual[ei]|anno|fine anno)\b/i,
+      /\b(se continuo cosi|a questo ritmo)\b.*\b(quanto|anno)\b/i,
+      /\b(quanto)\b.*\b(fatturer[oò]|far[oò]|chiuder[oò])\b.*\b(anno|annual)\b/i,
+      /\b(proiezione|projection)\b.*\b(annual[ei]|anno)\b/i,
+      /\b(a fine anno)\b.*\b(quanto|arriver[oò])\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'analytics_growth_leader',
+    patterns: [
+      /\b(cliente?)\b.*\b(crescita|crescendo|cresce)\b.*\b(maggiore|pi[uù]|migliore)\b/i,
+      /\b(chi)\b.*\b(sta crescendo|cresce)\b.*\b(di pi[uù]|maggiormente)\b/i,
+      /\b(qual[ei]?)\b.*\b(cliente?)\b.*\b(crescita|crescendo)\b/i,
+      /\b(top|migliore?)\b.*\b(crescita|performer)\b/i,
+      // "qual è il cliente che sta crescendo di più"
+      /\b(qual[ei]?)\b.*\b(cliente)\b.*\b(crescendo|cresce)\b.*\b(pi[uù])\b/i,
+    ],
+    confidence: 0.9, // Aumentato per precedenza su analytics_client_trend
+  },
+
+  {
+    intent: 'analytics_new_clients',
+    patterns: [
+      /\b(client[ei])\b.*\b(nuovi|acquisit[oi])\b.*\b(questo mese|trimestre|anno)\b/i,
+      /\b(nuovi)\b.*\b(client[ei])\b.*\b(mese|trimestre|settimana)\b/i,
+      /\b(acquisizioni|nuove acquisizioni)\b.*\b(client[ei])?\b/i,
+      // "quanti clienti nuovi ho acquisito" - deve vincere su client_count
+      /\b(quanti)\b.*\b(client[ei])\b.*\b(nuovi|acquisit[oi])\b/i,
+      /\b(quanti)\b.*\b(nuovi)\b.*\b(client[ei])\b/i,
+    ],
+    confidence: 0.96, // Alta precedenza su client_count
+  },
+
+  {
+    intent: 'analytics_conversion_rate',
+    patterns: [
+      /\b(tasso|rate|percentuale)\b.*\b(conversione|conversion)\b/i,
+      /\b(conversione)\b.*\b(visite|vendite)\b/i,
+      /\b(quante visite)\b.*\b(diventano|convertono)\b.*\b(vendite|ordini)\b/i,
+      /\b(visite)\b.*\b(su|\/)\b.*\b(vendite)\b/i,
+      /\b(efficacia|efficienza)\b.*\b(visite|commerciale)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'analytics_visit_frequency',
+    patterns: [
+      /\b(ogni quanto|frequenza)\b.*\b(visit[oa]|vedo|passo)\b/i,
+      /\b(quanto tempo)\b.*\b(tra|passa)\b.*\b(visita|visite)\b/i,
+      /\b(frequenza)\b.*\b(medi[ao])?\b.*\b(visite|passaggi)\b/i,
+      /\b(intervallo)\b.*\b(visite|tra una visita)\b/i,
+      /\b(stesso cliente)\b.*\b(ogni quanto|frequenza)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  // analytics_revenue_per_km rimosso - usa revenue_per_km esistente
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FASE 2: INFERENZE STRATEGICHE
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    intent: 'strategy_visit_priority',
+    patterns: [
+      /\b(qual[ei]?|chi)\b.*\b(client[ei]?)\b.*\b(dovrei|devo)\b.*\b(visitare|vedere)\b/i,
+      /\b(chi)\b.*\b(dovrei|devo)\b.*\b(visitare|vedere)\b.*\b(per prim[oa]|prima)\b/i,
+      /\b(chi)\b.*\b(priorit[aà]|prioritari[oa]|urgent[ei])\b.*\b(vedere|visitare)\b/i,
+      /\b(priorit[aà])\b.*\b(visite|client[ei])\b/i,
+      /\b(client[ei])\b.*\b(prioritari[oi]?|da vedere)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'strategy_churn_risk',
+    patterns: [
+      /\b(chi)\b.*\b(rischia|potrebbe)\b.*\b(passare|andare)\b.*\b(concorrenza|competitor)\b/i,
+      /\b(client[ei])\b.*\b(a rischio|rischiosi)\b/i,
+      /\b(chi)\b.*\b(potrei|posso)\b.*\b(perdere)\b/i,
+      /\b(rischio)\b.*\b(churn|abbandono|perdita)\b/i,
+      /\b(client[ei])\b.*\b(in fuga|che scappano)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'strategy_revenue_focus',
+    patterns: [
+      // "dove dovrei concentrarmi per aumentare"
+      /\b(dove)\b.*\b(dovrei|devo)\b.*\b(concentrar\w*|focalizzar\w*)\b/i,
+      /\b(come)\b.*\b(posso|potrei)\b.*\b(aumentare|incrementare)\b.*\b(vendite|fatturato)\b/i,
+      /\b(strategi[ae])\b.*\b(aumentare|crescere)\b.*\b(fatturato|vendite)\b/i,
+      /\b(per)\b.*\b(vendere|fatturare)\b.*\b(di più|meglio)\b/i,
+      // "come aumentare le vendite"
+      /\b(come)\b.*\b(aumentare|aumentar)\b.*\b(vendite|fatturato)\b/i,
+    ],
+    confidence: 0.96, // Alta per battere help (95%)
+  },
+
+  {
+    intent: 'strategy_product_focus',
+    patterns: [
+      /\b(qual[ei]?)\b.*\b(prodott[oi])\b.*\b(dovrei|devo)\b.*\b(spingere|promuovere|vendere)\b/i,
+      /\b(su)\b.*\b(qual[ei]?)\b.*\b(prodott[oi])\b.*\b(puntare|concentrar)\b/i,
+      /\b(prodott[oi])\b.*\b(da spingere|strategici|prioritari)\b/i,
+      /\b(cosa)\b.*\b(dovrei)\b.*\b(vendere|proporre)\b.*\b(di più)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'strategy_ideal_customer',
+    patterns: [
+      /\b(qual[ei]?)\b.*\b(mio|il)\b.*\b(cliente?)\b.*\b(ideale|perfetto|tipo)\b/i,
+      /\b(profilo)\b.*\b(cliente?)\b.*\b(ideale|perfetto|migliore)\b/i,
+      /\b(cliente?)\b.*\b(ideale|perfetto|modello)\b/i,
+      /\b(target)\b.*\b(cliente?|ideale)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'strategy_lost_opportunities',
+    patterns: [
+      /\b(dove)\b.*\b(sto|stai)\b.*\b(perdendo)\b.*\b(opportunit[aà])\b/i,
+      /\b(qual[ei]?)\b.*\b(opportunit[aà])\b.*\b(mi sto|sto)\b.*\b(perdendo)\b/i,
+      /\b(opportunit[aà])\b.*\b(mancate|perse|perdo)\b/i,
+      /\b(cosa)\b.*\b(mi sto|sto)\b.*\b(perdendo)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'strategy_growth_potential',
+    patterns: [
+      /\b(client[ei])\b.*\b(potenziale|promettent[ei])\b/i,
+      /\b(potenziale)\b.*\b(inespresso|nascosto|latente)\b/i,
+      /\b(chi)\b.*\b(può|potrebbe)\b.*\b(crescere|sviluppare)\b/i,
+      // "quali clienti piccoli potrebbero crescere"
+      /\b(qual[ei]?)\b.*\b(client[ei])\b.*\b(piccol[ei])\b.*\b(crescere)\b/i,
+      /\b(client[ei])\b.*\b(piccol[ei]|minor[ei])\b.*\b(potrebbe|possono|potrebbero)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'strategy_action_plan',
+    patterns: [
+      // "cosa dovrei fare per raggiungere X euro" - DEVE vincere su analytics_target_gap
+      /\b(cosa)\b.*\b(dovrei|devo)\b.*\b(fare)\b.*\b(raggiungere|arrivare)\b/i,
+      /\b(come)\b.*\b(arriv[oa]|raggiungo)\b.*\b(target|obiettivo|\d+)\b/i,
+      /\b(piano)\b.*\b(azione|per raggiungere)\b/i,
+      /\b(strategia)\b.*\b(raggiungere|per)\b.*\b(target|obiettivo)\b/i,
+    ],
+    confidence: 0.93, // Aumentato per vincere su analytics_target_gap (0.92)
+    entityExtractor: (text) => {
+      const amountMatch = text.match(/(\d+(?:\.\d{3})*)\s*(€|euro)?/i);
+      return amountMatch ? { targetAmount: parseInt(amountMatch[1].replace(/\./g, '')) } : {};
+    }
+  },
+
+  {
+    intent: 'strategy_best_time',
+    patterns: [
+      /\b(qual[ei]?)\b.*\b(miglior[ei]?)\b.*\b(momento|orario|giorno)\b.*\b(visitare|vedere)\b/i,
+      /\b(quando)\b.*\b(visitare|vedere|passare)\b.*\b(bar|ristoran\w*|hotel|local)\b/i,
+      /\b(orario|momento)\b.*\b(migliore|ideale)\b.*\b(per)\b.*\b(bar|ristoran)\b/i,
+      // "quando visitare i ristoranti"
+      /\b(quando)\b.*\b(visitare)\b.*\b(ristoranti|bar|hotel|pizzeri|pub)\b/i,
+    ],
+    confidence: 0.88,
+    entityExtractor: (text) => {
+      const typeMatch = text.match(/\b(bar|ristoran\w*|hotel|pizzeri\w*|pub|enotec\w*|cafe|caff[eè])\b/i);
+      return typeMatch ? { localeType: typeMatch[1].toLowerCase() } : {};
+    }
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 FASE 3: VISUALIZZAZIONI E TREND
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    intent: 'chart_sales_trend',
+    patterns: [
+      /\b(trend|andamento)\b.*\b(vendite|fatturato|incassi)\b/i,
+      /\b(mostra\w*)\b.*\b(trend|andamento)\b.*\b(vendite|fatturato)\b/i,
+      /\b(come)\b.*\b(stanno andando|va|andando)\b.*\b(vendite|fatturato)\b/i,
+      /\b(grafico|chart)\b.*\b(vendite|fatturato)\b/i,
+      /\b(vendite|fatturato)\b.*\b(ultim[ei]|negli ultimi)\b.*\b(mesi|settimane)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'chart_yoy_comparison',
+    patterns: [
+      /\b(confronta|paragona)\b.*\b(vendite|fatturato)\b.*\b(anno scorso|anno precedente)\b/i,
+      /\b(rispetto)\b.*\b(anno scorso|anno precedente)\b.*\b(come|sto)\b/i,
+      /\b(anno scorso)\b.*\b(come|quanto)\b.*\b(sto|stavo|facevo)\b/i,
+      /\b(year.?over.?year|yoy)\b/i,
+      /\b(confronto)\b.*\b(annual[ei])\b/i,
+      // "confronta le vendite con l'anno scorso"
+      /\b(confronta)\b.*\b(con)\b.*\b(anno scorso|l'anno scorso)\b/i,
+    ],
+    confidence: 0.96, // Alta per vincere su sales_period
+  },
+
+  {
+    intent: 'chart_sales_by_weekday',
+    patterns: [
+      // "distribuzione vendite per giorno della settimana"
+      /\b(distribuzione|ripartizione)\b.*\b(vendite|fatturato)\b.*\b(giorn|settimana)\b/i,
+      /\b(vendite|fatturato)\b.*\b(per|ogni)\b.*\b(giorno)\b.*\b(settimana)\b/i,
+      /\b(giorno)\b.*\b(migliore|peggiore)\b.*\b(vendite|fatturato)\b/i,
+      // "in che giorno vendo di più"
+      /\b(in che|quale)\b.*\b(giorno)\b.*\b(vendo|fatturo)\b/i,
+      /\b(che giorno)\b.*\b(vendo|fatturo)\b.*\b(più|meglio|meno)\b/i,
+    ],
+    confidence: 0.96, // Alta per vincere su sales_period
+  },
+
+  {
+    intent: 'chart_sales_by_city',
+    patterns: [
+      /\b(classifica|ranking)\b.*\b(citt[aà]|zone|aree)\b.*\b(fatturato|vendite)\b/i,
+      /\b(fatturato|vendite)\b.*\b(per|ogni)\b.*\b(citt[aà]|zona|area)\b/i,
+      /\b(citt[aà]|zone)\b.*\b(migliori|top|produttive)\b/i,
+      /\b(dove)\b.*\b(vendo|fatturo)\b.*\b(di più|meglio)\b/i,
+      // "vendite per zona"
+      /\b(vendite)\b.*\b(per)\b.*\b(zona|citt)\b/i,
+    ],
+    confidence: 0.90, // Più alta di sales_by_client
+  },
+
+  {
+    intent: 'chart_visits_by_type',
+    patterns: [
+      /\b(distribuzione|ripartizione)\b.*\b(visite|client[ei])\b.*\b(tipo|tipologia)\b/i,
+      /\b(visite|client[ei])\b.*\b(per)\b.*\b(tipo|tipologia)\b/i,
+      /\b(tipo)\b.*\b(local[ei]?)\b.*\b(più|maggiormente)\b.*\b(visit\w*)\b/i,
+      // "quanti bar e quanti ristoranti visito"
+      /\b(quant[ei])\b.*\b(bar)\b.*\b(e)\b.*\b(quant[ei])\b.*\b(ristoran)\b/i,
+      /\b(quant[ei])\b.*\b(bar|ristoran)\b.*\b(visit\w*)\b/i,
+    ],
+    confidence: 0.96, // Alta per vincere su client_count
+  },
+
+  {
+    intent: 'chart_avg_order_trend',
+    patterns: [
+      // "andamento ordine medio" - deve vincere su analytics_avg_order
+      /\b(andamento|trend|evoluzione)\b.*\b(ordine|scontrino)\b.*\b(medio)\b/i,
+      /\b(come)\b.*\b(sta cambiando|cambia|cambiando|evolve)\b.*\b(scontrino|ordine)\b/i,
+      /\b(ordine|scontrino)\b.*\b(medio)\b.*\b(nel tempo|trend|andamento)\b/i,
+    ],
+    confidence: 0.92, // Più alta di analytics_avg_order (0.90)
+  },
+
+  {
+    intent: 'chart_clients_by_revenue',
+    patterns: [
+      /\b(client[ei])\b.*\b(per)\b.*\b(fascia|range|livello)\b.*\b(fatturato|spesa)\b/i,
+      /\b(distribuzione)\b.*\b(client[ei])\b.*\b(per)\b.*\b(spesa|fatturato)\b/i,
+      /\b(segmentazione|segmenta)\b.*\b(client[ei])\b.*\b(fatturato|spesa)\b/i,
+      /\b(quant[ei])\b.*\b(client[ei])\b.*\b(alti|bassi|medi)\b.*\b(spendenti|compratori)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'chart_seasonality',
+    patterns: [
+      /\b(stagionalit[aà])\b.*\b(vendite|fatturato)\b/i,
+      /\b(mesi)\b.*\b(migliori|peggiori)\b/i,
+      /\b(vendite|fatturato)\b.*\b(stagional[ei])\b/i,
+      /\b(picchi|cali)\b.*\b(stagional[ei]|durante l'anno)\b/i,
+      /\b(quando)\b.*\b(vendo|fatturo)\b.*\b(di più|meno)\b.*\b(anno|stagione)\b/i,
+    ],
+    confidence: 0.88,
+  },
+
+  {
+    intent: 'chart_client_growth',
+    patterns: [
+      // "evoluzione del numero clienti" - deve vincere su client_count
+      // MA NON deve matchare "cliente con la crescita maggiore" (singolo cliente)
+      /\b(evoluzione|andamento)\b.*\b(numero|portafoglio|portfolio)\b.*\b(client[ei])\b/i,
+      /\b(come)\b.*\b(è cresciuto|cresciuto|aumentato)\b.*\b(portafoglio|numero)\b.*\b(client[ei])\b/i,
+      /\b(storico)\b.*\b(acquisizioni|nuovi client[ei])\b/i,
+      /\b(evoluzione)\b.*\b(numero)\b.*\b(client[ei])\b/i,
+      /\b(crescita)\b.*\b(portafoglio|portfolio)\b.*\b(client[ei])\b/i,
+    ],
+    confidence: 0.96, // Alta per vincere su client_count
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🎩 NAPOLEONE - Briefing proattivo
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    intent: 'napoleon_briefing',
+    patterns: [
+      /\b(fammi|dammi)\b.*\b(il punto|punto)\b.*\b(situazione|giornata|oggi)\b/i,
+      /\b(cosa)\b.*\b(devo|dovrei)\b.*\b(sapere|fare)\b.*\b(oggi)\b/i,
+      /\b(programma|piano)\b.*\b(di oggi|oggi|giornata)\b/i,
+      /\b(briefing|riepilogo)\b.*\b(giornata|mattina|oggi)\b/i,
+      /\b(napoleone)\b.*\b(dimmi|consiglia|suggerisci)\b/i,
+      /\b(aggiornami|aggiorna)\b.*\b(situazione|tutto)\b/i,
+      /\b(cosa)\b.*\b(c'è|abbiamo)\b.*\b(in programma|da fare)\b/i,
+      /\b(ok|bene)\b.*\b(napoleone|che)\b.*\b(mi dici|novità)\b/i,
+    ],
+    confidence: 0.90,
+  },
+
   {
     intent: 'product_price',
     patterns: [
@@ -1485,6 +1964,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(prodott[oi])\b.*\b(maggior fatturato|più redditi[tz]io)\b.*\b(km|chilometr|distanz)\b/i,
       /quale\s+prodott[oi]\s+.*\b(km|chilometr)\b/i,
       /\b(miglior|ottim)\b.*\b(resa|rendimento)\b.*\b(distanz|km)\b/i,
+      // "euro per chilometro", "€ per km"
+      /\b(€|euro)\b.*\b(per)?\b.*\b(km|chilometro)\b/i,
     ],
     confidence: 0.95,
     entityExtractor: (text) => {
@@ -1736,6 +2217,9 @@ function parseSingleIntent(
   const normalized = normalize(text);
   const baseEntities = extractEntities(normalized, context);
 
+  // 🆕 Trova TUTTI i match e scegli quello con confidence più alta
+  let bestMatch: { intent: IntentType; entities: EntityType; confidence: number } | null = null;
+
   for (const matcher of INTENT_MATCHERS) {
     for (const pattern of matcher.patterns) {
       const match = normalized.match(pattern);
@@ -1753,16 +2237,20 @@ function parseSingleIntent(
           }
         }
 
-        return {
-          intent: matcher.intent,
-          entities,
-          confidence: matcher.confidence
-        };
+        // 🆕 Tieni il match con confidence più alta
+        if (!bestMatch || matcher.confidence > bestMatch.confidence) {
+          bestMatch = {
+            intent: matcher.intent,
+            entities,
+            confidence: matcher.confidence
+          };
+        }
+        break; // Solo un match per pattern set per questo intent
       }
     }
   }
 
-  return null;
+  return bestMatch;
 }
 
 // ==================== PARSER PRINCIPALE ====================
@@ -1792,7 +2280,13 @@ export function parseIntent(
   // 1. Estrai entità (indipendentemente dall'intent)
   const baseEntities = extractEntities(normalized, context);
 
-  // 2. Cerca match tra i pattern
+  // 2. Cerca match tra i pattern - 🆕 Trova TUTTI i match e scegli quello con confidence più alta
+  let bestMatch: {
+    matcher: typeof INTENT_MATCHERS[0];
+    entities: EntityType;
+    match: RegExpMatchArray;
+  } | null = null;
+
   for (const matcher of INTENT_MATCHERS) {
     for (const pattern of matcher.patterns) {
       const match = normalized.match(pattern);
@@ -1824,21 +2318,30 @@ export function parseIntent(
           }
         }
 
-        // Genera suggerimenti proattivi
-        const proactiveSuggestions = matcher.proactiveAfter?.(entities, context);
-
-        return {
-          intent: matcher.intent,
-          confidence: matcher.confidence,
-          entities,
-          raw,
-          normalized,
-          needsConfirmation: ['visit_create', 'client_create'].includes(matcher.intent),
-          suggestedResponse: getSuggestedResponse(matcher.intent, entities),
-          proactiveSuggestions,
-        };
+        // 🆕 Tieni il match con confidence più alta
+        if (!bestMatch || matcher.confidence > bestMatch.matcher.confidence) {
+          bestMatch = { matcher, entities, match };
+        }
+        break; // Solo un match per pattern set per questo intent
       }
     }
+  }
+
+  // 🆕 Se abbiamo trovato un match, restituiscilo
+  if (bestMatch) {
+    const { matcher, entities } = bestMatch;
+    const proactiveSuggestions = matcher.proactiveAfter?.(entities, context);
+
+    return {
+      intent: matcher.intent,
+      confidence: matcher.confidence,
+      entities,
+      raw,
+      normalized,
+      needsConfirmation: ['visit_create', 'client_create'].includes(matcher.intent),
+      suggestedResponse: getSuggestedResponse(matcher.intent, entities),
+      proactiveSuggestions,
+    };
   }
 
   // 3. Prova inferenza dal contesto per follow-up

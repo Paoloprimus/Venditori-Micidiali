@@ -21,6 +21,14 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
   const [homePageExpanded, setHomePageExpanded] = useState(false);
   const [homePageMode, setHomePageMode] = useState<'chat' | 'dashboard'>('chat');
 
+  // Stato Napoleone
+  const [napoleonExpanded, setNapoleonExpanded] = useState(false);
+  const [napoleonEnabled, setNapoleonEnabled] = useState(true);
+
+  // Stato Riepilogo Settimanale
+  const [weeklyExpanded, setWeeklyExpanded] = useState(false);
+  const [weeklyEnabled, setWeeklyEnabled] = useState(true);
+
   // Carica impostazioni salvate
   useEffect(() => {
     const saved = localStorage.getItem('repping_settings');
@@ -37,6 +45,16 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
         }
       } catch {}
     }
+    // Carica preferenza Napoleone
+    const napoleonVisible = localStorage.getItem('napoleon_visible');
+    if (napoleonVisible === 'false') {
+      setNapoleonEnabled(false);
+    }
+    // Carica preferenza Riepilogo Settimanale
+    const weeklyVisible = localStorage.getItem('weekly_summary_visible');
+    if (weeklyVisible === 'false') {
+      setWeeklyEnabled(false);
+    }
   }, []);
 
   function handleHomePageModeChange(mode: 'chat' | 'dashboard') {
@@ -48,6 +66,20 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
       localStorage.setItem('repping_settings', JSON.stringify(data));
       window.dispatchEvent(new CustomEvent('repping:homePageModeChanged', { detail: { mode } }));
     } catch {}
+  }
+
+  function handleNapoleonToggle(enabled: boolean) {
+    setNapoleonEnabled(enabled);
+    localStorage.setItem('napoleon_visible', String(enabled));
+    // Dispatch event per aggiornare la dashboard
+    window.dispatchEvent(new CustomEvent('repping:napoleonVisibilityChanged', { detail: { enabled } }));
+  }
+
+  function handleWeeklyToggle(enabled: boolean) {
+    setWeeklyEnabled(enabled);
+    localStorage.setItem('weekly_summary_visible', String(enabled));
+    // Dispatch event per aggiornare la dashboard
+    window.dispatchEvent(new CustomEvent('repping:weeklySummaryVisibilityChanged', { detail: { enabled } }));
   }
 
   async function handleSaveAddress() {
@@ -225,7 +257,169 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
           )}
         </div>
 
-        {/* SEZIONE DRIVING MODE */}
+        {/* SEZIONE NAPOLEONE */}
+        <div style={{ marginBottom: 16 }}>
+          <button 
+            onClick={() => setNapoleonExpanded(!napoleonExpanded)} 
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px 16px',
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
+              border: 'none',
+              borderRadius: napoleonExpanded ? '12px 12px 0 0' : 12,
+              cursor: 'pointer',
+              color: 'white',
+              transition: 'all 0.2s',
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>💡 Napoleone</span>
+              {!napoleonExpanded && (
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: 400 }}>
+                  {napoleonEnabled ? '✓ Attivo' : '○ Disattivato'}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 12 }}>{napoleonExpanded ? '▲' : '▼'}</span>
+          </button>
+          
+          {napoleonExpanded && (
+            <div style={{
+              padding: 16,
+              border: 'none',
+              borderTop: 'none',
+              borderRadius: '0 0 12px 12px',
+              background: 'linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%)',
+            }}>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 16 }}>
+                Napoleone analizza i tuoi dati e ti suggerisce azioni: clienti da chiamare, opportunità da cogliere.
+              </p>
+              
+              <div 
+                onClick={() => handleNapoleonToggle(!napoleonEnabled)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '16px',
+                  background: napoleonEnabled ? 'rgba(59, 130, 246, 0.3)' : 'rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  border: napoleonEnabled ? '2px solid #3b82f6' : '1px solid rgba(255,255,255,0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 24 }}>💡</span>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'white' }}>Mostra in Dashboard</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                      {napoleonEnabled ? 'Vedrai i suggerimenti nella home' : 'I suggerimenti sono nascosti'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: napoleonEnabled ? '#3b82f6' : '#d1d5db',
+                  position: 'relative', transition: 'background 0.2s',
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 10,
+                    background: 'white', position: 'absolute', top: 2,
+                    left: napoleonEnabled ? 22 : 2,
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SEZIONE FEEDBACK GIORNALIERO */}
+        <div style={{ marginBottom: 16 }}>
+          <button 
+            onClick={() => setWeeklyExpanded(!weeklyExpanded)} 
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: '14px 16px',
+              background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+              border: 'none',
+              borderRadius: weeklyExpanded ? '12px 12px 0 0' : 12,
+              cursor: 'pointer',
+              color: 'white',
+              transition: 'all 0.2s',
+            }}
+          >
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 2 }}>
+              <span style={{ fontWeight: 600, fontSize: 15 }}>📊 Feedback Giornaliero</span>
+              {!weeklyExpanded && (
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.85)', fontWeight: 400 }}>
+                  {weeklyEnabled ? '✓ Attivo' : '○ Disattivato'}
+                </span>
+              )}
+            </div>
+            <span style={{ fontSize: 12 }}>{weeklyExpanded ? '▲' : '▼'}</span>
+          </button>
+          
+          {weeklyExpanded && (
+            <div style={{
+              padding: 16,
+              border: 'none',
+              borderTop: 'none',
+              borderRadius: '0 0 12px 12px',
+              background: 'linear-gradient(135deg, #059669 0%, #10b981 100%)',
+            }}>
+              <p style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 16 }}>
+                A fine giornata ti chiedo com&apos;è andata con un semplice feedback.
+              </p>
+              
+              <div 
+                onClick={() => handleWeeklyToggle(!weeklyEnabled)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '16px',
+                  background: weeklyEnabled ? 'rgba(16, 185, 129, 0.3)' : 'rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  border: weeklyEnabled ? '2px solid #10b981' : '1px solid rgba(255,255,255,0.2)',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <span style={{ fontSize: 24 }}>📊</span>
+                  <div>
+                    <div style={{ fontWeight: 600, color: 'white' }}>Chiedi feedback</div>
+                    <div style={{ fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
+                      {weeklyEnabled ? 'Dopo le 18 ti chiederò com\'è andata' : 'Il feedback è disattivato'}
+                    </div>
+                  </div>
+                </div>
+                <div style={{
+                  width: 44, height: 24, borderRadius: 12,
+                  background: weeklyEnabled ? '#10b981' : '#d1d5db',
+                  position: 'relative', transition: 'background 0.2s',
+                }}>
+                  <div style={{
+                    width: 20, height: 20, borderRadius: 10,
+                    background: 'white', position: 'absolute', top: 2,
+                    left: weeklyEnabled ? 22 : 2,
+                    transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* SEZIONE DRIVER */}
         <div style={{ marginBottom: 16 }}>
           <a 
             href="/driving"
@@ -234,7 +428,7 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
               alignItems: 'center',
               justifyContent: 'space-between',
               padding: '16px',
-              background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)',
+              background: 'linear-gradient(135deg, #4b5563 0%, #9ca3af 100%)',
               borderRadius: 12,
               textDecoration: 'none',
               color: 'white',
@@ -242,7 +436,7 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
             }}
             onMouseOver={e => {
               e.currentTarget.style.transform = 'scale(1.02)';
-              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.3)';
+              e.currentTarget.style.boxShadow = '0 4px 20px rgba(0,0,0,0.2)';
             }}
             onMouseOut={e => {
               e.currentTarget.style.transform = 'scale(1)';
@@ -252,8 +446,8 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
               <span style={{ fontSize: 28 }}>🚗</span>
               <div>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>Modalità Guida</div>
-                <div style={{ fontSize: 12, opacity: 0.8 }}>Interfaccia hands-free per guidare</div>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Driver</div>
+                <div style={{ fontSize: 12, opacity: 0.9 }}>Interfaccia hands-free per guidare</div>
               </div>
             </div>
             <span style={{ fontSize: 20 }}>→</span>

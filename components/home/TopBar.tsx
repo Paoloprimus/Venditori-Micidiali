@@ -68,7 +68,7 @@ export default function TopBar({
           onClick={onOpenDati}
           title="Gestione"
         >
-          📊
+          📝
         </button>
         <button
           className="iconbtn"

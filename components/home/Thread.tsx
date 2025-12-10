@@ -1,6 +1,5 @@
 "use client";
 import React, { RefObject, useEffect, useState, useRef } from "react";
-import PromemoriaWidget from './PromemoriaWidget';
 
 type Bubble = { role: "user" | "assistant"; content: string };
 
@@ -223,10 +222,6 @@ export default function Thread({ bubbles, serverError, threadRef, endRef, onOpen
 
   return (
     <div className="thread" ref={threadRef}>
-      {bubbles.length === 0 && !isSending && (
-        <PromemoriaWidget onOpenDrawer={onOpenDrawer} />
-      )}
-      
       {bubbles.map((m, i) => (
         <div key={i} className={`msg ${m.role === "user" ? "me" : ""}`}>
           {m.role === 'assistant' ? (
