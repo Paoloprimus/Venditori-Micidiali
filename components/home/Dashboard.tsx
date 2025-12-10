@@ -314,9 +314,14 @@ export default function HomeDashboard({ userName }: { userName: string }) {
 
       {/* === BANNER PRINCIPALI (subito dopo saluto) === */}
       
-      {/* 1. Driver - Sfondo grigio sfumato */}
-      <a 
-        href="/driving"
+      {/* 1. Dialogo - Modalità hands-free */}
+      <button 
+        onClick={() => {
+          // Setta flag per attivare dialogo nella chat
+          localStorage.setItem('activate_dialog_mode', 'true');
+          // Emetti evento per attivare dialogo
+          window.dispatchEvent(new CustomEvent('repping:activateDialog'));
+        }}
         style={{
           display: 'flex',
           alignItems: 'center',
@@ -325,20 +330,22 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           marginBottom: 12,
           background: 'linear-gradient(135deg, #4b5563 0%, #9ca3af 100%)',
           borderRadius: 14,
-          textDecoration: 'none',
+          border: 'none',
+          width: '100%',
+          cursor: 'pointer',
           color: 'white',
           boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 28 }}>🚗</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Driver</div>
-            <div style={{ fontSize: 12, opacity: 0.9 }}>Hands-free per guidare</div>
+          <span style={{ fontSize: 28 }}>🎙️</span>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontWeight: 700, fontSize: 16 }}>Dialogo</div>
+            <div style={{ fontSize: 12, opacity: 0.9 }}>Modalità hands-free</div>
           </div>
         </div>
         <span style={{ fontSize: 20, opacity: 0.8 }}>→</span>
-      </a>
+      </button>
 
       {/* 2. Promemoria - Sfondo bianco */}
       <a 

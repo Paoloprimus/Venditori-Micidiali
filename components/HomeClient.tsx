@@ -9,6 +9,7 @@ import TopBar from "./home/TopBar";
 import Thread from "./home/Thread";
 import Composer from "./home/Composer";
 import HomeDashboard from "./home/Dashboard";
+import DialogOverlay from "./home/DialogOverlay";
 import PassphraseDebugPanel from "./PassphraseDebugPanel";
 import WelcomeModal from "./WelcomeModal";
 
@@ -231,6 +232,31 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     voice.setLastAssistantResponse(stripMarkdownForTTS(lastAssistantText));
     if (voice.speakerEnabled) speakAssistant(lastAssistantText);
   }, [lastAssistantText, voice.speakerEnabled, speakAssistant, voice]);
+
+  // 🎙️ Listener per attivazione Dialogo da Dashboard/Drawer
+  useEffect(() => {
+    const handleActivateDialog = () => {
+      // Se siamo nella dashboard, passa alla chat
+      setHomePageMode('chat');
+      // Attiva dialogo
+      if (!voice.voiceMode) {
+        voice.startDialog();
+      }
+      // Pulisci il flag
+      localStorage.removeItem('activate_dialog_mode');
+    };
+
+    window.addEventListener('repping:activateDialog', handleActivateDialog);
+    
+    // Check flag all'avvio (se utente ha cliccato su Dialogo e poi ricaricato)
+    if (localStorage.getItem('activate_dialog_mode') === 'true') {
+      handleActivateDialog();
+    }
+
+    return () => {
+      window.removeEventListener('repping:activateDialog', handleActivateDialog);
+    };
+  }, [voice]);
 
   const handleAnyHomeInteraction = useCallback(() => {
     if (leftOpen) closeLeft();
@@ -591,6 +617,15 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
       {/* 👋 Welcome Modal (primo accesso) */}
       <WelcomeModal userName={userName} />
+
+      {/* 🎙️ Dialog Overlay - Modalità hands-free */}
+      <DialogOverlay
+        active={voice.voiceMode}
+        isListening={voice.isRecording}
+        isSpeaking={ttsSpeaking}
+        transcript={conv.input}
+        onClose={voice.stopDialog}
+      />
     </>
   );
 }

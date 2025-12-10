@@ -419,10 +419,17 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
           )}
         </div>
 
-        {/* SEZIONE DRIVER */}
+        {/* SEZIONE DIALOGO */}
         <div style={{ marginBottom: 16 }}>
-          <a 
-            href="/driving"
+          <button 
+            onClick={() => {
+              // Setta flag per attivare dialogo nella chat
+              localStorage.setItem('activate_dialog_mode', 'true');
+              // Emetti evento per attivare dialogo
+              window.dispatchEvent(new CustomEvent('repping:activateDialog'));
+              // Chiudi drawer
+              onClose?.();
+            }}
             style={{
               display: 'flex',
               alignItems: 'center',
@@ -430,7 +437,9 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
               padding: '16px',
               background: 'linear-gradient(135deg, #4b5563 0%, #9ca3af 100%)',
               borderRadius: 12,
-              textDecoration: 'none',
+              border: 'none',
+              width: '100%',
+              cursor: 'pointer',
               color: 'white',
               transition: 'transform 0.2s, box-shadow 0.2s',
             }}
@@ -444,14 +453,14 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-              <span style={{ fontSize: 28 }}>🚗</span>
-              <div>
-                <div style={{ fontWeight: 600, fontSize: 16 }}>Driver</div>
-                <div style={{ fontSize: 12, opacity: 0.9 }}>Interfaccia hands-free per guidare</div>
+              <span style={{ fontSize: 28 }}>🎙️</span>
+              <div style={{ textAlign: 'left' }}>
+                <div style={{ fontWeight: 600, fontSize: 16 }}>Dialogo</div>
+                <div style={{ fontSize: 12, opacity: 0.9 }}>Modalità hands-free</div>
               </div>
             </div>
             <span style={{ fontSize: 20 }}>→</span>
-          </a>
+          </button>
         </div>
 
         {/* SEZIONE LEGAL */}
