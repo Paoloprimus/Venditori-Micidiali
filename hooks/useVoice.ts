@@ -456,25 +456,43 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
       };
 
       sr.onerror = (event: any) => {
-        console.error("[useVoice] SR onerror:", event?.error || event);
-        if (micActiveRef.current) {
+        console.error("[useVoice] SR onerror:", event?.error || event, "ttsSpeaking:", isTtsSpeaking());
+        
+        // NON riavviare se TTS sta parlando
+        if (isTtsSpeaking()) {
+          console.log("[useVoice] TTS speaking, NOT restarting SR after error");
+          try { sr.stop?.(); } catch {}
+          srRef.current = null;
+          return;
+        }
+        
+        if (micActiveRef.current && dialogModeRef.current) {
           try { sr.stop?.(); } catch {}
           srRef.current = null;
           // 🔁 al riavvio azzera i buffer per evitare carry-over
           finalAccumRef.current = "";
           dialogBufRef.current = "";
-          setTimeout(startNativeSR, 180);
+          setTimeout(startNativeSR, 300);
         }
       };
 
       sr.onend = () => {
-        console.log("[useVoice] SR onend, micActive:", micActiveRef.current);
-        if (micActiveRef.current) {
+        console.log("[useVoice] SR onend, micActive:", micActiveRef.current, "ttsSpeaking:", isTtsSpeaking());
+        
+        // NON riavviare se TTS sta parlando (evita loop!)
+        if (isTtsSpeaking()) {
+          console.log("[useVoice] TTS speaking, NOT restarting SR");
+          srRef.current = null;
+          setIsRecording(false);
+          return;
+        }
+        
+        if (micActiveRef.current && dialogModeRef.current) {
           srRef.current = null;
           // 🔁 al riavvio azzera i buffer
           finalAccumRef.current = "";
           dialogBufRef.current = "";
-          setTimeout(startNativeSR, 120);
+          setTimeout(startNativeSR, 200); // Delay leggermente aumentato
         } else {
           setIsRecording(false);
         }
@@ -610,20 +628,41 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     const greeting = firstName ? `Ciao ${firstName}, ti ascolto.` : 'Ciao, ti ascolto.';
     onSpeak(greeting);
     
-    // ⏱️ Avvia SR dopo un delay breve (il saluto è corto)
-    setTimeout(() => {
-      console.log("[useVoice] Delayed SR start, dialogMode:", dialogModeRef.current);
-      if (!dialogModeRef.current) return;
+    // ⏱️ Aspetta che il TTS finisca PRIMA di avviare SR
+    // (altrimenti il microfono cattura il saluto!)
+    const waitForTTSAndStartSR = async () => {
+      console.log("[useVoice] Waiting for TTS to finish...");
       
+      // Aspetta minimo 500ms (tempo per TTS di iniziare)
+      await sleep(500);
+      
+      // Poi aspetta che TTS finisca (max 5 secondi)
+      let waited = 0;
+      while (isTtsSpeaking() && waited < 5000) {
+        await sleep(200);
+        waited += 200;
+        console.log("[useVoice] Still waiting for TTS...", waited, "ms");
+      }
+      
+      // Extra buffer dopo fine TTS
+      await sleep(300);
+      
+      if (!dialogModeRef.current) {
+        console.log("[useVoice] Dialog cancelled while waiting for TTS");
+        return;
+      }
+      
+      console.log("[useVoice] TTS finished, starting SR");
       micActiveRef.current = true;
-      console.log("[useVoice] Starting SR after delay");
       
       if (supportsNativeSR) {
         startNativeSR();
       } else {
         startFallbackRecorder();
       }
-    }, 1200); // 1.2 secondi - giusto per il saluto breve
+    };
+    
+    waitForTTSAndStartSR();
   }
 
   function stopDialog() {
