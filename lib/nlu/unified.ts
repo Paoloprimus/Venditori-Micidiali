@@ -155,6 +155,8 @@ export type EntityType = {
   sortBy?: 'amount' | 'frequency' | 'recency' | 'growth';
   limit?: number;            // Top N
   comparisonType?: 'vs_previous' | 'vs_last_year' | 'trend';
+  // 🆕 Per target e obiettivi
+  targetAmount?: number;     // Obiettivo di vendita
   // 🆕 Per domande impossibili
   missingData?: string[];    // Dati mancanti (es: ["km", "margini"])
   alternativeIntent?: IntentType; // Intent alternativo suggerito
