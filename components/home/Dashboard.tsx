@@ -543,7 +543,7 @@ export default function HomeDashboard({ userName }: { userName: string }) {
         </div>
       </div>
 
-      {/* Ultime Attività */}
+      {/* TODO: Ultime Attività - Da rivedere per mostrare info più utili
       {recentActivities.length > 0 && (
         <div>
           <div style={{ fontSize: 14, fontWeight: 600, color: '#374151', marginBottom: 12 }}>🕐 Ultime attività</div>
@@ -590,6 +590,7 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           </div>
         </div>
       )}
+      */}
       
       {/* Modal Storico Mesi */}
       {showMonthHistory && (
