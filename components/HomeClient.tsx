@@ -222,6 +222,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     autoTitleRome: conv.autoTitleRome,
     preferServerSTT: false,
     isTtsSpeaking: isTtsSpeakingFn,
+    userName,
   });
 
   useAutoResize(conv.taRef, conv.input);

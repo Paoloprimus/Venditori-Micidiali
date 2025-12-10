@@ -124,6 +124,7 @@ type Params = {
   autoTitleRome: () => string;
   preferServerSTT?: boolean;
   isTtsSpeaking?: () => boolean;
+  userName?: string;                                   // Nome utente per saluto
 };
 
 export function useVoice({
@@ -134,6 +135,7 @@ export function useVoice({
   autoTitleRome,
   preferServerSTT = false,
   isTtsSpeaking = () => false,
+  userName,
 }: Params) {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
@@ -593,8 +595,10 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     finalAccumRef.current = "";
     micActiveRef.current = true;
     
-    // 🔊 Parla messaggio iniziale
-    onSpeak("Dialogo attivo. Parla normalmente.");
+    // 🔊 Saluto breve e personalizzato
+    const firstName = userName?.split(' ')[0] || '';
+    const greeting = firstName ? `Ciao ${firstName}.` : 'Ciao.';
+    onSpeak(greeting);
     
     // ⏱️ Avvia SR dopo un delay fisso (dà tempo al TTS di iniziare/finire)
     setTimeout(() => {

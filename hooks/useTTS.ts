@@ -270,8 +270,8 @@ export function useTTS(mode: TTSMode = "auto") {
     // Stop previous
     stopSpeaking();
 
-    // For very short text (< 20 chars), use browser TTS to save API calls
-    const useOpenAI = mode === "openai" || (mode === "auto" && toSpeak.length >= 20);
+    // Usa sempre OpenAI per qualità migliore (voce italiana più naturale)
+    const useOpenAI = mode === "openai" || mode === "auto";
     
     console.log("[useTTS] Using:", useOpenAI ? "OpenAI" : "Browser");
     
