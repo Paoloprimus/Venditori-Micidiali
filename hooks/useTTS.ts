@@ -101,10 +101,52 @@ export function useTTS(mode: TTSMode = "auto") {
       
       audioUnlockedRef.current = true;
       console.log('[useTTS] Audio unlocked for autoplay');
+      
+      // 🚀 Pre-cache frasi comuni in background (non blocca)
+      precacheCommonPhrases();
     } catch (e) {
       console.warn('[useTTS] Failed to unlock audio:', e);
     }
   }, []);
+
+  // 🚀 Pre-cache frasi comuni per risposta istantanea
+  const precachingRef = useRef(false);
+  
+  async function precacheCommonPhrases() {
+    if (precachingRef.current) return;
+    precachingRef.current = true;
+    
+    const commonPhrases = [
+      "Dialogo terminato.",
+      "Ok, annullato.",
+      "Non ho capito, puoi ripetere?",
+      "Sono pronto, dimmi.",
+    ];
+    
+    console.log('[useTTS] Pre-caching common phrases...');
+    
+    for (const phrase of commonPhrases) {
+      const cacheKey = phrase.slice(0, 200);
+      if (cacheRef.current.has(cacheKey)) continue;
+      
+      try {
+        const response = await fetch("/api/voice/tts", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text: phrase }),
+        });
+        
+        if (response.ok) {
+          const blob = await response.blob();
+          cacheRef.current.set(cacheKey, blob);
+        }
+      } catch {
+        // Ignora errori di pre-cache
+      }
+    }
+    
+    console.log('[useTTS] Pre-cache completed:', cacheRef.current.size, 'phrases');
+  }
 
   // ===== Stop all playback =====
   const stopSpeaking = useCallback(() => {

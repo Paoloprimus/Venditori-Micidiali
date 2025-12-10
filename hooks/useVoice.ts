@@ -265,7 +265,7 @@ export function useVoice({
   
   // Auto-send dopo pausa: timer per rilevare silenzio
   const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
-  const AUTO_SEND_DELAY_MS = 1500; // 1.5 secondi di silenzio → invio automatico
+  const AUTO_SEND_DELAY_MS = 1200; // 1.2 secondi di silenzio → invio automatico
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
@@ -610,7 +610,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     const greeting = firstName ? `Ciao ${firstName}, ti ascolto.` : 'Ciao, ti ascolto.';
     onSpeak(greeting);
     
-    // ⏱️ Avvia SR dopo un delay fisso (dà tempo al TTS di iniziare/finire)
+    // ⏱️ Avvia SR dopo un delay breve (il saluto è corto)
     setTimeout(() => {
       console.log("[useVoice] Delayed SR start, dialogMode:", dialogModeRef.current);
       if (!dialogModeRef.current) return;
@@ -623,7 +623,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
       } else {
         startFallbackRecorder();
       }
-    }, 2000); // 2 secondi - tempo per il TTS
+    }, 1200); // 1.2 secondi - giusto per il saluto breve
   }
 
   function stopDialog() {
