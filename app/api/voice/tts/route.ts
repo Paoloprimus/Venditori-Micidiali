@@ -8,9 +8,8 @@ export const runtime = "nodejs";
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY! });
 
 // Voci disponibili: alloy, echo, fable, onyx, nova, shimmer
-// shimmer = femminile, più naturale per italiano
-// nova = femminile naturale, echo = maschile naturale
-const DEFAULT_VOICE = process.env.OPENAI_TTS_VOICE || "shimmer";
+// nova = femminile naturale (più testata per italiano)
+const DEFAULT_VOICE = process.env.OPENAI_TTS_VOICE || "nova";
 const DEFAULT_MODEL = process.env.OPENAI_TTS_MODEL || "tts-1"; // tts-1 = veloce, tts-1-hd = alta qualità
 const DEFAULT_SPEED = 1.0;
 

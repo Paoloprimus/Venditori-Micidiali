@@ -194,8 +194,10 @@ export function useVoice({
   }
 
   function isStopCommand(t: string) {
-    const s = (t || "").trim().toLowerCase();
-    return s === "stop" || s === "esci" || s === "basta" || s === "chiudi" || s === "basta così";
+    // Rimuovi punteggiatura e normalizza
+    const s = (t || "").trim().toLowerCase().replace(/[.!?,;:]+$/, '').trim();
+    console.log('[useVoice] Checking stop command:', JSON.stringify(s));
+    return s === "stop" || s === "esci" || s === "basta" || s === "chiudi" || s === "basta così" || s === "fermati";
   }
 
   // 🆕 Comandi naturali per hands-free
