@@ -53,7 +53,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
 
   // ---- TTS
-  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant, unlockAudio } = useTTS();
+  const { ttsSpeaking, lastAssistantText, setLastAssistantText, speakAssistant, unlockAudio, stopSpeaking } = useTTS();
   const ttsSpeakingRef = useRef(false);
   useEffect(() => { ttsSpeakingRef.current = ttsSpeaking; }, [ttsSpeaking]);
   const isTtsSpeakingFn = useCallback(() => ttsSpeakingRef.current, []);
@@ -643,7 +643,10 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         isSpeaking={ttsSpeaking}
         transcript={voice.dialogTranscript}
         messages={mergedBubbles}
-        onClose={voice.stopDialog}
+        onClose={() => {
+          stopSpeaking(); // 🔇 Ferma TTS
+          voice.stopDialog(); // 🎤 Ferma SR
+        }}
       />
     </>
   );

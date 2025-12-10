@@ -113,10 +113,13 @@ export function getLocalIntentResponse(intent: string, entities: Record<string, 
   }
 }
 
-/** Strip markdown per TTS */
+/** Strip markdown e placeholder per TTS */
 export function stripMarkdownForTTS(text: string): string {
   return text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links
-    .replace(/\*\*/g, ''); // Bold
+    .replace(/\*\*/g, '') // Bold
+    .replace(/\[CLIENT:[a-f0-9-]+(?:\|[^|\]]*)*\]/gi, 'un cliente') // Placeholder non decriptati
+    .replace(/\s+/g, ' ') // Normalizza spazi multipli
+    .trim();
 }
 
