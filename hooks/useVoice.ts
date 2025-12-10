@@ -597,7 +597,7 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     
     // 🔊 Saluto breve e personalizzato
     const firstName = userName?.split(' ')[0] || '';
-    const greeting = firstName ? `Ciao ${firstName}.` : 'Ciao.';
+    const greeting = firstName ? `Ciao ${firstName}, ti ascolto.` : 'Ciao, ti ascolto.';
     onSpeak(greeting);
     
     // ⏱️ Avvia SR dopo un delay fisso (dà tempo al TTS di iniziare/finire)

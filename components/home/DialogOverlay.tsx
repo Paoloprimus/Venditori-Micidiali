@@ -81,19 +81,6 @@ export default function DialogOverlay({
         ✕
       </button>
 
-      {/* Status indicator */}
-      <div
-        style={{
-          fontSize: 18,
-          fontWeight: 500,
-          color: isSpeaking ? '#10b981' : isListening ? '#3b82f6' : 'rgba(255,255,255,0.6)',
-          textTransform: 'uppercase',
-          letterSpacing: 2,
-        }}
-      >
-        {isSpeaking ? 'Rispondo...' : isListening ? 'Ti ascolto' : 'Pronto'}
-      </div>
-
       {/* Main indicator */}
       <div
         style={{
