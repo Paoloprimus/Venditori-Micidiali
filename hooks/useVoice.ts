@@ -307,6 +307,17 @@ export function useVoice({
         for (let i = e.resultIndex; i < e.results.length; i++) {
           const res = e.results[i];
           const txt = (res?.[0]?.transcript ?? "") as string;
+          
+          // 🔧 FIX: Check stop command anche su risultati intermedi
+          // (a volte "basta" non viene marcato come isFinal)
+          if (isStopCommand(txt)) {
+            console.log("[useVoice] STOP command detected:", txt, "isFinal:", res.isFinal);
+            const canSpeak = speakerEnabledRef.current;
+            stopDialog();
+            if (canSpeak) onSpeak("Dialogo terminato.");
+            return;
+          }
+          
           if (res.isFinal) {
             if (isCancelCommand(txt)) {
               finalAccumRef.current = "";
@@ -314,15 +325,7 @@ export function useVoice({
               continue;
             }
 
-            // 🆕 Comandi naturali hands-free
-            
-            // "stop", "esci", "basta", "chiudi" → chiude dialogo
-            if (isStopCommand(txt)) {
-              const canSpeak = speakerEnabledRef.current;
-              stopDialog();
-              if (canSpeak) onSpeak("Dialogo terminato.");
-              return;
-            }
+            // 🆕 Comandi naturali hands-free (altri comandi richiedono isFinal)
 
             // "ripeti" → rilegge ultima risposta
             if (isRepeatCommand(txt)) {
