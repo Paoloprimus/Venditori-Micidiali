@@ -292,43 +292,38 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   }, [conv.bubbles]);
 
   // ✅ Decripta placeholder [CLIENT:uuid]
+  // NOTA: NON usiamo cryptoReady come gate - decryptClientPlaceholders
+  // usa window.cryptoSvc direttamente e ha il suo sistema di attesa
   const [decryptedBubbles, setDecryptedBubbles] = useState<Bubble[]>([]);
 
   useEffect(() => {
-    // 🔍 DEBUG: Log stato crypto
-    console.log('[HomeClient] Decrypt effect - cryptoReady:', cryptoReady);
+    // Salta se non ci sono bubble con placeholder
+    const hasPlaceholders = patchedBubbles.some(
+      b => b?.role === 'assistant' && /\[CLIENT:[a-f0-9-]+/i.test(b?.content || '')
+    );
     
-    if (!cryptoReady) {
-      console.log('[HomeClient] Crypto not ready, skipping decryption');
+    if (!hasPlaceholders) {
       setDecryptedBubbles(patchedBubbles);
       return;
     }
 
+    console.log('[HomeClient] Found placeholders, attempting decryption...');
+
     async function processPlaceholders() {
-      console.log('[HomeClient] Processing', patchedBubbles.length, 'bubbles for decryption');
-      
       const processed = await Promise.all(
         patchedBubbles.map(async (b: any) => {
           if (b?.role === 'assistant' && b?.content) {
-            const hasPlaceholder = /\[CLIENT:[a-f0-9-]+/i.test(b.content);
-            if (hasPlaceholder) {
-              console.log('[HomeClient] Found placeholder in:', b.content.slice(0, 100));
-            }
             const decrypted = await decryptClientPlaceholders(b.content);
-            if (hasPlaceholder && decrypted !== b.content) {
-              console.log('[HomeClient] ✅ Decrypted to:', decrypted.slice(0, 100));
-            } else if (hasPlaceholder) {
-              console.log('[HomeClient] ❌ Decryption failed, content unchanged');
-            }
             return { ...b, content: decrypted };
           }
           return b;
         })
       );
       setDecryptedBubbles(processed);
+      console.log('[HomeClient] Decryption completed');
     }
     processPlaceholders();
-  }, [patchedBubbles, cryptoReady]);
+  }, [patchedBubbles]);
 
   // --- Stato per bolle locali ---
   const [localUser, setLocalUser] = useState<string[]>([]);
