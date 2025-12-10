@@ -107,16 +107,6 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
               <button
                 type="button"
                 className="iconbtn"
-                onClick={voice.onToggleDialog}
-                disabled={dialogDisabled}
-                title="Avvia dialogo continuo"
-              >
-                💬
-              </button>
-
-              <button
-                type="button"
-                className="iconbtn"
                 onClick={voice.onToggleSpeaker}
                 title={voice.speakerEnabled ? "Disattiva voce" : "Attiva voce"}
                 style={{
@@ -143,6 +133,23 @@ export default function Composer({ value, onChange, onSend, disabled, taRef, voi
         </div>
 
         <div className="right">
+          {/* Bottone Dialogo a destra */}
+          {!showOnlyDialogButton && (
+            <button
+              type="button"
+              className="iconbtn"
+              onClick={voice.onToggleDialog}
+              disabled={dialogDisabled}
+              title="Avvia modalità Dialogo"
+              style={{
+                background: 'linear-gradient(135deg, #4b5563 0%, #6b7280 100%)',
+                color: 'white',
+                marginRight: 8,
+              }}
+            >
+              🎙️
+            </button>
+          )}
           <button
             type="button"
             className="btn"
