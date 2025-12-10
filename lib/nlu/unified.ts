@@ -97,6 +97,7 @@ export type IntentType =
   | 'analytics_new_clients'       // "Nuovi clienti acquisiti"
   | 'analytics_conversion_rate'   // "Tasso conversione visite/vendite"
   | 'analytics_visit_frequency'   // "Frequenza visite per cliente"
+  | 'analytics_revenue_per_km'    // "Fatturato per km percorso"
   // ═══════════════════════════════════════════════════════════════
   // 🆕 FASE 2: INFERENZE STRATEGICHE
   // ═══════════════════════════════════════════════════════════════

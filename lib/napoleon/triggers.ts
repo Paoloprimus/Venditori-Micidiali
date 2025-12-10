@@ -74,16 +74,18 @@ async function decryptClientName(
       await (crypto as any).getOrCreateScopeKeys('table:accounts');
     }
 
-    // Decripta
-    const dec = await crypto.decryptFields(
-      "table:accounts", 
-      "accounts", 
-      acc.id, 
-      recordForDecrypt as Record<string, unknown>, 
-      ["name"]
-    );
-    
-    if (dec?.name) return dec.name;
+    // Decripta (se disponibile)
+    if (crypto.decryptFields) {
+      const dec = await crypto.decryptFields(
+        "table:accounts", 
+        "accounts", 
+        acc.id, 
+        recordForDecrypt as Record<string, unknown>, 
+        ["name"]
+      );
+      
+      if (dec?.name && typeof dec.name === 'string') return dec.name;
+    }
 
     // Fallback su city se disponibile
     if (acc.city) return acc.city;

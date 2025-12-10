@@ -90,6 +90,7 @@ import {
 
 // 💡 Napoleone
 import { generateSuggestions, getSuggestions, generateBriefing } from "@/lib/napoleon";
+import { supabase } from "@/lib/supabase/client";
 
 // ==================== TIPI ====================
 

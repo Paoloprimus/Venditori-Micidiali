@@ -64,13 +64,13 @@ export interface NapoleonAnalysis {
 
 /** Tipo minimo per crypto service */
 export interface CryptoLike {
-  decryptFields: (
+  decryptFields?: (
     scope: string,
     table: string,
     rowId: string,
     row: Record<string, unknown>,
-    fields: string[]
-  ) => Promise<Record<string, string> | null>;
+    fields?: string[]
+  ) => Promise<Record<string, unknown> | null>;
   getOrCreateScopeKeys?: (scope: string) => Promise<void>;
 }
 
