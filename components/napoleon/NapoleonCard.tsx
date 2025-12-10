@@ -34,7 +34,7 @@ export default function NapoleonCard({ className = '' }: NapoleonCardProps) {
   const [loading, setLoading] = useState(true);
   const [urgentSuggestions, setUrgentSuggestions] = useState<NapoleonSuggestion[]>([]);
   const [totalCount, setTotalCount] = useState(0);
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(true);
   const [visible, setVisible] = useState(true);
   
   // Refs per evitare loop
