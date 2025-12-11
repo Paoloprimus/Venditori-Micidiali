@@ -220,9 +220,8 @@ export default function PreferencesPage() {
               </div>
             </div>
 
-            {/* Sezione Test Panel - Solo per tester/admin */}
-            {isTester && (
-              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+            {/* Sezione Test Panel - BETA: sempre visibile */}
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
                 <div className="bg-gradient-to-r from-indigo-700 to-indigo-500 px-6 py-4">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
@@ -275,7 +274,6 @@ export default function PreferencesPage() {
                   </div>
                 </div>
               </div>
-            )}
 
             {/* Messaggio */}
             {message && (
