@@ -425,6 +425,12 @@ useEffect(() => {
   if (actuallyReady) {
     // Appena ready, spegni subito checking
     setChecking(false);
+    
+    // 🔧 FIX: Ricarica dati se la lista è vuota (navigazione da altra pagina)
+    if (rows.length === 0 && userId && !loading) {
+      console.log('[/clients] 🔄 Ricarico dati (navigazione)');
+      loadClients();
+    }
   } else {
     // Controlla se c'è password in storage
     const hasPass = !!(sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
@@ -439,7 +445,7 @@ useEffect(() => {
     
     return () => clearTimeout(timer);
   }
-}, [actuallyReady]);
+}, [actuallyReady, userId, rows.length]);
 
   const view: PlainAccount[] = useMemo(() => {
     const norm = (s: string) => (s || "").toLocaleLowerCase();

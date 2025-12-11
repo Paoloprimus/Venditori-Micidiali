@@ -40,7 +40,7 @@ import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
 import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
-import { geocodeAddressWithDelay } from "@/lib/geocoding";
+import { geocodeAddressWithFallback } from "@/lib/geocoding";
 
 // Aggiungo l'import per crypto se non esiste. Se l'ambiente non ha crypto.randomUUID() disponibile globalmente,
 // questo potrebbe essere necessario. Tuttavia, in ambienti moderni come Next.js client side, è spesso globale.
@@ -435,8 +435,8 @@ export default function ImportClientsPage() {
             continue;
           }
 
-          // Geocodifica con rate limiting
-          const coords = await geocodeAddressWithDelay(address, client.city || "Italia");
+          // Geocodifica con fallback (indirizzo → via senza numero → centro città)
+          const coords = await geocodeAddressWithFallback(address, client.city || "Italia");
 
           if (coords) {
             await supabase

@@ -111,6 +111,55 @@ export async function geocodeAddressWithDelay(
 }
 
 /**
+ * Geocodifica con fallback: prima prova indirizzo completo, poi solo città
+ * 
+ * @param address - Indirizzo completo
+ * @param city - Città
+ * @param delayMs - Delay tra richieste (default 1100ms)
+ * @returns Coordinate GPS o null
+ */
+export async function geocodeAddressWithFallback(
+  address: string,
+  city: string,
+  delayMs: number = 1100
+): Promise<GeoCoordinates | null> {
+  // 1. Prova con indirizzo completo
+  let result = await geocodeAddress(address, city);
+  
+  if (result) {
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    return result;
+  }
+  
+  // 2. Fallback: prova solo via senza numero civico
+  const addressWithoutNumber = address.replace(/\s*\d+\s*$/, '').trim();
+  if (addressWithoutNumber && addressWithoutNumber !== address) {
+    console.log('[Geocoding] Fallback: provo senza numero civico:', addressWithoutNumber);
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    result = await geocodeAddress(addressWithoutNumber, city);
+    
+    if (result) {
+      await new Promise(resolve => setTimeout(resolve, delayMs));
+      return result;
+    }
+  }
+  
+  // 3. Fallback finale: solo città (centro città)
+  console.log('[Geocoding] Fallback: provo solo città:', city);
+  await new Promise(resolve => setTimeout(resolve, delayMs));
+  result = await geocodeAddress('', city);
+  
+  if (result) {
+    console.log('[Geocoding] ⚠️ Usato centro città come fallback');
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    return result;
+  }
+  
+  await new Promise(resolve => setTimeout(resolve, delayMs));
+  return null;
+}
+
+/**
  * Batch geocoding con progress callback
  * 
  * @param addresses - Array di { address, city }
