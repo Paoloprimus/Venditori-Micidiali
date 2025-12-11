@@ -113,12 +113,57 @@ export function getLocalIntentResponse(intent: string, entities: Record<string, 
   }
 }
 
+/** Converte numeri in parole italiane per TTS naturale */
+function numberToItalianWords(num: number): string {
+  if (num < 0) return 'meno ' + numberToItalianWords(-num);
+  if (num === 0) return 'zero';
+  
+  const units = ['', 'uno', 'due', 'tre', 'quattro', 'cinque', 'sei', 'sette', 'otto', 'nove'];
+  const teens = ['dieci', 'undici', 'dodici', 'tredici', 'quattordici', 'quindici', 'sedici', 'diciassette', 'diciotto', 'diciannove'];
+  const tens = ['', '', 'venti', 'trenta', 'quaranta', 'cinquanta', 'sessanta', 'settanta', 'ottanta', 'novanta'];
+  
+  if (num < 10) return units[num];
+  if (num < 20) return teens[num - 10];
+  if (num < 100) {
+    const t = Math.floor(num / 10);
+    const u = num % 10;
+    if (u === 0) return tens[t];
+    if (u === 1 || u === 8) return tens[t].slice(0, -1) + units[u]; // vent'uno, ventotto
+    return tens[t] + units[u];
+  }
+  if (num < 1000) {
+    const h = Math.floor(num / 100);
+    const rest = num % 100;
+    const prefix = h === 1 ? 'cento' : units[h] + 'cento';
+    if (rest === 0) return prefix;
+    return prefix + (rest < 10 ? units[rest] : numberToItalianWords(rest));
+  }
+  if (num < 10000) {
+    const k = Math.floor(num / 1000);
+    const rest = num % 1000;
+    const prefix = k === 1 ? 'mille' : units[k] + 'mila';
+    if (rest === 0) return prefix;
+    return prefix + numberToItalianWords(rest);
+  }
+  // Per numeri più grandi, ritorna la cifra
+  return num.toString();
+}
+
 /** Strip markdown e placeholder per TTS */
 export function stripMarkdownForTTS(text: string): string {
   return text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links
     .replace(/\*\*/g, '') // Bold
     .replace(/\[CLIENT:[a-f0-9-]+(?:\|[^|\]]*)*\]/gi, 'un cliente') // Placeholder non decriptati
+    // Converti numeri in parole italiane (es. "94" → "novantaquattro")
+    .replace(/€\s*(\d+(?:[.,]\d+)?)/g, (_, n) => {
+      const num = parseFloat(n.replace(',', '.'));
+      return numberToItalianWords(Math.round(num)) + ' euro';
+    })
+    .replace(/\b(\d+)\s*(clienti?|visite?|ordini?|€|euro)\b/gi, (_, n, word) => {
+      return numberToItalianWords(parseInt(n)) + ' ' + word.toLowerCase();
+    })
+    .replace(/\b(\d+)\.\s/g, (_, n) => numberToItalianWords(parseInt(n)) + '. ') // Liste numerate
     .replace(/\s+/g, ' ') // Normalizza spazi multipli
     .trim();
 }

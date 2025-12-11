@@ -616,12 +616,13 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     dialogModeRef.current = true;
     setDialogMode(true);
     dialogBufRef.current = "";
+    setDialogTranscript("");  // 🧹 Pulisci transcript all'inizio
     dialogSendingRef.current = false;
     setVoiceMode(true);
     setVoiceError(null);
     setSpeakerEnabled(true);
     finalAccumRef.current = "";
-    micActiveRef.current = true;
+    micActiveRef.current = false;  // 🔧 FIX: NON attivare mic subito (aspetta TTS)
     
     // 🔊 Saluto breve e personalizzato
     const firstName = userName?.split(' ')[0] || '';
