@@ -537,16 +537,16 @@ export default function HomeClient({ email, userName }: { email: string; userNam
             setScope: () => {},
           };
 
-          const result = await handleLocalIntent(
-            parsed.intent,
-            parsed.entities,
-            plannerCtx,
-            crypto
-          );
+          const cryptoForPlanner = crypto && typeof crypto.decryptFields === 'function' 
+            ? crypto as any 
+            : null;
+          const result = await runChatTurn_v2(txt, plannerCtx, cryptoForPlanner);
 
           if (result) {
+            // Aggiorna contesto NLU
+            nluContextRef.current = updateContext(nluContextRef.current, parsed);
+            
             appendAssistantLocal(result.text);
-            nluContextRef.current = updateContext(nluContextRef.current, parsed, result.text);
             speakIfEnabled(stripMarkdownForTTS(result.text));
           }
         } finally {
