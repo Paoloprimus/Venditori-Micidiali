@@ -23,9 +23,32 @@ export default function TermsOfServicePage() {
               Contratto di licenza d'uso per l'applicazione REPING
             </p>
             <p className="text-slate-500 text-xs mt-1">
-              Ultimo aggiornamento: 2 Dicembre 2025
+              Ultimo aggiornamento: 11 Dicembre 2025
             </p>
           </header>
+
+          {/* BANNER BETA */}
+          <div className="bg-amber-100 border-2 border-amber-400 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🧪</span>
+              <div>
+                <h2 className="font-bold text-amber-900 text-lg mb-2">PROGRAMMA BETA - AVVISO IMPORTANTE</h2>
+                <p className="text-amber-800 text-sm mb-3">
+                  <strong>Stai partecipando alla fase di test (Beta) di REPING.</strong> Leggi attentamente:
+                </p>
+                <ul className="text-amber-800 text-sm space-y-2 list-disc list-inside">
+                  <li><strong>Servizio GRATUITO:</strong> Non ti verrà addebitato alcun costo durante la Beta.</li>
+                  <li><strong>Software in sviluppo:</strong> Potrebbero verificarsi malfunzionamenti, errori o interruzioni del servizio.</li>
+                  <li><strong>Nessuna garanzia sui dati:</strong> I dati potrebbero essere persi, corrotti o resettati senza preavviso durante la fase di test.</li>
+                  <li><strong>Partecipazione volontaria:</strong> Partecipi al test a tuo rischio. REPING non è responsabile per eventuali danni diretti o indiretti.</li>
+                  <li><strong>Feedback apprezzato:</strong> I tuoi suggerimenti ci aiutano a migliorare il prodotto prima del lancio.</li>
+                </ul>
+                <p className="text-amber-800 text-sm mt-3 font-medium">
+                  ✅ <strong>I tuoi diritti GDPR sono pienamente garantiti</strong> anche durante la Beta (accesso, rettifica, cancellazione, portabilità).
+                </p>
+              </div>
+            </div>
+          </div>
 
           <hr className="border-slate-200" />
 
@@ -39,10 +62,50 @@ export default function TermsOfServicePage() {
             <ul className="list-disc list-inside space-y-1 ml-2 mt-2">
               <li>Gestione del portafoglio clienti</li>
               <li>Pianificazione visite e giri</li>
-              <li>Consultazione catalogo prodotti</li>
               <li>Assistente AI per domande e analisi</li>
               <li>Generazione report e documenti</li>
             </ul>
+          </section>
+
+          {/* 1-bis. Condizioni Beta */}
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">1-bis. Condizioni Speciali - Programma Beta</h2>
+            <div className="bg-slate-50 border border-slate-200 rounded p-4">
+              <p className="mb-3">
+                Durante il <strong>Programma Beta</strong> (fino a diversa comunicazione), si applicano le seguenti condizioni speciali:
+              </p>
+              <ul className="list-disc list-inside space-y-2 ml-2">
+                <li>
+                  <strong>Gratuità totale:</strong> L'accesso al servizio è completamente gratuito. Non ti verrà chiesto 
+                  alcun pagamento e non verranno raccolti dati di pagamento.
+                </li>
+                <li>
+                  <strong>Accesso su invito:</strong> La partecipazione alla Beta è riservata a utenti che hanno ricevuto 
+                  un token di invito valido.
+                </li>
+                <li>
+                  <strong>Software non definitivo:</strong> Le funzionalità potrebbero cambiare, essere rimosse o modificate 
+                  senza preavviso. L'interfaccia e le prestazioni non sono definitive.
+                </li>
+                <li>
+                  <strong>Possibile perdita dati:</strong> In casi eccezionali (bug critici, reset database, migrazione), 
+                  i dati inseriti durante la Beta potrebbero essere persi. <strong>Ti consigliamo di mantenere backup esterni 
+                  dei dati importanti.</strong>
+                </li>
+                <li>
+                  <strong>Esclusione responsabilità:</strong> REPING non è responsabile per danni derivanti da 
+                  malfunzionamenti, errori dell'AI, perdita dati o interruzioni del servizio durante la fase Beta.
+                </li>
+                <li>
+                  <strong>Diritto di terminare:</strong> Ci riserviamo di terminare il programma Beta o il tuo accesso 
+                  in qualsiasi momento, con comunicazione via email.
+                </li>
+              </ul>
+              <p className="mt-4 text-sm text-slate-600">
+                Al termine della Beta, ti verrà comunicato come migrare al servizio definitivo e quali condizioni 
+                economiche saranno applicate.
+              </p>
+            </div>
           </section>
 
           {/* 2. Accettazione */}
@@ -113,31 +176,41 @@ export default function TermsOfServicePage() {
           {/* 5. Piani e pagamenti */}
           <section>
             <h2 className="text-lg font-semibold text-slate-900 mb-3">5. Piani e Pagamenti</h2>
-            <p>REPING offre diversi piani di abbonamento:</p>
             
-            <div className="grid gap-4 mt-4">
+            <div className="bg-green-50 border border-green-200 rounded p-4 mb-4">
+              <p className="font-medium text-green-800 mb-2">🎁 Durante la Beta: GRATUITO</p>
+              <p className="text-green-700 text-sm">
+                La partecipazione al programma Beta è <strong>completamente gratuita</strong>. 
+                Non ti verrà chiesto di inserire carte di credito o metodi di pagamento. 
+                Hai accesso a tutte le funzionalità senza limiti durante il periodo di test.
+              </p>
+            </div>
+
+            <p className="mb-3">Dopo la Beta, REPING offrirà diversi piani di abbonamento:</p>
+            
+            <div className="grid gap-4">
               <div className="bg-slate-50 border border-slate-200 rounded p-4">
-                <h4 className="font-medium text-slate-900">Piano Agente (Base)</h4>
+                <h4 className="font-medium text-slate-900">Piano Premium</h4>
                 <ul className="text-xs text-slate-600 mt-2 space-y-1">
-                  <li>• 30 query chat/giorno</li>
-                  <li>• Storico 90 giorni</li>
-                  <li>• 3 export PDF/mese</li>
+                  <li>• Fino a 500 clienti</li>
+                  <li>• 60 query chat/giorno</li>
+                  <li>• Export PDF limitati</li>
                 </ul>
               </div>
               <div className="bg-blue-50 border border-blue-200 rounded p-4">
-                <h4 className="font-medium text-blue-900">Piano Premium</h4>
+                <h4 className="font-medium text-blue-900">Piano Business</h4>
                 <ul className="text-xs text-blue-700 mt-2 space-y-1">
-                  <li>• 300 query chat/giorno</li>
-                  <li>• Storico illimitato</li>
+                  <li>• Fino a 1000 clienti</li>
+                  <li>• Query illimitate</li>
                   <li>• Export illimitati</li>
-                  <li>• Analytics avanzati</li>
+                  <li>• Modalità Guida</li>
                 </ul>
               </div>
             </div>
 
             <p className="mt-4 text-xs text-slate-500">
-              I prezzi e le condizioni dei piani a pagamento saranno comunicati separatamente. 
-              Durante la fase Beta, il servizio è gratuito per i tester invitati.
+              I prezzi definitivi saranno comunicati prima del termine della Beta. 
+              I tester riceveranno condizioni speciali di lancio.
             </p>
           </section>
 

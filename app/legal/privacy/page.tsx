@@ -23,9 +23,33 @@ export default function PrivacyPolicyPage() {
               Ai sensi del Regolamento UE 2016/679 (GDPR) e del D.Lgs. 196/2003
             </p>
             <p className="text-slate-500 text-xs mt-1">
-              Ultimo aggiornamento: 2 Dicembre 2025
+              Ultimo aggiornamento: 11 Dicembre 2025
             </p>
           </header>
+
+          {/* BANNER BETA - GDPR */}
+          <div className="bg-green-100 border-2 border-green-400 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <span className="text-2xl">🛡️</span>
+              <div>
+                <h2 className="font-bold text-green-900 text-lg mb-2">I TUOI DIRITTI DURANTE LA BETA</h2>
+                <p className="text-green-800 text-sm mb-3">
+                  Anche durante la fase di test (Beta), <strong>tutti i tuoi diritti GDPR sono pienamente garantiti</strong>:
+                </p>
+                <ul className="text-green-800 text-sm space-y-1 list-disc list-inside">
+                  <li><strong>Accesso:</strong> Puoi vedere tutti i tuoi dati in qualsiasi momento</li>
+                  <li><strong>Rettifica:</strong> Puoi correggere dati errati</li>
+                  <li><strong>Cancellazione:</strong> Puoi eliminare il tuo account e tutti i dati</li>
+                  <li><strong>Portabilità:</strong> Puoi esportare i tuoi dati in formato standard</li>
+                  <li><strong>Opposizione:</strong> Puoi opporti a specifici trattamenti</li>
+                </ul>
+                <p className="text-green-800 text-sm mt-3">
+                  Per esercitare i tuoi diritti: <Link href="/settings/my-data" className="underline font-medium">I Miei Dati</Link> o 
+                  email a <a href="mailto:info@reping.it" className="underline font-medium">info@reping.it</a>
+                </p>
+              </div>
+            </div>
+          </div>
 
           <hr className="border-slate-200" />
 
@@ -43,6 +67,36 @@ export default function PrivacyPolicyPage() {
             <p className="mt-3 text-xs text-slate-500">
               Nota: I dati del titolare saranno completati con la ragione sociale definitiva al momento del lancio.
             </p>
+          </section>
+
+          {/* 1-bis. Nota Beta */}
+          <section>
+            <h2 className="text-lg font-semibold text-slate-900 mb-3">1-bis. Trattamento Dati durante la Beta</h2>
+            <div className="bg-amber-50 border border-amber-200 rounded p-4">
+              <p className="font-medium text-amber-800 mb-2">🧪 Fase di Test (Beta)</p>
+              <p className="text-amber-700 mb-3">
+                Durante il programma Beta, il trattamento dei dati avviene alle stesse condizioni 
+                del servizio definitivo, con le seguenti precisazioni:
+              </p>
+              <ul className="text-amber-700 space-y-2 list-disc list-inside text-sm">
+                <li>
+                  <strong>Finalità aggiuntiva:</strong> I dati di utilizzo (anonimi e aggregati) possono essere 
+                  analizzati per migliorare il prodotto prima del lancio.
+                </li>
+                <li>
+                  <strong>Conservazione:</strong> I dati saranno conservati anche dopo la Beta, salvo tua cancellazione.
+                </li>
+                <li>
+                  <strong>Rischio perdita:</strong> In casi eccezionali di malfunzionamenti gravi, i dati potrebbero 
+                  essere persi. Questo non costituisce violazione data breach se non riguarda dati sensibili 
+                  accessibili a terzi.
+                </li>
+                <li>
+                  <strong>Nessun trasferimento commerciale:</strong> I tuoi dati non saranno mai venduti, ceduti o 
+                  utilizzati per profilazione pubblicitaria.
+                </li>
+              </ul>
+            </div>
           </section>
 
           {/* 2. Dati raccolti */}
