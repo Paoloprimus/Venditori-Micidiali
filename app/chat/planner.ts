@@ -192,20 +192,9 @@ function scopeFromIntent(intent: string): Scope {
 }
 
 // Formatta suggerimenti proattivi in testo
-function formatProactiveSuggestions(suggestions?: ProactiveSuggestion[]): string {
-  if (!suggestions?.length) return '';
-  
-  const highPriority = suggestions.filter(s => s.priority === 'high');
-  if (highPriority.length > 0) {
-    return `\n\n💡 **Suggerimento:** ${highPriority[0].text}`;
-  }
-  
-  const medium = suggestions.filter(s => s.priority === 'medium');
-  if (medium.length > 0) {
-    return `\n\n💡 ${medium[0].text}`;
-  }
-  
-  return '';
+// DISABILITATO: l'utente vuole risposte secche senza suggerimenti inline
+function formatProactiveSuggestions(_suggestions?: ProactiveSuggestion[]): string {
+  return ''; // Nessun suggerimento inline
 }
 
 // ==================== PLANNER PRINCIPALE ====================
@@ -389,13 +378,7 @@ async function handleIntent(
     
     case 'client_count': {
       const n = await countClients();
-      let text = `Hai **${n}** ${n === 1 ? 'cliente' : 'clienti'} in archivio.`;
-      
-      // Proattivo: se tanti clienti, suggerisci filtro
-      if (n > 50) {
-        text += `\n\n📊 Sono tanti! Vuoi filtrarli per città o tipo locale?`;
-      }
-      
+      const text = `Hai **${n}** ${n === 1 ? 'cliente' : 'clienti'}.`;
       return { text, intent };
     }
 
