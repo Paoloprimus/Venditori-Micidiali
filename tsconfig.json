@@ -36,6 +36,10 @@
     ".next/types/**/*.ts"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "reping-mobile",
+    "migration-pack-mistral",
+    "playwright-report",
+    "test-results"
   ]
 }
