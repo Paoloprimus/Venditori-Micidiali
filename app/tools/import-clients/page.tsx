@@ -425,7 +425,7 @@ export default function ImportClientsPage() {
           };
 
           const decAny = await (cryptoSvc as any).decryptFields(
-            "table:accounts", "accounts", "", clientForDecrypt, ["address"]
+            "table:accounts", "accounts", client.id, clientForDecrypt, ["address"]
           );
           const dec = toObj(decAny);
           const address = String(dec.address ?? '');
