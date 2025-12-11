@@ -402,10 +402,11 @@ export default function HomeClient({ email, userName }: { email: string; userNam
       });
 
       // Se confidence alta E non è un intent che richiede OpenAI → planner locale
+      // NOTA: crypto NON è richiesto per tutte le query (es. client_count non decripta nomi)
       const shouldUseLocal = 
         parsed.confidence >= LOCAL_CONFIDENCE_THRESHOLD && 
-        !FORCE_OPENAI_INTENTS.includes(parsed.intent) &&
-        cryptoReady; // Serve crypto per query DB
+        !FORCE_OPENAI_INTENTS.includes(parsed.intent);
+      // cryptoReady non più richiesto - il planner gestisce query senza decriptazione
 
       if (shouldUseLocal) {
         console.debug('[HomeClient] 🆓 Using LOCAL planner (no OpenAI)');
