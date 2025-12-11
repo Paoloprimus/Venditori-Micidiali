@@ -39,6 +39,8 @@ import * as XLSX from "xlsx";
 import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
 import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
+import { useToast } from "@/components/ui/Toast";
+import { geocodeAddressWithDelay } from "@/lib/geocoding";
 
 // Aggiungo l'import per crypto se non esiste. Se l'ambiente non ha crypto.randomUUID() disponibile globalmente,
 // questo potrebbe essere necessario. Tuttavia, in ambienti moderni come Next.js client side, è spesso globale.
@@ -93,6 +95,8 @@ const COLUMN_ALIASES: Record<string, string[]> = {
 export default function ImportClientsPage() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const toast = useToast();
+  const geocodingAbortRef = useRef(false);
   
   // Drawer
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
@@ -106,6 +110,8 @@ export default function ImportClientsPage() {
   }
   
   const [step, setStep] = useState<ImportStep>("upload");
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeProgress, setGeocodeProgress] = useState("");
   const [rawData, setRawData] = useState<any[]>([]);
   const [csvHeaders, setCsvHeaders] = useState<string[]>([]);
   const [mapping, setMapping] = useState<ColumnMapping>({});
@@ -336,6 +342,94 @@ export default function ImportClientsPage() {
     setStep("preview");
   };
 
+  // Geocoding automatico dopo import
+  async function geocodeImportedClients() {
+    geocodingAbortRef.current = false;
+    setGeocoding(true);
+    setGeocodeProgress("Avvio geocodificazione...");
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast("❌ Utente non autenticato", "error");
+        return;
+      }
+
+      // Trova clienti senza coordinate (appena importati)
+      const { data: clients, error } = await supabase
+        .from("accounts")
+        .select("id, street, city")
+        .eq("user_id", user.id)
+        .or("latitude.is.null,longitude.is.null")
+        .not("street", "is", null)
+        .not("city", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.error("[Geocode] Errore query:", error);
+        toast("❌ Errore durante geocodificazione", "error");
+        return;
+      }
+
+      if (!clients || clients.length === 0) {
+        toast("✅ Tutti i clienti hanno già coordinate GPS", "success");
+        return;
+      }
+
+      const total = clients.length;
+      let success = 0;
+      let failed = 0;
+
+      for (let i = 0; i < clients.length; i++) {
+        if (geocodingAbortRef.current) {
+          toast(`⏹️ Geocodificazione interrotta (${success} completati)`, "info");
+          break;
+        }
+
+        const client = clients[i];
+        setGeocodeProgress(`📍 ${i + 1}/${total}: ${client.city}...`);
+
+        try {
+          const coords = await geocodeAddressWithDelay(
+            client.street || "",
+            client.city || "Italia"
+          );
+
+          if (coords) {
+            await supabase
+              .from("accounts")
+              .update({
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+              })
+              .eq("id", client.id);
+            success++;
+          } else {
+            failed++;
+          }
+        } catch (e) {
+          console.error("[Geocode] Errore cliente:", e);
+          failed++;
+        }
+      }
+
+      if (!geocodingAbortRef.current) {
+        if (failed === 0) {
+          toast(`✅ Geocodificazione completata! ${success} clienti con coordinate GPS`, "success");
+        } else {
+          toast(`⚠️ Geocodificazione: ${success} OK, ${failed} non trovati`, "info");
+        }
+      }
+    } catch (e: any) {
+      console.error("[Geocode] Errore:", e);
+      toast("❌ Errore durante geocodificazione", "error");
+    } finally {
+      setGeocoding(false);
+      setGeocodeProgress("");
+    }
+  }
+
   // Import finale
   const handleImport = async () => {
     setStep("importing");
@@ -471,6 +565,18 @@ export default function ImportClientsPage() {
 
     setImportResults(results);
     setStep("complete");
+    
+    // Toast di conferma import
+    if (results.success > 0) {
+      toast(`✅ Import completato: ${results.success} clienti importati`, "success");
+      
+      // Avvia geocoding in background se ci sono clienti con indirizzo
+      const hasAddresses = validClients.some(c => c.address && c.city);
+      if (hasAddresses) {
+        toast("📍 Geocodificazione in corso... Le coordinate GPS verranno aggiunte automaticamente", "info");
+        setTimeout(() => geocodeImportedClients(), 1000);
+      }
+    }
   };
 
   return (
@@ -873,6 +979,41 @@ export default function ImportClientsPage() {
         {/* ========== STEP: COMPLETE ========== */}
         {step === "complete" && (
           <div style={{ background: "white", borderRadius: 12, padding: 32, boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+            {/* Geocoding in corso */}
+            {geocoding && (
+              <div style={{
+                padding: 16,
+                background: "#EFF6FF",
+                border: "1px solid #3B82F6",
+                borderRadius: 8,
+                marginBottom: 24,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 20 }}>🔄</span>
+                  <strong style={{ color: "#1D4ED8" }}>Geocodificazione in corso...</strong>
+                </div>
+                <div style={{ color: "#1D4ED8", fontSize: 14 }}>{geocodeProgress}</div>
+                <div style={{ marginTop: 8, fontSize: 12, color: "#6B7280" }}>
+                  ⏱️ ~1 secondo per cliente (rate limit OpenStreetMap)
+                </div>
+                <button
+                  onClick={() => { geocodingAbortRef.current = true; }}
+                  style={{
+                    marginTop: 12,
+                    padding: "6px 16px",
+                    fontSize: 13,
+                    background: "#FEE2E2",
+                    border: "1px solid #EF4444",
+                    borderRadius: 6,
+                    cursor: "pointer",
+                    color: "#DC2626",
+                  }}
+                >
+                  ⏹️ Interrompi
+                </button>
+              </div>
+            )}
+
             <div style={{ textAlign: "center", marginBottom: 24 }}>
               <div style={{ fontSize: 64, marginBottom: 16 }}>
                 {importResults.failed === 0 ? "🎉" : "⚠️"}
