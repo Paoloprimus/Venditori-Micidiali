@@ -355,14 +355,19 @@ export default function ImportClientsPage() {
         return;
       }
 
-      // Trova clienti senza coordinate (appena importati)
+      // Inizializza crypto per decifrare gli indirizzi
+      const cryptoSvc = getCryptoService();
+      if (!cryptoSvc) {
+        toast("❌ Crypto non pronto", "error");
+        return;
+      }
+
+      // Trova clienti senza coordinate (indirizzi sono cifrati!)
       const { data: clients, error } = await supabase
         .from("accounts")
-        .select("id, street, city")
+        .select("id, address_enc, address_iv, city")
         .eq("user_id", user.id)
         .or("latitude.is.null,longitude.is.null")
-        .not("street", "is", null)
-        .not("city", "is", null)
         .order("created_at", { ascending: false })
         .limit(100);
 
@@ -372,29 +377,66 @@ export default function ImportClientsPage() {
         return;
       }
 
-      if (!clients || clients.length === 0) {
+      // Filtra solo quelli con indirizzo cifrato e città
+      const clientsToGeocode = (clients || []).filter(
+        c => c.address_enc && c.address_iv && c.city
+      );
+
+      if (clientsToGeocode.length === 0) {
         toast("✅ Tutti i clienti hanno già coordinate GPS", "success");
         return;
       }
 
-      const total = clients.length;
+      const total = clientsToGeocode.length;
       let success = 0;
       let failed = 0;
 
-      for (let i = 0; i < clients.length; i++) {
+      // Helper per conversione hex/base64 (da Supabase bytea)
+      const hexToBase64 = (hexStr: any): string => {
+        if (!hexStr || typeof hexStr !== 'string') return '';
+        if (!hexStr.startsWith('\\x')) return hexStr;
+        const hex = hexStr.slice(2);
+        const bytes = hex.match(/.{1,2}/g)?.map(b => String.fromCharCode(parseInt(b, 16))).join('') || '';
+        return bytes;
+      };
+
+      const toObj = (x: any): Record<string, unknown> =>
+        Array.isArray(x)
+          ? x.reduce((acc: Record<string, unknown>, it: any) => {
+              if (it && typeof it === 'object' && "name" in it) acc[it.name] = it.value ?? "";
+              return acc;
+            }, {})
+          : ((x ?? {}) as Record<string, unknown>);
+
+      for (let i = 0; i < clientsToGeocode.length; i++) {
         if (geocodingAbortRef.current) {
           toast(`⏹️ Geocodificazione interrotta (${success} completati)`, "info");
           break;
         }
 
-        const client = clients[i];
+        const client = clientsToGeocode[i];
         setGeocodeProgress(`📍 ${i + 1}/${total}: ${client.city}...`);
 
         try {
-          const coords = await geocodeAddressWithDelay(
-            client.street || "",
-            client.city || "Italia"
+          // Decifra l'indirizzo
+          const clientForDecrypt = {
+            address_enc: hexToBase64(client.address_enc),
+            address_iv: hexToBase64(client.address_iv),
+          };
+
+          const decAny = await (cryptoSvc as any).decryptFields(
+            "table:accounts", "accounts", "", clientForDecrypt, ["address"]
           );
+          const dec = toObj(decAny);
+          const address = String(dec.address ?? '');
+
+          if (!address) {
+            failed++;
+            continue;
+          }
+
+          // Geocodifica con rate limiting
+          const coords = await geocodeAddressWithDelay(address, client.city || "Italia");
 
           if (coords) {
             await supabase
