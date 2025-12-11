@@ -143,7 +143,9 @@ export default async function AdminPage() {
         <AdminAction href="/admin/tokens" icon="🎟️" label="Token Beta" desc="Genera e gestisci inviti per tester" />
         <AdminAction href="/admin/users" icon="👥" label="Gestione Utenti" desc="Modifica ruoli, visualizza attività" />
         <AdminAction href="/admin/usage" icon="📈" label="Statistiche Uso" desc="Query giornaliere, limiti raggiunti" />
-        <AdminAction href="/admin/products" icon="📦" label="Catalogo Prodotti" desc="Import/export, modifica prezzi" />
+        {/* 🔒 BETA: Link Catalogo Prodotti nascosto - riattivare per MULTIAGENT
+        <AdminAction href="/products" icon="📦" label="Catalogo Prodotti" desc="Import/export, modifica prezzi" />
+        */}
       </div>
     </div>
   );
