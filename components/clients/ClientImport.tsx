@@ -9,6 +9,10 @@ const TABLE = "accounts";
 
 type RawRow = {
   name: string;
+  contact_name?: string | null;
+  city?: string | null;
+  street?: string | null;
+  type?: string | null;
   email?: string | null;
   phone?: string | null;
   vat_number?: string | null;
@@ -24,23 +28,53 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
 
   // Mapping headers flessibili (identico al server)
   const HEADER_MAP: Record<string, keyof RawRow> = {
+    // Nome cliente / Ragione sociale
     "nome": "name",
     "name": "name",
     "ragione sociale": "name",
     "cliente": "name",
+    // Nome contatto
+    "contatto": "contact_name",
+    "contact_name": "contact_name",
+    "contact": "contact_name",
+    "referente": "contact_name",
+    "nome contatto": "contact_name",
+    // Città
+    "città": "city",
+    "citta": "city",
+    "city": "city",
+    "comune": "city",
+    "località": "city",
+    "localita": "city",
+    // Indirizzo
+    "indirizzo": "street",
+    "address": "street",
+    "street": "street",
+    "via": "street",
+    // Tipo locale
+    "tipo locale": "type",
+    "tipo_locale": "type",
+    "type": "type",
+    "tipologia": "type",
+    "categoria": "type",
+    // Email
     "email": "email",
     "e-mail": "email",
     "mail": "email",
+    // Telefono
     "telefono": "phone",
     "tel": "phone",
     "phone": "phone",
     "cellulare": "phone",
+    // P.IVA / CF
     "p.iva": "vat_number",
     "piva": "vat_number",
     "partita iva": "vat_number",
     "vat": "vat_number",
+    "vat_number": "vat_number",
     "cf": "vat_number",
     "codice fiscale": "vat_number",
+    // Note
     "note": "notes",
     "notes": "notes",
     "memo": "notes",
@@ -63,6 +97,18 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
       switch (key) {
         case "name":
           out.name = val;
+          break;
+        case "contact_name":
+          out.contact_name = val;
+          break;
+        case "city":
+          out.city = val;
+          break;
+        case "street":
+          out.street = val;
+          break;
+        case "type":
+          out.type = val;
           break;
         case "email":
           out.email = val.toLowerCase();
@@ -88,6 +134,10 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
     
     return {
       name,
+      contact_name: r.contact_name?.trim() || null,
+      city: r.city?.trim() || null,
+      street: r.street?.trim() || null,
+      type: r.type?.trim() || null,
       email: r.email?.trim() || null,
       phone: r.phone?.trim() || null,
       vat_number: r.vat_number?.trim() || null,
@@ -140,9 +190,9 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
         try {
           const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
         
-          
           // Prepara campi da cifrare
           const fieldsToEncrypt: Record<string, any> = { name: row.name };
+          if (row.contact_name) fieldsToEncrypt.contact_name = row.contact_name;
           if (row.email) fieldsToEncrypt.email = row.email;
           if (row.phone) fieldsToEncrypt.phone = row.phone;
           if (row.vat_number) fieldsToEncrypt.vat_number = row.vat_number;
@@ -162,6 +212,12 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
             name_enc: String(enc.name_enc),
             name_iv: String(enc.name_iv),
           };
+
+          // Campi cifrati opzionali
+          if (enc.contact_name_enc) {
+            encRow.contact_name_enc = String(enc.contact_name_enc);
+            encRow.contact_name_iv = String(enc.contact_name_iv);
+          }
 
           if (enc.email_enc) {
             encRow.email_enc = String(enc.email_enc);
@@ -183,6 +239,11 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
             encRow.notes_enc = String(enc.notes_enc);
             encRow.notes_iv = String(enc.notes_iv);
           }
+
+          // Campi in chiaro (non cifrati)
+          if (row.city) encRow.city = row.city;
+          if (row.street) encRow.street = row.street;
+          if (row.type) encRow.type = row.type;
 
           encrypted.push(encRow);
         } catch (e: any) {
@@ -246,9 +307,9 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
 
   function downloadTemplate() {
     const csv = [
-      "nome,email,telefono,p.iva,note",
-      "Rossi Mario,m.rossi@example.com,+39 333 1234567,IT12345678901,Cliente importante",
-      "Bianchi SRL,info@bianchi.it,+39 02 12345678,IT98765432109,Ordini mensili",
+      "nome,contatto,città,indirizzo,tipo_locale,telefono,email,p.iva,note",
+      "Bar Centrale,Marco Rossi,Verona,Via Roma 15,Bar,+39 045 8001234,barcentrale@email.it,IT01234567890,Cliente storico",
+      "Trattoria da Mario,Mario Bianchi,Milano,Corso Italia 42,Ristorante,+39 02 5551234,mario@trattoria.it,IT11223344556,Preferisce vini rossi",
     ].join("\n");
 
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
@@ -323,9 +384,9 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
 
       {/* Info */}
       <div style={{ fontSize: 12, color: "#6B7280" }}>
-        <strong>Formato CSV:</strong> nome (obbligatorio), email, telefono, p.iva, note
+        <strong>Formato CSV:</strong> nome (obbligatorio), contatto, città, indirizzo, tipo_locale, telefono, email, p.iva, note
         <br />
-        <strong>Sicurezza:</strong> Cifratura end-to-end nel browser. I dati non escono mai in chiaro.
+        <strong>Sicurezza:</strong> Dati sensibili cifrati end-to-end nel browser (nome, contatto, email, telefono, p.iva, note).
       </div>
 
       {/* Risultato */}

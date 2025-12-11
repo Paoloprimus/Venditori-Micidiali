@@ -1,0 +1,31 @@
+name	contact_name	city	address	tipo_locale	phone	email	vat_number	notes
+Bar Centrale	Marco Rossi	Verona	Via Roma 15	Bar	+39 045 8001234	barcentrale@email.it	IT01234567890	Cliente storico - ordina ogni lunedì
+Trattoria da Mario	Mario Bianchi	Verona	Corso Porta Nuova 42	Trattoria	+39 045 5551234	mario.trattoria@gmail.com	IT11223344556	Preferisce Prosecco e birre artigianali
+Osteria del Corso	Anna Verdi	San Giovanni Lupatoto	Via del Corso 8	Osteria	+39 045 6667890	info@osteriacorso.it	IT22334455667	Pagamento sempre puntuale
+Pizzeria La Pergola	Giuseppe Neri	Bussolengo	Piazza Garibaldi 3	Pizzeria	+39 045 7778901	lapergola.pizza@email.it	IT33445566778	Grande consumo di birra - 20 fusti/mese
+Ristorante Bella Vista	Lucia Martini	Bardolino	Lungolago Marconi 22	Ristorante	+39 045 8889012	prenotazioni@bellavista.com	IT44556677889	Eventi e matrimoni - ordini grandi
+Caffè Sport	Franco Colombo	Villafranca	Via Pace 7	Caffè	+39 045 9990123	caffesport@libero.it	IT55667788990	Aperto 6-22 - consegne mattino presto
+Enoteca Il Gallo	Stefano Ferrari	Peschiera del Garda	Via Venezia 31	Enoteca	+39 045 1112345	ilgallo.vini@email.it	IT66778899001	Specializzato in vini locali
+Pub The Corner	Andrea Russo	Verona	Via Mazzini 56	Pub	+39 045 2223456	thecorner.vr@gmail.com	IT77889900112	Birre estere e craft - giovani
+Birreria Tre Archi	Paolo Galli	Legnago	Via Tre Archi 12	Birreria	+39 0442 3334567	trearchi@pec.it	IT88990011223	30 spine - grande rotazione
+Taverna Aurora	Elena Conti	Sommacampagna	Via Aurora 5	Taverna	+39 045 4445678	aurora.taverna@email.it	IT99001122334	Cucina tradizionale - vino sfuso
+Locanda del Porto	Roberto Ricci	Lazise	Via Porto 18	Locanda	+39 045 5556789	locandaporto@gmail.com	IT00112233445	Pesce fresco - vini bianchi
+Bar Italia	Massimo Greco	Verona	Piazza Erbe 2	Bar	+39 045 6667891	bar.italia.vr@email.it	IT11223344557	Centro storico - alta rotazione
+Ristorante Da Gino	Gino Fontana	Negrar	Via Valpolicella 67	Ristorante	+39 045 7778902	dagino.ristorante@email.it	IT22334455668	Carne alla griglia - vini rossi corposi
+Pizzeria Napoli	Antonio Esposito	San Martino Buon Albergo	Via Nazionale 89	Pizzeria	+39 045 8889013	napolipizza@gmail.com	IT33445566779	Pizza napoletana - Peroni e Nastro
+Osteria La Fontana	Carla Moretti	Isola della Scala	Via Fontana 11	Osteria	+39 045 9990124	lafontana.osteria@email.it	IT44556677880	Pranzi di lavoro - menù fisso
+Caffè Roma	Simone Barbieri	Verona	Via Roma 1	Caffè	+39 045 1112346	cafferoma.vr@libero.it	IT55667788991	Colazioni e aperitivi
+Trattoria Il Sole	Maria Santini	Cerea	Via del Sole 24	Trattoria	+39 0442 2223457	ilsole.trattoria@email.it	IT66778899002	Aperto solo a pranzo
+Pub La Luna	Davide Marchetti	Verona	Via XX Settembre 33	Pub	+39 045 3334568	laluna.pub@gmail.com	IT77889900113	Musica live venerdì e sabato
+Enoteca Buon Gusto	Francesca Rinaldi	Soave	Via del Vino 9	Enoteca	+39 045 4445679	buongusto@pec.it	IT88990011224	Degustazioni e corsi
+Bar Due Torri	Luca Pellegrini	Verona	Piazza Stazione 4	Bar	+39 045 5556780	duetorri.bar@email.it	IT99001122335	Vicino stazione - turisti
+Ristorante Corona	Alberto Mancini	Malcesine	Via Gardesana 78	Ristorante	+39 045 6667892	corona.rist@gmail.com	IT00112233446	Ristorante di lusso - champagne
+Pizzeria Da Franco	Franco Lombardi	Bovolone	Via Cavour 45	Pizzeria	+39 0442 7778903	dafranco.pizza@email.it	IT11223344558	Forno a legna - consegne a domicilio
+Osteria Veneto	Giovanni Trevisan	San Bonifacio	Via Veneto 16	Osteria	+39 045 8889014	osteria.veneto@libero.it	IT22334455669	Cucina veneta tradizionale
+Caffè La Piazza	Sara Benedetti	Sona	Piazza Vittoria 1	Caffè	+39 045 9990125	lapiazza.caffe@email.it	IT33445566770	Piazza principale - dehors grande
+Trattoria Da Piero	Piero Gatti	Valeggio sul Mincio	Via Mincio 52	Trattoria	+39 045 1112347	dapiero@gmail.com	IT44556677881	Pasta fresca fatta in casa
+Birreria Alpina	Hans Gruber	Bosco Chiesanuova	Via Monte Baldo 3	Birreria	+39 045 2223458	alpina.birreria@email.it	IT55667788992	Birre tedesche e austriache
+Bar Il Ritrovo	Claudio Ferri	Castel d'Azzano	Via Mantova 27	Bar	+39 045 3334569	ilritrovo.bar@libero.it	IT66778899003	Punto di ritrovo locale
+Ristorante Adriatico	Marina Costa	Torri del Benaco	Via Lago 14	Ristorante	+39 045 4445680	adriatico.rist@email.it	IT77889900114	Specialità pesce - cena
+Pizzeria Quattro Stagioni	Enzo Parisi	Zevio	Via delle Stagioni 4	Pizzeria	+39 045 5556781	4stagioni@gmail.com	IT88990011225	Aperto tutto l'anno
+Enoteca Stella d'Oro	Giulia Fabbri	Colognola ai Colli	Via Stella 8	Enoteca	+39 045 6667893	stelladoro@pec.it	IT99001122336	Vini pregiati - clientela selezionata

@@ -9,6 +9,8 @@ type EncryptedRow = {
   id: string;
   name_enc: string;
   name_iv: string;
+  contact_name_enc?: string;
+  contact_name_iv?: string;
   email_enc?: string;
   email_iv?: string;
   email_bi?: string;
@@ -18,6 +20,10 @@ type EncryptedRow = {
   vat_number_iv?: string;
   notes_enc?: string;
   notes_iv?: string;
+  // Campi in chiaro
+  city?: string;
+  street?: string;
+  type?: string;
 };
 
 export async function POST(req: NextRequest) {
