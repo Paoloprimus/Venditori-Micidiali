@@ -535,6 +535,12 @@ export default function HomeClient({ email, userName }: { email: string; userNam
             },
             expired: false,
             setScope: () => {},
+            remember: (partial: any) => {
+              if (partial.nluContext) {
+                nluContextRef.current = partial.nluContext;
+              }
+            },
+            reset: () => { nluContextRef.current = createEmptyContext(); },
           };
 
           const cryptoForPlanner = crypto && typeof crypto.decryptFields === 'function' 
