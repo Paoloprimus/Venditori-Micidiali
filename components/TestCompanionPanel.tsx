@@ -5,7 +5,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/lib/supabase/client';
 
-type NoteCategory = 'bug' | 'ux' | 'idea' | 'performance' | 'altro';
+type NoteCategory = 'bug' | 'miglioramento';
 
 type TestNote = {
   id?: string;
@@ -19,10 +19,7 @@ type TestNote = {
 
 const CATEGORY_CONFIG: Record<NoteCategory, { emoji: string; label: string; color: string }> = {
   bug: { emoji: '🐛', label: 'Bug', color: '#ef4444' },
-  ux: { emoji: '🎨', label: 'UX', color: '#8b5cf6' },
-  idea: { emoji: '💡', label: 'Idea', color: '#f59e0b' },
-  performance: { emoji: '⚡', label: 'Perf', color: '#10b981' },
-  altro: { emoji: '📝', label: 'Altro', color: '#6b7280' },
+  miglioramento: { emoji: '💡', label: 'Miglioramento', color: '#f59e0b' },
 };
 
 export default function TestCompanionPanel() {
@@ -30,7 +27,7 @@ export default function TestCompanionPanel() {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [note, setNote] = useState('');
-  const [category, setCategory] = useState<NoteCategory>('ux');
+  const [category, setCategory] = useState<NoteCategory>('bug');
   const [saving, setSaving] = useState(false);
   const [todayCount, setTodayCount] = useState(0);
   const [recentNotes, setRecentNotes] = useState<TestNote[]>([]);
@@ -503,7 +500,7 @@ export default function TestCompanionPanel() {
                     }}
                   >
                     <div style={{ display: 'flex', gap: 4, marginBottom: 2 }}>
-                      <span>{CATEGORY_CONFIG[n.category]?.emoji || '📝'}</span>
+                      <span>{CATEGORY_CONFIG[n.category as NoteCategory]?.emoji || '📝'}</span>
                       <span style={{ color: '#6b7280' }}>{n.page_url}</span>
                     </div>
                     <div style={{ color: '#111827' }}>{n.note}</div>

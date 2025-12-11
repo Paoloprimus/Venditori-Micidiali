@@ -5,10 +5,12 @@ import { redirect } from 'next/navigation';
 import { createSupabaseServer } from '@/lib/supabase/server';
 import Link from 'next/link';
 
-type NoteCategory = 'bug' | 'ux' | 'idea' | 'performance' | 'altro';
+type NoteCategory = 'bug' | 'miglioramento';
 
-const CATEGORY_CONFIG: Record<NoteCategory, { emoji: string; label: string; color: string; bgColor: string }> = {
+const CATEGORY_CONFIG: Record<string, { emoji: string; label: string; color: string; bgColor: string }> = {
   bug: { emoji: '🐛', label: 'Bug', color: '#dc2626', bgColor: '#fef2f2' },
+  miglioramento: { emoji: '💡', label: 'Miglioramento', color: '#d97706', bgColor: '#fffbeb' },
+  // Fallback per vecchie categorie
   ux: { emoji: '🎨', label: 'UX', color: '#7c3aed', bgColor: '#f5f3ff' },
   idea: { emoji: '💡', label: 'Idea', color: '#d97706', bgColor: '#fffbeb' },
   performance: { emoji: '⚡', label: 'Perf', color: '#059669', bgColor: '#ecfdf5' },
@@ -78,13 +80,9 @@ export default async function AdminFeedbackPage() {
           <div style={{ fontSize: 32, fontWeight: 700, color: '#dc2626' }}>{categoryStats['bug'] || 0}</div>
           <div style={{ fontSize: 13, color: '#ef4444' }}>🐛 Bug</div>
         </div>
-        <div style={{ background: '#f5f3ff', padding: 20, borderRadius: 12, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#7c3aed' }}>{categoryStats['ux'] || 0}</div>
-          <div style={{ fontSize: 13, color: '#8b5cf6' }}>🎨 UX</div>
-        </div>
         <div style={{ background: '#fffbeb', padding: 20, borderRadius: 12, textAlign: 'center' }}>
-          <div style={{ fontSize: 32, fontWeight: 700, color: '#d97706' }}>{categoryStats['idea'] || 0}</div>
-          <div style={{ fontSize: 13, color: '#f59e0b' }}>💡 Idee</div>
+          <div style={{ fontSize: 32, fontWeight: 700, color: '#d97706' }}>{(categoryStats['miglioramento'] || 0) + (categoryStats['idea'] || 0)}</div>
+          <div style={{ fontSize: 13, color: '#f59e0b' }}>💡 Miglioramenti</div>
         </div>
         <div style={{ background: '#ecfdf5', padding: 20, borderRadius: 12, textAlign: 'center' }}>
           <div style={{ fontSize: 32, fontWeight: 700, color: '#059669' }}>{recentNotes.length}</div>

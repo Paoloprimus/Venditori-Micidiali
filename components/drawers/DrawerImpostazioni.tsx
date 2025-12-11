@@ -516,7 +516,7 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
 
               <div style={{ marginTop: 12, fontSize: 12, color: 'rgba(255,255,255,0.7)' }}>
                 <p>💡 Usa le categorie per segnalare:</p>
-                <p style={{ marginLeft: 8, marginTop: 4 }}>🐛 Bug • 🎨 UX • 💡 Idee • ⚡ Performance</p>
+                <p style={{ marginLeft: 8, marginTop: 4 }}>🐛 Bug • 💡 Miglioramento</p>
               </div>
             </div>
           )}
