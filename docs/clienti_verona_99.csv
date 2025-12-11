@@ -1,0 +1,95 @@
+Nome,Nome contatto,Città,Indirizzo,Tipo locale,Telefono,Email,Partita IVA,Latitudine,Longitudine,Note
+Verona1,Mario Rossi,Verona,Via Mazzini 12,Bar,0458001234,verona1@bar.it,IT01234567890,45.43838200,10.99235800,Cliente storico
+Verona2,Luca Bianchi,Verona,Piazza Bra 5,Ristorante,0458002345,verona2@rist.it,IT01234567891,45.43879600,10.99457300,Ordini settimanali
+Verona3,Anna Verdi,Verona,Via Cappello 23,Pizzeria,0458003456,verona3@pizza.it,IT01234567892,45.44195400,10.99819200,VIP - Sconti speciali
+Verona4,Paolo Neri,Verona,Corso Porta Nuova 88,Caffetteria,0458004567,verona4@caffe.it,IT01234567893,45.43576100,10.99054700,Nuovo cliente
+Verona5,Giulia Russo,Verona,Via Roma 45,Bar,0458005678,verona5@bar.it,IT01234567894,45.44008300,10.99325600,Cliente affezionato
+Verona6,Marco Ferrari,Verona,Via Stella 19,Trattoria,0458006789,verona6@tratt.it,IT01234567895,45.44456700,10.99645800,Pagamento 30gg
+Verona7,Sara Esposito,Verona,Piazza Erbe 34,Bar,0458007890,verona7@bar.it,IT01234567896,45.44345600,10.99812400,Consegna mattina
+Verona8,Andrea Colombo,Verona,Via Leoni 67,Ristorante,0458008901,verona8@rist.it,IT01234567897,45.44289100,10.99534200,Cliente premium
+Verona9,Elena Ricci,Verona,Lungadige Matteotti 15,Pizzeria,0458009012,verona9@pizza.it,IT01234567898,45.44778900,11.00123500,Ordini elevati
+Verona10,Francesco Marino,Verona,Via Pellicciai 8,Bar,0458010123,verona10@bar.it,IT01234567899,45.44412300,10.99756700,Contatti frequenti
+Verona11,Chiara Romano,Verona,Corso Cavour 41,Caffetteria,0458011234,verona11@caffe.it,IT01234567800,45.44523400,10.99234500,Cliente occasionale
+Verona12,Davide Greco,Verona,Via Dietro Pallone 5,Osteria,0458012345,verona12@osteria.it,IT01234567801,45.44656700,10.99890100,Buon pagatore
+Verona13,Martina Bruno,Verona,Piazza Corrubbio 12,Bar,0458013456,verona13@bar.it,IT01234567802,45.44001200,10.99667800,Richiede fattura
+Verona14,Simone Gallo,Verona,Via San Paolo 23,Ristorante,0458014567,verona14@rist.it,IT01234567803,45.43912300,10.99445600,Ordini regolari
+Verona15,Valentina Conti,Verona,Via Oberdan 56,Pizzeria,0458015678,verona15@pizza.it,IT01234567804,45.43678900,10.99123400,Nuovo contatto
+Verona16,Roberto De Luca,Verona,Stradone Porta Palio 78,Bar,0458016789,verona16@bar.it,IT01234567805,45.44890100,10.98765400,Cliente fedele
+Verona17,Federica Mancini,Verona,Via Anfiteatro 9,Trattoria,0458017890,verona17@tratt.it,IT01234567806,45.43989000,10.99556700,Pagamento anticipato
+Verona18,Alessandro Costa,Verona,Corso Milano 134,Bar,0458018901,verona18@bar.it,IT01234567807,45.45123400,10.99890200,Ottimo cliente
+Verona19,Laura Giordano,Verona,Via Interrato Acqua Morta 44,Caffetteria,0458019012,verona19@caffe.it,IT01234567808,45.44234500,10.99234600,Consegne serali
+Verona20,Matteo Marchetti,Verona,Piazza San Zeno 2,Osteria,0458020123,verona20@osteria.it,IT01234567809,45.44789000,10.98234500,Cliente storico zona
+Verona21,Alessia Barbieri,Verona,Via Seminario 18,Bar,0458021234,verona21@bar.it,IT01234567810,45.44567800,10.99890300,Ordini medi
+Verona22,Stefano Fontana,Verona,Lungadige San Giorgio 15,Ristorante,0458022345,verona22@rist.it,IT01234567811,45.44012300,11.00456700,Cliente esigente
+Verona23,Silvia Santoro,Verona,Via Garibaldi 72,Pizzeria,0458023456,verona23@pizza.it,IT01234567812,45.43567800,10.99234700,Pagamento contante
+Verona24,Daniele Ferrara,Verona,Piazza Cittadella 7,Bar,0458024567,verona24@bar.it,IT01234567813,45.44890200,10.99123500,Richiede preventivi
+Verona25,Monica Vitale,Verona,Via San Cosimo 31,Caffetteria,0458025678,verona25@caffe.it,IT01234567814,45.44123400,10.99678900,Nuovo contatto recente
+Verona26,Fabio Leone,Verona,Corso Porta Borsari 19,Trattoria,0458026789,verona26@tratt.it,IT01234567815,45.44345600,10.99456700,Cliente affidabile
+Verona27,Paola Longo,Verona,Via Scala 44,Bar,0458027890,verona27@bar.it,IT01234567816,45.44678900,10.99234800,Ordini piccoli frequenti
+Verona28,Giorgio Serra,Verona,Piazza Viviani 8,Ristorante,0458028901,verona28@rist.it,IT01234567817,45.43890100,10.99567800,Cliente premium zona
+Verona29,Claudia Orlando,Verona,Via Redentore 25,Pizzeria,0458029012,verona29@pizza.it,IT01234567818,45.44234600,10.99890400,Pagamento 60gg
+Verona30,Massimo Riva,Verona,Lungadige Porta Vittoria 9,Bar,0458030123,verona30@bar.it,IT01234567819,45.44567800,11.00234500,Richiede ordini urgenti
+Verona31,Elisa Caruso,Verona,Via Pigna 52,Caffetteria,0458031234,verona31@caffe.it,IT01234567820,45.44012300,10.99123600,Cliente occasionale
+Verona32,Antonio Palmieri,Verona,Piazza Nogara 14,Osteria,0458032345,verona32@osteria.it,IT01234567821,45.43678900,10.99456800,Ordini elevati
+Verona33,Barbara Lombardi,Verona,Via Duomo 3,Bar,0458033456,verona33@bar.it,IT01234567822,45.44456700,10.99678900,Contatti regolari
+Verona34,Vincenzo Moretti,Verona,Corso Castelvecchio 28,Ristorante,0458034567,verona34@rist.it,IT01234567823,45.44789000,10.99234900,Cliente VIP
+Verona35,Cristina Rizzo,Verona,Via Leoncino 11,Pizzeria,0458035678,verona35@pizza.it,IT01234567824,45.44123400,10.99567900,Nuovo cliente promettente
+Verona36,Emanuele Ferraro,Verona,Piazza Pozza 6,Bar,0458036789,verona36@bar.it,IT01234567825,45.43890100,10.99890500,Pagamento puntuale
+Verona37,Diana Basile,Verona,Via Sottoriva 21,Trattoria,0458037890,verona37@tratt.it,IT01234567826,45.44567800,10.99123700,Cliente storico
+Verona38,Riccardo Gentile,Verona,Lungadige Re Teodorico 34,Bar,0458038901,verona38@bar.it,IT01234567827,45.44234600,11.00567800,Ordini medi regolari
+Verona39,Sabrina Mariani,Verona,Via Macello 47,Caffetteria,0458039012,verona39@caffe.it,IT01234567828,45.43789000,10.99456900,Richiede fattura elettronica
+Verona40,Lorenzo Battaglia,Verona,Piazza Isolo 16,Osteria,0458040123,verona40@osteria.it,IT01234567829,45.44678900,10.99789000,Cliente affezionato centro
+Villafranca1,Giuseppe Fabbri,Villafranca di Verona,Via Pace 15,Bar,0457900123,villafranca1@bar.it,IT02234567890,45.35290500,10.84429800,Cliente aeroporto zona
+Villafranca2,Maria Bellini,Villafranca di Verona,Corso Garibaldi 89,Ristorante,0457901234,villafranca2@rist.it,IT02234567891,45.35456700,10.84678900,Ordini settimanali fissi
+Villafranca3,Angelo Parisi,Villafranca di Verona,Piazza Castello 4,Pizzeria,0457902345,villafranca3@pizza.it,IT02234567892,45.35123400,10.84234500,Nuovo contatto
+SanBonifacio1,Teresa Ferri,San Bonifacio,Via Roma 78,Bar,0456100123,sanbonifacio1@bar.it,IT03234567890,45.39523400,11.27234500,Cliente zona industriale
+SanBonifacio2,Carlo Monti,San Bonifacio,Corso Venezia 45,Trattoria,0456101234,sanbonifacio2@tratt.it,IT03234567891,45.39789000,11.27567800,Pagamento 30gg
+SanBonifacio3,Rosa Sala,San Bonifacio,Via Marconi 12,Caffetteria,0456102345,sanbonifacio3@caffe.it,IT03234567892,45.39234600,11.27890100,Ordini elevati
+Bussolengo1,Sergio Villa,Bussolengo,Via Verona 123,Bar,0456700123,bussolengo1@bar.it,IT04234567890,45.47123400,10.84567800,Cliente Gardaland zona
+Bussolengo2,Patrizia Morelli,Bussolengo,Piazza XXVI Aprile 9,Ristorante,0456701234,bussolengo2@rist.it,IT04234567891,45.47456700,10.84890200,Ottimo pagatore
+Bussolengo3,Mauro Rossetti,Bussolengo,Via Matteotti 56,Pizzeria,0456702345,bussolengo3@pizza.it,IT04234567892,45.47789000,10.85123400,Cliente storico
+Legnago1,Franca Amato,Legnago,Corso Garibaldi 234,Bar,0442600123,legnago1@bar.it,IT05234567890,45.19234600,11.30567800,Cliente zona sud
+Legnago2,Claudio De Rosa,Legnago,Piazza Libertà 18,Trattoria,0442601234,legnago2@tratt.it,IT05234567891,45.19567800,11.30890100,Pagamento anticipato
+Legnago3,Giovanna Bianco,Legnago,Via Roma 67,Caffetteria,0442602345,legnago3@caffe.it,IT05234567892,45.19890100,11.31123400,Ordini regolari
+SanGiovanniLupatoto1,Bruno Rossini,San Giovanni Lupatoto,Via Belvedere 45,Bar,0458700123,lupatoto1@bar.it,IT06234567890,45.38234600,11.03567800,Cliente sud Verona
+SanGiovanniLupatoto2,Daniela Giuliani,San Giovanni Lupatoto,Corso Italia 12,Ristorante,0458701234,lupatoto2@rist.it,IT06234567891,45.38567800,11.03890100,Pagamento puntuale
+SanGiovanniLupatoto3,Maurizio Farina,San Giovanni Lupatoto,Via Venezia 89,Pizzeria,0458702345,lupatoto3@pizza.it,IT06234567892,45.38890100,11.04123400,Cliente affidabile
+Soave1,Nicoletta Poli,Soave,Via Castello 23,Bar,0456700234,soave1@bar.it,IT07234567890,45.42123400,11.24567800,Cliente zona vini
+Soave2,Piero Galli,Soave,Piazza Antenna 5,Osteria,0456701345,soave2@osteria.it,IT07234567891,45.42456700,11.24890100,Ordini elevati enoteche
+Soave3,Ornella Benedetti,Soave,Via Roma 78,Trattoria,0456702456,soave3@tratt.it,IT07234567892,45.42789000,11.25123400,Cliente storico
+Bardolino1,Gianluca Sartori,Bardolino,Lungolago Cipriani 34,Bar,0457200123,bardolino1@bar.it,IT08234567890,45.54123400,10.72567800,Cliente lago turistico
+Bardolino2,Antonella Pellegrini,Bardolino,Via Marconi 67,Ristorante,0457201234,bardolino2@rist.it,IT04234567891,45.54456700,10.72890100,Pagamento 60gg stagionale
+Bardolino3,Flavio Martini,Bardolino,Piazza Matteotti 12,Pizzeria,0457202345,bardolino3@pizza.it,IT08234567892,45.54789000,10.73123400,Cliente estate
+PeschieradelGarda1,Enzo Mazza,Peschiera del Garda,Viale Venezia 89,Bar,0456400123,peschiera1@bar.it,IT09234567890,45.43789000,10.68234500,Cliente stazione
+PeschieradelGarda2,Mirella Marini,Peschiera del Garda,Piazza Betteloni 23,Caffetteria,0456401234,peschiera2@caffe.it,IT09234567891,45.44123400,10.68567800,Ordini turistici
+PeschieradelGarda3,Alberto Neri,Peschiera del Garda,Via Milano 45,Ristorante,0456402345,peschiera3@rist.it,IT09234567892,45.44456700,10.68890100,Cliente lago sud
+Isola della Scala1,Carla Testa,Isola della Scala,Corso Garibaldi 123,Bar,0457300123,isolascala1@bar.it,IT10234567890,45.27123400,11.00567800,Cliente pianura
+Isola della Scala2,Tommaso Gentile,Isola della Scala,Via Roma 56,Trattoria,0457301234,isolascala2@tratt.it,IT10234567891,45.27456700,11.00890100,Pagamento contante
+Isola della Scala3,Luciana Ferretti,Isola della Scala,Piazza Libertà 8,Pizzeria,0457302345,isolascala3@pizza.it,IT10234567892,45.27789000,11.01123400,Cliente zona riso
+Negrar1,Guido Pagani,Negrar,Via Garibaldi 34,Bar,0457500123,negrar1@bar.it,IT11234567890,45.53123400,10.93567800,Cliente Valpolicella
+Negrar2,Rossana Barone,Negrar,Piazza Mercato 12,Osteria,0457501234,negrar2@osteria.it,IT11234567891,45.53456700,10.93890100,Ordini vini pregiati
+Negrar3,Ivano Rizzi,Negrar,Via Roma 67,Trattoria,0457502345,negrar3@tratt.it,IT11234567892,45.53789000,10.94123400,Cliente cantina
+Cerea1,Lucia Monti,Cerea,Corso Garibaldi 89,Bar,0442800123,cerea1@bar.it,IT12234567890,45.19456700,11.21890100,Cliente bassa veronese
+Cerea2,Renzo Colombo,Cerea,Via Roma 45,Ristorante,0442801234,cerea2@rist.it,IT12234567891,45.19789000,11.22123400,Pagamento 30gg
+Cerea3,Graziella Rossi,Cerea,Piazza Libertà 23,Pizzeria,0442802345,cerea3@pizza.it,IT12234567892,45.20123400,11.22456700,Ordini medi
+Bovolone1,Elio Martini,Bovolone,Via Verona 123,Bar,0457100123,bovolone1@bar.it,IT13234567890,45.25123400,11.12567800,Cliente zona est
+Bovolone2,Nadia Serra,Bovolone,Corso Italia 56,Caffetteria,0457101234,bovolone2@caffe.it,IT13234567891,45.25456700,11.12890100,Pagamento puntuale
+Bovolone3,Ottavio Ferri,Bovolone,Piazza Costituzione 8,Trattoria,0457102345,bovolone3@tratt.it,IT13234567892,45.25789000,11.13123400,Cliente storico
+Valeggio sul Mincio1,Ada Bellini,Valeggio sul Mincio,Via Roma 78,Bar,0457900234,valeggio1@bar.it,IT14234567890,45.35567800,10.73890100,Cliente Borghetto
+Valeggio sul Mincio2,Ugo Mariani,Valeggio sul Mincio,Piazza Carlo Alberto 12,Ristorante,0457901345,valeggio2@rist.it,IT14234567891,45.35890100,10.74123400,Ordini tortellini
+Valeggio sul Mincio3,Emma Santi,Valeggio sul Mincio,Via Mincio 45,Pizzeria,0457902456,valeggio3@pizza.it,IT14234567892,45.36123400,10.74456700,Cliente Parco Sigurtà
+Sommacampagna1,Dino Greco,Sommacampagna,Via Verona 234,Bar,0458960123,sommacampagna1@bar.it,IT15234567890,45.41123400,10.85567800,Cliente zona ovest
+Sommacampagna2,Rita Mancini,Sommacampagna,Corso Roma 67,Trattoria,0458961234,sommacampagna2@tratt.it,IT15234567891,45.41456700,10.85890100,Pagamento 30gg
+Sommacampagna3,Aldo Leone,Sommacampagna,Piazza Italia 9,Caffetteria,0458962345,sommacampagna3@caffe.it,IT15234567892,45.41789000,10.86123400,Ordini regolari
+Castelnuovo del Garda1,Vera Fontana,Castelnuovo del Garda,Via Gardesana 123,Bar,0457570123,castelnuovo1@bar.it,IT16234567890,45.45123400,10.74567800,Cliente Gardaland sud
+Castelnuovo del Garda2,Nello Costa,Castelnuovo del Garda,Piazza Mazzini 34,Ristorante,0457571234,castelnuovo2@rist.it,IT16234567891,45.45456700,10.74890100,Pagamento stagionale
+Castelnuovo del Garda3,Olga Caruso,Castelnuovo del Garda,Via Roma 56,Pizzeria,0457572345,castelnuovo3@pizza.it,IT16234567892,45.45789000,10.75123400,Cliente turistico
+SanMartinoBA1,Ivo Romano,San Martino Buon Albergo,Via Verona 89,Bar,0458700234,sanmartino1@bar.it,IT17234567890,45.41890100,11.06567800,Cliente est Verona
+SanMartinoBA2,Lidia Giordano,San Martino Buon Albergo,Corso Italia 23,Caffetteria,0458701345,sanmartino2@caffe.it,IT17234567891,45.42123400,11.06890100,Pagamento anticipato
+SanMartinoBA3,Cesare Vitale,San Martino Buon Albergo,Piazza Libertà 45,Trattoria,0458702456,sanmartino3@tratt.it,IT17234567892,45.42456700,11.07123400,Ordini fissi
+Zevio1,Alma Longo,Zevio,Via Roma 123,Bar,0458700345,zevio1@bar.it,IT18234567890,45.38456700,11.13890100,Cliente sud-est
+Zevio2,Tullio Palmieri,Zevio,Corso Garibaldi 56,Ristorante,0458701456,zevio2@rist.it,IT18234567891,45.38789000,11.14123400,Pagamento 60gg
+Zevio3,Ilda Lombardi,Zevio,Piazza Maggiore 12,Pizzeria,0458702567,zevio3@pizza.it,IT18234567892,45.39123400,11.14456700,Cliente affidabile
+Grezzana1,Fausto Moretti,Grezzana,Via Verona 78,Bar,0457900345,grezzana1@bar.it,IT19234567890,45.50123400,11.00890100,Cliente valle nord
+Grezzana2,Iris Rizzo,Grezzana,Piazza Vittoria 23,Osteria,0457901456,grezzana2@osteria.it,IT19234567891,45.50456700,11.01123400,Ordini montagna
+Grezzana3,Primo Ferraro,Grezzana,Via Roma 45,Trattoria,0457902567,grezzana3@tratt.it,IT19234567892,45.50789000,11.01456700,Cliente Valpantena
