@@ -349,11 +349,20 @@ export function useTTS(mode: TTSMode = "auto") {
     // Stop previous
     stopSpeaking();
 
+    // 🔧 FIX: Setta ttsSpeaking=true SUBITO, prima del fetch
+    // Così il polling in useVoice trova lo stato corretto
+    setTtsSpeaking(true);
+
     // Usa sempre OpenAI per qualità migliore (voce italiana più naturale)
     // NO FALLBACK al browser TTS (ha accento inglese su Chrome)
     console.log("[useTTS] Using OpenAI TTS (no browser fallback)");
     
     const success = await speakOpenAI(toSpeak);
+    
+    // Se fallisce, resetta lo stato
+    if (!success) {
+      setTtsSpeaking(false);
+    }
     console.log("[useTTS] OpenAI result:", success);
     
     if (!success) {

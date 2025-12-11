@@ -180,8 +180,8 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
   const [originalVoiceCommand, setOriginalVoiceCommand] = useState<string>("");
   
-  // 🆕 Ref per permettere a onSendDirectly di usare submitFromComposer
-  const handleSubmitRef = useRef<(() => Promise<void>) | null>(null);
+  // 🆕 Ref per permettere a onSendDirectly di usare il planner
+  const processVoiceInputRef = useRef<((text: string) => Promise<void>) | null>(null);
 
   function speakIfEnabled(msg: string) {
     if (voice.speakerEnabled) speakAssistant(msg);
@@ -216,13 +216,11 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         if (intent.type !== "NONE") { askConfirm(intent); return; }
       }
       
-      // 🆕 Usa il planner locale invece di andare direttamente a OpenAI
-      // Simula un submit del form
-      conv.setInput(raw);
-      // Triggera handleSubmit tramite ref (sarà definito dopo)
-      if (handleSubmitRef.current) {
-        await handleSubmitRef.current();
+      // 🆕 Usa processVoiceInput che gestisce il planner direttamente
+      if (processVoiceInputRef.current) {
+        await processVoiceInputRef.current(raw);
       } else {
+        console.warn('[onSendDirectly] processVoiceInputRef not ready, falling back to OpenAI');
         await conv.send(raw);
       }
     },
@@ -500,9 +498,74 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     await conv.send(txt);
   }
 
-  // 🆕 Assegna submitFromComposer alla ref per uso da onSendDirectly (vocale)
+  // 🆕 Funzione per processare input vocale con il planner
+  async function processVoiceInput(txt: string) {
+    console.log('[HomeClient] processVoiceInput:', txt);
+    
+    // Usa il planner NLU
+    try {
+      const parsed = parseIntent(txt, nluContextRef.current);
+      
+      console.debug('[HomeClient] NLU parsed (voice):', {
+        input: txt,
+        intent: parsed.intent,
+        confidence: parsed.confidence,
+      });
+
+      const shouldUseLocal = 
+        parsed.confidence >= LOCAL_CONFIDENCE_THRESHOLD && 
+        !FORCE_OPENAI_INTENTS.includes(parsed.intent);
+
+      if (shouldUseLocal) {
+        console.debug('[HomeClient] 🆓 Using LOCAL planner (voice)');
+        
+        appendUserLocal(txt);
+        setIsLocalProcessing(true);
+        
+        try {
+          const plannerCtx = {
+            state: {
+              scope: 'global' as const,
+              topic_attivo: null,
+              ultimo_intent: null,
+              entita_correnti: null,
+              ultimo_risultato: null,
+              updated_at: Date.now(),
+              nluContext: nluContextRef.current,
+            },
+            expired: false,
+            setScope: () => {},
+          };
+
+          const result = await handleLocalIntent(
+            parsed.intent,
+            parsed.entities,
+            plannerCtx,
+            crypto
+          );
+
+          if (result) {
+            appendAssistantLocal(result.text);
+            nluContextRef.current = updateContext(nluContextRef.current, parsed, result.text);
+            speakIfEnabled(stripMarkdownForTTS(result.text));
+          }
+        } finally {
+          setIsLocalProcessing(false);
+        }
+        return;
+      }
+    } catch (e) {
+      console.error('[HomeClient] Voice planner error:', e);
+    }
+
+    // Fallback a OpenAI
+    console.debug('[HomeClient] 💸 Using OpenAI API (voice fallback)');
+    await conv.send(txt);
+  }
+
+  // Assegna alla ref per uso da onSendDirectly
   useEffect(() => {
-    handleSubmitRef.current = submitFromComposer;
+    processVoiceInputRef.current = processVoiceInput;
   });
 
   // Helper: salva conferma intent e ricarica messaggi
