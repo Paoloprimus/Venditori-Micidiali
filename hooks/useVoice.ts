@@ -632,28 +632,41 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
     // ⏱️ Aspetta che il TTS finisca PRIMA di avviare SR
     // (altrimenti il microfono cattura il saluto!)
     const waitForTTSAndStartSR = async () => {
-      console.log("[useVoice] Waiting for TTS to finish...");
+      console.log("[useVoice] Waiting for TTS to start...");
       
-      // Aspetta minimo 500ms (tempo per TTS di iniziare)
-      await sleep(500);
-      
-      // Poi aspetta che TTS finisca (max 5 secondi)
-      let waited = 0;
-      while (isTtsSpeaking() && waited < 5000) {
-        await sleep(200);
-        waited += 200;
-        console.log("[useVoice] Still waiting for TTS...", waited, "ms");
+      // FASE 1: Aspetta che TTS INIZI (max 3 secondi)
+      // Il fetch dell'audio può impiegare 1-2 secondi
+      let waitedForStart = 0;
+      while (!isTtsSpeaking() && waitedForStart < 3000) {
+        await sleep(100);
+        waitedForStart += 100;
       }
       
-      // Extra buffer dopo fine TTS
-      await sleep(300);
+      if (isTtsSpeaking()) {
+        console.log("[useVoice] TTS started after", waitedForStart, "ms, now waiting for it to finish...");
+        
+        // FASE 2: Aspetta che TTS FINISCA (max 10 secondi)
+        let waitedForEnd = 0;
+        while (isTtsSpeaking() && waitedForEnd < 10000) {
+          await sleep(150);
+          waitedForEnd += 150;
+        }
+        console.log("[useVoice] TTS finished after", waitedForEnd, "ms more");
+      } else {
+        // TTS non è partito (errore?), aspetta un po' comunque
+        console.log("[useVoice] TTS didn't start, waiting fallback 2s");
+        await sleep(2000);
+      }
+      
+      // Extra buffer dopo fine TTS (per evitare eco)
+      await sleep(400);
       
       if (!dialogModeRef.current) {
         console.log("[useVoice] Dialog cancelled while waiting for TTS");
         return;
       }
       
-      console.log("[useVoice] TTS finished, starting SR");
+      console.log("[useVoice] Starting SR now");
       micActiveRef.current = true;
       
       if (supportsNativeSR) {

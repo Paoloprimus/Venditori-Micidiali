@@ -179,6 +179,9 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   // ---- Stato conferma intent (legacy voce)
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
   const [originalVoiceCommand, setOriginalVoiceCommand] = useState<string>("");
+  
+  // 🆕 Ref per permettere a onSendDirectly di usare submitFromComposer
+  const handleSubmitRef = useRef<(() => Promise<void>) | null>(null);
 
   function speakIfEnabled(msg: string) {
     if (voice.speakerEnabled) speakAssistant(msg);
@@ -212,7 +215,16 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         const intent = matchIntent(raw);
         if (intent.type !== "NONE") { askConfirm(intent); return; }
       }
-      await conv.send(raw);
+      
+      // 🆕 Usa il planner locale invece di andare direttamente a OpenAI
+      // Simula un submit del form
+      conv.setInput(raw);
+      // Triggera handleSubmit tramite ref (sarà definito dopo)
+      if (handleSubmitRef.current) {
+        await handleSubmitRef.current();
+      } else {
+        await conv.send(raw);
+      }
     },
     onSpeak: (text) => speakAssistant(text),
     createNewSession: async (titleAuto) => {
@@ -487,6 +499,11 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     console.debug('[HomeClient] 💸 Using OpenAI API (fallback)');
     await conv.send(txt);
   }
+
+  // 🆕 Assegna submitFromComposer alla ref per uso da onSendDirectly (vocale)
+  useEffect(() => {
+    handleSubmitRef.current = submitFromComposer;
+  });
 
   // Helper: salva conferma intent e ricarica messaggi
   async function saveIntentConfirmation(convId: string, userText: string, confirmed: boolean) {
