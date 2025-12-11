@@ -16,11 +16,13 @@ import type { NapoleonStyle } from "@/lib/napoleon";
 interface UserPreferences {
   napoleonVisible: boolean;
   napoleonStyle: NapoleonStyle;
+  testPanelEnabled: boolean;
 }
 
 const DEFAULT_PREFERENCES: UserPreferences = {
   napoleonVisible: true,
   napoleonStyle: 'equilibrato',
+  testPanelEnabled: true,
 };
 
 const NAPOLEON_STYLES: Array<{ value: NapoleonStyle; label: string; description: string; example: string }> = [
@@ -49,6 +51,7 @@ export default function PreferencesPage() {
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [isTester, setIsTester] = useState(false);
 
   useEffect(() => {
     loadPreferences();
@@ -59,12 +62,15 @@ export default function PreferencesPage() {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
-      // Carica preferenze dal profilo (campo custom jsonb)
+      // Carica preferenze e ruolo dal profilo
       const { data: profile } = await supabase
         .from('profiles')
-        .select('preferences')
+        .select('preferences, role')
         .eq('id', user.id)
         .single();
+
+      // Verifica se è tester o admin
+      setIsTester(profile?.role === 'tester' || profile?.role === 'admin');
 
       if (profile?.preferences) {
         setPreferences({
@@ -97,6 +103,12 @@ export default function PreferencesPage() {
       // Salva anche in localStorage per accesso veloce
       localStorage.setItem('napoleon_style', preferences.napoleonStyle);
       localStorage.setItem('napoleon_visible', String(preferences.napoleonVisible));
+      localStorage.setItem('test_panel_enabled', String(preferences.testPanelEnabled));
+
+      // Emetti evento per aggiornare Test Panel in tempo reale
+      window.dispatchEvent(new CustomEvent('repping:testPanelChanged', {
+        detail: { enabled: preferences.testPanelEnabled }
+      }));
 
       setMessage({ type: 'success', text: 'Preferenze salvate!' });
     } catch (e: any) {
@@ -207,6 +219,63 @@ export default function PreferencesPage() {
                 </div>
               </div>
             </div>
+
+            {/* Sezione Test Panel - Solo per tester/admin */}
+            {isTester && (
+              <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+                <div className="bg-gradient-to-r from-indigo-700 to-indigo-500 px-6 py-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <span className="text-3xl">🧪</span>
+                      <div>
+                        <h2 className="text-lg font-semibold text-white">Test Companion</h2>
+                        <p className="text-indigo-100 text-sm">Pannello per segnalazioni Beta</p>
+                      </div>
+                    </div>
+                    {/* Toggle attivazione */}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <span className="text-white text-sm">Attivo</span>
+                      <div className="relative">
+                        <input
+                          type="checkbox"
+                          checked={preferences.testPanelEnabled}
+                          onChange={(e) => setPreferences(prev => ({
+                            ...prev,
+                            testPanelEnabled: e.target.checked
+                          }))}
+                          className="sr-only"
+                        />
+                        <div className={`w-11 h-6 rounded-full transition-colors ${
+                          preferences.testPanelEnabled ? 'bg-white' : 'bg-indigo-800'
+                        }`}>
+                          <div className={`absolute top-0.5 left-0.5 w-5 h-5 rounded-full transition-transform ${
+                            preferences.testPanelEnabled 
+                              ? 'translate-x-5 bg-indigo-600' 
+                              : 'bg-indigo-400'
+                          }`}></div>
+                        </div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+                
+                <div className={`p-6 transition-opacity ${preferences.testPanelEnabled ? '' : 'opacity-50'}`}>
+                  <div className="text-sm text-gray-600 space-y-2">
+                    <p>📍 Il pannello appare in basso a destra su ogni pagina</p>
+                    <p>💡 Usa le categorie per segnalare:</p>
+                    <ul className="ml-4 space-y-1">
+                      <li>🐛 <strong>Bug</strong> - Errori e malfunzionamenti</li>
+                      <li>🎨 <strong>UX</strong> - Problemi di usabilità</li>
+                      <li>💡 <strong>Idea</strong> - Suggerimenti e miglioramenti</li>
+                      <li>⚡ <strong>Perf</strong> - Lentezza o problemi di performance</li>
+                    </ul>
+                    <p className="pt-2 text-gray-500 italic">
+                      ⌘+Enter per salvare velocemente
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Messaggio */}
             {message && (

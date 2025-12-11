@@ -1,5 +1,5 @@
 // components/TestCompanionPanel.tsx
-// Pannello floating per testing funzionale - Solo dev/admin
+// Pannello floating per testing funzionale - Solo tester/admin
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
@@ -26,7 +26,8 @@ const CATEGORY_CONFIG: Record<NoteCategory, { emoji: string; label: string; colo
 };
 
 export default function TestCompanionPanel() {
-  const [isOpen, setIsOpen] = useState(true);
+  // 🧪 Stato: chiuso di default, mostra solo per tester/admin
+  const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [note, setNote] = useState('');
   const [category, setCategory] = useState<NoteCategory>('ux');
@@ -35,8 +36,12 @@ export default function TestCompanionPanel() {
   const [recentNotes, setRecentNotes] = useState<TestNote[]>([]);
   const [showRecent, setShowRecent] = useState(false);
   
-  // Drag state
-  const [position, setPosition] = useState({ x: 20, y: 100 });
+  // Controllo visibilità: solo tester/admin, rispetta preferenza utente
+  const [canShow, setCanShow] = useState(false);
+  const [isEnabled, setIsEnabled] = useState(true);
+  
+  // Drag state - Posizione default: basso a destra
+  const [position, setPosition] = useState({ x: -1, y: -1 }); // -1 = calcola dinamicamente
   const [isDragging, setIsDragging] = useState(false);
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -44,15 +49,80 @@ export default function TestCompanionPanel() {
   // Current page info
   const [pageInfo, setPageInfo] = useState({ url: '', title: '' });
 
-  // Load position from localStorage
+  // Verifica ruolo utente e preferenze
+  useEffect(() => {
+    checkUserRole();
+  }, []);
+
+  async function checkUserRole() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        setCanShow(false);
+        return;
+      }
+
+      // Verifica ruolo (solo tester e admin)
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role, preferences')
+        .eq('id', user.id)
+        .single();
+
+      const isTesterOrAdmin = profile?.role === 'tester' || profile?.role === 'admin';
+      setCanShow(isTesterOrAdmin);
+
+      // Verifica preferenza salvata
+      const prefEnabled = profile?.preferences?.testPanelEnabled;
+      if (prefEnabled !== undefined) {
+        setIsEnabled(prefEnabled);
+      } else {
+        // Fallback localStorage
+        const localEnabled = localStorage.getItem('test_panel_enabled');
+        if (localEnabled !== null) {
+          setIsEnabled(localEnabled !== 'false');
+        }
+      }
+    } catch (e) {
+      console.log('[TestPanel] Could not check user role');
+      setCanShow(false);
+    }
+  }
+
+  // Load position from localStorage, default basso-destra
   useEffect(() => {
     const saved = localStorage.getItem('test_companion_position');
     if (saved) {
       try {
-        setPosition(JSON.parse(saved));
-      } catch {}
+        const pos = JSON.parse(saved);
+        setPosition(pos);
+      } catch {
+        // Default: basso-destra
+        setDefaultPosition();
+      }
+    } else {
+      setDefaultPosition();
     }
   }, []);
+
+  // Ascolta cambiamenti preferenza test panel
+  useEffect(() => {
+    const handlePrefChange = (e: CustomEvent) => {
+      setIsEnabled(e.detail.enabled);
+      if (!e.detail.enabled) setIsOpen(false);
+    };
+    window.addEventListener('repping:testPanelChanged', handlePrefChange as EventListener);
+    return () => {
+      window.removeEventListener('repping:testPanelChanged', handlePrefChange as EventListener);
+    };
+  }, []);
+
+  function setDefaultPosition() {
+    // Posizione default: 20px dal bordo destro e 100px dal fondo
+    const x = typeof window !== 'undefined' ? window.innerWidth - 300 : 20;
+    const y = typeof window !== 'undefined' ? window.innerHeight - 400 : 100;
+    setPosition({ x: Math.max(20, x), y: Math.max(100, y) });
+  }
 
   // Save position to localStorage
   useEffect(() => {
@@ -207,20 +277,25 @@ export default function TestCompanionPanel() {
     };
   }, [isDragging]);
 
+  // Non mostrare se non è tester/admin o se disabilitato
+  if (!canShow || !isEnabled) {
+    return null;
+  }
+
   if (!isOpen) {
     return (
       <button
         onClick={() => setIsOpen(true)}
         style={{
           position: 'fixed',
-          bottom: 20,
+          bottom: 80, // Sopra la navbar mobile
           right: 20,
           zIndex: 99999,
           width: 48,
           height: 48,
           borderRadius: '50%',
           border: 'none',
-          background: '#2563eb',
+          background: '#1e40af',
           color: 'white',
           fontSize: 20,
           cursor: 'pointer',

@@ -7,9 +7,6 @@ import TestCompanionPanel from "@/components/TestCompanionPanel";
 import CookieBanner from "@/components/CookieBanner";
 import type { Metadata, Viewport } from "next";
 
-// Mostra il Test Panel solo se attivo (imposta NEXT_PUBLIC_SHOW_TEST_PANEL=1 in Vercel)
-const SHOW_TEST_PANEL = process.env.NEXT_PUBLIC_SHOW_TEST_PANEL === "1";
-
 // ✅ PWA Metadata
 export const metadata: Metadata = {
   title: "REPING",
@@ -50,9 +47,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <Providers>
           <ConversationProvider>
             {children}
-            {/* 🧪 Test Companion Panel - COMMENTATO per Beta
-            {SHOW_TEST_PANEL && <TestCompanionPanel />}
-            */}
+            {/* 🧪 Test Companion Panel - Attivo per tester (auto-hide per non-tester) */}
+            <TestCompanionPanel />
             {/* 🍪 Cookie Banner GDPR */}
             <CookieBanner />
           </ConversationProvider>
