@@ -23,6 +23,7 @@ import {
 import {
   // Clienti
   countClients,
+  countUniqueCities,
   listClientNames,
   searchClients,
   // Visite
@@ -379,6 +380,15 @@ async function handleIntent(
     case 'client_count': {
       const n = await countClients();
       const text = `Hai **${n}** ${n === 1 ? 'cliente' : 'clienti'}.`;
+      return { text, intent };
+    }
+
+    case 'client_city_count': {
+      const result = await countUniqueCities();
+      let text = `I tuoi clienti sono distribuiti in **${result.count}** ${result.count === 1 ? 'città' : 'città diverse'}.`;
+      if (result.count > 0 && result.count <= 10) {
+        text += `\n\n${result.cities.join(', ')}.`;
+      }
       return { text, intent };
     }
 

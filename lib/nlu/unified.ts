@@ -21,6 +21,7 @@
 export type IntentType =
   // CLIENTI
   | 'client_count'           // "Quanti clienti ho?"
+  | 'client_city_count'      // "In quante città sono distribuiti?"
   | 'client_list'            // "Lista clienti" / "Elencali"
   | 'client_search'          // "Cerca cliente Rossi"
   | 'composite_query'        // "Clienti di Verona che hanno comprato vino" (filtri multipli)
@@ -734,22 +735,23 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(client[ei]|negozi)\b.*\b(quanti|totale|numero)\b/i,
     ],
     confidence: 0.95,
-    proactiveAfter: (entities) => {
-      const suggestions: ProactiveSuggestion[] = [];
-      if (!entities.city && !entities.localeType) {
-        suggestions.push({
-          text: "Vuoi filtrarli per città o tipo locale?",
-          intent: 'client_count',
-          priority: 'medium'
-        });
-      }
-      suggestions.push({
-        text: "Vuoi vedere la lista?",
-        intent: 'client_list',
-        priority: 'low'
-      });
-      return suggestions;
-    }
+  },
+
+  {
+    intent: 'client_city_count',
+    patterns: [
+      // "in quante città sono distribuiti"
+      /\b(quante|numero)\b.*\b(citt[aà])\b.*\b(distribuit|sono|ho)\b/i,
+      // "distribuzione geografica clienti"
+      /\b(distribuzione|ripartizione)\b.*\b(geografica|territoriale|citt[aà])\b/i,
+      // "in quante zone/città lavoro"
+      /\b(quante)\b.*\b(zone|citt[aà]|aree)\b.*\b(lavor|opero|ho client)\b/i,
+      // "quante città copro"
+      /\b(quante)\b.*\b(citt[aà])\b.*\b(copro|servo|seguo)\b/i,
+      // "clienti in quante città"
+      /\b(client[ei])\b.*\b(quante)\b.*\b(citt[aà])\b/i,
+    ],
+    confidence: 0.95,
   },
 
   // 🆕 INTENT CHAINING - Più azioni in una query

@@ -77,6 +77,31 @@ export async function countClients(): Promise<number> {
 }
 
 /**
+ * Conta le città uniche dove ho clienti
+ */
+export async function countUniqueCities(): Promise<{ count: number; cities: string[] }> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new Error("Utente non autenticato");
+  
+  const { data, error } = await supabase
+    .from("accounts")
+    .select("city")
+    .eq("user_id", user.id)
+    .not("city", "is", null)
+    .not("city", "eq", "");
+  
+  if (error) throw error;
+  
+  // Estrai città uniche
+  const uniqueCities = [...new Set(data?.map(a => a.city).filter(Boolean) || [])];
+  
+  return {
+    count: uniqueCities.length,
+    cities: uniqueCities.sort()
+  };
+}
+
+/**
  * lista nomi clienti decifrati (o plain se presente).
  * @param crypto istanza da useCrypto().crypto
  * @returns oggetto con nomi e conteggio clienti senza nome
