@@ -563,10 +563,8 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     await conv.send(txt);
   }
 
-  // Assegna alla ref per uso da onSendDirectly
-  useEffect(() => {
-    processVoiceInputRef.current = processVoiceInput;
-  });
+  // Assegna SUBITO alla ref (non in useEffect, troppo tardi!)
+  processVoiceInputRef.current = processVoiceInput;
 
   // Helper: salva conferma intent e ricarica messaggi
   async function saveIntentConfirmation(convId: string, userText: string, confirmed: boolean) {
