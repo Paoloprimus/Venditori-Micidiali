@@ -1,8 +1,11 @@
 // components/clients/ClientImport.tsx 
 "use client";
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useCrypto } from "@/lib/crypto/CryptoProvider";
 import { parse as csvParse } from "csv-parse/browser/esm/sync";
+import { useToast } from "@/components/ui/Toast";
+import { geocodeAddressWithDelay } from "@/lib/geocoding";
+import { supabase } from "@/lib/supabase/client";
 
 const SCOPE = "table:accounts";
 const TABLE = "accounts";
@@ -25,6 +28,10 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
   const [overwrite, setOverwrite] = useState(false);
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<any>(null);
+  const [geocoding, setGeocoding] = useState(false);
+  const [geocodeProgress, setGeocodeProgress] = useState("");
+  const toast = useToast();
+  const geocodingAbortRef = useRef(false);
 
   // Mapping headers flessibili (identico al server)
   const HEADER_MAP: Record<string, keyof RawRow> = {
@@ -274,27 +281,26 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
       setResult({ ...data, encryptionFailed: failed.length });
       
       if (data.ok) {
-        alert(
-          `✅ Import completato!\n\n` +
-          `Totali: ${rows.length}\n` +
-          `Cifrati: ${encrypted.length}\n` +
-          `Importati: ${data.imported}\n` +
-          `Falliti cifratura: ${failed.length}\n` +
-          `Falliti DB: ${data.failed}\n` +
-          `Duplicati scartati: ${data.duplicatesDropped || 0}`
-        );
+        // Toast di conferma import
+        toast(`✅ Import completato: ${data.imported} clienti importati`, "success");
         
         // Reset form
         setFile(null);
         
         // Callback per refresh lista clienti
         onImported?.();
+        
+        // Avvia geocoding in background se ci sono indirizzi
+        const hasAddresses = rows.some(r => r.street && r.city);
+        if (hasAddresses && data.imported > 0) {
+          toast("📍 Geocodificazione in corso... Le coordinate GPS verranno aggiunte automaticamente", "info");
+          // Lancia in background (non blocca l'UI)
+          setTimeout(() => geocodeImportedClients(), 500);
+        }
       } else {
-        alert(
-          `⚠️ Import parziale\n\n` +
-          `Importati: ${data.imported}/${encrypted.length}\n` +
-          `Falliti: ${data.failed}\n\n` +
-          `Errore: ${data.dbError || "Vedi console"}`
+        toast(
+          `⚠️ Import parziale: ${data.imported}/${encrypted.length} importati`,
+          "error"
         );
       }
     } catch (e: any) {
@@ -302,6 +308,94 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
       console.error("Import error:", e);
     } finally {
       setBusy(false);
+    }
+  }
+
+  // Geocoding in background per i clienti appena importati
+  async function geocodeImportedClients() {
+    geocodingAbortRef.current = false;
+    setGeocoding(true);
+    setGeocodeProgress("Avvio geocodificazione...");
+    
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast("❌ Utente non autenticato", "error");
+        return;
+      }
+
+      // Trova clienti senza coordinate (appena importati)
+      const { data: clients, error } = await supabase
+        .from("accounts")
+        .select("id, street, city")
+        .eq("user_id", user.id)
+        .or("latitude.is.null,longitude.is.null")
+        .not("street", "is", null)
+        .not("city", "is", null)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+      if (error) {
+        console.error("[Geocode] Errore query:", error);
+        toast("❌ Errore durante geocodificazione", "error");
+        return;
+      }
+
+      if (!clients || clients.length === 0) {
+        toast("✅ Tutti i clienti hanno già coordinate GPS", "success");
+        return;
+      }
+
+      const total = clients.length;
+      let success = 0;
+      let failed = 0;
+
+      for (let i = 0; i < clients.length; i++) {
+        if (geocodingAbortRef.current) {
+          toast(`⏹️ Geocodificazione interrotta (${success} completati)`, "info");
+          break;
+        }
+
+        const client = clients[i];
+        setGeocodeProgress(`📍 ${i + 1}/${total}: ${client.city}...`);
+
+        try {
+          const coords = await geocodeAddressWithDelay(
+            client.street || "",
+            client.city || "Italia"
+          );
+
+          if (coords) {
+            await supabase
+              .from("accounts")
+              .update({
+                latitude: coords.latitude,
+                longitude: coords.longitude,
+              })
+              .eq("id", client.id);
+            success++;
+          } else {
+            failed++;
+          }
+        } catch (e) {
+          console.error("[Geocode] Errore cliente:", e);
+          failed++;
+        }
+      }
+
+      if (!geocodingAbortRef.current) {
+        if (failed === 0) {
+          toast(`✅ Geocodificazione completata! ${success} clienti con coordinate GPS`, "success");
+        } else {
+          toast(`⚠️ Geocodificazione: ${success} OK, ${failed} non trovati`, "info");
+        }
+      }
+    } catch (e: any) {
+      console.error("[Geocode] Errore:", e);
+      toast("❌ Errore durante geocodificazione", "error");
+    } finally {
+      setGeocoding(false);
+      setGeocodeProgress("");
     }
   }
 
@@ -389,8 +483,44 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
         <strong>Sicurezza:</strong> Dati sensibili cifrati end-to-end nel browser (nome, contatto, email, telefono, p.iva, note).
       </div>
 
+      {/* Geocoding in corso */}
+      {geocoding && (
+        <div
+          style={{
+            padding: 12,
+            background: "#EFF6FF",
+            border: "1px solid #3B82F6",
+            borderRadius: 6,
+            fontSize: 13,
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+            <span style={{ animation: "spin 1s linear infinite" }}>🔄</span>
+            <strong>Geocodificazione in corso...</strong>
+          </div>
+          <div style={{ color: "#1D4ED8" }}>{geocodeProgress}</div>
+          <div style={{ marginTop: 8, fontSize: 12, color: "#6B7280" }}>
+            ⏱️ ~1 secondo per cliente (rate limit OpenStreetMap)
+          </div>
+          <button
+            onClick={() => { geocodingAbortRef.current = true; }}
+            style={{
+              marginTop: 8,
+              padding: "4px 12px",
+              fontSize: 12,
+              background: "#FEE2E2",
+              border: "1px solid #EF4444",
+              borderRadius: 4,
+              cursor: "pointer",
+            }}
+          >
+            ⏹️ Interrompi
+          </button>
+        </div>
+      )}
+
       {/* Risultato */}
-      {result && (
+      {result && !geocoding && (
         <div
           style={{
             padding: 12,
