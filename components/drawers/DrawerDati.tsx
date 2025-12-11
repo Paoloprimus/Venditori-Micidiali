@@ -119,10 +119,11 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
       </div>
 
       {/* Tabs */}
+      {/* 🔒 BETA: Tab PRODOTTI nascosto - riattivare per MULTIAGENT */}
       <div style={{ display: 'flex', borderBottom: '1px solid #e5e7eb' }}>
         <button onClick={() => setTab('uscite')} style={tabStyle(tab === 'uscite')}>USCITE</button>
         <button onClick={() => setTab('clienti')} style={tabStyle(tab === 'clienti')}>CLIENTI</button>
-        <button onClick={() => setTab('prodotti')} style={tabStyle(tab === 'prodotti')}>PRODOTTI</button>
+        {/* <button onClick={() => setTab('prodotti')} style={tabStyle(tab === 'prodotti')}>PRODOTTI</button> */}
       </div>
 
       <div className="list" style={{ padding: 16 }}>
@@ -167,6 +168,7 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
           </div>
         )}
 
+        {/* 🔒 BETA: Sezione PRODOTTI nascosta - riattivare per MULTIAGENT
         {tab === 'prodotti' && (
           <div style={{ display: 'grid', gap: 8 }}>
             <button className="btn" onClick={goProductsList}>📦 Lista prodotti</button>
@@ -177,6 +179,7 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
             <button className="btn" onClick={downloadProductsCSVTemplate}>📄 Scarica template CSV</button>
           </div>
         )}
+        */}
 
         {tab === 'uscite' && (
           <div style={{ display: 'grid', gap: 8 }}>

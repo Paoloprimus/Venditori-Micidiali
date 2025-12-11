@@ -1205,6 +1205,9 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     }
   },
 
+  // 🔒 BETA: Intent product_missing nascosto - richiede tabella products strutturata
+  // Riattivare per MULTIAGENT
+  /*
   {
     intent: 'product_missing',
     patterns: [
@@ -1214,7 +1217,11 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     ],
     confidence: 0.9,
   },
+  */
 
+  // 🔒 BETA: Intent product_search nascosto - richiede tabella products strutturata
+  // Riattivare per MULTIAGENT
+  /*
   {
     intent: 'product_search',
     patterns: [
@@ -1224,6 +1231,7 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     ],
     confidence: 0.85,
   },
+  */
 
   // ═══════════════════════════════════════════════════════════════
   // PLANNING
@@ -1917,6 +1925,9 @@ const INTENT_MATCHERS: IntentMatcher[] = [
     confidence: 0.90,
   },
 
+  // 🔒 BETA: Intent product_price nascosto - richiede tabella products strutturata
+  // Riattivare per MULTIAGENT
+  /*
   {
     intent: 'product_price',
     patterns: [
@@ -1930,7 +1941,11 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       return match ? { productName: match[1].trim() } : {};
     }
   },
+  */
 
+  // 🔒 BETA: Intent product_stock nascosto - richiede tabella products strutturata
+  // Riattivare per MULTIAGENT
+  /*
   {
     intent: 'product_stock',
     patterns: [
@@ -1944,6 +1959,7 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       return match ? { productName: match[1].trim() } : {};
     }
   },
+  */
 
   {
     intent: 'product_not_proposed',
@@ -2596,8 +2612,9 @@ function getTopicSuggestions(topic: ConversationContext['currentTopic']): Proact
     sales: [
       { text: 'Quanto ho venduto questo mese?', intent: 'sales_summary', entities: { period: 'month' }, priority: 'high' },
     ],
+    // 🔒 BETA: Suggerimenti prodotti nascosti - riattivare per MULTIAGENT
     products: [
-      { text: 'Prodotti mancanti', intent: 'product_missing', priority: 'medium' },
+      // { text: 'Prodotti mancanti', intent: 'product_missing', priority: 'medium' },
     ],
     planning: [
       { text: 'Cosa devo fare oggi?', intent: 'planning_today', priority: 'high' },

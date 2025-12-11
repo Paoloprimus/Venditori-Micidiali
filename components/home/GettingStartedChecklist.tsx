@@ -9,7 +9,8 @@ const DISMISSED_KEY = "reping:getting_started_dismissed";
 
 interface ChecklistState {
   hasClients: boolean;
-  hasProducts: boolean;
+  // 🔒 BETA: hasProducts rimosso - riattivare per MULTIAGENT
+  // hasProducts: boolean;
   hasAskedAssistant: boolean;
   hasPlannedRoute: boolean;
 }
@@ -21,7 +22,7 @@ interface Props {
 export default function GettingStartedChecklist({ onAskAssistant }: Props) {
   const [state, setState] = useState<ChecklistState>({
     hasClients: false,
-    hasProducts: false,
+    // 🔒 BETA: hasProducts rimosso
     hasAskedAssistant: false,
     hasPlannedRoute: false,
   });
@@ -66,10 +67,10 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
         .select("id", { count: "exact", head: true })
         .eq("user_id", user.id);
 
-      // Check prodotti (prodotti sono globali, non per user)
-      const { count: productsCount } = await supabase
-        .from("products")
-        .select("id", { count: "exact", head: true });
+      // 🔒 BETA: Check prodotti rimosso - riattivare per MULTIAGENT
+      // const { count: productsCount } = await supabase
+      //   .from("products")
+      //   .select("id", { count: "exact", head: true });
 
       // Check messaggi (ha usato l'assistente?)
       const { count: messagesCount } = await supabase
@@ -84,7 +85,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
 
       const newState: ChecklistState = {
         hasClients: (clientsCount || 0) > 0,
-        hasProducts: (productsCount || 0) > 0,
+        // 🔒 BETA: hasProducts rimosso
         hasAskedAssistant: (messagesCount || 0) > 0,
         hasPlannedRoute: hasPlanned,
       };
@@ -113,21 +114,22 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
   };
 
   // Calcola progresso
+  // 🔒 BETA: hasProducts rimosso (3 step invece di 4)
   const completed = [
     state.hasClients,
-    state.hasProducts,
+    // state.hasProducts,
     state.hasAskedAssistant,
     state.hasPlannedRoute,
   ].filter(Boolean).length;
 
-  const allComplete = completed === 4;
+  const allComplete = completed === 3;
 
   // Non mostrare se dismissato o tutto completato
   if (dismissed || allComplete || loading) {
     return null;
   }
 
-  const progressPercent = (completed / 4) * 100;
+  const progressPercent = (completed / 3) * 100;
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-6">
@@ -140,7 +142,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
           <span className="text-xl">🚀</span>
           <div>
             <h3 className="font-semibold text-slate-800 text-sm">Primi Passi</h3>
-            <p className="text-xs text-slate-500">{completed}/4 completati</p>
+            <p className="text-xs text-slate-500">{completed}/3 completati</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
@@ -176,7 +178,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
             }
           />
 
-          {/* Step 2: Carica prodotti */}
+          {/* 🔒 BETA: Step 2 (Prodotti) nascosto - riattivare per MULTIAGENT
           <ChecklistItem
             done={state.hasProducts}
             icon="📦"
@@ -188,6 +190,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
               </Link>
             }
           />
+          */}
 
           {/* Step 3: Prova assistente */}
           <ChecklistItem
