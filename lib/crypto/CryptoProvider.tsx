@@ -222,11 +222,10 @@ export function CryptoProvider({ children, userId: userIdProp }: Props) {
           try {
             await unlock(pass);
             await prewarm(DEFAULT_SCOPES);
+            // Rimuovi SOLO da sessionStorage (temporaneo)
+            // NON rimuovere da localStorage (serve per "ricordami")
             try {
               sessionStorage.removeItem("repping:pph");
-            } catch {}
-            try {
-              localStorage.removeItem("repping:pph");
             } catch {}
           } catch (e) {
             // Evita rumorosità: OperationError può arrivare da scope racing altrove

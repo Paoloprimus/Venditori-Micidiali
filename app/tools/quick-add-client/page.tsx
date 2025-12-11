@@ -57,54 +57,67 @@ export default function QuickAddClientPage() {
     window.location.href = "/login";
   }
 
-  // 🔧 WORKAROUND: Re-unlock automatico se crypto non è sbloccato
+  // 🔧 FIX: Usa `ready` dal context come fonte di verità
+  // Il CryptoProvider gestisce già l'auto-unlock e il polling di isUnlocked()
+  // Se ready è false ma il servizio è sbloccato, forziamo un re-check
+  const [localReady, setLocalReady] = useState(false);
+  
   useEffect(() => {
-    console.log('[QuickAdd] 🔍 useEffect triggered, crypto:', !!crypto);
-    
-    if (!crypto) {
-      console.log('[QuickAdd] ⚠️ crypto è null/undefined, esco');
+    // Se il context dice ready, siamo a posto
+    if (ready) {
+      setLocalReady(true);
       return;
     }
     
-    const checkAndUnlock = async () => {
-      console.log('[QuickAdd] 🔍 checkAndUnlock started');
+    // Polling per verificare se il servizio è stato sbloccato
+    let cancelled = false;
+    const interval = setInterval(() => {
+      if (cancelled) return;
       
-      if (!crypto || typeof crypto.isUnlocked !== 'function') {
-        console.log('[QuickAdd] ⚠️ crypto o isUnlocked non validi');
-        return;
-      }
-      
-      const unlocked = crypto.isUnlocked();
-      console.log('[QuickAdd] 🔍 isUnlocked:', unlocked);
-      
-      if (!unlocked) {
-        const pass = sessionStorage.getItem('repping:pph');
-        console.log('[QuickAdd] 🔍 Password in storage:', !!pass);
-        
-        if (pass && typeof crypto.unlockWithPassphrase === 'function') {
-          console.log('[QuickAdd] 🔧 Tento re-unlock...');
-          try {
-            await crypto.unlockWithPassphrase(pass);
-            console.log('[QuickAdd] ✅ Re-unlock completato!');
-          } catch (e) {
-            console.error('[QuickAdd] ❌ Re-unlock fallito:', e);
-          }
-        } else {
-          console.log('[QuickAdd] ⚠️ Password mancante o unlockWithPassphrase non disponibile');
+      try {
+        const unlocked = crypto && typeof crypto.isUnlocked === 'function' && crypto.isUnlocked();
+        if (unlocked) {
+          console.log('[QuickAdd] ✅ Crypto unlocked detected via polling');
+          setLocalReady(true);
+          clearInterval(interval);
         }
-      } else {
-        console.log('[QuickAdd] ✅ Crypto già unlocked, niente da fare');
+      } catch {
+        // ignore
+      }
+    }, 200);
+    
+    // Prova anche unlock da storage (sessionStorage O localStorage)
+    const tryUnlock = async () => {
+      if (!crypto || typeof crypto.unlockWithPassphrase !== 'function') return;
+      
+      const pass = sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph');
+      if (pass) {
+        console.log('[QuickAdd] 🔧 Tento unlock da storage...');
+        try {
+          await crypto.unlockWithPassphrase(pass);
+          console.log('[QuickAdd] ✅ Unlock completato!');
+          setLocalReady(true);
+        } catch (e) {
+          console.error('[QuickAdd] ❌ Unlock fallito:', e);
+        }
       }
     };
     
-    checkAndUnlock();
-  }, [crypto]);
+    tryUnlock();
+    
+    // Timeout dopo 5 secondi
+    const timeout = setTimeout(() => {
+      clearInterval(interval);
+    }, 5000);
+    
+    return () => {
+      cancelled = true;
+      clearInterval(interval);
+      clearTimeout(timeout);
+    };
+  }, [crypto, ready]);
 
-  const actuallyReady = (
-    crypto && 
-    typeof crypto.isUnlocked === 'function' && 
-    crypto.isUnlocked()
-  );
+  const actuallyReady = ready || localReady;
 
   // Dati del form
   const [form, setForm] = useState<ClientForm>({
