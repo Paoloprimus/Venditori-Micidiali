@@ -26,7 +26,7 @@ const CATEGORY_CONFIG: Record<NoteCategory, { emoji: string; label: string; colo
 };
 
 export default function TestCompanionPanel() {
-  // 🧪 Stato: chiuso di default, mostra solo per tester/admin
+  // 🧪 Stato: chiuso di default
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(false);
   const [note, setNote] = useState('');
@@ -36,8 +36,8 @@ export default function TestCompanionPanel() {
   const [recentNotes, setRecentNotes] = useState<TestNote[]>([]);
   const [showRecent, setShowRecent] = useState(false);
   
-  // Controllo visibilità: solo tester/admin, rispetta preferenza utente
-  const [canShow, setCanShow] = useState(false);
+  // 🧪 BETA: Mostra SEMPRE (semplificato per debug)
+  const [canShow, setCanShow] = useState(true); // Sempre true per Beta
   const [isEnabled, setIsEnabled] = useState(true);
   
   // Drag state - Posizione default: basso a destra
@@ -49,46 +49,23 @@ export default function TestCompanionPanel() {
   // Current page info
   const [pageInfo, setPageInfo] = useState({ url: '', title: '' });
 
-  // Verifica ruolo utente e preferenze
+  // 🧪 BETA: Verifica preferenze utente (ma mostra sempre di default)
   useEffect(() => {
-    checkUserRole();
+    checkPreferences();
   }, []);
 
-  async function checkUserRole() {
+  async function checkPreferences() {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) {
-        setCanShow(false);
-        return;
+      // Controlla solo se l'utente ha disabilitato manualmente
+      const localEnabled = localStorage.getItem('test_panel_enabled');
+      if (localEnabled === 'false') {
+        setIsEnabled(false);
       }
-
-      // Durante la Beta, mostra a tutti gli utenti autenticati
-      // In futuro: solo tester e admin
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('role, preferences')
-        .eq('id', user.id)
-        .single();
-
-      // 🧪 BETA: Mostra a tutti (tutti sono tester)
-      // Per limitare solo a tester/admin: profile?.role === 'tester' || profile?.role === 'admin'
-      const canShowPanel = !!profile; // Qualsiasi utente autenticato con profilo
-      setCanShow(canShowPanel);
-
-      // Verifica preferenza salvata
-      const prefEnabled = profile?.preferences?.testPanelEnabled;
-      if (prefEnabled !== undefined) {
-        setIsEnabled(prefEnabled);
-      } else {
-        // Fallback localStorage
-        const localEnabled = localStorage.getItem('test_panel_enabled');
-        if (localEnabled !== null) {
-          setIsEnabled(localEnabled !== 'false');
-        }
-      }
+      
+      // Log per debug
+      console.log('[TestPanel] 🧪 Pannello Beta attivo');
     } catch (e) {
-      console.log('[TestPanel] Could not check user role');
-      setCanShow(false);
+      console.log('[TestPanel] Errore check preferenze:', e);
     }
   }
 
@@ -280,8 +257,8 @@ export default function TestCompanionPanel() {
     };
   }, [isDragging]);
 
-  // Non mostrare se non è tester/admin o se disabilitato
-  if (!canShow || !isEnabled) {
+  // 🧪 BETA: Mostra sempre (solo check se disabilitato manualmente)
+  if (!isEnabled) {
     return null;
   }
 
