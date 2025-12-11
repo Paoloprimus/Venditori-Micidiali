@@ -292,6 +292,78 @@ OPENAI_API_KEY=sk-xxx
 
 ---
 
+## 📦 PRODOTTI - STATO BETA
+
+> **Decisione 11 Dic 2025:** Per la Beta, la gestione prodotti strutturata è **nascosta**.
+
+### Cosa è NASCOSTO (riattivare per MULTIAGENT):
+- Tab "PRODOTTI" nel drawer Gestione (`components/drawers/DrawerDati.tsx`)
+- Step "Carica listino" nella checklist onboarding (`components/home/GettingStartedChecklist.tsx`)
+- Intent NLU: `product_price`, `product_stock`, `product_missing`, `product_search` (`lib/nlu/unified.ts`)
+
+### Cosa RESTA attivo:
+- Campo testuale `prodotti_discussi` nelle visite
+- Intent `product_discussed` ("Cosa ho discusso con Rossi?") - legge dal testo
+- Intent `product_sold_to` ("Chi compra birra?") - cerca nel testo visite
+- L'AI estrae pattern orientativi: "Questo cliente compra spesso vino"
+
+### Perché:
+- Agenti plurimandatari hanno N cataloghi diversi (impossibile gestirli tutti)
+- Per la Beta basta annotare a testo cosa si vende
+- La tabella `products` resta per MULTIAGENT futuro (catalogo condiviso aziendale)
+
+### Per riattivare (MULTIAGENT):
+Cerca `🔒 BETA` nei file commentati e decommenta.
+
+---
+
+## 👤 RUOLI E ACCESSI
+
+### Ruoli disponibili (profiles.role):
+| Ruolo | Descrizione | Come si ottiene |
+|-------|-------------|-----------------|
+| `tester` | Beta tester | Registrazione con token beta |
+| `agente` | Utente standard | Default |
+| `agente_premium` | Piano Business | Upgrade da admin |
+| `admin` | Amministratore | Manuale in DB |
+
+### Flusso registrazione Beta:
+```
+1. Utente inserisce token BETA-XXXXXXXX
+2. API valida token (check_beta_token)
+3. Registrazione Supabase Auth
+4. Token marcato come usato (use_beta_token)
+5. Ruolo impostato a 'tester'
+6. Consensi GDPR salvati
+7. Crittografia sbloccata con password
+8. Redirect a home
+```
+
+### Generare token Beta:
+```sql
+-- Da Supabase SQL Editor (come admin)
+SELECT generate_beta_token('Nota opzionale');
+```
+
+### Limiti per ruolo - BETA:
+**Per la Beta tutti i tester hanno accesso BUSINESS completo (nessun limite).**
+
+I limiti saranno applicati post-Beta:
+- PREMIUM: 500 clienti, 60 query/giorno, 9 PDF/mese, no Modalità Guida
+- BUSINESS: 1000 clienti, illimitato, Modalità Guida
+- MULTIAGENT: Business + Dashboard Admin
+
+### RLS (Row Level Security):
+| Tabella | Chi può leggere | Chi può scrivere |
+|---------|-----------------|------------------|
+| `profiles` | Solo il proprio | Solo il proprio |
+| `accounts` | Solo i propri | Solo i propri |
+| `visits` | Solo le proprie | Solo le proprie |
+| `products` | Tutti | Solo admin |
+| `beta_tokens` | Tutti (validazione) | Solo admin |
+
+---
+
 ## 📝 PROSSIMI PASSI SUGGERITI
 
 1. **Voce** - Risolvere lettura numeri in italiano, stabilizzare SR/TTS timing
@@ -309,5 +381,5 @@ OPENAI_API_KEY=sk-xxx
 
 ---
 
-*Ultimo aggiornamento: 11 Dicembre 2025*
+*Ultimo aggiornamento: 11 Dicembre 2025 (sera) - Aggiunto: Prodotti Beta, Ruoli e Accessi*
 
