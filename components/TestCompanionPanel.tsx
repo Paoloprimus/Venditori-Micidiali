@@ -62,15 +62,18 @@ export default function TestCompanionPanel() {
         return;
       }
 
-      // Verifica ruolo (solo tester e admin)
+      // Durante la Beta, mostra a tutti gli utenti autenticati
+      // In futuro: solo tester e admin
       const { data: profile } = await supabase
         .from('profiles')
         .select('role, preferences')
         .eq('id', user.id)
         .single();
 
-      const isTesterOrAdmin = profile?.role === 'tester' || profile?.role === 'admin';
-      setCanShow(isTesterOrAdmin);
+      // 🧪 BETA: Mostra a tutti (tutti sono tester)
+      // Per limitare solo a tester/admin: profile?.role === 'tester' || profile?.role === 'admin'
+      const canShowPanel = !!profile; // Qualsiasi utente autenticato con profilo
+      setCanShow(canShowPanel);
 
       // Verifica preferenza salvata
       const prefEnabled = profile?.preferences?.testPanelEnabled;

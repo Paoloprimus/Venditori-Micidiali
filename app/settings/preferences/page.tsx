@@ -69,8 +69,9 @@ export default function PreferencesPage() {
         .eq('id', user.id)
         .single();
 
-      // Verifica se è tester o admin
-      setIsTester(profile?.role === 'tester' || profile?.role === 'admin');
+      // 🧪 BETA: Mostra a tutti (tutti sono tester)
+      // Per limitare solo a tester/admin: profile?.role === 'tester' || profile?.role === 'admin'
+      setIsTester(!!profile);
 
       if (profile?.preferences) {
         setPreferences({
