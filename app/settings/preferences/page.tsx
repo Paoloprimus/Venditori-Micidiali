@@ -51,7 +51,8 @@ export default function PreferencesPage() {
   const [saving, setSaving] = useState(false);
   const [preferences, setPreferences] = useState<UserPreferences>(DEFAULT_PREFERENCES);
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
-  const [isTester, setIsTester] = useState(false);
+  // 🧪 BETA: Mostra sempre il toggle Test Panel
+  const [isTester, setIsTester] = useState(true);
 
   useEffect(() => {
     loadPreferences();
@@ -69,9 +70,7 @@ export default function PreferencesPage() {
         .eq('id', user.id)
         .single();
 
-      // 🧪 BETA: Mostra a tutti (tutti sono tester)
-      // Per limitare solo a tester/admin: profile?.role === 'tester' || profile?.role === 'admin'
-      setIsTester(!!profile);
+      // 🧪 BETA: isTester sempre true (gestito nello state iniziale)
 
       if (profile?.preferences) {
         setPreferences({
