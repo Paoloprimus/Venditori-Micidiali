@@ -522,10 +522,7 @@ function AnimatedMockup() {
         )}
       </div>
       
-      {/* Floating badge */}
-      <div className="absolute -top-2 -right-2 bg-gradient-to-r from-green-500 to-emerald-500 text-white px-2 py-1 rounded-full text-xs font-semibold shadow-lg flex items-center gap-1">
-        <span className="animate-pulse">●</span> AI
-      </div>
+      {/* Floating badge - rimosso per pulizia UI */}
 
       {/* Hint */}
       {!isPlaying && (
@@ -736,7 +733,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             href="https://reping.app/login"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
           >
-            Accedi
+            Accedi all'app
           </a>
         </div>
       </nav>
@@ -794,23 +791,19 @@ Come ci ha conosciuto: ${form.comeConosciuto}
       <section className="py-20 bg-slate-50">
         <div className="max-w-6xl mx-auto px-4">
           <div className="text-center mb-12">
-            <BetaBanner />
-            <h2 className="text-3xl font-bold text-slate-900 mt-4 mb-4">
-              Ti riconosci in questi problemi?
+            <h2 className="text-4xl font-bold text-slate-900 mb-4">
+              Quanto pesano queste difficoltà nel tuo lavoro?
             </h2>
-            <p className="text-slate-600 max-w-2xl mx-auto">
-              Ogni giorno gli agenti di commercio affrontano sfide che rubano tempo e riducono le vendite.
-            </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {[
-              { icon: "⏰", title: "Pianificazione lenta", desc: "Perdo tempo a gestire la pianificazione delle attività" },
-              { icon: "📋", title: "Info frammentate", desc: "Non ho tutte le info utili per la vendita a portata di mano" },
+              { icon: "⏰", title: "Pianificazione lenta", desc: "Perdi tempo a gestire la pianificazione delle attività" },
+              { icon: "📋", title: "Info frammentate", desc: "Non hai tutte le info utili per la vendita a portata di mano" },
               { icon: "🚗", title: "Guida pericolosa", desc: "Rischio incidenti per guardare e maneggiare uno schermo" },
-              { icon: "📊", title: "Nessuna visione", desc: "Non ho il polso della situazione e dello storico vendite" },
-              { icon: "🗺️", title: "Percorsi inefficienti", desc: "Non so se i miei piani di visita sono razionali ed efficaci" },
-              { icon: "🎯", title: "Scarsa personalizzazione", desc: "Non ho tempo e info sufficienti per migliorare la qualità del servizio clienti" },
+              { icon: "📊", title: "Visione debole", desc: "Poco orientato verso l'obiettivo finale" },
+              { icon: "🗺️", title: "Percorsi inefficienti", desc: "Non sei certo della tua pianificazione" },
+              { icon: "🎯", title: "Scarsa personalizzazione", desc: "Non hai tempo e info sufficienti per migliorare la qualità del servizio clienti" },
             ].map((pain, i) => (
               <div 
                 key={i} 
@@ -834,18 +827,18 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               REPING risolve tutto questo
             </h2>
             <p className="text-slate-600 max-w-2xl mx-auto">
-              Il tuo AI CoPilot che capisce il tuo lavoro e ti supporta ogni giorno.
+              AI CoPilot che capisce il tuo lavoro e ti supporta in molti modi.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: "📱", title: "Info sottomano", desc: "Tutti i dati dei tuoi clienti, prodotti e storico sempre accessibili con una domanda.", bg: "from-blue-50 to-white border-blue-100" },
-              { icon: "📊", title: "Elaborazioni dati", desc: "Analisi automatiche: fatturato, visite, trend. Chiedi e REPING calcola.", bg: "from-green-50 to-white border-green-100" },
-              { icon: "📝", title: "Note personalizzate", desc: "Appunti e promemoria per vendite mirate. Mai più dimenticare un dettaglio.", bg: "from-purple-50 to-white border-purple-100" },
-              { icon: "💡", title: "Consigli strategici", desc: "Indicazioni operative basate sui tuoi dati. L'AI suggerisce, tu decidi.", bg: "from-yellow-50 to-white border-yellow-100" },
-              { icon: "🗺️", title: "Percorsi ottimizzati", desc: "Risparmia km e tempo. REPING pianifica i giri più efficienti.", bg: "from-red-50 to-white border-red-100" },
-              { icon: "🚗", title: "Modalità Guida", desc: "Guida in sicurezza, REPING dialoga con te! Hands-free totale.", bg: "from-indigo-50 to-white border-indigo-100" },
+              { icon: "", title: "Info sottomano", desc: "Tutti i dati sempre immediatamente accessibili, anche solo con una domanda.", bg: "from-blue-50 to-white border-blue-100" },
+              { icon: "", title: "Elaborazioni dati", desc: "Analisi automatiche: fatturato, visite, trend. Chiedi e REPING calcola.", bg: "from-green-50 to-white border-green-100" },
+              { icon: "", title: "Note personalizzate", desc: "Appunti e promemoria per vendite mirate. Mai più dimenticare un dettaglio.", bg: "from-purple-50 to-white border-purple-100" },
+              { icon: "", title: "Consigli strategici", desc: "Indicazioni operative basate sui tuoi dati. L'AI suggerisce, tu decidi.", bg: "from-yellow-50 to-white border-yellow-100" },
+              { icon: "", title: "Percorsi ottimizzati", desc: "Risparmia km e tempo. REPING pianifica i giri più efficienti.", bg: "from-red-50 to-white border-red-100" },
+              { icon: "", title: "Modalità Guida", desc: "Guida in sicurezza, REPING dialoga con te! Hands-free totale.", bg: "from-indigo-50 to-white border-indigo-100" },
             ].map((feature, i) => (
               <div 
                 key={i} 
@@ -1029,7 +1022,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               <div className="text-4xl mb-4">📱</div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">GUI Standard</h3>
               <p className="text-slate-600 text-sm">
-                Interazione classica con interfaccia grafica, arricchita da <strong>comandi vocali</strong> e 
+Interazione classica con interfaccia grafica, arricchita da
                 funzioni <strong>proattive</strong> (pianificazione visite, utilizzo note clienti).
               </p>
               <div className="mt-4 text-xs text-slate-500">
@@ -1258,14 +1251,12 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               {/* Right: CTA */}
               <div className="flex flex-col items-center lg:items-end gap-3">
                 <div className="text-slate-500 text-sm">Disponibile prossimamente</div>
-                <div className="text-xl font-bold text-slate-900">
-                  Contattaci
-                </div>
+                <div className="text-lg font-semibold text-slate-700">Contatto</div>
                 <a 
                   href="mailto:info@reping.it?subject=Richiesta informazioni Enterprise" 
-                  className="text-blue-600 hover:text-blue-800 font-medium text-lg"
+                  className="text-blue-600 hover:text-blue-800 font-bold text-xl"
                 >
-                  📧 info@reping.it
+                  info@reping.it
                 </a>
               </div>
             </div>
@@ -1282,16 +1273,16 @@ Come ci ha conosciuto: ${form.comeConosciuto}
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-400 text-lg font-bold mb-6">
-              🚀 BETA ESCLUSIVA - Posti limitati
+              🚀 BETA PER PRO SELEZIONATI
             </div>
             
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Candidati al programma Beta
             </h2>
             <p className="text-slate-300 text-lg">
-              Cerchiamo <strong className="text-white">10 agenti di commercio</strong> per testare REPING.
+              Cerchiamo <strong className="text-white">10 agenti di commercio qualificati</strong> per testare REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">BUSINESS GRATUITO</strong> + supporto diretto con il team.
+              Se selezionato: <strong className="text-amber-400">BUSINESS GRATUITO per 1 anno</strong> + supporto diretto con il team.
             </p>
           </div>
 
@@ -1548,7 +1539,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 </button>
 
                 <p className="text-center text-slate-500 text-sm mt-4">
-                  📧 Problemi? Scrivi a{" "}
+                  Problemi? Scrivi a{" "}
                   <a href="mailto:info@reping.it" className="text-blue-400 hover:underline">info@reping.it</a>
                 </p>
               </div>
