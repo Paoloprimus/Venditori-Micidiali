@@ -565,20 +565,155 @@ function BetaBanner({ variant = "default" }: { variant?: "default" | "large" | "
   );
 }
 
+// Form di candidatura Beta
+interface BetaFormData {
+  nome: string;
+  email: string;
+  settore: string;
+  settoreAltro: string;
+  ruolo: string;
+  clienti: string;
+  zona: string;
+  telefono: string;
+  esperienza: string;
+  strumenti: string[];
+  strumentiAltro: string;
+  dispositivi: string;
+  dispositiviAltro: string;
+  comeConosciuto: string;
+  privacy: boolean;
+}
+
+const INITIAL_FORM: BetaFormData = {
+  nome: "",
+  email: "",
+  settore: "",
+  settoreAltro: "",
+  ruolo: "",
+  clienti: "",
+  zona: "",
+  telefono: "",
+  esperienza: "",
+  strumenti: [],
+  strumentiAltro: "",
+  dispositivi: "",
+  dispositiviAltro: "",
+  comeConosciuto: "",
+  privacy: false,
+};
+
 export default function LandingPage() {
-  const [email, setEmail] = useState("");
+  const [form, setForm] = useState<BetaFormData>(INITIAL_FORM);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState("");
+
+  const updateForm = (field: keyof BetaFormData, value: string | boolean | string[]) => {
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const toggleStrumento = (strumento: string) => {
+    setForm(prev => ({
+      ...prev,
+      strumenti: prev.strumenti.includes(strumento)
+        ? prev.strumenti.filter(s => s !== strumento)
+        : [...prev.strumenti, strumento]
+    }));
+  };
 
   async function handleBetaRequest(e: React.FormEvent) {
     e.preventDefault();
-    if (!email.trim()) return;
+    setError("");
+    
+    // Validazione
+    if (!form.nome || !form.email || !form.settore || !form.ruolo || 
+        !form.clienti || !form.zona || !form.telefono || !form.esperienza ||
+        form.strumenti.length === 0 || !form.dispositivi || !form.comeConosciuto) {
+      setError("Compila tutti i campi obbligatori");
+      return;
+    }
+    if (!form.privacy) {
+      setError("Devi accettare la Privacy Policy per procedere");
+      return;
+    }
+    if ((form.settore === "altro" && !form.settoreAltro) ||
+        (form.strumenti.includes("Misto") && !form.strumentiAltro) ||
+        (form.dispositivi === "altro" && !form.dispositiviAltro)) {
+      setError("Specifica i campi 'Altro' selezionati");
+      return;
+    }
     
     setSubmitting(true);
-    // TODO: Inviare email a Supabase
-    await new Promise(r => setTimeout(r, 1000));
-    setSubmitted(true);
-    setSubmitting(false);
+    
+    try {
+      // Prepara dati per email
+      const strumentiText = form.strumenti.includes("Misto") 
+        ? form.strumenti.filter(s => s !== "Misto").join(", ") + " + " + form.strumentiAltro
+        : form.strumenti.join(", ");
+      
+      const settoreText = form.settore === "altro" ? form.settoreAltro : form.settore;
+      const dispositiviText = form.dispositivi === "altro" ? form.dispositiviAltro : form.dispositivi;
+
+      // Invia via Web3Forms (gratuito, no backend)
+      const response = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_key: "YOUR_WEB3FORMS_KEY", // Da configurare
+          subject: `🎯 Candidatura Beta REPING: ${form.nome}`,
+          from_name: "REPING Beta Form",
+          to: "info@reping.it",
+          // Dati candidatura
+          "Nome": form.nome,
+          "Email": form.email,
+          "Telefono": form.telefono,
+          "Settore": settoreText,
+          "Ruolo": form.ruolo,
+          "Clienti gestiti": form.clienti,
+          "Zona": form.zona,
+          "Esperienza": form.esperienza,
+          "Strumenti attuali": strumentiText,
+          "Dispositivi": dispositiviText,
+          "Come ci ha conosciuto": form.comeConosciuto,
+          // Messaggio formattato
+          message: `
+NUOVA CANDIDATURA BETA REPING
+=============================
+
+👤 DATI PERSONALI
+Nome: ${form.nome}
+Email: ${form.email}
+Telefono: ${form.telefono}
+
+💼 PROFILO PROFESSIONALE
+Settore: ${settoreText}
+Ruolo: ${form.ruolo}
+Clienti gestiti: ${form.clienti}
+Zona: ${form.zona}
+Esperienza: ${form.esperienza}
+
+🛠️ STRUMENTI E DISPOSITIVI
+Strumenti attuali: ${strumentiText}
+Dispositivi: ${dispositiviText}
+
+📣 ACQUISIZIONE
+Come ci ha conosciuto: ${form.comeConosciuto}
+
+✅ Privacy accettata: Sì
+          `.trim(),
+        }),
+      });
+
+      if (response.ok) {
+        setSubmitted(true);
+      } else {
+        throw new Error("Errore invio");
+      }
+    } catch (err) {
+      setError("Errore nell'invio. Riprova o scrivi a info@reping.it");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -1160,52 +1295,282 @@ export default function LandingPage() {
       </section>
 
       {/* ============ BETA CTA ============ */}
-      <section id="beta" className="py-20 bg-gradient-to-br from-amber-500 via-orange-500 to-red-500">
-        <div className="max-w-3xl mx-auto px-4 text-center">
-          <div className="inline-flex items-center gap-2 px-5 py-2 bg-white/20 rounded-full text-white text-lg font-bold mb-6">
-            🚀 BETA ESCLUSIVA - Posti limitati
+      <section id="beta" className="py-20 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800">
+        <div className="max-w-3xl mx-auto px-4">
+          <div className="text-center mb-8">
+            <div className="inline-flex items-center gap-2 px-5 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-400 text-lg font-bold mb-6">
+              🚀 BETA ESCLUSIVA - Posti limitati
+            </div>
+            
+            <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
+              Candidati al programma Beta
+            </h2>
+            <p className="text-slate-300 text-lg">
+              Cerchiamo <strong className="text-white">10 agenti di commercio</strong> per testare REPING.
+              <br />
+              Se selezionato: <strong className="text-amber-400">BUSINESS GRATUITO</strong> + supporto diretto con il team.
+            </p>
           </div>
-          
-          <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-            Vuoi provare REPING in anteprima?
-          </h2>
-          <p className="text-white/90 mb-8 text-lg">
-            Stiamo cercando <strong>10 agenti di commercio</strong> per testare REPING.
-            <br />
-            Accesso <strong>BUSINESS GRATUITO</strong> + supporto diretto con il team.
-          </p>
 
           {submitted ? (
-            <div className="bg-white/20 border border-white/30 rounded-xl p-6 max-w-md mx-auto backdrop-blur">
-              <div className="text-4xl mb-3">🎉</div>
-              <h3 className="text-xl font-semibold text-white mb-2">Richiesta inviata!</h3>
-              <p className="text-white/90">
-                Ti contatteremo presto all'indirizzo <strong>{email}</strong>
+            <div className="bg-green-500/20 border border-green-500/50 rounded-2xl p-8 text-center max-w-lg mx-auto">
+              <div className="text-5xl mb-4">🎉</div>
+              <h3 className="text-2xl font-bold text-white mb-3">Candidatura inviata!</h3>
+              <p className="text-slate-300 mb-4">
+                Grazie <strong className="text-white">{form.nome}</strong>!
+                <br />
+                Valuteremo la tua candidatura e ti contatteremo a <strong className="text-white">{form.email}</strong>
+              </p>
+              <p className="text-slate-400 text-sm">
+                ⚠️ Se non verrai selezionato, i tuoi dati saranno cancellati.
               </p>
             </div>
           ) : (
-            <form onSubmit={handleBetaRequest} className="flex flex-col sm:flex-row gap-3 max-w-md mx-auto">
-              <input
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="La tua email"
-                required
-                className="flex-1 px-4 py-3 rounded-xl bg-white/20 border-2 border-white/30 text-white placeholder-white/60 focus:outline-none focus:border-white/60 font-medium"
-              />
-              <button
-                type="submit"
-                disabled={submitting}
-                className="px-6 py-3 bg-white text-orange-600 rounded-xl font-bold hover:bg-orange-50 transition disabled:opacity-50"
-              >
-                {submitting ? "Invio..." : "Richiedi Accesso"}
-              </button>
+            <form onSubmit={handleBetaRequest} className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 md:p-8">
+              {error && (
+                <div className="bg-red-500/20 border border-red-500/50 text-red-300 px-4 py-3 rounded-xl mb-6 text-sm">
+                  ⚠️ {error}
+                </div>
+              )}
+
+              {/* Sezione: Dati personali */}
+              <div className="mb-8">
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                  <span className="text-xl">👤</span> Dati personali
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Nome e Cognome *</label>
+                    <input
+                      type="text"
+                      value={form.nome}
+                      onChange={e => updateForm("nome", e.target.value)}
+                      placeholder="Mario Rossi"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Email *</label>
+                    <input
+                      type="email"
+                      value={form.email}
+                      onChange={e => updateForm("email", e.target.value)}
+                      placeholder="mario@esempio.it"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Telefono *</label>
+                    <input
+                      type="tel"
+                      value={form.telefono}
+                      onChange={e => updateForm("telefono", e.target.value)}
+                      placeholder="+39 333 1234567"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Zona (regione/provincia) *</label>
+                    <input
+                      type="text"
+                      value={form.zona}
+                      onChange={e => updateForm("zona", e.target.value)}
+                      placeholder="es. Lombardia, Milano e provincia"
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Sezione: Profilo professionale */}
+              <div className="mb-8">
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                  <span className="text-xl">💼</span> Profilo professionale
+                </h3>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Settore *</label>
+                    <select
+                      value={form.settore}
+                      onChange={e => updateForm("settore", e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">Seleziona...</option>
+                      <option value="HoReCa">HoReCa (Hotel, Ristoranti, Caffè)</option>
+                      <option value="Food&Beverage">Food & Beverage</option>
+                      <option value="altro">Altro (specificare)</option>
+                    </select>
+                    {form.settore === "altro" && (
+                      <input
+                        type="text"
+                        value={form.settoreAltro}
+                        onChange={e => updateForm("settoreAltro", e.target.value)}
+                        placeholder="Specifica il settore..."
+                        className="w-full mt-2 px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                      />
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Ruolo *</label>
+                    <select
+                      value={form.ruolo}
+                      onChange={e => updateForm("ruolo", e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">Seleziona...</option>
+                      <option value="Monomandatario">Agente Monomandatario</option>
+                      <option value="Plurimandatario">Agente Plurimandatario</option>
+                      <option value="Dipendente">Venditore Dipendente</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Quanti clienti gestisci? *</label>
+                    <select
+                      value={form.clienti}
+                      onChange={e => updateForm("clienti", e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">Seleziona...</option>
+                      <option value="<50">Meno di 50</option>
+                      <option value="50-300">50 - 300</option>
+                      <option value="300-500">300 - 500</option>
+                      <option value=">500">Più di 500</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-slate-400 text-sm mb-1">Anni di esperienza *</label>
+                    <select
+                      value={form.esperienza}
+                      onChange={e => updateForm("esperienza", e.target.value)}
+                      className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                    >
+                      <option value="">Seleziona...</option>
+                      <option value="<2">Meno di 2 anni</option>
+                      <option value="2-10">2 - 10 anni</option>
+                      <option value=">10">Più di 10 anni</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Sezione: Strumenti e dispositivi */}
+              <div className="mb-8">
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                  <span className="text-xl">🛠️</span> Strumenti e dispositivi
+                </h3>
+                
+                <div className="mb-4">
+                  <label className="block text-slate-400 text-sm mb-2">Strumenti attuali per gestire i clienti * (seleziona tutti)</label>
+                  <div className="flex flex-wrap gap-2">
+                    {["CRM", "Excel", "App", "Carta", "Misto"].map(strumento => (
+                      <button
+                        key={strumento}
+                        type="button"
+                        onClick={() => toggleStrumento(strumento)}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                          form.strumenti.includes(strumento)
+                            ? "bg-blue-600 text-white"
+                            : "bg-slate-700 text-slate-300 hover:bg-slate-600"
+                        }`}
+                      >
+                        {strumento}
+                      </button>
+                    ))}
+                  </div>
+                  {form.strumenti.includes("Misto") && (
+                    <input
+                      type="text"
+                      value={form.strumentiAltro}
+                      onChange={e => updateForm("strumentiAltro", e.target.value)}
+                      placeholder="Specifica gli strumenti usati..."
+                      className="w-full mt-2 px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-slate-400 text-sm mb-1">Dispositivo principale per lavoro *</label>
+                  <select
+                    value={form.dispositivi}
+                    onChange={e => updateForm("dispositivi", e.target.value)}
+                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500"
+                  >
+                    <option value="">Seleziona...</option>
+                    <option value="iPhone">iPhone</option>
+                    <option value="Android">Smartphone Android</option>
+                    <option value="iPad">iPad</option>
+                    <option value="Tablet Android">Tablet Android</option>
+                    <option value="Mac">Mac</option>
+                    <option value="PC Windows">PC Windows</option>
+                    <option value="altro">Altro (specificare)</option>
+                  </select>
+                  {form.dispositivi === "altro" && (
+                    <input
+                      type="text"
+                      value={form.dispositiviAltro}
+                      onChange={e => updateForm("dispositiviAltro", e.target.value)}
+                      placeholder="Specifica il dispositivo..."
+                      className="w-full mt-2 px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                    />
+                  )}
+                </div>
+              </div>
+
+              {/* Sezione: Come ci hai conosciuto */}
+              <div className="mb-8">
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                  <span className="text-xl">📣</span> Come ci hai conosciuto?
+                </h3>
+                <input
+                  type="text"
+                  value={form.comeConosciuto}
+                  onChange={e => updateForm("comeConosciuto", e.target.value)}
+                  placeholder="es. LinkedIn, passaparola, ricerca Google, altro..."
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Privacy e Submit */}
+              <div className="border-t border-slate-700 pt-6">
+                <label className="flex items-start gap-3 cursor-pointer mb-6">
+                  <input
+                    type="checkbox"
+                    checked={form.privacy}
+                    onChange={e => updateForm("privacy", e.target.checked)}
+                    className="mt-1 w-5 h-5 rounded border-slate-600 bg-slate-900 text-blue-600 focus:ring-blue-500"
+                  />
+                  <span className="text-slate-300 text-sm">
+                    Ho letto e accetto la{" "}
+                    <Link href="/legal/privacy" target="_blank" className="text-blue-400 hover:underline">
+                      Privacy Policy
+                    </Link>
+                    . Comprendo che in caso di non selezione i miei dati saranno cancellati. *
+                  </span>
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-lg hover:opacity-90 transition disabled:opacity-50 flex items-center justify-center gap-2"
+                >
+                  {submitting ? (
+                    <>
+                      <span className="animate-spin">⏳</span> Invio in corso...
+                    </>
+                  ) : (
+                    <>
+                      🚀 Invia Candidatura
+                    </>
+                  )}
+                </button>
+
+                <p className="text-center text-slate-500 text-sm mt-4">
+                  📧 Problemi? Scrivi a{" "}
+                  <a href="mailto:info@reping.it" className="text-blue-400 hover:underline">info@reping.it</a>
+                </p>
+              </div>
             </form>
           )}
-
-          <p className="mt-6 text-white/80 text-sm">
-            📧 Oppure scrivi a <a href="mailto:info@reping.it" className="underline font-medium">info@reping.it</a>
-          </p>
         </div>
       </section>
 
