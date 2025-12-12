@@ -1319,7 +1319,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               <p className="text-slate-300 mb-4">
                 Grazie <strong className="text-white">{form.nome}</strong>!
                 <br />
-                Valuteremo la tua candidatura e ti contatteremo a <strong className="text-white">{form.email}</strong>
+                Valuteremo la tua candidatura e ti contatteremo entro 24h a <strong className="text-white">{form.email}</strong>
               </p>
               <p className="text-slate-400 text-sm">
                 ⚠️ Se non verrai selezionato, i tuoi dati saranno cancellati.
