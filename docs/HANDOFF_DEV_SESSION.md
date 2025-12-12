@@ -319,13 +319,13 @@ Cerca `🔒 BETA` nei file commentati e decommenta.
 
 ## 👤 RUOLI E ACCESSI
 
-### Ruoli disponibili (profiles.role):
-| Ruolo | Descrizione | Come si ottiene |
-|-------|-------------|-----------------|
-| `tester` | Beta tester | Registrazione con token beta |
-| `agente` | Utente standard | Default |
-| `agente_premium` | Piano Business | Upgrade da admin |
-| `admin` | Amministratore | Manuale in DB |
+### Ruoli disponibili (profiles.role) - Allineati con reping.it:
+| Ruolo | Piano | Prezzo | Descrizione |
+|-------|-------|--------|-------------|
+| `admin` | - | - | Amministratori (tutto illimitato) |
+| `tester` | Gratis | €0 | Collaboratori che testano (= Business completo) |
+| `premium` | PREMIUM | €49/mese | 500 clienti, 60 query/g, 90gg storico, 9 PDF/mese |
+| `business` | BUSINESS | €99/mese | 1000 clienti, illimitato, Guida, Analytics |
 
 ### Flusso registrazione Beta:
 ```
@@ -345,13 +345,14 @@ Cerca `🔒 BETA` nei file commentati e decommenta.
 SELECT generate_beta_token('Nota opzionale');
 ```
 
-### Limiti per ruolo - BETA:
-**Per la Beta tutti i tester hanno accesso BUSINESS completo (nessun limite).**
+### Limiti per ruolo (da Febbraio 2026):
+**Durante la Beta tutti i tester hanno accesso BUSINESS completo (nessun limite).**
 
-I limiti saranno applicati post-Beta:
-- PREMIUM: 500 clienti, 60 query/giorno, 9 PDF/mese, no Modalità Guida
-- BUSINESS: 1000 clienti, illimitato, Modalità Guida
-- MULTIAGENT: Business + Dashboard Admin
+| Piano | Clienti | Query/giorno | Storico | PDF/mese | Guida | Analytics |
+|-------|---------|--------------|---------|----------|-------|-----------|
+| PREMIUM €49 | 500 | 60 | 90 giorni | 9 | ❌ | ❌ |
+| BUSINESS €99 | 1000 | ∞ | ∞ | ∞ | ✅ | ✅ |
+| MULTIAGENT €149 | = Business + Dashboard Admin (da Aprile 2026) |
 
 ### RLS (Row Level Security):
 | Tabella | Chi può leggere | Chi può scrivere |
