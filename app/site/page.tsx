@@ -659,7 +659,7 @@ export default function LandingPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          access_key: "YOUR_WEB3FORMS_KEY", // Da configurare
+          access_key: "0f7cea16-e0ed-4735-969f-aacbcc65595d", // Da configurare
           subject: `🎯 Candidatura Beta REPING: ${form.nome}`,
           from_name: "REPING Beta Form",
           to: "info@reping.it",
