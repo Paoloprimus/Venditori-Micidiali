@@ -64,6 +64,7 @@ ON CONFLICT (role) DO UPDATE SET
   updated_at = now();
 
 -- 5. AGGIORNA FUNZIONE get_my_limits PER INCLUDERE max_clients
+DROP FUNCTION IF EXISTS public.get_my_limits();
 CREATE OR REPLACE FUNCTION public.get_my_limits()
 RETURNS TABLE (
   max_chat_queries_day INT,
@@ -94,6 +95,7 @@ RETURNS INT AS $$
 $$ LANGUAGE sql STABLE SECURITY DEFINER;
 
 -- 7. AGGIORNA can_use_feature PER INCLUDERE max_clients
+DROP FUNCTION IF EXISTS public.can_use_feature(TEXT);
 CREATE OR REPLACE FUNCTION public.can_use_feature(p_feature TEXT)
 RETURNS BOOLEAN AS $$
 DECLARE
