@@ -718,9 +718,6 @@ Come ci ha conosciuto: ${form.comeConosciuto}
 
   return (
     <div className="font-sans">
-      {/* ============ STICKY BETA BANNER ============ */}
-      <BetaBanner variant="sticky" />
-
       {/* ============ NAVBAR ============ */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-900/95 backdrop-blur-sm border-b border-slate-800">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -750,17 +747,13 @@ Come ci ha conosciuto: ${form.comeConosciuto}
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Testo */}
             <div>
-              <BetaBanner variant="large" />
-              
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 mt-6 leading-tight">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
                 Il tuo AI CoPilot
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"> alle Vendite</span>
               </h1>
               
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
                 Vendi di più, meglio e in meno tempo.
-                <br />
-                Parla con REPING, al resto pensa l'AI.
               </p>
 
               <div className="flex flex-wrap gap-4">
@@ -774,30 +767,20 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 */}
                 <a 
                   href="#beta"
-                  className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:opacity-90 transition"
+                  className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-xl hover:opacity-90 transition shadow-lg"
                 >
                   Richiedi Accesso Beta
                 </a>
               </div>
 
               {/* Trust badges */}
-              <div className="mt-10 flex flex-wrap items-center gap-4 text-sm">
-                <div className="flex items-center gap-2 bg-green-500/10 text-green-400 px-3 py-1.5 rounded-full border border-green-500/30">
-                  <span>🔐</span>
-                  <span className="font-medium">Dati cifrati E2E</span>
-                </div>
-                <div className="flex items-center gap-2 bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">
-                  <span>🇮🇹</span>
-                  Made in Italy
-                </div>
-                <div className="flex items-center gap-2 bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">
-                  <span>🚗</span>
-                  Hands-free
-                </div>
-                <div className="flex items-center gap-2 bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">
-                  <span>🛡️</span>
-                  GDPR compliant
-                </div>
+              <div className="mt-10 flex flex-wrap items-center gap-3 text-sm">
+                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Dati cifrati E2E</div>
+                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Made in Italy</div>
+                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Hands-free</div>
+                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">GDPR compliant</div>
+                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Statistiche</div>
+                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Suggerimenti</div>
               </div>
             </div>
 
