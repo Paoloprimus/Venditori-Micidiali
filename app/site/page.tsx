@@ -595,7 +595,7 @@ export default function LandingPage() {
           
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-slate-300 hover:text-white transition">Funzionalità</a>
-            <a href="#demo" className="text-slate-300 hover:text-white transition">Demo</a>
+            {/* <a href="#demo" className="text-slate-300 hover:text-white transition">Demo</a> */}
             <a href="#pricing" className="text-slate-300 hover:text-white transition">Piani</a>
             <a href="#beta" className="text-slate-300 hover:text-white transition">Beta</a>
           </div>
@@ -629,12 +629,14 @@ export default function LandingPage() {
               </p>
 
               <div className="flex flex-wrap gap-4">
+                {/* 🔒 BETA: Pulsante demo disabilitato - riattivare quando video pronto
                 <a 
                   href="#demo"
                   className="px-6 py-3 bg-white text-slate-900 rounded-xl font-semibold hover:bg-slate-100 transition flex items-center gap-2"
                 >
                   <span>▶</span> Guarda Demo
                 </a>
+                */}
                 <a 
                   href="#beta"
                   className="px-6 py-3 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-xl font-semibold hover:opacity-90 transition"
@@ -862,6 +864,7 @@ export default function LandingPage() {
       </section>
 
       {/* ============ VIDEO DEMO ============ */}
+      {/* 🔒 BETA: Sezione video commentata - da riattivare quando il video sarà pronto
       <section id="demo" className="py-20 bg-slate-900">
         <div className="max-w-4xl mx-auto px-4 text-center">
           <BetaBanner />
@@ -872,7 +875,6 @@ export default function LandingPage() {
             2 minuti per capire come REPING può trasformare il tuo lavoro.
           </p>
 
-          {/* Video placeholder */}
           <div className="relative aspect-video bg-slate-800 rounded-2xl overflow-hidden border border-slate-700 group cursor-pointer">
             <div className="absolute inset-0 flex items-center justify-center">
               <div className="w-24 h-24 bg-gradient-to-r from-blue-600 to-purple-600 rounded-full flex items-center justify-center group-hover:scale-110 transition shadow-lg">
@@ -889,6 +891,7 @@ export default function LandingPage() {
           </p>
         </div>
       </section>
+      */}
 
       {/* ============ MODALITÀ D'USO ============ */}
       <section className="py-16 bg-white">
@@ -950,9 +953,9 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4">
           {/* BETA NOTICE - Very prominent */}
           <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl p-6 mb-10 text-center shadow-lg">
-            <div className="text-2xl font-bold mb-2">🚀 BETA GRATUITA: Prova BUSINESS fino a Febbraio!</div>
+            <div className="text-2xl font-bold mb-2">🚀 BETA GRATUITA: Prova BUSINESS completo!</div>
             <p className="text-white/90">
-              Fino a Febbraio 2026 puoi provare <strong>BUSINESS completo</strong> (valore €99/mese) 
+              Per tutta la durata della fase Beta puoi provare <strong>BUSINESS completo</strong> (valore €99/mese) 
               gratuitamente su invito. Poi scegli: resta BUSINESS o passa a PREMIUM.
             </p>
             <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-emerald-600 rounded-full font-bold hover:bg-emerald-50 transition">
@@ -965,7 +968,7 @@ export default function LandingPage() {
               Piani
             </h2>
             <p className="text-slate-600">
-              Da Febbraio 2026 saranno disponibili i seguenti piani
+              Al termine della fase Beta saranno disponibili i seguenti piani
             </p>
           </div>
 
@@ -974,7 +977,7 @@ export default function LandingPage() {
 
             {/* PREMIUM */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
-              <div className="text-xs font-medium text-slate-400 mb-1">DA FEBBRAIO</div>
+              <div className="text-xs font-medium text-slate-400 mb-1">POST-BETA</div>
               <div className="text-lg font-bold text-slate-700 mb-2">PREMIUM</div>
               <div className="text-4xl font-bold text-slate-900 mb-1">€49</div>
               <div className="text-slate-500 text-sm mb-2">/mese</div>
@@ -1015,7 +1018,7 @@ export default function LandingPage() {
                 ⭐ DISPONIBILE ORA IN BETA GRATUITA
               </div>
               <div className="mt-6">
-                <div className="text-xs font-medium text-emerald-200 mb-1">DA FEBBRAIO</div>
+                <div className="text-xs font-medium text-emerald-200 mb-1">POST-BETA</div>
                 <div className="text-lg font-bold text-white mb-2">BUSINESS</div>
                 <div className="text-4xl font-bold text-white mb-1">€99</div>
                 <div className="text-emerald-200 text-sm mb-2">/mese</div>
@@ -1064,7 +1067,7 @@ export default function LandingPage() {
 
             {/* MULTIAGENT */}
             <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
-              <div className="text-xs font-medium text-orange-500 mb-1">DA APRILE</div>
+              <div className="text-xs font-medium text-orange-500 mb-1">PROSSIMAMENTE</div>
               <div className="text-lg font-bold text-slate-700 mb-2">MULTIAGENT</div>
               <div className="text-4xl font-bold text-slate-900 mb-1">€149</div>
               <div className="text-slate-500 text-sm mb-2">/utente/mese</div>
@@ -1136,17 +1139,16 @@ export default function LandingPage() {
               
               {/* Right: CTA */}
               <div className="flex flex-col items-center lg:items-end gap-3">
-                <div className="text-slate-500 text-sm">Disponibile da Aprile 2026</div>
-                <a 
-                  href="mailto:enterprise@reping.it?subject=Richiesta informazioni Enterprise" 
-                  className="px-8 py-3 bg-slate-900 text-white rounded-xl font-bold hover:bg-slate-800 transition flex items-center gap-2"
-                >
-                  <span>Parliamone</span>
-                  <span>→</span>
-                </a>
-                <div className="text-slate-400 text-xs">
-                  enterprise@reping.it
+                <div className="text-slate-500 text-sm">Disponibile prossimamente</div>
+                <div className="text-xl font-bold text-slate-900">
+                  Contattaci
                 </div>
+                <a 
+                  href="mailto:info@reping.it?subject=Richiesta informazioni Enterprise" 
+                  className="text-blue-600 hover:text-blue-800 font-medium text-lg"
+                >
+                  📧 info@reping.it
+                </a>
               </div>
             </div>
           </div>
@@ -1170,7 +1172,7 @@ export default function LandingPage() {
           <p className="text-white/90 mb-8 text-lg">
             Stiamo cercando <strong>10 agenti di commercio</strong> per testare REPING.
             <br />
-            Accesso <strong>PREMIUM GRATUITO</strong> + supporto diretto con il team.
+            Accesso <strong>BUSINESS GRATUITO</strong> + supporto diretto con il team.
           </p>
 
           {submitted ? (
@@ -1230,7 +1232,7 @@ export default function LandingPage() {
               <ul className="space-y-2 text-slate-400 text-sm">
                 <li><a href="#features" className="hover:text-white transition">Funzionalità</a></li>
                 <li><a href="#pricing" className="hover:text-white transition">Piani</a></li>
-                <li><a href="#demo" className="hover:text-white transition">Demo</a></li>
+                {/* <li><a href="#demo" className="hover:text-white transition">Demo</a></li> */}
                 <li><a href="#beta" className="hover:text-white transition">Beta</a></li>
               </ul>
             </div>
