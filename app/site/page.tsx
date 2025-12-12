@@ -1541,9 +1541,9 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   />
                   <span className="text-slate-300 text-sm">
                     Ho letto e accetto la{" "}
-                    <Link href="/legal/privacy" target="_blank" className="text-blue-400 hover:underline">
+                    <a href="https://reping.app/legal/privacy" target="_blank" className="text-blue-400 hover:underline">
                       Privacy Policy
-                    </Link>
+                    </a>
                     . Comprendo che in caso di non selezione i miei dati saranno cancellati. *
                   </span>
                 </label>
@@ -1605,9 +1605,9 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             <div>
               <h4 className="font-semibold text-white mb-4">Legale</h4>
               <ul className="space-y-2 text-slate-400 text-sm">
-                <li><Link href="/legal/privacy" className="hover:text-white transition">Privacy Policy</Link></li>
-                <li><Link href="/legal/terms" className="hover:text-white transition">Termini di Servizio</Link></li>
-                <li><Link href="/legal/cookies" className="hover:text-white transition">Cookie Policy</Link></li>
+                <li><a href="https://reping.app/legal/privacy" className="hover:text-white transition">Privacy Policy</a></li>
+                <li><a href="https://reping.app/legal/terms" className="hover:text-white transition">Termini di Servizio</a></li>
+                <li><a href="https://reping.app/legal/cookies" className="hover:text-white transition">Cookie Policy</a></li>
               </ul>
             </div>
 
