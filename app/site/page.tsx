@@ -242,11 +242,11 @@ Come ci ha conosciuto: ${form.comeConosciuto}
 
       {/* ============ HERO ============ */}
       <section className="pt-40 pb-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-        <div className="max-w-6xl mx-auto px-4">
-          <div className="grid lg:grid-cols-2 gap-12 items-center">
-            {/* Testo */}
+        <div className="max-w-7xl mx-auto px-4">
+          <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 items-center">
+            {/* Colonna sinistra: Titolo + Claim + CTA */}
             <div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
                 REPING
                 <br />
                 <span className="text-white">IL CoPilota +</span>
@@ -259,22 +259,6 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 <br />
                 <span className="text-white">Commercio</span>
               </h1>
-              
-              {/* Features list */}
-              <div className="my-8 space-y-2 text-sm">
-                {/* Feature intelligenti */}
-                <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
-                <p className="text-cyan-400">• Suggerimenti proattivi</p>
-                <p className="text-cyan-400">• Personalizzazione vendite</p>
-                <p className="text-cyan-400">• Analisi, statistiche, report</p>
-                
-                {/* Feature sicure */}
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
-              </div>
 
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
                 Vendi di più, meglio e in meno tempo.
@@ -290,8 +274,26 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               </div>
             </div>
 
-            {/* Animated Mockup */}
-            <AnimatedMockup />
+            {/* Colonna centrale: Features list */}
+            <div className="hidden lg:block space-y-2 text-sm whitespace-nowrap px-6">
+              {/* Feature intelligenti */}
+              <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
+              <p className="text-cyan-400">• Suggerimenti proattivi</p>
+              <p className="text-cyan-400">• Personalizzazione vendite</p>
+              <p className="text-cyan-400">• Analisi, statistiche, report</p>
+              
+              {/* Feature sicure */}
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
+            </div>
+
+            {/* Colonna destra: Animated Mockup */}
+            <div className="flex justify-center">
+              <AnimatedMockup />
+            </div>
           </div>
         </div>
       </section>
