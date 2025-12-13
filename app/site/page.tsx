@@ -401,7 +401,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 </li>
                 <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
-                  Conforme GDPR - Server in Europa
+                  Conforme GDPR
                 </li>
                 <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
@@ -577,8 +577,8 @@ Interazione classica con interfaccia grafica, arricchita da
           <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl p-6 mb-10 text-center shadow-lg">
             <div className="text-2xl font-bold mb-2">🚀 BETA GRATUITA: Prova BUSINESS completo!</div>
             <p className="text-white/90">
-              Per tutta la durata della fase Beta puoi provare <strong>BUSINESS completo</strong> (valore €99/mese) 
-              gratuitamente su invito. Poi scegli: resta BUSINESS o passa a PREMIUM.
+              Per tutta la durata della fase Beta (fino esaurimento posti, durata minima 1 mese) puoi provare su richiesta <strong>BUSINESS completo</strong> (valore €99/mese) 
+              gratuitamente. Poi scegli: passa a PREMIUM gratis per un anno o resta BUSINESS a prezzo dimezzato per un anno .
             </p>
             <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-emerald-600 rounded-full font-bold hover:bg-emerald-50 transition">
               Richiedi Accesso Beta →
@@ -630,7 +630,7 @@ Interazione classica con interfaccia grafica, arricchita da
               </ul>
 
               <div className="text-xs text-slate-400 text-center">
-                Per chi non serve Modalità Guida
+                Per chi non usa Modalità Guida
               </div>
             </div>
 
@@ -793,7 +793,7 @@ Interazione classica con interfaccia grafica, arricchita da
             <p className="text-slate-300 text-lg">
               Cerchiamo <strong className="text-white">10 agenti di commercio qualificati</strong> per testare REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">BUSINESS GRATUITO per 1 anno</strong> + supporto diretto con il team.
+              Se selezionato: <strong className="text-amber-400">PREMIUM GRATUITO per 1 anno o BUSINESS a prezzo dimezzato per 1 anno</strong> + supporto diretto con il team.
             </p>
           </div>
 
