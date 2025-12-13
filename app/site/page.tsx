@@ -1085,7 +1085,7 @@ Interazione classica con interfaccia grafica, arricchita da
               <p className="text-slate-400 text-sm mt-4">
                 Il tuo AI CoPilot alle Vendite.
                 <br />
-                Per agenti di commercio HoReCa.
+                Per agenti di commercio.
               </p>
               <div className="mt-3">
                 <BetaBanner />
