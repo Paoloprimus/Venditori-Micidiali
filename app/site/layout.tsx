@@ -9,7 +9,7 @@ export const metadata: Metadata = {
   description: "Vendi di più, meglio e in meno tempo.",
   keywords: ["agente commercio", "vendite", "HoReCa", "AI", "assistente", "percorsi", "ottimizzazione", "personalizzazione"],
   openGraph: {
-    title: "REPING - Il CoPilota più intelligente per agenti di commercio,
+    title: "REPING - Il CoPilota più intelligente per agenti di commercio",
     description: "Vendi di più, meglio e in meno tempo.",
     type: "website",
     locale: "it_IT",
