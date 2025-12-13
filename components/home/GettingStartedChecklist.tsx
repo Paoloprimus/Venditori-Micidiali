@@ -12,7 +12,8 @@ interface ChecklistState {
   // 🔒 BETA: hasProducts rimosso - riattivare per MULTIAGENT
   // hasProducts: boolean;
   hasAskedAssistant: boolean;
-  hasPlannedRoute: boolean;
+  hasFirstVisit: boolean;
+  hasSentFeedback: boolean;
 }
 
 interface Props {
@@ -24,7 +25,8 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
     hasClients: false,
     // 🔒 BETA: hasProducts rimosso
     hasAskedAssistant: false,
-    hasPlannedRoute: false,
+    hasFirstVisit: false,
+    hasSentFeedback: false,
   });
   const [loading, setLoading] = useState(true);
   const [dismissed, setDismissed] = useState(false);
@@ -79,15 +81,24 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
         .eq("user_id", user.id)
         .eq("role", "user");
 
-      // Check planning (ha visitato /planning o creato visite?)
-      // Per semplicità, usiamo il localStorage flag
-      const hasPlanned = localStorage.getItem("reping:has_planned") === "true";
+      // Check visite (ha registrato almeno una visita?)
+      const { count: visitsCount } = await supabase
+        .from("visits")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
+
+      // Check feedback (ha inviato almeno un feedback?)
+      const { count: feedbackCount } = await supabase
+        .from("test_notes")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id);
 
       const newState: ChecklistState = {
         hasClients: (clientsCount || 0) > 0,
         // 🔒 BETA: hasProducts rimosso
         hasAskedAssistant: (messagesCount || 0) > 0,
-        hasPlannedRoute: hasPlanned,
+        hasFirstVisit: (visitsCount || 0) > 0,
+        hasSentFeedback: (feedbackCount || 0) > 0,
       };
 
       setState(newState);
@@ -104,51 +115,50 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
     setDismissed(true);
   };
 
-  const handleMarkPlanned = () => {
-    localStorage.setItem("reping:has_planned", "true");
-    setState(prev => {
-      const newState = { ...prev, hasPlannedRoute: true };
-      localStorage.setItem(CHECKLIST_KEY, JSON.stringify(newState));
-      return newState;
-    });
+  // Apre il Test Companion Panel
+  const handleOpenTestPanel = () => {
+    // Attiva il pannello se disattivato
+    localStorage.setItem("reping:testPanelEnabled", "true");
+    // Apri il pannello
+    window.dispatchEvent(new CustomEvent("repping:testPanelChanged", { detail: { enabled: true, open: true } }));
   };
 
-  // Calcola progresso
-  // 🔒 BETA: hasProducts rimosso (3 step invece di 4)
+  // Calcola progresso (4 step per BETA)
   const completed = [
     state.hasClients,
-    // state.hasProducts,
     state.hasAskedAssistant,
-    state.hasPlannedRoute,
+    state.hasFirstVisit,
+    state.hasSentFeedback,
   ].filter(Boolean).length;
 
-  const allComplete = completed === 3;
+  const totalSteps = 4;
+  const allComplete = completed === totalSteps;
 
   // Non mostrare se dismissato o tutto completato
   if (dismissed || allComplete || loading) {
     return null;
   }
 
-  const progressPercent = (completed / 3) * 100;
+  const progressPercent = (completed / totalSteps) * 100;
 
   return (
     <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm mb-6">
       {/* Header */}
       <div 
-        className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-purple-50 border-b border-slate-100 cursor-pointer"
+        className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-blue-50 to-amber-50 border-b border-slate-100 cursor-pointer"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
           <span className="text-xl">🚀</span>
           <div>
-            <h3 className="font-semibold text-slate-800 text-sm">Primi Passi</h3>
-            <p className="text-xs text-slate-500">{completed}/3 completati</p>
+            <h3 className="font-semibold text-slate-800 text-sm">Primi Passi - Beta</h3>
+            <p className="text-xs text-slate-500">{completed}/{totalSteps} completati</p>
           </div>
         </div>
         <div className="flex items-center gap-2">
           <div className="w-20 h-2 bg-slate-200 rounded-full overflow-hidden">
             <div 
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-500"
+              className="h-full bg-gradient-to-r from-blue-500 to-amber-500 transition-all duration-500"
               style={{ width: `${progressPercent}%` }}
             />
           </div>
@@ -178,7 +188,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
             }
           />
 
-          {/* 🔒 BETA: Step 2 (Prodotti) nascosto - riattivare per MULTIAGENT
+          {/* 🔒 BETA: Step Prodotti nascosto - riattivare per MULTIAGENT
           <ChecklistItem
             done={state.hasProducts}
             icon="📦"
@@ -192,12 +202,12 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
           />
           */}
 
-          {/* Step 3: Prova assistente */}
+          {/* Step 2: Prova assistente */}
           <ChecklistItem
             done={state.hasAskedAssistant}
             icon="💬"
-            title="Prova a chiedere qualcosa"
-            description='Es: "Quanti clienti ho a Milano?"'
+            title="Chiedi qualcosa all'AI"
+            description='Es: "Quanti clienti ho a Verona?"'
             action={
               onAskAssistant ? (
                 <button onClick={onAskAssistant} className="text-blue-600 text-xs hover:underline">
@@ -211,20 +221,35 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
             }
           />
 
-          {/* Step 4: Pianifica giro */}
+          {/* Step 3: Registra prima visita */}
           <ChecklistItem
-            done={state.hasPlannedRoute}
-            icon="🗺️"
-            title="Pianifica il primo giro"
-            description="Ottimizza il percorso delle visite"
+            done={state.hasFirstVisit}
+            icon="📝"
+            title="Registra una visita"
+            description="Prova a registrare una visita di prova"
             action={
               <Link 
-                href="/planning" 
-                onClick={handleMarkPlanned}
+                href="/tools/add-visit" 
                 className="text-blue-600 text-xs hover:underline"
               >
-                Pianifica →
+                Registra →
               </Link>
+            }
+          />
+
+          {/* Step 4: BETA - Invia feedback */}
+          <ChecklistItem
+            done={state.hasSentFeedback}
+            icon="🧪"
+            title="Aiutaci a migliorare"
+            description="Segnala bug o suggerimenti"
+            action={
+              <button 
+                onClick={handleOpenTestPanel}
+                className="text-amber-600 text-xs hover:underline font-medium"
+              >
+                Apri Test Panel →
+              </button>
             }
           />
         </div>

@@ -85,8 +85,16 @@ export default function TestCompanionPanel() {
   // Ascolta cambiamenti preferenza test panel
   useEffect(() => {
     const handlePrefChange = (e: CustomEvent) => {
-      setIsEnabled(e.detail.enabled);
-      if (!e.detail.enabled) setIsOpen(false);
+      // Aggiorna stato enabled
+      if (typeof e.detail.enabled === 'boolean') {
+        setIsEnabled(e.detail.enabled);
+        if (!e.detail.enabled) setIsOpen(false);
+      }
+      // Se richiesto di aprire il pannello
+      if (e.detail.open === true && e.detail.enabled !== false) {
+        setIsEnabled(true);
+        setIsOpen(true);
+      }
     };
     window.addEventListener('repping:testPanelChanged', handlePrefChange as EventListener);
     return () => {
