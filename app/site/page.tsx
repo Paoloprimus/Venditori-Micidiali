@@ -247,11 +247,14 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             {/* Testo */}
             <div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
-                Il tuo AI CoPilot
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400"> alle Vendite</span>
+                REPING
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Il CoPilota + Intelligente</span>
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">x Agenti di Commercio</span>
               </h1>
               
-              <p className="text-xl text-slate-300 mb-8 leading-relaxed">
+              <p className="text-xl text-slate-300 mb-8 mt-4 leading-relaxed">
                 Vendi di più, meglio e in meno tempo.
               </p>
 
