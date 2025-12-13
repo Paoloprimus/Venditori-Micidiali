@@ -5,12 +5,12 @@ import "../globals.css";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
-  title: "REPING - Il tuo AI CoPilot alle Vendite",
-  description: "Vendi di più, meglio e in meno tempo. L'assistente AI per agenti di commercio HoReCa.",
-  keywords: ["agente commercio", "vendite", "HoReCa", "AI", "assistente", "CRM", "percorsi"],
+  title: "REPING - Il CoPilota più intelligente per agenti di commercio",
+  description: "Vendi di più, meglio e in meno tempo.",
+  keywords: ["agente commercio", "vendite", "HoReCa", "AI", "assistente", "percorsi", "ottimizzazione", "personalizzazione"],
   openGraph: {
-    title: "REPING - Il tuo AI CoPilot alle Vendite",
-    description: "Vendi di più, meglio e in meno tempo. L'assistente AI per agenti di commercio HoReCa.",
+    title: "REPING - Il CoPilota più intelligente per agenti di commercio,
+    description: "Vendi di più, meglio e in meno tempo.",
     type: "website",
     locale: "it_IT",
   },
@@ -33,4 +33,3 @@ export default function MarketingLayout({
     </div>
   );
 }
-
