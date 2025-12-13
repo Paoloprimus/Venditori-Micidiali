@@ -264,6 +264,22 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 Vendi di più, meglio e in meno tempo.
               </p>
 
+              {/* Features list MOBILE - sotto il claim */}
+              <div className="lg:hidden mb-8 space-y-2 text-sm">
+                {/* Feature intelligenti */}
+                <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
+                <p className="text-cyan-400">• Suggerimenti proattivi</p>
+                <p className="text-cyan-400">• Personalizzazione vendite</p>
+                <p className="text-cyan-400">• Analisi, statistiche, report</p>
+                
+                {/* Feature sicure */}
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
+              </div>
+
               <div className="flex flex-wrap gap-4">
                 <a 
                   href="#beta"
@@ -274,7 +290,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               </div>
             </div>
 
-            {/* Colonna centrale: Features list */}
+            {/* Colonna centrale: Features list DESKTOP */}
             <div className="hidden lg:block space-y-2 text-base whitespace-nowrap px-3">
               {/* Feature intelligenti */}
               <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
