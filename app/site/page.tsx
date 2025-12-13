@@ -235,7 +235,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             href="https://reping.app/login"
             className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
           >
-            Accedi all'app
+            Accedi all'app (con invito)
           </a>
         </div>
       </nav>
