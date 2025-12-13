@@ -246,43 +246,47 @@ Come ci ha conosciuto: ${form.comeConosciuto}
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             {/* Testo */}
             <div>
-              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white mb-6 leading-tight">
+              <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight">
                 REPING
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">Il CoPilota + Intelligente</span>
+                <span className="text-white">IL CoPilota +</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-purple-400">x Agenti di Commercio</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Intelligente</span>
+                <br />
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">e Sicuro</span>
+                <br />
+                <span className="text-white">x Agenti di</span>
+                <br />
+                <span className="text-white">Commercio</span>
               </h1>
               
-              <p className="text-xl text-slate-300 mb-8 mt-4 leading-relaxed">
+              {/* Features list */}
+              <div className="my-8 space-y-2 text-sm">
+                {/* Feature intelligenti */}
+                <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
+                <p className="text-cyan-400">• Suggerimenti proattivi</p>
+                <p className="text-cyan-400">• Personalizzazione vendite</p>
+                <p className="text-cyan-400">• Analisi, statistiche, report</p>
+                
+                {/* Feature sicure */}
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
+              </div>
+
+              <p className="text-xl text-slate-300 mb-8 leading-relaxed">
                 Vendi di più, meglio e in meno tempo.
               </p>
 
               <div className="flex flex-wrap gap-4">
-                {/* 🔒 BETA: Pulsante demo disabilitato - riattivare quando video pronto
-                <a 
-                  href="#demo"
-                  className="px-6 py-3 bg-white text-slate-900 rounded-xl font-semibold hover:bg-slate-100 transition flex items-center gap-2"
-                >
-                  <span>▶</span> Guarda Demo
-                </a>
-                */}
                 <a 
                   href="#beta"
                   className="px-8 py-4 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl font-bold text-xl hover:opacity-90 transition shadow-lg"
                 >
                   Richiedi Accesso Beta
                 </a>
-              </div>
-
-              {/* Trust badges */}
-              <div className="mt-10 flex flex-wrap items-center gap-3 text-sm">
-                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Dati cifrati E2E</div>
-                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Made in Italy</div>
-                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Hands-free</div>
-                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">GDPR compliant</div>
-                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Statistiche</div>
-                <div className="bg-slate-700/50 text-slate-300 px-3 py-1.5 rounded-full">Suggerimenti</div>
               </div>
             </div>
 
