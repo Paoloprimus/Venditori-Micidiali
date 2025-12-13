@@ -26,7 +26,7 @@
  * 
  * DIPENDENZE:
  * - csv-parse/browser/esm/sync (per CSV)
- * - xlsx (per Excel)
+ * - read-excel-file (per Excel - libreria sicura)
  * - API /api/products/import-parsed
  * 
  * ============================================================================
@@ -37,7 +37,7 @@
 import { useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { parse } from "csv-parse/browser/esm/sync";
-import * as XLSX from "xlsx";
+import readXlsxFile from "read-excel-file";
 import { useDrawers, LeftDrawer, RightDrawer } from "@/components/Drawers";
 import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
@@ -183,40 +183,39 @@ export default function ImportProductsPage() {
     });
   }
 
-  // Parser Excel
+  // Parser Excel (usando read-excel-file - libreria sicura)
   async function parseExcel(file: File): Promise<{ headers: string[]; data: any[] }> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
+    try {
+      // read-excel-file restituisce un array di array (righe)
+      const rows = await readXlsxFile(file);
 
-      reader.onload = (event) => {
-        try {
-          const data = event.target?.result;
-          const workbook = XLSX.read(data, { type: "array" });
+      if (!rows || rows.length === 0) {
+        throw new Error("Il file Excel è vuoto!");
+      }
 
-          const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonData = XLSX.utils.sheet_to_json(firstSheet);
+      // Prima riga = headers
+      const headers = rows[0].map((cell) => String(cell || "").trim());
+      
+      // Righe successive = dati, convertite in oggetti JSON
+      const jsonData = rows.slice(1).map((row) => {
+        const obj: Record<string, any> = {};
+        headers.forEach((header, index) => {
+          // Gestisce valori null/undefined
+          obj[header] = row[index] !== null && row[index] !== undefined ? row[index] : "";
+        });
+        return obj;
+      });
 
-          if (jsonData.length === 0) {
-            reject(new Error("Il file Excel è vuoto!"));
-            return;
-          }
+      if (jsonData.length === 0) {
+        throw new Error("Il file Excel non contiene dati (solo intestazioni)!");
+      }
 
-          const headers = Object.keys(jsonData[0] as any);
-          setParsingProgress(null);
-          resolve({ headers, data: jsonData });
-        } catch (error: any) {
-          setParsingProgress(null);
-          reject(new Error(`Errore parsing Excel: ${error.message}`));
-        }
-      };
-
-      reader.onerror = () => {
-        setParsingProgress(null);
-        reject(new Error("Errore lettura file Excel"));
-      };
-
-      reader.readAsArrayBuffer(file);
-    });
+      setParsingProgress(null);
+      return { headers, data: jsonData };
+    } catch (error: any) {
+      setParsingProgress(null);
+      throw new Error(`Errore parsing Excel: ${error.message}`);
+    }
   }
 
   // Gestione upload file
