@@ -243,13 +243,13 @@ Come ci ha conosciuto: ${form.comeConosciuto}
       {/* ============ HERO ============ */}
       <section className="pt-40 pb-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-8 items-center">
+          <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-4 items-center">
             {/* Colonna sinistra: Titolo + Claim + CTA */}
             <div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
                 REPING
                 <br />
-                <span className="text-white">IL CoPilota +</span>
+                <span className="text-white">IL CoPilota</span>
                 <br />
                 <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Intelligente</span>
                 <br />
@@ -275,7 +275,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             </div>
 
             {/* Colonna centrale: Features list */}
-            <div className="hidden lg:block space-y-2 text-sm whitespace-nowrap px-6">
+            <div className="hidden lg:block space-y-2 text-base whitespace-nowrap px-3">
               {/* Feature intelligenti */}
               <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
               <p className="text-cyan-400">• Suggerimenti proattivi</p>
