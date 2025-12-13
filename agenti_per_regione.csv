@@ -1,0 +1,147 @@
+Regione,Cognome,Nome,Città,Totale per Regione
+
+ABRUZZO,,,,3
+Abruzzo,Ciatti,Berardino,L'Aquila,
+Abruzzo,Falone,Mattia,Pescara,
+Abruzzo,Morelli,Alessandro,Pescara,
+
+BASILICATA,,,,1
+Basilicata,Boccuni,Vincenzo,Matera,
+
+CALABRIA,,,,1
+Calabria,Monopoli,Davide,Pizzo,
+
+CAMPANIA,,,,6
+Campania,Adriano,128,Salerno,
+Campania,Di Pietro,Paolo,Napoli,
+Campania,Esposito,Salvatore,Salerno,
+Campania,Florio,Luigi,Aversa,
+Campania,Mandato,Francesco,Sorrento,
+Campania,Scalesse,Rosario,Napoli,
+
+EMILIA-ROMAGNA,,,,7
+Emilia-Romagna,Antolini,Maura,Ferrara,
+Emilia-Romagna,Ferraresi,Milo,Tresigallo,
+Emilia-Romagna,Mollica,Floriano,Rimini,
+Emilia-Romagna,Montrone,Andrea,Formigine,
+Emilia-Romagna,Nicolosi,Giovanni,Forlimpopoli,
+Emilia-Romagna,Rinaldi,Marco,Rimini,
+Emilia-Romagna,Tassinari,Michele,Ravenna,
+
+FRIULI-VENEZIA GIULIA,,,,2
+Friuli-Venezia Giulia,Celic,Roberto,Santa Croce Marę,
+Friuli-Venezia Giulia,Petrucco,Eros,Udine,
+
+LAZIO,,,,11
+Lazio,Amiti,Valter,Roma,
+Lazio,Becchiarutti,Simone,Anzio,
+Lazio,Bellucci,Claudia,Roma,
+Lazio,Buonaiuto,Luciano,Roma,
+Lazio,Dionisi,Lorenzo,Civitavecchia,
+Lazio,Giovannetti,Guido,Roma,
+Lazio,Grimaldi,Riccardo,Roma,
+Lazio,Maturilli,Dario,Roma,
+Lazio,Mazzilli,Vito,Roma,
+Lazio,Neroni,Matteo,Frosinone,
+Lazio,Plunder,Roberto,Roma,
+Lazio,V.,Massimiliano,Roma,
+
+LOMBARDIA,,,,12
+Lombardia,Avigo,Federico,Desenzano del Garda,
+Lombardia,Balascio,Manuela,Borgo mantovano,
+Lombardia,Barbieri,Marco,Milano,
+Lombardia,Bellanova,Nicolò,Caselle Lurani,
+Lombardia,Bucherato,Alessandro,Bergamo,
+Lombardia,Colleoni,Melania,Cesano Maderno,
+Lombardia,Colombi,Ivano,Bellinzago Lombardo,
+Lombardia,Daneri,Gianluca,Pavia,
+Lombardia,Fioretti,Angiolo,Milano,
+Lombardia,Giacomelli,Daniele,Brescia,
+Lombardia,Prevedello,Rolando,Milano,
+Lombardia,Rastelli,Fiorenza,Milano,
+Lombardia,Sivocci,Riccardo,Varese,
+
+MARCHE,,,,3
+Marche,Forti,Mario,Pesaro Urbino,
+Marche,Luciani,Michele,Fermo,
+Marche,Trasatti,Roberto,Pesaro,
+
+PIEMONTE,,,,5
+Piemonte,Cara,Alex,Torino,
+Piemonte,Corbella,Mattia,Torino,
+Piemonte,Mastrilli,010,Novara,
+Piemonte,Ravizza,Alberto,Cuneo,
+Piemonte,Rubat Baleari,Emanuele,Corio,
+Piemonte,Valdata,Davide Enrico,Alessandria,
+
+PUGLIA,,,,4
+Puglia,Chiaromonte,Savino M.,Puglia,
+Puglia,Mancino,Giuseppe,Foggia,
+Puglia,Messa,Francesco,Bari,
+Puglia,Scarpa,Domenico,Trani,
+
+SARDEGNA,,,,1
+Sardegna,Battaglieri,Alberto,Sassari,
+
+SICILIA,,,,7
+Sicilia,Agosta,Francesco,Scicli,
+Sicilia,Codia,Danilo,Aragona,
+Sicilia,De Nunzio,Maria Luisa,Catania,
+Sicilia,Di Matteo,Alessandro,Palermo,
+Sicilia,Lopresti,Sergio,Messina,
+Sicilia,Sciammacca,Vito,Enna,
+Sicilia,Sgroi,Salvo,Lentini,
+
+TOSCANA,,,,4
+Toscana,Bartolini,Federico,Pistoia,
+Toscana,Palla,Michele,San Giuliano Terme,
+Toscana,Porciani,Maikol,Ponte Buggianese,
+Toscana,Rosi,Andrea,Castiglione della Pescaia,
+Toscana,Sorrenti,Enrico,Prato,
+
+TRENTINO-ALTO ADIGE,,,,1
+Trentino-Alto Adige,Minelli,Alessandro,Rovereto,
+
+VENETO,,,,17
+Veneto,Albanese,Pierantonio,Treviso,
+Veneto,Bassi,Marco,Padova,
+Veneto,Beltrame,Luca,Verona,
+Veneto,Busatto,Giulio,Cittadella,
+Veneto,Carlet,Stefano,Treviso,
+Veneto,Chiesa,Nicolò,Verona,
+Veneto,Contessa,Marco,Venezia,
+Veneto,Dalla Piazza,Michele,Belluno,
+Veneto,Frassetto,Orazio,Treviso,
+Veneto,Gallina,Fabio,Treviso,
+Veneto,Massarenti,Luca,Santa Maria Maddalena,
+Veneto,Morosin,Nicoletta,Montebelluna,
+Veneto,Negretto,Luca,Verona,
+Veneto,Pagan,Gianluca,Venezia,
+Veneto,Perdon,Mattia,Padova,
+Veneto,Perini,Alessandro,Arcole,
+Veneto,Renna,Anny,Padova,
+Veneto,Sebben,Allen,Bassano,
+
+NON SPECIFICATO,,,,1
+,Fagiolo,Erika,Italia,
+
+RIEPILOGO TOTALI PER REGIONE,,,,
+Veneto,,,,17
+Lombardia,,,,13
+Lazio,,,,12
+Sicilia,,,,7
+Emilia-Romagna,,,,7
+Campania,,,,6
+Piemonte,,,,6
+Toscana,,,,5
+Puglia,,,,4
+Abruzzo,,,,3
+Marche,,,,3
+Friuli-Venezia Giulia,,,,2
+Basilicata,,,,1
+Calabria,,,,1
+Sardegna,,,,1
+Trentino-Alto Adige,,,,1
+Non specificato,,,,1
+TOTALE,,,,91
+
