@@ -522,7 +522,7 @@ export default function AnimatedMockup() {
 
                   <div className="space-y-2">
                     <div className="bg-blue-600 text-white p-2 rounded-2xl rounded-br-sm text-xs ml-auto max-w-[75%]">
-                      Che visite ho in programma oggi?
+                      Che visite ho oggi?
                     </div>
 
                     <div className="bg-slate-800 p-3 rounded-2xl rounded-bl-sm max-w-[95%] animate-slideInLeft">
