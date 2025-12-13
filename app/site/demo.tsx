@@ -38,8 +38,7 @@ export default function AnimatedMockup() {
     { id: 13, file: "utente13.mp3", type: "user", label: "Dettatura", visualId: "visit-dictation" },
     { id: 14, file: "reping14.mp3", type: "reping", label: "Salvato", visualId: "visit-saved" },
     { id: 15, file: "narratore15.mp3", type: "narrator", label: "Report", visualId: "daily-report" },
-    { id: 16, file: "utente16.mp3", type: "user", label: "Testimonianza", visualId: "testimonial" },
-    { id: 17, file: "narratore17.mp3", type: "narrator", label: "Claim", visualId: "claim" },
+    { id: 16, file: "narratore17.mp3", type: "narrator", label: "Claim", visualId: "claim" },
   ];
 
   // Preload all audio files
@@ -251,7 +250,7 @@ export default function AnimatedMockup() {
         break;
         
       case "chat-ask-visits":
-        typeText("Che visite ho in programma oggi?", duration * 0.7);
+        typeText("Che visite ho oggi?", duration * 0.7);
         break;
         
       case "chat-ask-stats":
@@ -334,7 +333,7 @@ export default function AnimatedMockup() {
                 <div className="pt-12 px-3">
                   <p className="text-white font-bold text-sm mb-3">📜 Storico Chat</p>
                   <div className="space-y-2">
-                    {["Piano visite lunedì", "Stats Verona", "Clienti inattivi", "Report settimana", "Analisi trimestrale"].map((chat, i) => (
+                    {["merc 12/11/25", "Stats Verona", "mar 11/11/25", "lun 10/11/25", "ven 07/11/25", "gio 06/11/25", "vmerc 05/11/25","Analisi trimestrale"].map((chat, i) => (
                       <div key={i} className={`bg-slate-700/50 p-2 rounded-lg text-xs text-slate-300 ${i === 0 ? "border border-blue-500/50" : ""}`}>
                         {chat}
                       </div>
@@ -397,7 +396,7 @@ export default function AnimatedMockup() {
                       <div className="text-[10px] text-slate-400">Visite oggi</div>
                     </div>
                     <div className={`bg-green-600/20 p-2 rounded-xl text-center border border-green-500/30 ${subStep > 2 ? "animate-pulse" : ""}`}>
-                      <div className="text-xl font-bold text-white">{subStep > 1 ? "€24.5k" : "..."}</div>
+                      <div className="text-xl font-bold text-white">{subStep > 1 ? "€24k" : "..."}</div>
                       <div className="text-[10px] text-slate-400">Mese</div>
                     </div>
                     <div className={`bg-purple-600/20 p-2 rounded-xl text-center border border-purple-500/30 ${subStep > 3 ? "animate-pulse" : ""}`}>
@@ -593,7 +592,7 @@ export default function AnimatedMockup() {
 
                     <div className="bg-slate-900 rounded-lg p-2">
                       <div className="flex items-end justify-between h-16 gap-1">
-                        {[45, 60, 55, 75, 65, 85, 70, 90, 80, 95, 88].map((h, i) => (
+                        {[45, 45, 60, 55, 75, 65, 85, 70, 90, 80, 80, 95].map((h, i) => (
                           <div key={i} className="flex-1 bg-gradient-to-t from-blue-600 to-blue-400 rounded-t transition-all duration-500" style={{ height: `${subStep > i ? h : 10}%` }}></div>
                         ))}
                       </div>
@@ -825,53 +824,45 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* SCENE 16: Testimonial */}
-              {currentVisualId === "testimonial" && (
-                <div className="px-4 animate-fadeIn flex flex-col items-center justify-center h-[400px]">
-                  <div className="bg-slate-800 rounded-xl p-4 mb-4">
-                    <p className="text-slate-400 text-xs mb-2">Valuta la giornata</p>
-                    <div className="flex justify-center gap-4">
-                      <div className={`w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center ${subStep > 2 ? "bg-green-500/30 border-2 border-green-500" : ""}`}>
-                        <span className="text-2xl">👍</span>
-                      </div>
-                      <div className="w-12 h-12 bg-slate-700 rounded-full flex items-center justify-center">
-                        <span className="text-2xl">👎</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {subStep > 3 && (
-                    <div className="bg-slate-800/50 rounded-xl p-4 text-center animate-slideInLeft">
-                      <p className="text-white text-sm italic leading-relaxed">
-                        "Prima di REPING perdevo un'ora al giorno. Ora faccio tutto in pochi minuti. Fatturato +20% in 3 mesi!"
-                      </p>
-                      <div className="flex items-center justify-center gap-2 mt-3">
-                        <div className="w-8 h-8 bg-slate-700 rounded-full flex items-center justify-center">👤</div>
-                        <p className="text-slate-400 text-xs">Marco, Agente HoReCa</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* SCENE 17: Claim */}
+              {/* SCENE 16 (ex 17): Claim - con valutazione iniziale */}
               {currentVisualId === "claim" && (
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 flex flex-col items-center justify-center animate-fadeIn rounded-b-[2.5rem]">
                   <div className="text-center px-6">
-                    <div className={`w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 ${subStep > 1 ? "animate-pulse" : ""}`}>
-                      <span className="text-white text-2xl font-bold">R</span>
-                    </div>
-                    <p className="text-white/80 text-sm mb-1">REPING</p>
-                    {subStep > 2 && (
-                      <p className="text-white text-xl font-bold leading-tight animate-fadeIn">
-                        Vendi di più,
-                        <br />meglio e in meno tempo.
-                      </p>
-                    )}
-                    {subStep > 4 && (
-                      <div className="mt-6 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full animate-pulse">
-                        <span className="text-white text-sm font-medium">Richiedi accesso Beta →</span>
+                    
+                    {/* Valutazione giornata - visibile solo all'inizio (subStep 0-3) */}
+                    {subStep < 4 && (
+                      <div className="bg-white/10 rounded-xl p-4 mb-6 animate-fadeIn">
+                        <p className="text-white/70 text-xs mb-2">Valuta la giornata</p>
+                        <div className="flex justify-center gap-4">
+                          <div className={`w-12 h-12 bg-white/10 rounded-full flex items-center justify-center transition-all ${subStep > 1 ? "bg-green-500/30 border-2 border-green-400 scale-110" : ""}`}>
+                            <span className="text-2xl">👍</span>
+                          </div>
+                          <div className="w-12 h-12 bg-white/10 rounded-full flex items-center justify-center">
+                            <span className="text-2xl">👎</span>
+                          </div>
+                        </div>
                       </div>
+                    )}
+                    
+                    {/* Logo e Claim - appare dopo la valutazione */}
+                    {subStep >= 4 && (
+                      <>
+                        <div className={`w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 ${subStep > 5 ? "animate-pulse" : ""}`}>
+                          <span className="text-white text-2xl font-bold">R</span>
+                        </div>
+                        <p className="text-white/80 text-sm mb-1">REPING</p>
+                        {subStep > 5 && (
+                          <p className="text-white text-xl font-bold leading-tight animate-fadeIn">
+                            Vendi di più,
+                            <br />meglio e in meno tempo.
+                          </p>
+                        )}
+                        {subStep > 7 && (
+                          <div className="mt-6 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full animate-pulse">
+                            <span className="text-white text-sm font-medium">Richiedi accesso Beta →</span>
+                          </div>
+                        )}
+                      </>
                     )}
                   </div>
                 </div>
