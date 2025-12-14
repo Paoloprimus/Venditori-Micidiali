@@ -390,8 +390,12 @@ export default function HomeClient({ email, userName }: { email: string; userNam
         id: accountId,
         name_enc: String(encrypted.name_enc),
         name_iv: String(encrypted.name_iv),
-        name_bi: await crypto.computeBlindIndex('table:accounts', data.name),
       };
+
+      // Blind index per nome (se disponibile)
+      if (typeof crypto.computeBlindIndex === 'function') {
+        payload.name_bi = await crypto.computeBlindIndex('table:accounts', data.name);
+      }
 
       if (data.city) payload.city = data.city;
       if (data.street) payload.street = data.street;
