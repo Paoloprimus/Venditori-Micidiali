@@ -7,36 +7,11 @@ import { useBroadcastMessages } from '@/hooks/useBroadcastMessages';
 export default function BroadcastToast() {
   const { currentMessage, remainingCount, markAsRead } = useBroadcastMessages();
   const [visible, setVisible] = useState(false);
-  const [progress, setProgress] = useState(100);
-
-  const DURATION = 10000; // 10 secondi
 
   useEffect(() => {
     if (currentMessage) {
       // Mostra toast con animazione
       setVisible(true);
-      setProgress(100);
-
-      // Progress bar countdown
-      const interval = setInterval(() => {
-        setProgress(prev => {
-          if (prev <= 0) {
-            clearInterval(interval);
-            return 0;
-          }
-          return prev - (100 / (DURATION / 100));
-        });
-      }, 100);
-
-      // Auto-close dopo durata
-      const timeout = setTimeout(() => {
-        handleClose();
-      }, DURATION);
-
-      return () => {
-        clearInterval(interval);
-        clearTimeout(timeout);
-      };
     } else {
       setVisible(false);
     }
@@ -92,23 +67,8 @@ export default function BroadcastToast() {
           borderRadius: 16,
           padding: '16px 20px',
           boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
-          position: 'relative',
-          overflow: 'hidden',
         }}
       >
-        {/* Progress bar */}
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 0,
-            left: 0,
-            height: 4,
-            background: colors.progress,
-            width: `${progress}%`,
-            transition: 'width 0.1s linear',
-            opacity: 0.3,
-          }}
-        />
 
         {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
