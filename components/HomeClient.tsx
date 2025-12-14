@@ -12,6 +12,7 @@ import HomeDashboard from "./home/Dashboard";
 import DialogOverlay from "./home/DialogOverlay";
 import PassphraseDebugPanel from "./PassphraseDebugPanel";
 import WelcomeModal from "./WelcomeModal";
+import GuidedClientCreationDialog from "./GuidedClientCreationDialog";
 
 import { useConversation } from "../app/context/ConversationContext";
 import { useConversations, type Bubble, decryptClientPlaceholders } from "../hooks/useConversations";
@@ -183,15 +184,291 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   // 🆕 Ref per permettere a onSendDirectly di usare il planner
   const processVoiceInputRef = useRef<((text: string) => Promise<void>) | null>(null);
 
+  // 🎙️ Stato dialogo guidato creazione cliente
+  type ClientCreationStep = 'name' | 'city' | 'street' | 'tipo_locale' | 'phone' | 'email' | 'notes' | 'confirm';
+  type ClientData = {
+    name: string;
+    city: string;
+    street: string;
+    tipo_locale: string;
+    phone: string;
+    email: string;
+    notes: string;
+  };
+  const [guidedClientCreation, setGuidedClientCreation] = useState<{
+    active: boolean;
+    step: ClientCreationStep;
+    data: Partial<ClientData>;
+  }>({ active: false, step: 'name', data: {} });
+
   function speakIfEnabled(msg: string) {
     if (voice.speakerEnabled) speakAssistant(msg);
   }
 
+  // === GUIDED CLIENT CREATION LOGIC ===
+  
+  function startGuidedClientCreation() {
+    unlockAudio(); // Unlock audio per TTS
+    setGuidedClientCreation({ active: true, step: 'name', data: {} });
+    speakIfEnabled("Ok! Come si chiama il locale o il cliente?");
+  }
+
+  function closeGuidedClientCreation() {
+    setGuidedClientCreation({ active: false, step: 'name', data: {} });
+    stopSpeaking();
+  }
+
+  async function handleGuidedClientInput(text: string) {
+    const { step, data } = guidedClientCreation;
+    const trimmed = text.trim();
+    
+    // Comandi speciali
+    if (/^(annulla|stop|basta|esci)$/i.test(trimmed)) {
+      speakIfEnabled("Ok, annullato.");
+      closeGuidedClientCreation();
+      return;
+    }
+
+    // Skip per campi opzionali
+    const isSkip = /^(skip|salta|no|niente|passa)$/i.test(trimmed);
+
+    const STEP_ORDER: ClientCreationStep[] = ['name', 'city', 'street', 'tipo_locale', 'phone', 'email', 'notes', 'confirm'];
+    const currentIndex = STEP_ORDER.indexOf(step);
+
+    // Gestione step by step
+    switch (step) {
+      case 'name':
+        if (!trimmed) {
+          speakIfEnabled("Non ho capito il nome. Ripeti per favore.");
+          return;
+        }
+        setGuidedClientCreation(prev => ({
+          ...prev,
+          step: 'city',
+          data: { ...prev.data, name: trimmed }
+        }));
+        speakIfEnabled(`${trimmed}. In che città si trova?`);
+        break;
+
+      case 'city':
+        if (!trimmed) {
+          speakIfEnabled("Non ho capito la città. Ripeti per favore.");
+          return;
+        }
+        setGuidedClientCreation(prev => ({
+          ...prev,
+          step: 'street',
+          data: { ...prev.data, city: trimmed }
+        }));
+        speakIfEnabled(`${trimmed}. Qual è l'indirizzo completo?`);
+        break;
+
+      case 'street':
+        if (isSkip) {
+          setGuidedClientCreation(prev => ({ ...prev, step: 'tipo_locale' }));
+          speakIfEnabled("Ok, saltiamo l'indirizzo. È un bar, ristorante, hotel o altro?");
+        } else {
+          setGuidedClientCreation(prev => ({
+            ...prev,
+            step: 'tipo_locale',
+            data: { ...prev.data, street: trimmed }
+          }));
+          speakIfEnabled(`${trimmed}. È un bar, ristorante, hotel o altro?`);
+        }
+        break;
+
+      case 'tipo_locale':
+        if (isSkip) {
+          setGuidedClientCreation(prev => ({ ...prev, step: 'phone' }));
+          speakIfEnabled("Ok, saltiamo il tipo. Hai un numero di telefono? Oppure di' salta.");
+        } else {
+          setGuidedClientCreation(prev => ({
+            ...prev,
+            step: 'phone',
+            data: { ...prev.data, tipo_locale: trimmed }
+          }));
+          speakIfEnabled(`${trimmed}. Hai un numero di telefono? Oppure di' salta.`);
+        }
+        break;
+
+      case 'phone':
+        if (isSkip) {
+          setGuidedClientCreation(prev => ({ ...prev, step: 'email' }));
+          speakIfEnabled("Ok, saltiamo il telefono. Hai un indirizzo email? Oppure di' salta.");
+        } else {
+          setGuidedClientCreation(prev => ({
+            ...prev,
+            step: 'email',
+            data: { ...prev.data, phone: trimmed }
+          }));
+          speakIfEnabled(`Telefono salvato. Hai un indirizzo email? Oppure di' salta.`);
+        }
+        break;
+
+      case 'email':
+        if (isSkip) {
+          setGuidedClientCreation(prev => ({ ...prev, step: 'notes' }));
+          speakIfEnabled("Ok, saltiamo l'email. Vuoi aggiungere delle note? Oppure di' no.");
+        } else {
+          setGuidedClientCreation(prev => ({
+            ...prev,
+            step: 'notes',
+            data: { ...prev.data, email: trimmed }
+          }));
+          speakIfEnabled("Email salvata. Vuoi aggiungere delle note? Oppure di' no.");
+        }
+        break;
+
+      case 'notes':
+        if (isSkip) {
+          setGuidedClientCreation(prev => ({ ...prev, step: 'confirm' }));
+          speakRiepilogo({ ...data });
+        } else {
+          const newData = { ...data, notes: trimmed };
+          setGuidedClientCreation(prev => ({
+            ...prev,
+            step: 'confirm',
+            data: newData
+          }));
+          speakRiepilogo(newData);
+        }
+        break;
+
+      case 'confirm':
+        if (YES_PATTERN.test(trimmed)) {
+          speakIfEnabled("Perfetto! Salvo il cliente...");
+          await saveGuidedClient(data as ClientData);
+        } else if (NO_PATTERN.test(trimmed)) {
+          speakIfEnabled("Ok, annullato.");
+          closeGuidedClientCreation();
+        } else {
+          speakIfEnabled("Non ho capito. Di' sì per salvare o no per annullare.");
+        }
+        break;
+    }
+  }
+
+  function speakRiepilogo(data: Partial<ClientData>) {
+    let recap = "Perfetto! Riepilogo: ";
+    if (data.name) recap += `Nome: ${data.name}. `;
+    if (data.city) recap += `Città: ${data.city}. `;
+    if (data.street) recap += `Indirizzo: ${data.street}. `;
+    if (data.tipo_locale) recap += `Tipo: ${data.tipo_locale}. `;
+    if (data.phone) recap += `Telefono: ${data.phone}. `;
+    if (data.email) recap += `Email: ${data.email}. `;
+    if (data.notes) recap += `Note: ${data.notes}. `;
+    recap += "Confermi e salvo? Di' sì o no.";
+    speakIfEnabled(recap);
+  }
+
+  async function saveGuidedClient(data: ClientData) {
+    if (!cryptoReady || !crypto) {
+      speakIfEnabled("Errore: sistema di cifratura non pronto. Riprova dopo aver sbloccato la sessione.");
+      closeGuidedClientCreation();
+      return;
+    }
+
+    try {
+      const accountId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      
+      // Cifra i campi sensibili
+      const fieldsToEncrypt: Record<string, string> = { name: data.name };
+      if (data.phone) fieldsToEncrypt.phone = data.phone;
+      if (data.email) fieldsToEncrypt.email = data.email;
+      if (data.notes) fieldsToEncrypt.notes = data.notes;
+
+      const encrypted = await crypto.encryptFields('table:accounts', 'accounts', accountId, fieldsToEncrypt);
+
+      // Blind index per email
+      let email_bi: string | undefined;
+      if (data.email && typeof crypto.computeBlindIndex === 'function') {
+        email_bi = await crypto.computeBlindIndex('table:accounts', data.email);
+      }
+
+      // Prepara payload
+      const payload: any = {
+        id: accountId,
+        name_enc: String(encrypted.name_enc),
+        name_iv: String(encrypted.name_iv),
+        name_bi: await crypto.computeBlindIndex('table:accounts', data.name),
+      };
+
+      if (data.city) payload.city = data.city;
+      if (data.street) payload.street = data.street;
+      if (data.tipo_locale) payload.tipo_locale = data.tipo_locale;
+
+      if (encrypted.phone_enc) {
+        payload.phone_enc = String(encrypted.phone_enc);
+        payload.phone_iv = String(encrypted.phone_iv);
+      }
+
+      if (encrypted.email_enc) {
+        payload.email_enc = String(encrypted.email_enc);
+        payload.email_iv = String(encrypted.email_iv);
+        if (email_bi) payload.email_bi = email_bi;
+      }
+
+      if (encrypted.notes_enc) {
+        payload.notes_enc = String(encrypted.notes_enc);
+        payload.notes_iv = String(encrypted.notes_iv);
+      }
+
+      // Salva via API
+      const res = await fetch('/api/clients/upsert', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({ error: 'Errore sconosciuto' }));
+        throw new Error(error.error || 'Errore salvataggio');
+      }
+
+      speakIfEnabled(`Perfetto! Cliente ${data.name} salvato con successo. Vuoi aggiungerne un altro?`);
+      
+      // 🆕 Marca come completato per checklist onboarding
+      localStorage.setItem('reping:used_voice_client', 'true');
+      
+      // Aspetta risposta per eventuale altro cliente
+      const waitForAnother = async () => {
+        // Timeout 5 secondi per risposta
+        await new Promise(resolve => setTimeout(resolve, 5000));
+        closeGuidedClientCreation();
+      };
+      
+      // Reset ma aspetta risposta
+      setGuidedClientCreation({ active: true, step: 'name', data: {} });
+      waitForAnother();
+
+    } catch (e: any) {
+      console.error('[GuidedClient] Errore salvataggio:', e);
+      speakIfEnabled(`Errore durante il salvataggio: ${e.message || 'errore sconosciuto'}. Riprova.`);
+      closeGuidedClientCreation();
+    }
+  }
+
+  // Ascolta evento per avviare creazione guidata da Dashboard
+  useEffect(() => {
+    function handleStartGuidedCreation() {
+      startGuidedClientCreation();
+    }
+    window.addEventListener('repping:startGuidedClientCreation', handleStartGuidedCreation);
+    return () => window.removeEventListener('repping:startGuidedClientCreation', handleStartGuidedCreation);
+  }, []);
+
+  // === END GUIDED CLIENT CREATION LOGIC ===
+
   function askConfirm(i: Intent) {
+    // 🎙️ Se è CLIENT_CREATE, avvia dialogo guidato invece di conferma
+    if (i.type === 'CLIENT_CREATE') {
+      startGuidedClientCreation();
+      return;
+    }
+
     setPendingIntent(i);
     let confirmMessage = "";
     switch (i.type) {
-      case "CLIENT_CREATE": confirmMessage = `Confermi: creo il cliente ${i.name ?? "senza nome"}?`; break;
       case "CLIENT_SEARCH": confirmMessage = `Confermi: cerco il cliente ${i.query}?`; break;
       case "CLIENT_UPDATE": confirmMessage = `Confermi: modifico il cliente ${i.name}?`; break;
       case "NOTES_SEARCH": confirmMessage = `Vuoi che cerchi nelle note di ${i.accountHint} se c'è qualcosa su ${i.topic}?`; break;
@@ -207,6 +484,12 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     onSendDirectly: async (text) => {
       const raw = (text || "").trim();
       if (!raw) return;
+
+      // 🎙️ Se dialogo guidato attivo, intercetta input
+      if (guidedClientCreation.active) {
+        await handleGuidedClientInput(raw);
+        return;
+      }
 
       if (pendingIntent) {
         if (YES_PATTERN.test(raw)) { await handleIntent(pendingIntent); setPendingIntent(null); return; }
@@ -730,6 +1013,14 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
       {/* 👋 Welcome Modal (primo accesso) */}
       <WelcomeModal userName={userName} />
+
+      {/* 🎙️ Dialogo Guidato Creazione Cliente */}
+      <GuidedClientCreationDialog
+        active={guidedClientCreation.active}
+        currentStep={guidedClientCreation.step}
+        clientData={guidedClientCreation.data}
+        onClose={closeGuidedClientCreation}
+      />
 
       {/* 🎙️ Dialog Overlay - Modalità hands-free */}
       <DialogOverlay

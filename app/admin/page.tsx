@@ -140,6 +140,7 @@ export default async function AdminPage() {
 
       {/* Azioni */}
       <div style={{ display: 'grid', gap: 12 }}>
+        <AdminAction href="/admin/broadcast" icon="📢" label="Broadcast Messaggi" desc="Invia messaggi a tutti i tester (toast 10sec)" />
         <AdminAction href="/admin/feedback" icon="🧪" label="Feedback Tester" desc="Segnalazioni bug, UX, idee dai tester" />
         <AdminAction href="/admin/tokens" icon="🎟️" label="Token Beta" desc="Genera e gestisci inviti per tester" />
         <AdminAction href="/admin/users" icon="👥" label="Gestione Utenti" desc="Modifica ruoli, visualizza attività" />

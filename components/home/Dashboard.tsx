@@ -17,6 +17,7 @@ import GettingStartedChecklist from './GettingStartedChecklist';
 import { fetchPromemoria } from '@/lib/promemoria';
 import NapoleonCard from '@/components/napoleon/NapoleonCard';
 import DailyFeedbackPopup from '@/components/weekly/DailyFeedbackPopup';
+import NewClientModal from '@/components/NewClientModal';
 
 type DashboardStats = {
   visiteOggi: number;
@@ -70,6 +71,9 @@ export default function HomeDashboard({ userName }: { userName: string }) {
   const [showMonthHistory, setShowMonthHistory] = useState(false);
   const [monthlyHistory, setMonthlyHistory] = useState<MonthlyStats[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(false);
+
+  // 🆕 Modal nuovo cliente
+  const [showNewClientModal, setShowNewClientModal] = useState(false);
 
   useEffect(() => {
     loadDashboardData();
@@ -532,7 +536,7 @@ export default function HomeDashboard({ userName }: { userName: string }) {
           <QuickAction 
             icon="👤" 
             label="Nuovo Cliente" 
-            href="/tools/quick-add-client"
+            onClick={() => setShowNewClientModal(true)}
             color="#059669"
           />
           <QuickAction 
@@ -776,6 +780,9 @@ export default function HomeDashboard({ userName }: { userName: string }) {
 
       {/* 📊 Feedback giornaliero (popup a fine giornata) */}
       <DailyFeedbackPopup />
+
+      {/* 🆕 Modal Nuovo Cliente */}
+      <NewClientModal show={showNewClientModal} onClose={() => setShowNewClientModal(false)} />
     </div>
   );
 }
@@ -802,29 +809,15 @@ function KPICard({ icon, label, value, color, bgColor }: {
   );
 }
 
-function QuickAction({ icon, label, href, color }: {
+function QuickAction({ icon, label, href, onClick, color }: {
   icon: string;
   label: string;
-  href: string;
+  href?: string;
+  onClick?: () => void;
   color: string;
 }) {
-  return (
-    <a
-      href={href}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '14px 16px',
-        background: 'white',
-        borderRadius: 12,
-        border: '1px solid #e5e7eb',
-        textDecoration: 'none',
-        color: '#111827',
-        fontWeight: 500,
-        transition: 'all 0.15s',
-      }}
-    >
+  const content = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
       <div style={{ 
         width: 40, 
         height: 40, 
@@ -838,6 +831,35 @@ function QuickAction({ icon, label, href, color }: {
         {icon}
       </div>
       <span>{label}</span>
+    </div>
+  );
+
+  const commonStyles = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: 12,
+    padding: '14px 16px',
+    background: 'white',
+    borderRadius: 12,
+    border: '1px solid #e5e7eb',
+    textDecoration: 'none',
+    color: '#111827',
+    fontWeight: 500,
+    transition: 'all 0.15s',
+    cursor: 'pointer',
+  };
+
+  if (onClick) {
+    return (
+      <button onClick={onClick} style={{ ...commonStyles, width: '100%', textAlign: 'left' }}>
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <a href={href!} style={commonStyles}>
+      {content}
     </a>
   );
 }

@@ -246,16 +246,16 @@ export default function ImportClientsPage() {
         return obj;
       });
 
-      if (jsonData.length === 0) {
+          if (jsonData.length === 0) {
         throw new Error("Il file Excel non contiene dati (solo intestazioni)!");
-      }
+          }
 
-      setParsingProgress(null);
+          setParsingProgress(null);
       return { headers, data: jsonData };
-    } catch (error: any) {
-      setParsingProgress(null);
+        } catch (error: any) {
+          setParsingProgress(null);
       throw new Error(`Errore parsing Excel: ${error.message}`);
-    }
+        }
   }
 
   // Gestione upload file

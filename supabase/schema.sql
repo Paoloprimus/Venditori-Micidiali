@@ -370,9 +370,9 @@ CREATE TABLE IF NOT EXISTS "public"."profiles" (
     "id" "uuid" NOT NULL,
     "first_name" "text" NOT NULL,
     "last_name" "text" NOT NULL,
-    "role" "text" DEFAULT 'tester'::"text",
+    "role" "text" DEFAULT 'agente'::"text",
     "created_at" timestamp with time zone DEFAULT "now"(),
-    CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['admin'::"text", 'tester'::"text", 'premium'::"text", 'business'::"text"])))
+    CONSTRAINT "profiles_role_check" CHECK (("role" = ANY (ARRAY['admin'::"text", 'agente'::"text", 'agente_premium'::"text", 'tester'::"text"])))
 );
 
 

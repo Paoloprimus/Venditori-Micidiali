@@ -80,7 +80,7 @@ export default function QuickAddClientPage() {
           console.log('[QuickAdd] ✅ Crypto unlocked detected via polling');
           setLocalReady(true);
           clearInterval(interval);
-        }
+      }
       } catch {
         // ignore
       }
@@ -93,13 +93,13 @@ export default function QuickAddClientPage() {
       const pass = sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph');
       if (pass) {
         console.log('[QuickAdd] 🔧 Tento unlock da storage...');
-        try {
-          await crypto.unlockWithPassphrase(pass);
+          try {
+            await crypto.unlockWithPassphrase(pass);
           console.log('[QuickAdd] ✅ Unlock completato!');
           setLocalReady(true);
-        } catch (e) {
+          } catch (e) {
           console.error('[QuickAdd] ❌ Unlock fallito:', e);
-        }
+          }
       }
     };
     

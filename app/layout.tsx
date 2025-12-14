@@ -5,6 +5,7 @@ import { ConversationProvider } from "./context/ConversationContext";
 import Providers from "./providers"; // ✅ NUOVO: importa i providers con crypto
 import TestCompanionPanel from "@/components/TestCompanionPanel";
 import CookieBanner from "@/components/CookieBanner";
+import BroadcastToast from "@/components/BroadcastToast";
 import type { Metadata, Viewport } from "next";
 
 // ✅ PWA Metadata
@@ -51,6 +52,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <TestCompanionPanel />
             {/* 🍪 Cookie Banner GDPR */}
             <CookieBanner />
+            {/* 📢 Broadcast Toast - Messaggi beta per tester */}
+            <BroadcastToast />
           </ConversationProvider>
         </Providers>
       </body>

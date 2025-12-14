@@ -196,7 +196,7 @@ export default function ClientImport({ onImported }: { onImported?: () => void }
       for (const row of rows) {
         try {
           const id = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-        
+          
           // Prepara campi da cifrare
           const fieldsToEncrypt: Record<string, any> = { name: row.name };
           if (row.contact_name) fieldsToEncrypt.contact_name = row.contact_name;

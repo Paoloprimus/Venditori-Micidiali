@@ -271,9 +271,9 @@ export default function PreferencesPage() {
                     <p className="pt-2 text-gray-500 italic">
                       ⌘+Enter per salvare velocemente
                     </p>
-                  </div>
                 </div>
               </div>
+            </div>
 
             {/* Messaggio */}
             {message && (

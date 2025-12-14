@@ -9,6 +9,7 @@ const DISMISSED_KEY = "reping:getting_started_dismissed";
 
 interface ChecklistState {
   hasClients: boolean;
+  hasVoiceClient: boolean; // 🆕 Ha provato creazione vocale
   // 🔒 BETA: hasProducts rimosso - riattivare per MULTIAGENT
   // hasProducts: boolean;
   hasAskedAssistant: boolean;
@@ -23,6 +24,7 @@ interface Props {
 export default function GettingStartedChecklist({ onAskAssistant }: Props) {
   const [state, setState] = useState<ChecklistState>({
     hasClients: false,
+    hasVoiceClient: false,
     // 🔒 BETA: hasProducts rimosso
     hasAskedAssistant: false,
     hasFirstVisit: false,
@@ -95,11 +97,18 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
 
       const newState: ChecklistState = {
         hasClients: (clientsCount || 0) > 0,
+        hasVoiceClient: false, // 🆕 Verrà settato da localStorage se ha usato voice
         // 🔒 BETA: hasProducts rimosso
         hasAskedAssistant: (messagesCount || 0) > 0,
         hasFirstVisit: (visitsCount || 0) > 0,
         hasSentFeedback: (feedbackCount || 0) > 0,
       };
+
+      // 🆕 Check localStorage per voiceClient
+      const voiceClientUsed = localStorage.getItem('reping:used_voice_client');
+      if (voiceClientUsed) {
+        newState.hasVoiceClient = true;
+      }
 
       setState(newState);
       localStorage.setItem(CHECKLIST_KEY, JSON.stringify(newState));
@@ -123,15 +132,16 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
     window.dispatchEvent(new CustomEvent("repping:testPanelChanged", { detail: { enabled: true, open: true } }));
   };
 
-  // Calcola progresso (4 step per BETA)
+  // Calcola progresso (5 step per BETA - aggiunto voice)
   const completed = [
     state.hasClients,
+    state.hasVoiceClient,
     state.hasAskedAssistant,
     state.hasFirstVisit,
     state.hasSentFeedback,
   ].filter(Boolean).length;
 
-  const totalSteps = 4;
+  const totalSteps = 5;
   const allComplete = completed === totalSteps;
 
   // Non mostrare se dismissato o tutto completato
@@ -175,7 +185,25 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
       {/* Lista steps */}
       {expanded && (
         <div className="p-4 space-y-3">
-          {/* Step 1: Importa clienti */}
+          {/* Step 1: Aggiungi cliente a voce - PRIORITARIO */}
+          <ChecklistItem
+            done={state.hasVoiceClient}
+            icon="🎙️"
+            title="Aggiungi un cliente a voce"
+            description="Solo 30 secondi - Prova la magia di REPING!"
+            action={
+              <button
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent('repping:startGuidedClientCreation'));
+                }}
+                className="text-blue-600 text-xs hover:underline font-semibold"
+              >
+                Prova ora →
+              </button>
+            }
+          />
+
+          {/* Step 2: Importa clienti CSV (se ha molti clienti) */}
           <ChecklistItem
             done={state.hasClients}
             icon="👥"
@@ -202,7 +230,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
           />
           */}
 
-          {/* Step 2: Prova assistente */}
+          {/* Step 3: Prova assistente */}
           <ChecklistItem
             done={state.hasAskedAssistant}
             icon="💬"
@@ -221,7 +249,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
             }
           />
 
-          {/* Step 3: Registra prima visita */}
+          {/* Step 4: Registra prima visita */}
           <ChecklistItem
             done={state.hasFirstVisit}
             icon="📝"
@@ -237,7 +265,7 @@ export default function GettingStartedChecklist({ onAskAssistant }: Props) {
             }
           />
 
-          {/* Step 4: BETA - Invia feedback */}
+          {/* Step 5: BETA - Invia feedback */}
           <ChecklistItem
             done={state.hasSentFeedback}
             icon="🧪"

@@ -9,7 +9,7 @@ export default function Providers({ children }: { children: React.ReactNode }) {
   return (
     <CryptoProvider>
       <ToastProvider>
-        <CryptoShell>{children}</CryptoShell>
+      <CryptoShell>{children}</CryptoShell>
       </ToastProvider>
     </CryptoProvider>
   );
