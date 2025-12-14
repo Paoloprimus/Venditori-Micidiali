@@ -123,25 +123,6 @@ export default function NewClientModal({ show, onClose }: Props) {
               e.currentTarget.style.boxShadow = '0 4px 12px rgba(37, 99, 235, 0.3)';
             }}
           >
-            {/* Badge CONSIGLIATO */}
-            <div
-              style={{
-                position: 'absolute',
-                top: 8,
-                right: 8,
-                background: '#fbbf24',
-                color: '#78350f',
-                padding: '4px 10px',
-                borderRadius: 20,
-                fontSize: 10,
-                fontWeight: 700,
-                textTransform: 'uppercase',
-                letterSpacing: '0.5px',
-              }}
-            >
-              ⭐ Consigliato
-            </div>
-
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
               <div
                 style={{
@@ -163,7 +144,7 @@ export default function NewClientModal({ show, onClose }: Props) {
                   Creazione Vocale
                 </div>
                 <div style={{ fontSize: 13, color: 'rgba(255, 255, 255, 0.9)' }}>
-                  ⏱️ Solo 30 secondi • Guidato passo-passo
+                  Guida passo-passo
                 </div>
               </div>
             </div>
