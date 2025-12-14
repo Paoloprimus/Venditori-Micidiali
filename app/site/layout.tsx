@@ -1,5 +1,5 @@
-// app/(marketing)/layout.tsx
-// Layout per le pagine marketing (landing page)
+// app/site/layout.tsx
+// Layout per le pagine marketing (landing page e SEO)
 
 import "../globals.css";
 import type { Metadata, Viewport } from "next";
@@ -22,14 +22,10 @@ export const viewport: Viewport = {
   themeColor: "#2563eb",
 };
 
-export default function MarketingLayout({
+export default function SiteLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <div className="min-h-screen bg-white">
-      {children}
-    </div>
-  );
+  return children; // Le pagine figlie gestiscono il proprio wrapper
 }
