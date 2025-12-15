@@ -1,24 +1,24 @@
-// app/site/agenti-horeca-milano/gestione-clienti/page.tsx
-// Pagina SEO: Gestione Clienti Milano
+// app/site/agenti-food-beverage-genova/gestione-clienti/page.tsx
+// Pagina SEO: Gestione Clienti Genova
 
 export const metadata = {
-  title: "AI CoPilot per Personalizzazione Vendite HoReCa a Milano | REPING",
-  description: "AI CoPilot per agenti HoReCa a Milano. Note clienti intelligenti, suggerimenti proattivi e personalizzazione vendite. Crittografia End-to-End.",
-  keywords: ["ai copilot vendite milano", "personalizzazione vendite horeca", "note clienti intelligenti", "suggerimenti proattivi", "agenti commercio ai"],
+  title: "AI CoPilot per Personalizzazione Vendite Food & Beverage a Genova | REPING",
+  description: "AI CoPilot per agenti Food & Beverage a Genova. Note clienti intelligenti, suggerimenti proattivi e personalizzazione vendite. Crittografia End-to-End.",
+  keywords: ["ai copilot vendite genova", "personalizzazione vendite food-beverage", "note clienti intelligenti", "suggerimenti proattivi", "agenti commercio ai"],
 };
 
-export default function GestioneClientiMilanoPage() {
+export default function GestioneClientiGenovaPage() {
   return (
     <div className="font-sans bg-white">
       {/* Header */}
       <header className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 py-20">
         <div className="max-w-4xl mx-auto px-4">
           <h1 className="text-4xl md:text-5xl font-bold text-white leading-tight mb-6">
-            AI CoPilot per Personalizzazione Vendite HoReCa a Milano
+            AI CoPilot per Personalizzazione Vendite Food & Beverage a Genova
           </h1>
           
           <p className="text-xl text-slate-300 leading-relaxed">
-            Ogni cliente è diverso. <strong className="text-white">Reping AI CoPilot analizza le tue note e suggerisce proattivamente il momento e l'offerta giusti</strong> per ogni ristorante e bar a Milano.
+            Ogni cliente è diverso. <strong className="text-white">Reping AI CoPilot analizza le tue note e suggerisce proattivamente il momento e l'offerta giusti</strong> per ogni ristorante e bar a Genova.
           </p>
         </div>
       </header>
@@ -32,7 +32,7 @@ export default function GestioneClientiMilanoPage() {
           
           <div className="prose prose-slate max-w-none">
             <p className="text-lg text-slate-700 leading-relaxed mb-4">
-              Se sei un <strong>Agente di Commercio HoReCa</strong> a <strong>Milano</strong>, sai che ogni ristorante 
+              Se sei un <strong>Agente di Commercio Food & Beverage</strong> a <strong>Genova</strong>, sai che ogni ristorante 
               ha esigenze diverse: il bistrot in Brera cerca fornitori bio, la pizzeria in Navigli vuole margini bassi, 
               il ristorante stellato in centro pretende qualità premium. <strong>Vendere a tutti allo stesso modo non funziona più.</strong>
             </p>
@@ -115,7 +115,7 @@ export default function GestioneClientiMilanoPage() {
                     Suggerimenti Proattivi Contestuali
                   </h3>
                   <p className="text-slate-700 mb-3">
-                    A febbraio, quando pianifichi il giro a Milano, Reping ti avvisa: <strong>"Il ristorante Dante voleva 
+                    A febbraio, quando pianifichi il giro a Genova, Reping ti avvisa: <strong>"Il ristorante Dante voleva 
                     il prosecco bio a marzo. Aggiungilo alla prossima visita?"</strong>. L'AI collega note passate, stagionalità 
                     e posizione geografica.
                   </p>
@@ -136,7 +136,7 @@ export default function GestioneClientiMilanoPage() {
                     Churn Prediction e Customer Health Score
                   </h3>
                   <p className="text-slate-700 mb-3">
-                    Se un cliente HoReCa a Milano non ordina da 45 giorni (sopra la media del suo segmento), Reping ti 
+                    Se un cliente Food & Beverage a Genova non ordina da 45 giorni (sopra la media del suo segmento), Reping ti 
                     avvisa: <strong>"Rischio churn alto. Ultima nota: 'Budget ridotto'. Suggerimento: proponi linea 
                     economica."</strong>
                   </p>
@@ -176,7 +176,7 @@ export default function GestioneClientiMilanoPage() {
       <section className="py-16 bg-white">
         <div className="max-w-4xl mx-auto px-4">
           <h2 className="text-3xl font-bold text-slate-900 mb-6">
-            ROI della personalizzazione: numeri reali per agenti HoReCa
+            ROI della personalizzazione: numeri reali per agenti Food & Beverage
           </h2>
           
           <div className="prose prose-slate max-w-none mb-8">
@@ -193,7 +193,7 @@ export default function GestioneClientiMilanoPage() {
             </ul>
 
             <p className="text-lg text-slate-700 leading-relaxed mb-4">
-              Per un agente HoReCa a Milano con 50 clienti attivi e fatturato medio di €120k/anno, questo si traduce in:
+              Per un agente Food & Beverage a Genova con 50 clienti attivi e fatturato medio di €120k/anno, questo si traduce in:
             </p>
 
             <div className="bg-blue-50 p-6 rounded-xl border border-blue-200 my-6">
@@ -333,18 +333,18 @@ export default function GestioneClientiMilanoPage() {
           <ul className="space-y-3">
             <li>
               <a 
-                href="/agenti-horeca-milano/pianificazione-percorsi" 
+                href="/agenti-food-beverage-genova/pianificazione-percorsi" 
                 className="flex items-center gap-3 text-blue-600 hover:text-blue-800 text-lg hover:underline"
               >
-                <span>→</span> Pianificazione Percorsi per Agenti HoReCa a Milano
+                <span>→</span> Pianificazione Percorsi per Agenti Food & Beverage a Genova
               </a>
             </li>
             <li>
               <a 
-                href="/agenti-horeca-roma/gestione-clienti" 
+                href="/agenti-food-beverage-roma/gestione-clienti" 
                 className="flex items-center gap-3 text-blue-600 hover:text-blue-800 text-lg hover:underline"
               >
-                <span>→</span> AI CoPilot Vendite per Agenti HoReCa a Roma
+                <span>→</span> AI CoPilot Vendite per Agenti Food & Beverage a Roma
               </a>
             </li>
             <li>
@@ -370,7 +370,7 @@ export default function GestioneClientiMilanoPage() {
           
           <p className="text-xl text-slate-300 mb-10 leading-relaxed">
             Siamo in <strong className="text-white">fase di Beta Testing</strong> e cerchiamo <strong className="text-white">Agenti 
-            HoReCa qualificati</strong> a Milano per testare Reping. Accesso gratuito alla suite <strong className="text-white">BUSINESS 
+            Food & Beverage qualificati</strong> a Genova per testare Reping. Accesso gratuito alla suite <strong className="text-white">BUSINESS 
             completa</strong> (valore €99/mese). L'AI impara dai tuoi clienti, i dati restano crittografati sul tuo dispositivo.
           </p>
           
