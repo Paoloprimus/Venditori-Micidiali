@@ -156,18 +156,18 @@ export default function PianificazionePercorsiMilanoPage() {
           <ul className="space-y-3">
             <li>
               <a 
-                href="/site/agenti-horeca-padova/guida-sicura" 
+                href="/site/agenti-horeca-roma/pianificazione-percorsi" 
                 className="flex items-center gap-3 text-blue-600 hover:text-blue-800 text-lg hover:underline"
               >
-                <span>→</span> Modalità Guida Sicura per Agenti HoReCa a Padova
+                <span>→</span> Pianificazione Percorsi per Agenti HoReCa a Roma
               </a>
             </li>
             <li>
               <a 
-                href="/site/agenti-horeca-bari/gestione-clienti" 
+                href="/site/agenti-horeca-torino/pianificazione-percorsi" 
                 className="flex items-center gap-3 text-blue-600 hover:text-blue-800 text-lg hover:underline"
               >
-                <span>→</span> Gestione Clienti e Storico Vendite per Agente HoReCa a Bari
+                <span>→</span> Pianificazione Percorsi per Agenti HoReCa a Torino
               </a>
             </li>
             <li>
