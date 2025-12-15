@@ -2,6 +2,7 @@
 // Layout per le pagine marketing (landing page e SEO)
 
 import "../globals.css";
+import Script from "next/script";
 import type { Metadata, Viewport } from "next";
 
 export const metadata: Metadata = {
@@ -27,5 +28,22 @@ export default function SiteLayout({
 }: {
   children: React.ReactNode;
 }) {
-  return children; // Le pagine figlie gestiscono il proprio wrapper
+  return (
+    <>
+      {/* Google Analytics */}
+      <Script
+        src="https://www.googletagmanager.com/gtag/js?id=G-N8T9F0MPR8"
+        strategy="afterInteractive"
+      />
+      <Script id="google-analytics" strategy="afterInteractive">
+        {`
+          window.dataLayer = window.dataLayer || [];
+          function gtag(){dataLayer.push(arguments);}
+          gtag('js', new Date());
+          gtag('config', 'G-N8T9F0MPR8');
+        `}
+      </Script>
+      {children}
+    </>
+  );
 }
