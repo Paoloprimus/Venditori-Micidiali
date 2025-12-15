@@ -145,3 +145,4 @@ Inizia con **Mistral Small 3** per testare. Se la qualità è sufficiente, manti
 
 
 
+
