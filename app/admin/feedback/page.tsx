@@ -196,10 +196,10 @@ export default async function AdminFeedbackPage() {
         )}
       </div>
 
-      {/* Info */}
+      {/* Info 
       <div style={{ marginTop: 24, padding: 16, background: '#eff6ff', borderRadius: 8, fontSize: 13, color: '#1e40af' }}>
         💡 <strong>Nota:</strong> Esegui la migrazione <code>2025-12-11_test_notes_admin_access.sql</code> per abilitare la lettura di tutte le note.
-      </div>
+      </div> */}
     </div>
   );
 }
