@@ -200,6 +200,18 @@ export default function TestCompanionPanel() {
         }
       }
 
+      // 📧 Invia notifica email all'admin (non bloccante)
+      fetch('/api/feedback/notify', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          category,
+          note: note.trim(),
+          pageUrl: pageInfo.url,
+          pageTitle: pageInfo.title,
+        }),
+      }).catch(e => console.log('[TestPanel] Email notify failed:', e));
+
       setNote('');
       setTodayCount(prev => prev + 1);
       

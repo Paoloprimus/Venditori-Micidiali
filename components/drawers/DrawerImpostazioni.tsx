@@ -4,6 +4,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { geocodeAddress } from '@/lib/geocoding';
+import { supabase } from '@/lib/supabase/client';
 
 interface DrawerImpostazioniProps {
   onClose: () => void;
@@ -32,6 +33,9 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
   // 🧪 Stato Test Companion Panel
   const [testPanelExpanded, setTestPanelExpanded] = useState(false);
   const [testPanelEnabled, setTestPanelEnabled] = useState(true);
+
+  // 👑 Stato Admin
+  const [isAdmin, setIsAdmin] = useState(false);
 
   // Carica impostazioni salvate
   useEffect(() => {
@@ -64,7 +68,28 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
     if (testPanelVisible === 'false') {
       setTestPanelEnabled(false);
     }
+    // 👑 Verifica se utente è admin
+    checkAdminRole();
   }, []);
+
+  async function checkAdminRole() {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', user.id)
+        .single();
+      
+      if (profile?.role === 'admin') {
+        setIsAdmin(true);
+      }
+    } catch (e) {
+      console.error('[Settings] Error checking admin role:', e);
+    }
+  }
 
   function handleHomePageModeChange(mode: 'chat' | 'dashboard') {
     setHomePageMode(mode);
@@ -565,6 +590,44 @@ export default function DrawerImpostazioni({ onClose }: DrawerImpostazioniProps)
             <span style={{ fontSize: 20 }}>→</span>
           </button>
         </div>
+
+        {/* 👑 SEZIONE ADMIN - Solo per admin */}
+        {isAdmin && (
+          <div style={{ marginBottom: 16 }}>
+            <a 
+              href="/admin"
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '16px',
+                background: 'linear-gradient(135deg, #dc2626 0%, #f97316 100%)',
+                borderRadius: 12,
+                textDecoration: 'none',
+                color: 'white',
+                border: 'none',
+                transition: 'transform 0.2s, box-shadow 0.2s',
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.transform = 'scale(1.02)';
+                e.currentTarget.style.boxShadow = '0 4px 20px rgba(220, 38, 38, 0.4)';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.boxShadow = 'none';
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                <span style={{ fontSize: 28 }}>👑</span>
+                <div>
+                  <div style={{ fontWeight: 600, fontSize: 16 }}>Dashboard Admin</div>
+                  <div style={{ fontSize: 12, opacity: 0.9 }}>Gestione tester, token, feedback</div>
+                </div>
+              </div>
+              <span style={{ fontSize: 20 }}>→</span>
+            </a>
+          </div>
+        )}
 
         {/* SEZIONE LEGAL */}
         <div style={{ marginBottom: 16, padding: 16, background: '#f9fafb', borderRadius: 12, border: '1px solid #e5e7eb' }}>
