@@ -240,8 +240,30 @@ export default function Login() {
           }
         }
         
-        // redirect "hard" alla home
-        window.location.replace("/");
+        // ✅ 7. Controllo ruolo per redirect intelligente
+        let redirectPath = "/"; // Default: home
+        
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .single();
+            
+            // Admin → Dashboard Admin
+            if (profile?.role === 'admin') {
+              console.log('[Login] 👑 Admin rilevato, redirect a /admin');
+              redirectPath = "/admin";
+            }
+          }
+        } catch (roleError) {
+          console.warn('[Login] Errore verifica ruolo, redirect a home:', roleError);
+        }
+        
+        // redirect "hard"
+        window.location.replace(redirectPath);
 
       } else {
         // Questo ramo gestisce il caso di signup dove è richiesta conferma email
