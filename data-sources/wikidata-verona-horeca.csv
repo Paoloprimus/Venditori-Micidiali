@@ -1,0 +1,5 @@
+nome,tipo,indirizzo_stradale,comune,provincia,cap,lat,lon,website,phone,source,wikidata_id
+"Caffè Vittorio Emanuele","caffetteria","","Verona","VR","","45.439256126","10.992416235","","","wikidata","http://www.wikidata.org/entity/Q131160845"
+"Palazzo dell'Aquila","albergo","","Verona","VR","","45.444835037","10.999630839","","","wikidata","http://www.wikidata.org/entity/Q21207410"
+"chiesa del Redentore","ristorante","","Verona","VR","","45.446799596","11.002062928","","","wikidata","http://www.wikidata.org/entity/Q127433601"
+"ex chiesa di San Matteo","ristorante","Vicolo San Matteo 1 – 37121 Verona (VR)","Verona","VR","","45.44175","10.99388889","http://www.smatteo.it/","","wikidata","http://www.wikidata.org/entity/Q3671167"

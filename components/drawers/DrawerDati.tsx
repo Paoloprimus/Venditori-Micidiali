@@ -15,9 +15,10 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
   
+  // Tutti i link PRO usano il prefisso /pro
   function goToClientDetail(clientId: string) {
     onClose();
-    window.location.href = `/clients/${clientId}`;
+    window.location.href = `/pro/clients/${clientId}`;
   }
 
   function goQuickAdd() {
@@ -27,32 +28,32 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
   
   function goClientsList() {
     onClose();
-    window.location.href = "/clients";
+    window.location.href = "/pro/clients";
   }
 
   function goImportClients() {
     onClose();
-    window.location.href = "/tools/import-clients";
+    window.location.href = "/pro/tools/import-clients";
   }
 
   function goPlanning() {
     onClose();
-    window.location.href = "/planning";
+    window.location.href = "/pro/planning";
   }
 
   function goProductsList() {
     onClose();
-    window.location.href = "/products";
+    window.location.href = "/pro/products";
   }
 
   function goQuickAddProduct() {
     onClose();
-    window.location.href = "/tools/quick-add-product";
+    window.location.href = "/pro/tools/quick-add-product";
   }
 
   function goImportProducts() {
     onClose();
-    window.location.href = "/tools/import-products";
+    window.location.href = "/pro/tools/import-products";
   }
 
   function downloadCSVTemplate() {
@@ -185,15 +186,21 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
 
         {tab === 'uscite' && (
           <div style={{ display: 'grid', gap: 8 }}>
-            <button className="btn" onClick={() => { onClose(); window.location.href = '/visits'; }}>
+            <button className="btn" onClick={() => { onClose(); window.location.href = '/pro/visits'; }}>
               📅 Visite & Chiamate
             </button>
-            <button className="btn" onClick={() => { onClose(); window.location.href = '/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+            <button className="btn" onClick={() => { onClose(); window.location.href = '/pro/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Nuova visita
             </button>
             <button className="btn" onClick={goPlanning} style={{ background: '#10b981', color: 'white', border: 'none' }}>
               🗺️ Planning Visite
             </button>
+            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 8, marginTop: 4 }}>
+              <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
+                💡 Vuoi POI pubblici e itinerari? Vai su{' '}
+                <a href="/" style={{ color: '#2563eb' }}>REPING COPILOT</a>
+              </p>
+            </div>
           </div>
         )}
       </div>

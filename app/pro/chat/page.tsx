@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useConversation } from "../context/ConversationContext";
+import { useConversation } from "@/app/context/ConversationContext";
 import { runChatTurn_v2 as runChatTurn } from "./planner";
 import { toPlannerScope } from "@/lib/nlu/scope"; // adapter locale→planner
 

@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { ProposalGenerator } from '../../../components/ProposalGenerator';
+import { ProposalGenerator } from '@/components/ProposalGenerator';
 
 export default function Page() {
   return (

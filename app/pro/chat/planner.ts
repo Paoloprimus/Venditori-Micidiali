@@ -87,7 +87,7 @@ import {
   getClientsByRevenueBand,
   getSeasonality,
   getClientGrowth,
-} from "../data/adapters";
+} from "@/app/data/adapters";
 
 // 💡 Napoleone
 import { generateSuggestions, getSuggestions, generateBriefing } from "@/lib/napoleon";

@@ -32,7 +32,7 @@ import {
   createEmptyContext,
   type ConversationContext 
 } from "@/lib/nlu/unified";
-import { runChatTurn_v2 } from "@/app/chat/planner";
+import { runChatTurn_v2 } from "@/app/pro/chat/planner";
 
 // Utilities estratte
 import { 

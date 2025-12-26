@@ -1,17 +1,13 @@
 // app/layout.tsx
+// Layout ROOT per REPING COPILOT (versione light - SENZA crittografia)
 import "./globals.css";
-import ClientErrorListener from "./ClientErrorListener";
-import { ConversationProvider } from "./context/ConversationContext";
-import Providers from "./providers"; // ✅ NUOVO: importa i providers con crypto
-import TestCompanionPanel from "@/components/TestCompanionPanel";
 import CookieBanner from "@/components/CookieBanner";
-import BroadcastToast from "@/components/BroadcastToast";
 import type { Metadata, Viewport } from "next";
 
 // ✅ PWA Metadata
 export const metadata: Metadata = {
-  title: "REPING",
-  description: "Assistente AI per agenti di commercio HoReCa",
+  title: "REPING COPILOT",
+  description: "Organizza i tuoi giri visite con POI HoReCa, itinerari e note",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -37,25 +33,16 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#2563eb",
+  themeColor: "#1e293b", // Slate-800 per COPILOT
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
       <body>
-        <ClientErrorListener />
-        <Providers>
-          <ConversationProvider>
-            {children}
-            {/* 🧪 Test Companion Panel - Attivo per tester (auto-hide per non-tester) */}
-            <TestCompanionPanel />
-            {/* 🍪 Cookie Banner GDPR */}
-            <CookieBanner />
-            {/* 📢 Broadcast Toast - Messaggi beta per tester */}
-            <BroadcastToast />
-          </ConversationProvider>
-        </Providers>
+        {children}
+        {/* 🍪 Cookie Banner GDPR */}
+        <CookieBanner />
       </body>
     </html>
   );

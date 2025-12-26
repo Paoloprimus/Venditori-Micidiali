@@ -1,6 +1,6 @@
 'use client';
 import React, { useState } from 'react';
-import { DBDesigner } from '../../../components/DBDesigner';
+import { DBDesigner } from '@/components/DBDesigner';
 
 export default function Page() {
   return (
