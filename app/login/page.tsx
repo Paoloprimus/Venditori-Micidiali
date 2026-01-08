@@ -1,202 +1,525 @@
-'use client';
+"use client";
+import { useState } from "react";
+import { supabase } from "@/lib/supabase/client"; // <- singleton
+import { useRouter } from "next/navigation";
+import { useCrypto } from "@/lib/crypto/CryptoProvider"; // ✅ 1. Import useCrypto
+import Link from "next/link";
 
-import { useState } from 'react';
-import { createBrowserClient } from '@supabase/ssr';
-import Link from 'next/link';
+export default function Login() {
+  const router = useRouter();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  
+  // ✅ 2. Ottieni la funzione di sblocco
+  const { unlock } = useCrypto(); 
 
-export default function CopilotLoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+
+  // ⬇️ nuovi campi per il signup
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+
+  // ⬇️ Token Beta per registrazione su invito
+  const [betaToken, setBetaToken] = useState("");
+  const [tokenValidated, setTokenValidated] = useState(false);
+  const [validatingToken, setValidatingToken] = useState(false);
+
+  // ⬇️ consensi GDPR per il signup
+  const [tosAccepted, setTosAccepted] = useState(false);
+  const [privacyAccepted, setPrivacyAccepted] = useState(false);
+  const [marketingAccepted, setMarketingAccepted] = useState(false);
+
+  const [msg, setMsg] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [mode, setMode] = useState<'login' | 'register'>('login');
-  const [success, setSuccess] = useState<string | null>(null);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
+  // Funzione per validare il token beta
+  async function validateBetaToken() {
+    if (!betaToken.trim()) {
+      setMsg("Inserisci un codice invito");
+      return;
+    }
+    
+    setValidatingToken(true);
+    setMsg(null);
+    
+    try {
+      const res = await fetch("/api/beta-tokens/validate", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ token: betaToken.trim() }),
+      });
+      
+      const data = await res.json();
+      
+      if (data.valid) {
+        setTokenValidated(true);
+        setMsg(null);
+      } else {
+        setMsg("Codice invito non valido o già utilizzato");
+        setTokenValidated(false);
+      }
+    } catch (err) {
+      setMsg("Errore nella verifica del codice");
+      setTokenValidated(false);
+    } finally {
+      setValidatingToken(false);
+    }
+  }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // 🗑️ Rimuovi la vecchia funzione savePassphrase
+  // La sua logica è stata integrata (e corretta) direttamente in submit().
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
+    setMsg(null);
     setLoading(true);
-    setError(null);
-    setSuccess(null);
+    let successSession = false; // Flag per tracciare se il login/signup ha creato una sessione valida
 
     try {
-      if (mode === 'login') {
-        const { error } = await supabase.auth.signInWithPassword({
-          email,
-          password,
+      if (mode === "signup") {
+        // 0) Verifica token beta
+        if (!tokenValidated) {
+          setMsg("Devi validare il codice invito per registrarti.");
+          setLoading(false);
+          return;
+        }
+
+        // 0.1) Verifica consensi obbligatori
+        if (!tosAccepted || !privacyAccepted) {
+          setMsg("Devi accettare i Termini di Servizio e la Privacy Policy per registrarti.");
+          setLoading(false);
+          return;
+        }
+
+        // 1) Registrazione
+        const { data, error } = await supabase.auth.signUp({ 
+            email, 
+            password, 
+            options: { data: { first_name: firstName, last_name: lastName } } 
         });
-        
         if (error) throw error;
+
+        // 1.1) Usa il token beta (lo marca come usato)
+        if (data.user) {
+          try {
+            await fetch("/api/beta-tokens/use", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                token: betaToken.trim(),
+                userId: data.user.id,
+              }),
+            });
+          } catch (tokenErr) {
+            console.warn("[Login] Errore uso token beta:", tokenErr);
+          }
+        }
+
+        // 1.2) Registra i consensi GDPR
+        if (data.user) {
+          try {
+            await fetch("/api/consents/check-signup", {
+              method: "POST",
+              headers: { "content-type": "application/json" },
+              body: JSON.stringify({
+                user_id: data.user.id,
+                tos_accepted: tosAccepted,
+                privacy_accepted: privacyAccepted,
+                marketing_accepted: marketingAccepted,
+              }),
+            });
+          } catch (consentErr) {
+            console.warn("[Login] Errore salvataggio consensi:", consentErr);
+            // Non blocchiamo il signup per errori di logging
+          }
+        }
+
+        // 2) Se sessione immediata (impostazioni Supabase)
+        if (data.session) {
+          successSession = true;
+        } else {
+          // Altrimenti tentiamo login immediato (se conferma email non è obbligatoria)
+          const { data: si, error: siErr } = await supabase.auth.signInWithPassword({ email, password });
+          if (siErr || !si.session) {
+            setMsg("Registrazione riuscita. Controlla l'email per confermare l'account, poi accedi.");
+            setLoading(false);
+            return; // senza sessione non possiamo procedere
+          }
+          successSession = true;
+        }
+
+        // 3) Upsert profilo (richiede sessione attiva)
+        const { data: sessCheck } = await supabase.auth.getSession();
+        if (!sessCheck.session) throw new Error("Sessione assente dopo registrazione");
+
+        const fn = firstName.trim();
+        const ln = lastName.trim();
+        if (!fn || !ln) throw new Error("Inserisci nome e cognome per completare la registrazione.");
+
+        const { error: upsertErr } = await supabase
+          .from("profiles")
+          .upsert({ id: sessCheck.session.user.id, first_name: fn, last_name: ln }, { onConflict: "id" });
+        if (upsertErr) throw upsertErr;
         
-        // Redirect alla homepage COPILOT
-        window.location.href = '/';
       } else {
-        const { error } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/`,
-          },
-        });
-        
+        // Accesso (Sign In)
+        const { data, error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
-        
-        setSuccess('Controlla la tua email per confermare la registrazione!');
+        successSession = !!data.session;
       }
+
+      // ----------------------------------------------------
+      // ➡️ AZIONI CRUCIALI DOPO LOGIN/SIGNUP DI SUCCESSO
+      // ----------------------------------------------------
+      if (successSession) {
+        
+        // ⬇️ allinea i cookie lato server (scrive i cookie sb-*)
+        const { data: sess } = await supabase.auth.getSession();
+        if (!sess.session) throw new Error("Sessione assente dopo login/signup");
+
+        await fetch("/api/auth/sync", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            access_token: sess.session.access_token,
+            refresh_token: sess.session.refresh_token,
+          }),
+          credentials: "same-origin",
+        });
+
+        // ✅ 3. Sblocca la cifratura (Passphrase = PW)
+        try {
+          console.log('[Login] Tentativo di sblocco crittografia con la password...');
+          await unlock(password); 
+          console.log('[Login] ✅ Unlock completato');
+        } catch (cryptoError) {
+          console.error('[Login] Unlock fallito (chiavi/passphrase errata):', cryptoError);
+          // Non blocchiamo il redirect qui. L'app riproverà in automatico.
+        }
+        
+        // ✅ 4. Memorizza la Passphrase in ENTRAMBI gli storage (più robusto)
+        // Salva PRIMA del redirect per garantire che sia scritto
+        try {
+          // Salva in localStorage PRIMA (più persistente)
+          localStorage.setItem("repping:pph", password);
+          // Poi in sessionStorage
+          sessionStorage.setItem("repping:pph", password);
+          
+          // 🔧 FIX: Verifica che sia stato salvato (Android può fallire silenziosamente)
+          const verifyLocal = localStorage.getItem("repping:pph");
+          const verifySession = sessionStorage.getItem("repping:pph");
+          
+          if (verifyLocal !== password || verifySession !== password) {
+            console.warn('[Login] ⚠️ Storage verification failed, retrying...');
+            // Retry con flush esplicito
+            localStorage.setItem("repping:pph", password);
+            sessionStorage.setItem("repping:pph", password);
+          }
+          
+          console.log('[Login] ✅ Passphrase salvata e verificata in storage');
+        } catch (storageError) {
+          console.error('[Login] ❌ Errore salvataggio storage:', storageError);
+          // Non blocchiamo, ma loggiamo l'errore
+        }
+        
+        // ✅ 5. Delay aumentato per Android (300ms invece di 100ms)
+        // Alcuni browser Android hanno bisogno di più tempo per scrivere nello storage
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // ✅ 6. Verifica finale prima del redirect
+        const finalCheck = localStorage.getItem("repping:pph");
+        if (finalCheck !== password) {
+          console.error('[Login] ❌ CRITICO: Passphrase non persistita dopo delay!');
+          // Salva di nuovo come ultimo tentativo
+          try {
+            localStorage.setItem("repping:pph", password);
+            sessionStorage.setItem("repping:pph", password);
+            await new Promise(resolve => setTimeout(resolve, 200));
+          } catch (e) {
+            console.error('[Login] ❌ Fallito anche il retry finale');
+          }
+        }
+        
+        // ✅ 7. Controllo ruolo per redirect intelligente
+        let redirectPath = "/"; // Default: home
+        
+        try {
+          const { data: { user } } = await supabase.auth.getUser();
+          if (user) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role')
+              .eq('id', user.id)
+              .single();
+            
+            // Admin → Dashboard Admin
+            if (profile?.role === 'admin') {
+              console.log('[Login] 👑 Admin rilevato, redirect a /admin');
+              redirectPath = "/admin";
+            }
+          }
+        } catch (roleError) {
+          console.warn('[Login] Errore verifica ruolo, redirect a home:', roleError);
+        }
+        
+        // redirect "hard"
+        window.location.replace(redirectPath);
+
+      } else {
+        // Questo ramo gestisce il caso di signup dove è richiesta conferma email
+        setMsg("Registrazione riuscita. Controlla l'email per confermare l'account, poi accedi.");
+      }
+
     } catch (err: any) {
-      setError(err.message || 'Errore durante l\'autenticazione');
+      console.error("[Login] Global error:", err);
+      setMsg(err?.message ?? "Errore.");
+      // ✅ fallback di sicurezza: rimuovi la pass (se fallisce)
+      try { sessionStorage.removeItem("repping:pph"); localStorage.removeItem("repping:pph"); } catch {}
     } finally {
       setLoading(false);
     }
-  };
-
-  const handleGoogleLogin = async () => {
-    setLoading(true);
-    setError(null);
-
-    try {
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: `${window.location.origin}/`,
-        },
-      });
-      
-      if (error) throw error;
-    } catch (err: any) {
-      setError(err.message || 'Errore login Google');
-      setLoading(false);
-    }
-  };
+  }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Logo */}
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold text-white mb-2">🚀 REPING</h1>
-          <p className="text-slate-400">COPILOT - Versione Light</p>
-        </div>
+    <div className="container" style={{ maxWidth: 440, paddingTop: 64 }}>
+      <h1 className="title">{mode === "signin" ? "Accedi" : "Registrati"}</h1>
+      <p className="helper">Versione Beta 1.0 - Per Utenti Tester - Su Invito</p>
 
-        {/* Card */}
-        <div className="bg-slate-800/50 rounded-2xl border border-slate-700/50 p-8">
-          <h2 className="text-2xl font-semibold text-white text-center mb-6">
-            {mode === 'login' ? 'Accedi' : 'Registrati'}
-          </h2>
-
-          {/* Google Button */}
-          <button
-            onClick={handleGoogleLogin}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white hover:bg-gray-100 text-gray-800 rounded-lg font-medium transition-colors disabled:opacity-50"
-          >
-            <svg className="w-5 h-5" viewBox="0 0 24 24">
-              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-            </svg>
-            Continua con Google
-          </button>
-
-          <div className="relative my-6">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-slate-600"></div>
+      <form onSubmit={submit} style={{ display: "grid", gap: 12, marginTop: 16 }}>
+        {/* Token Beta - richiesto per la registrazione */}
+        {mode === "signup" && (
+          <div style={{ 
+            padding: 16, 
+            background: tokenValidated ? "#0D2818" : "#0B1220", 
+            borderRadius: 12, 
+            border: tokenValidated ? "2px solid #22C55E" : "1px solid #1F2937",
+            transition: "all 0.3s ease"
+          }}>
+            <label style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 8, display: "block" }}>
+              🎟️ Codice Invito Beta
+            </label>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="text"
+                placeholder="BETA-XXXXXXXX"
+                value={betaToken}
+                onChange={(e) => {
+                  setBetaToken(e.target.value.toUpperCase());
+                  setTokenValidated(false); // Reset validazione se cambia
+                }}
+                disabled={tokenValidated}
+                style={{
+                  flex: 1,
+                  padding: 10, 
+                  border: "1px solid #1F2937", 
+                  borderRadius: 10,
+                  background: tokenValidated ? "#0D2818" : "#0B1220", 
+                  color: tokenValidated ? "#22C55E" : "#C9D1E7",
+                  fontFamily: "monospace",
+                  textTransform: "uppercase"
+                }}
+              />
+              {!tokenValidated && (
+                <button
+                  type="button"
+                  onClick={validateBetaToken}
+                  disabled={validatingToken || !betaToken.trim()}
+                  style={{
+                    padding: "10px 16px",
+                    background: "#3B82F6",
+                    color: "white",
+                    border: "none",
+                    borderRadius: 10,
+                    cursor: validatingToken ? "wait" : "pointer",
+                    opacity: validatingToken || !betaToken.trim() ? 0.5 : 1
+                  }}
+                >
+                  {validatingToken ? "..." : "Verifica"}
+                </button>
+              )}
             </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-2 bg-slate-800/50 text-slate-400">oppure</span>
-            </div>
+            {tokenValidated && (
+              <p style={{ color: "#22C55E", fontSize: 12, marginTop: 8 }}>
+                ✅ Codice valido! Completa la registrazione.
+              </p>
+            )}
           </div>
+        )}
 
-          {/* Form */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Email</label>
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="tu@email.com"
-              />
-            </div>
+        {/* Campi signup - visibili solo se token validato */}
+        {mode === "signup" && tokenValidated && (
+          <>
+            <input
+              name="firstName" id="firstName" autoComplete="given-name"
+              type="text"
+              placeholder="Nome"
+              value={firstName}
+              onChange={(e) => setFirstName(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+            <input
+              name="lastName" id="lastName" autoComplete="family-name"
+              type="text"
+              placeholder="Cognome"
+              value={lastName}
+              onChange={(e) => setLastName(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+          </>
+        )}
+
+        {/* Email e Password - per signin sempre, per signup solo dopo token validato */}
+        {(mode === "signin" || tokenValidated) && (
+          <>
+            <input
+              name="email" id="email" autoComplete="username"
+              type="email"
+              placeholder="la-tua-email@esempio.it"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+            <input
+              name="password" id="password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              type="password"
+              placeholder="password (min 6)"
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              required
+              style={{
+                padding: 10, border: "1px solid #1F2937", borderRadius: 10,
+                background: "#0B1220", color: "#C9D1E7"
+              }}
+            />
+          </>
+        )}
+
+        {/* Consensi GDPR - solo in modalità signup dopo token validato */}
+        {mode === "signup" && tokenValidated && (
+          <div style={{ 
+            display: "flex", 
+            flexDirection: "column", 
+            gap: 8, 
+            padding: 12, 
+            background: "#0B1220", 
+            borderRadius: 10, 
+            border: "1px solid #1F2937",
+            marginTop: 4 
+          }}>
+            <p style={{ color: "#9CA3AF", fontSize: 12, marginBottom: 4 }}>
+              Per registrarti, accetta i seguenti consensi:
+            </p>
             
-            <div>
-              <label className="block text-sm text-slate-400 mb-1">Password</label>
+            {/* ToS - Obbligatorio */}
+            <label style={{ 
+              display: "flex", 
+              alignItems: "flex-start", 
+              gap: 8, 
+              cursor: "pointer",
+              color: "#C9D1E7",
+              fontSize: 13
+            }}>
               <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                minLength={6}
-                className="w-full bg-slate-700/50 border border-slate-600 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="••••••••"
+                type="checkbox"
+                checked={tosAccepted}
+                onChange={(e) => setTosAccepted(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "#3B82F6" }}
               />
-            </div>
+              <span>
+                Ho letto e accetto i{" "}
+                <Link href="/legal/terms" target="_blank" style={{ color: "#3B82F6", textDecoration: "underline" }}>
+                  Termini di Servizio
+                </Link>
+                <span style={{ color: "#EF4444" }}> *</span>
+              </span>
+            </label>
 
-            {error && (
-              <div className="p-3 bg-red-900/30 border border-red-500/50 rounded-lg text-red-400 text-sm">
-                {error}
-              </div>
-            )}
+            {/* Privacy - Obbligatorio */}
+            <label style={{ 
+              display: "flex", 
+              alignItems: "flex-start", 
+              gap: 8, 
+              cursor: "pointer",
+              color: "#C9D1E7",
+              fontSize: 13
+            }}>
+              <input
+                type="checkbox"
+                checked={privacyAccepted}
+                onChange={(e) => setPrivacyAccepted(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "#3B82F6" }}
+              />
+              <span>
+                Ho letto la{" "}
+                <Link href="/legal/privacy" target="_blank" style={{ color: "#3B82F6", textDecoration: "underline" }}>
+                  Privacy Policy
+                </Link>
+                <span style={{ color: "#EF4444" }}> *</span>
+              </span>
+            </label>
 
-            {success && (
-              <div className="p-3 bg-emerald-900/30 border border-emerald-500/50 rounded-lg text-emerald-400 text-sm">
-                {success}
-              </div>
-            )}
+            {/* Marketing - Opzionale */}
+            <label style={{ 
+              display: "flex", 
+              alignItems: "flex-start", 
+              gap: 8, 
+              cursor: "pointer",
+              color: "#C9D1E7",
+              fontSize: 13
+            }}>
+              <input
+                type="checkbox"
+                checked={marketingAccepted}
+                onChange={(e) => setMarketingAccepted(e.target.checked)}
+                style={{ marginTop: 2, accentColor: "#3B82F6" }}
+              />
+              <span>
+                Acconsento a ricevere comunicazioni marketing
+                <span style={{ color: "#9CA3AF", fontSize: 11 }}> (opzionale)</span>
+              </span>
+            </label>
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors disabled:opacity-50"
-            >
-              {loading ? 'Caricamento...' : mode === 'login' ? 'Accedi' : 'Registrati'}
-            </button>
-          </form>
+            <p style={{ color: "#9CA3AF", fontSize: 11, marginTop: 4 }}>
+              <span style={{ color: "#EF4444" }}>*</span> Campi obbligatori
+            </p>
+          </div>
+        )}
 
-          {/* Toggle mode */}
-          <p className="text-center text-slate-400 mt-6">
-            {mode === 'login' ? (
-              <>
-                Non hai un account?{' '}
-                <button
-                  onClick={() => setMode('register')}
-                  className="text-blue-400 hover:underline"
-                >
-                  Registrati
-                </button>
-              </>
-            ) : (
-              <>
-                Hai già un account?{' '}
-                <button
-                  onClick={() => setMode('login')}
-                  className="text-blue-400 hover:underline"
-                >
-                  Accedi
-                </button>
-              </>
-            )}
-          </p>
-        </div>
+        {/* Bottone submit - per signin sempre visibile, per signup solo dopo token */}
+        {(mode === "signin" || tokenValidated) && (
+          <button 
+            className="btn" 
+            type="submit" 
+            disabled={loading || (mode === "signup" && (!tosAccepted || !privacyAccepted))}
+          >
+            {loading ? "Attendere…" : mode === "signin" ? "Accedi" : "Registrati"}
+          </button>
+        )}
 
-        {/* Links */}
-        <div className="text-center mt-6 space-y-2">
-          <Link href="/" className="text-slate-500 hover:text-slate-300 text-sm block">
-            ← Torna alla home
-          </Link>
-          <Link href="/pro/login" className="text-slate-500 hover:text-slate-300 text-sm block">
-            Vai a REPING PRO →
-          </Link>
-        </div>
-      </div>
+        <button
+          type="button"
+          className="iconbtn"
+          onClick={() => setMode(m => m === "signin" ? "signup" : "signin")}
+          disabled={loading}
+        >
+          {mode === "signin" ? "Passa a Registrazione" : "Hai già un account? Accedi"}
+        </button>
+
+        {msg && <p style={{ color: "#F59E0B" }}>{msg}</p>}
+      </form>
     </div>
   );
 }
-

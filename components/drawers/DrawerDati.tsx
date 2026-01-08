@@ -15,10 +15,9 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
   const [showClientSearch, setShowClientSearch] = useState(false);
   const [showNewClientModal, setShowNewClientModal] = useState(false);
   
-  // Tutti i link PRO usano il prefisso /pro
   function goToClientDetail(clientId: string) {
     onClose();
-    window.location.href = `/pro/clients/${clientId}`;
+    window.location.href = `/clients/${clientId}`;
   }
 
   function goQuickAdd() {
@@ -28,32 +27,32 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
   
   function goClientsList() {
     onClose();
-    window.location.href = "/pro/clients";
+    window.location.href = "/clients";
   }
 
   function goImportClients() {
     onClose();
-    window.location.href = "/pro/tools/import-clients";
+    window.location.href = "/tools/import-clients";
   }
 
   function goPlanning() {
     onClose();
-    window.location.href = "/pro/planning";
+    window.location.href = "/planning";
   }
 
   function goProductsList() {
     onClose();
-    window.location.href = "/pro/products";
+    window.location.href = "/products";
   }
 
   function goQuickAddProduct() {
     onClose();
-    window.location.href = "/pro/tools/quick-add-product";
+    window.location.href = "/tools/quick-add-product";
   }
 
   function goImportProducts() {
     onClose();
-    window.location.href = "/pro/tools/import-products";
+    window.location.href = "/tools/import-products";
   }
 
   function downloadCSVTemplate() {
@@ -186,10 +185,10 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
 
         {tab === 'uscite' && (
           <div style={{ display: 'grid', gap: 8 }}>
-            <button className="btn" onClick={() => { onClose(); window.location.href = '/pro/visits'; }}>
+            <button className="btn" onClick={() => { onClose(); window.location.href = '/visits'; }}>
               📅 Visite & Chiamate
             </button>
-            <button className="btn" onClick={() => { onClose(); window.location.href = '/pro/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
+            <button className="btn" onClick={() => { onClose(); window.location.href = '/tools/add-visit'; }} style={{ background: '#2563eb', color: 'white', border: 'none' }}>
               ➕ Nuova visita
             </button>
             <button className="btn" onClick={goPlanning} style={{ background: '#10b981', color: 'white', border: 'none' }}>
@@ -198,7 +197,7 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
             <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 8, marginTop: 4 }}>
               <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
                 💡 Vuoi POI pubblici e itinerari? Vai su{' '}
-                <a href="/" style={{ color: '#2563eb' }}>REPING COPILOT</a>
+                <a href="/copilot" style={{ color: '#2563eb' }}>REPING COPILOT</a>
               </p>
             </div>
           </div>

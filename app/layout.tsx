@@ -1,13 +1,18 @@
 // app/layout.tsx
-// Layout ROOT per REPING COPILOT (versione light - SENZA crittografia)
+// Layout ROOT per REPING (CRM completo con crittografia)
 import "./globals.css";
+import ClientErrorListener from "@/app/ClientErrorListener";
+import { ConversationProvider } from "@/app/context/ConversationContext";
+import Providers from "@/app/providers";
+import TestCompanionPanel from "@/components/TestCompanionPanel";
 import CookieBanner from "@/components/CookieBanner";
+import BroadcastToast from "@/components/BroadcastToast";
 import type { Metadata, Viewport } from "next";
 
 // ✅ PWA Metadata
 export const metadata: Metadata = {
-  title: "REPING COPILOT",
-  description: "Organizza i tuoi giri visite con POI HoReCa, itinerari e note",
+  title: "REPING",
+  description: "CRM intelligente per agenti di commercio",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -33,16 +38,25 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#1e293b", // Slate-800 per COPILOT
+  themeColor: "#2563eb", // Blue-600 per REPING
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="it">
       <body>
-        {children}
-        {/* 🍪 Cookie Banner GDPR */}
-        <CookieBanner />
+        <ClientErrorListener />
+        <Providers>
+          <ConversationProvider>
+            {children}
+            {/* 🧪 Test Companion Panel */}
+            <TestCompanionPanel />
+            {/* 🍪 Cookie Banner GDPR */}
+            <CookieBanner />
+            {/* 📢 Broadcast Toast */}
+            <BroadcastToast />
+          </ConversationProvider>
+        </Providers>
       </body>
     </html>
   );

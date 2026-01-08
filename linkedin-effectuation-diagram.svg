@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="1200" height="627" viewBox="0 0 1200 627" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background: warm light gray -->
+  <rect width="1200" height="627" fill="#f5f3f0"/>
+  
+  <!-- CAUSATION row -->
+  <g>
+    <!-- X mark -->
+    <text x="120" y="240" font-family="Georgia, Times, serif" font-size="72" fill="#c0392b" font-weight="bold">✗</text>
+    
+    <!-- Flow text -->
+    <text x="220" y="245" font-family="SF Pro Display, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="64" fill="#888888" letter-spacing="2">
+      <tspan>Capire</tspan>
+      <tspan dx="40" fill="#aaaaaa">→</tspan>
+      <tspan dx="40">Scegliere</tspan>
+      <tspan dx="40" fill="#aaaaaa">→</tspan>
+      <tspan dx="40">Agire</tspan>
+    </text>
+  </g>
+  
+  <!-- EFFECTUATION row -->
+  <g>
+    <!-- Check mark -->
+    <text x="120" y="420" font-family="Georgia, Times, serif" font-size="72" fill="#27ae60" font-weight="bold">✓</text>
+    
+    <!-- Flow text -->
+    <text x="220" y="425" font-family="SF Pro Display, -apple-system, Helvetica Neue, Arial, sans-serif" font-size="64" fill="#2c3e50" font-weight="500" letter-spacing="2">
+      <tspan>Scegliere</tspan>
+      <tspan dx="40" fill="#27ae60">→</tspan>
+      <tspan dx="40">Agire</tspan>
+      <tspan dx="40" fill="#27ae60">→</tspan>
+      <tspan dx="40">Capire</tspan>
+    </text>
+  </g>
+  
+  <!-- Source -->
+  <text x="1080" y="590" font-family="Georgia, Times, serif" font-size="18" fill="#999999" text-anchor="end" font-style="italic">
+    Sarasvathy, 2001
+  </text>
+  
+</svg>
