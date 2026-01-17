@@ -7,7 +7,7 @@ import { useState } from "react";
 import Link from "next/link";
 import AnimatedMockup from "./demo";
 
-// Logo Component - Design moderno
+// Logo Component - R lime su sfondo nero
 function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg"; light?: boolean }) {
   const sizes = { sm: 32, md: 40, lg: 56 };
   const s = sizes[size];
@@ -16,20 +16,20 @@ function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg";
   
   return (
     <div className="flex items-center gap-2">
-      {/* Logo Icon - Stylized "R" with AI wave */}
-      <svg width={s} height={s} viewBox="0 0 48 48" fill="none">
-        <defs>
-          <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#3B82F6" />
-            <stop offset="100%" stopColor="#8B5CF6" />
-          </linearGradient>
-        </defs>
-        <rect width="48" height="48" rx="12" fill="url(#logoGrad)" />
-        <path 
-          d="M14 34V14h10c4.5 0 7 2.5 7 6 0 2.5-1.5 4.5-4 5.5L32 34h-5l-4-8h-4v8h-5zm5-12h4c2 0 3-1 3-2.5S25 17 23 17h-4v5z" 
-          fill="white"
-        />
-        <circle cx="34" cy="14" r="4" fill="#22C55E" className="animate-pulse" />
+      {/* Logo Icon - R lime su sfondo nero */}
+      <svg width={s} height={s} viewBox="0 0 512 512" fill="none">
+        <rect width="512" height="512" rx="96" fill="#1e1e1e" />
+        <text 
+          x="256" 
+          y="380" 
+          fontFamily="Outfit, system-ui, sans-serif" 
+          fontSize="360" 
+          fontWeight="900" 
+          fill="#BEFF00" 
+          textAnchor="middle"
+        >
+          R
+        </text>
       </svg>
       <span className={`font-bold ${textSize} ${textColor}`}>REPING</span>
     </div>
