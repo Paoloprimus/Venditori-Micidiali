@@ -30,7 +30,7 @@ export default function TopBar({
         ☰
       </button>
 
-{/* Centro: Repping (bold, cliccabile) + titolo chat */}
+{/* Centro: Icona + Repping (bold, cliccabile) + titolo chat */}
 <div
   style={{
     flex: 1,
@@ -41,18 +41,46 @@ export default function TopBar({
     minWidth: 0,
   }}
 >
-  <span 
-    className="title" 
-    style={{ 
-      whiteSpace: "nowrap", 
-      fontWeight: 600,
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: 6,
       cursor: "pointer",
       userSelect: "none",
     }}
     onClick={() => window.location.href = '/'}
   >
-    {brand}
-  </span>
+    {/* Icona R lime su sfondo nero */}
+    <svg 
+      width="28" 
+      height="28" 
+      viewBox="0 0 512 512" 
+      style={{ borderRadius: 6, flexShrink: 0 }}
+    >
+      <rect width="512" height="512" fill="#1e1e1e" rx="96"/>
+      <text 
+        x="256" 
+        y="380" 
+        fontFamily="Outfit, system-ui, sans-serif" 
+        fontSize="360" 
+        fontWeight="900" 
+        fill="#BEFF00" 
+        textAnchor="middle"
+      >
+        R
+      </text>
+    </svg>
+    <span 
+      className="title" 
+      style={{ 
+        whiteSpace: "nowrap", 
+        fontWeight: 600,
+      }}
+    >
+      {brand}
+    </span>
+  </div>
   {!!title?.trim() && (
     <span className="title" style={{ whiteSpace: "nowrap" }}>
       {" "}{title.trim()}
