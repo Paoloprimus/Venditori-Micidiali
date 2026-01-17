@@ -224,18 +224,11 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             <RepingLogo size="sm" light />
           </Link>
           
-          <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-slate-300 hover:text-white transition">Funzionalità</a>
-            {/* <a href="#demo" className="text-slate-300 hover:text-white transition">Demo</a> */}
-            <a href="#pricing" className="text-slate-300 hover:text-white transition">Piani</a>
-            <a href="#beta" className="text-slate-300 hover:text-white transition">Beta</a>
-          </div>
-
           <a 
-            href="https://reping.app/login"
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition"
+            href="#beta"
+            className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-500 hover:opacity-90 text-white rounded-lg font-medium transition"
           >
-            Accedi all'app (con invito)
+            Richiedi Accesso Beta
           </a>
         </div>
       </nav>
@@ -549,12 +542,9 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               <div className="text-4xl mb-4">📱</div>
               <h3 className="text-xl font-bold text-slate-900 mb-2">GUI Standard</h3>
               <p className="text-slate-600 text-sm">
-Interazione classica con interfaccia grafica, arricchita da
+                Interazione classica con interfaccia grafica, arricchita da
                 funzioni <strong>proattive</strong> (pianificazione visite, utilizzo note clienti).
               </p>
-              <div className="mt-4 text-xs text-slate-500">
-                ✅ Tutti i piani
-              </div>
             </div>
             
             {/* Chat */}
@@ -565,9 +555,6 @@ Interazione classica con interfaccia grafica, arricchita da
                 GUI + interazione in <strong>linguaggio naturale</strong> per funzioni avanzate: 
                 elaborazioni statistiche, grafici personalizzati, analisi semantiche complesse.
               </p>
-              <div className="mt-4 text-xs text-slate-500">
-                ✅ Tutti i piani
-              </div>
             </div>
             
             {/* Guida */}
@@ -578,222 +565,11 @@ Interazione classica con interfaccia grafica, arricchita da
                 Uso <strong>solo dialogico</strong> (voce + audio) per tutte le funzioni dell'app. 
                 Perfetta per la <strong>guida sicura</strong>: niente schermo, solo conversazione.
               </p>
-              <div className="mt-4 text-xs text-emerald-600 font-medium">
-                ✨ Solo BUSINESS e MULTIAGENT
-              </div>
             </div>
           </div>
         </div>
       </section>
 
-      {/* ============ PRICING ============ */}
-      <section id="pricing" className="py-20 bg-slate-50">
-        <div className="max-w-6xl mx-auto px-4">
-          {/* BETA NOTICE - Very prominent */}
-          <div className="bg-gradient-to-r from-emerald-500 to-teal-500 text-white rounded-2xl p-6 mb-10 text-center shadow-lg">
-            <div className="text-2xl font-bold mb-2">🚀 BETA GRATUITA: Prova BUSINESS completo!</div>
-            <p className="text-white/90">
-              Per tutta la durata della fase Beta (fino esaurimento posti, durata minima 1 mese) puoi provare su richiesta <strong>BUSINESS completo</strong> (valore €99/mese) 
-              gratuitamente. Poi scegli: passa a PREMIUM gratis per un anno o resta BUSINESS a prezzo dimezzato per un anno .
-            </p>
-            <a href="#beta" className="inline-block mt-3 px-6 py-2 bg-white text-emerald-600 rounded-full font-bold hover:bg-emerald-50 transition">
-              Richiedi Accesso Beta →
-            </a>
-          </div>
-
-          <div className="text-center mb-10">
-            <h2 className="text-3xl font-bold text-slate-900 mb-4">
-              Piani
-            </h2>
-            <p className="text-slate-600">
-              Al termine della fase Beta saranno disponibili i seguenti piani
-            </p>
-          </div>
-
-          {/* Pricing Grid - 3 columns on desktop */}
-          <div className="grid lg:grid-cols-3 md:grid-cols-2 gap-6">
-
-            {/* PREMIUM */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
-              <div className="text-xs font-medium text-slate-400 mb-1">POST-BETA</div>
-              <div className="text-lg font-bold text-slate-700 mb-2">PREMIUM</div>
-              <div className="text-4xl font-bold text-slate-900 mb-1">€49</div>
-              <div className="text-slate-500 text-sm mb-2">/mese</div>
-              <div className="bg-green-100 text-green-700 text-xs font-medium px-3 py-1 rounded-full inline-block mb-4">
-                🎁 Primo mese gratuito
-              </div>
-              
-              <div className="bg-blue-50 text-blue-700 text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
-                📱💬 GUI + Chat
-              </div>
-              
-              <ul className="space-y-2.5 mb-6 text-sm">
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Max 500 clienti
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> 60 interazioni/giorno
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Storico 90 giorni
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> 9 export PDF/mese
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Supporto prioritario
-                </li>
-              </ul>
-
-              <div className="text-xs text-slate-400 text-center">
-                Per chi non usa Modalità Guida
-              </div>
-            </div>
-
-            {/* BUSINESS - Highlighted as current beta */}
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-6 rounded-2xl shadow-xl relative overflow-hidden transform lg:-translate-y-3 lg:scale-105">
-              <div className="absolute top-0 left-0 right-0 bg-amber-400 text-amber-900 text-xs font-bold py-1.5 text-center">
-                ⭐ DISPONIBILE ORA IN BETA GRATUITA
-              </div>
-              <div className="mt-6">
-                <div className="text-xs font-medium text-emerald-200 mb-1">POST-BETA</div>
-                <div className="text-lg font-bold text-white mb-2">BUSINESS</div>
-                <div className="text-4xl font-bold text-white mb-1">€99</div>
-                <div className="text-emerald-200 text-sm mb-2">/mese</div>
-                <div className="bg-amber-400 text-amber-900 text-xs font-medium px-3 py-1 rounded-full inline-block mb-4">
-                  🎁 Primo mese gratuito
-                </div>
-                
-                <div className="bg-white/20 text-white text-xs font-medium px-3 py-1.5 rounded-full inline-block mb-4">
-                  📱💬🚗 GUI + Chat + Guida
-                </div>
-                
-                <ul className="space-y-2.5 mb-4 text-sm">
-                  <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Max 1000 clienti
-                  </li>
-                  <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Interazioni illimitate
-                  </li>
-                  <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Storico illimitato
-                  </li>
-                  <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Export PDF illimitati
-                  </li>
-                  <li className="flex items-start gap-2 text-white">
-                    <span className="text-green-300 mt-0.5">✓</span> Supporto dedicato
-                  </li>
-                </ul>
-                
-                <div className="border-t border-white/20 pt-3 space-y-2 mb-4">
-                  <div className="flex items-start gap-2 text-amber-300 text-sm font-medium">
-                    <span className="mt-0.5">✨</span> Modalità Guida
-                  </div>
-                  <p className="text-white/80 text-xs ml-5 -mt-1">REPING dialoga con te mentre guidi!</p>
-                  <div className="flex items-start gap-2 text-amber-300 text-sm font-medium">
-                    <span className="mt-0.5">✨</span> Analitiche avanzate
-                  </div>
-                  <p className="text-white/80 text-xs ml-5 -mt-1">Insights sul tuo business</p>
-                </div>
-
-                <a href="#beta" className="block w-full py-2.5 bg-white text-emerald-600 rounded-xl font-bold text-center hover:bg-emerald-50 transition text-sm">
-                  🎁 Prova Gratis in Beta
-                </a>
-              </div>
-            </div>
-
-            {/* MULTIAGENT */}
-            <div className="bg-white p-6 rounded-2xl border border-slate-200 hover:shadow-lg transition">
-              <div className="text-xs font-medium text-orange-500 mb-1">PROSSIMAMENTE</div>
-              <div className="text-lg font-bold text-slate-700 mb-2">MULTIAGENT</div>
-              <div className="text-4xl font-bold text-slate-900 mb-1">€149</div>
-              <div className="text-slate-500 text-sm mb-2">/utente/mese</div>
-              <div className="bg-green-100 text-green-700 text-xs font-medium px-3 py-1 rounded-full inline-block mb-4">
-                🎁 Primo mese gratuito
-              </div>
-              
-              <div className="text-xs text-slate-500 mb-3 font-medium">Tutto BUSINESS +</div>
-              
-              <ul className="space-y-2.5 mb-4 text-sm">
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Dashboard Admin
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Pitch & Infografiche
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Community interna
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Gamification
-                </li>
-                <li className="flex items-start gap-2 text-slate-600">
-                  <span className="text-green-500 mt-0.5">✓</span> Analitiche comparative
-                </li>
-              </ul>
-            </div>
-
-          </div>
-
-          {/* ENTERPRISE - Banner separato per imprenditori */}
-          <div className="mt-12 bg-gradient-to-r from-slate-100 to-slate-50 rounded-2xl p-8 border border-slate-200">
-            <div className="flex flex-col lg:flex-row items-center gap-8">
-              {/* Left: Text */}
-              <div className="flex-1 text-center lg:text-left">
-                <div className="text-xs font-medium text-slate-500 mb-2 uppercase tracking-wide">
-                  Per aziende con esigenze specifiche
-                </div>
-                <h3 className="text-2xl font-bold text-slate-900 mb-3">
-                  🏢 Soluzioni Enterprise
-                </h3>
-                <p className="text-slate-600 mb-4">
-                  Hai una rete di vendita strutturata? Cerchi integrazioni con i tuoi sistemi esistenti? 
-                  Parliamo delle <strong>soluzioni personalizzate</strong> per la tua azienda.
-                </p>
-                
-                {/* Features grid */}
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 text-sm">
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-blue-500">🔗</span> CRM integrato
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-blue-500">⚡</span> API access
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-blue-500">🔐</span> SSO aziendale
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-blue-500">📊</span> BI & Reporting
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-blue-500">🛡️</span> SLA garantito
-                  </div>
-                  <div className="flex items-center gap-2 text-slate-600">
-                    <span className="text-blue-500">🎨</span> White label
-                  </div>
-                </div>
-              </div>
-              
-              {/* Right: CTA */}
-              <div className="flex flex-col items-center lg:items-end gap-3">
-                <div className="text-slate-500 text-sm">Disponibile prossimamente</div>
-                <div className="text-lg font-semibold text-slate-700">Contatto</div>
-                <a 
-                  href="mailto:info@reping.it?subject=Richiesta informazioni Enterprise" 
-                  className="text-blue-600 hover:text-blue-800 font-bold text-xl"
-                >
-                  info@reping.it
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-center text-slate-500 text-sm mt-8">
-            Tutti i prezzi sono IVA esclusa.
-          </p>
-        </div>
-      </section>
 
       {/* ============ BETA CTA ============ */}
       <section id="beta" className="py-20 bg-gradient-to-br from-slate-800 via-slate-900 to-slate-800">
@@ -809,7 +585,7 @@ Interazione classica con interfaccia grafica, arricchita da
             <p className="text-slate-300 text-lg">
               Cerchiamo <strong className="text-white">10 agenti di commercio qualificati</strong> per testare REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">PREMIUM GRATUITO per 1 anno o BUSINESS a prezzo dimezzato per 1 anno</strong> + supporto diretto con il team.
+              Se selezionato: <strong className="text-amber-400">accesso completo gratuito</strong> + supporto diretto con il team.
             </p>
           </div>
 
@@ -1097,8 +873,6 @@ Interazione classica con interfaccia grafica, arricchita da
               <h4 className="font-semibold text-white mb-4">Prodotto</h4>
               <ul className="space-y-2 text-slate-400 text-sm">
                 <li><a href="#features" className="hover:text-white transition">Funzionalità</a></li>
-                <li><a href="#pricing" className="hover:text-white transition">Piani</a></li>
-                {/* <li><a href="#demo" className="hover:text-white transition">Demo</a></li> */}
                 <li><a href="#beta" className="hover:text-white transition">Beta</a></li>
               </ul>
             </div>
