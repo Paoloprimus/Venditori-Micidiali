@@ -583,7 +583,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               Candidati al programma Beta
             </h2>
             <p className="text-slate-300 text-lg">
-              Cerchiamo <strong className="text-white">agenti di commercio plurimandatari qualificati</strong> per completare la fase di Beta testing di REPING.
+              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la fase Beta testing di REPING.
               <br />
               Se selezionato: <strong className="text-amber-400">accesso completo gratuito</strong> + supporto diretto con il team.
             </p>
