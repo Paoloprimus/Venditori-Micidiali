@@ -1,6 +1,6 @@
 'use client';
 
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, useMemo } from 'react';
 import { supabase } from '@/lib/supabase/client';
 import { useCrypto } from '@/lib/crypto/CryptoProvider';
@@ -51,7 +51,9 @@ const DEFAULT_SCOPES = ["table:accounts", "table:visits"];
 export default function ClientDetailPage() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const clientId = params.id as string;
+  const fromNapoleon = searchParams.get('from') === 'napoleon';
   
   const { crypto, ready, unlock, prewarm } = useCrypto();
   const { leftOpen, rightOpen, rightContent, openLeft, closeLeft, openDati, openDocs, openImpostazioni, closeRight } = useDrawers();
@@ -432,7 +434,7 @@ export default function ClientDetailPage() {
         }}>
           <div>
             <button 
-              onClick={() => router.push('/clients')}
+              onClick={() => router.push(fromNapoleon ? '/napoleon' : '/clients')}
               style={{ 
                 background: 'none', 
                 border: 'none', 
@@ -445,7 +447,7 @@ export default function ClientDetailPage() {
                 gap: 4,
               }}
             >
-              ← Torna alla lista
+              ← {fromNapoleon ? 'Torna ai suggerimenti' : 'Torna alla lista'}
             </button>
             <h1 style={{ fontSize: 28, fontWeight: 700, marginBottom: 4 }}>
               {client.name || 'Cliente senza nome'}

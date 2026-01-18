@@ -51,10 +51,12 @@ const INITIAL_CHECKLIST: Omit<CheckItem, 'status' | 'note'>[] = [
   { id: 'client-5', category: '👥 Clienti', name: 'Ricerca cliente (chat)', flow: '"cerca cliente X" → blind index → decripta risultati' },
   { id: 'client-6', category: '👥 Clienti', name: 'Import CSV', flow: '/tools/import-clients → parse → cifra batch → insert' },
   
-  // 5. PRODOTTI
-  { id: 'prod-1', category: '📦 Prodotti', name: 'Lista prodotti', flow: '/products → fetch con blind index' },
-  { id: 'prod-2', category: '📦 Prodotti', name: 'Creazione prodotto', flow: '/tools/quick-add-product → form → salva' },
-  { id: 'prod-3', category: '📦 Prodotti', name: 'Import prodotti', flow: '/tools/import-products → CSV → insert' },
+  // 5. PROMEMORIA
+  { id: 'prom-1', category: '📝 Promemoria', name: 'Lista promemoria', flow: 'Dashboard/Drawer → lista promemoria attivi' },
+  { id: 'prom-2', category: '📝 Promemoria', name: 'Crea promemoria', flow: 'Dettaglio cliente → "Aggiungi promemoria" → salva' },
+  { id: 'prom-3', category: '📝 Promemoria', name: 'Completa promemoria', flow: 'Click checkbox → marca completato' },
+  { id: 'prom-4', category: '📝 Promemoria', name: 'Elimina promemoria', flow: 'Swipe/click elimina → rimuovi' },
+  { id: 'prom-5', category: '📝 Promemoria', name: 'Promemoria da chat', flow: '"ricordami di..." → crea promemoria' },
   
   // 6. VISITE
   { id: 'visit-1', category: '📍 Visite', name: 'Registra visita', flow: '/tools/add-visit → seleziona cliente → dettagli → salva' },

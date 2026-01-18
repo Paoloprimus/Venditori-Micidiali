@@ -194,12 +194,6 @@ export default function DrawerDati({ onClose }: DrawerDatiProps) {
             <button className="btn" onClick={goPlanning} style={{ background: '#10b981', color: 'white', border: 'none' }}>
               🗺️ Planning Visite
             </button>
-            <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: 8, marginTop: 4 }}>
-              <p style={{ fontSize: 12, color: '#6b7280', marginBottom: 8 }}>
-                💡 Vuoi POI pubblici e itinerari? Vai su{' '}
-                <a href="/copilot" style={{ color: '#2563eb' }}>REPING COPILOT</a>
-              </p>
-            </div>
           </div>
         )}
       </div>

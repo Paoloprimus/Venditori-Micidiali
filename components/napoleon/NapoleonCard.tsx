@@ -218,7 +218,7 @@ export default function NapoleonCard({ className = '' }: NapoleonCardProps) {
                           onClick={(e) => {
                             e.preventDefault();
                             e.stopPropagation();
-                            router.push(`/clients/${suggestion.client_id}`);
+                            router.push(`/clients/${suggestion.client_id}?from=napoleon`);
                           }}
                           className="p-1 text-red-400 hover:text-red-600 transition-colors flex-shrink-0"
                         >

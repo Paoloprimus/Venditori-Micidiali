@@ -274,7 +274,7 @@ export default function NapoleonPage() {
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {suggestion.client_id && (
                         <Link
-                          href={`/clients/${suggestion.client_id}`}
+                          href={`/clients/${suggestion.client_id}?from=napoleon`}
                           className="p-2 text-gray-400 hover:text-blue-600 hover:bg-white rounded-lg transition-colors"
                           title="Vai al cliente"
                         >
