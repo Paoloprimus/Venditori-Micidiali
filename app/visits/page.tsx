@@ -112,6 +112,15 @@ export default function VisitsPage(): JSX.Element {
     })();
   }, [authChecked, crypto, unlock, prewarm]);
 
+  // 🔧 FIX: Carica visite automaticamente se crypto è già sbloccato
+  useEffect(() => {
+    if (!actuallyReady || !crypto || !userId) return;
+    if (rows.length > 0) return; // Già caricato
+    if (loading) return; // Già in caricamento
+    
+    loadVisits();
+  }, [actuallyReady, crypto, userId]);
+
   async function loadVisits(): Promise<void> {
     if (!crypto || !userId) return;
     setLoading(true);
