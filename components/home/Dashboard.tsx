@@ -16,6 +16,7 @@ import { supabase } from '@/lib/supabase/client';
 import GettingStartedChecklist from './GettingStartedChecklist';
 import { fetchPromemoria } from '@/lib/promemoria';
 import NapoleonCard from '@/components/napoleon/NapoleonCard';
+import PromemoriaCard from '@/components/promemoria/PromemoriaCard';
 import DailyFeedbackPopup from '@/components/weekly/DailyFeedbackPopup';
 import NewClientModal from '@/components/NewClientModal';
 
@@ -351,53 +352,10 @@ export default function HomeDashboard({ userName }: { userName: string }) {
         <span style={{ fontSize: 20, opacity: 0.8 }}>→</span>
       </button>
 
-      {/* 2. Promemoria - Sfondo bianco */}
-      <a 
-        href="#"
-        onClick={(e) => {
-          e.preventDefault();
-          // Dispatch evento per aprire drawer docs con promemoria
-          window.dispatchEvent(new CustomEvent('open-promemoria'));
-        }}
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          padding: '14px 18px',
-          marginBottom: 12,
-          background: 'white',
-          borderRadius: 14,
-          textDecoration: 'none',
-          color: '#111827',
-          border: '1px solid #e5e7eb',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.05)',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 28 }}>📌</span>
-          <div>
-            <div style={{ fontWeight: 700, fontSize: 16 }}>Promemoria</div>
-            <div style={{ fontSize: 12, color: '#6b7280' }}>Le tue note importanti</div>
-          </div>
-        </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          {stats.promemoriaCount > 0 && (
-            <span style={{
-              background: '#ef4444',
-              color: 'white',
-              fontSize: 13,
-              fontWeight: 700,
-              padding: '4px 10px',
-              borderRadius: 20,
-              minWidth: 28,
-              textAlign: 'center',
-            }}>
-              {stats.promemoriaCount}
-            </span>
-          )}
-          <span style={{ fontSize: 20, color: '#9ca3af' }}>→</span>
-        </div>
-      </a>
+      {/* 2. Promemoria - Accordion come Napoleon */}
+      <div style={{ marginBottom: 12 }}>
+        <PromemoriaCard />
+      </div>
 
       {/* 3. Planning Giornata - Sfondo bianco */}
       <a 
