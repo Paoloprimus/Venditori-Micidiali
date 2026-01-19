@@ -83,9 +83,13 @@ export default function AdminTokensPage() {
     }
   }
 
-  // Invalida (elimina) un token non usato
+  // Invalida (elimina) un token
   async function invalidateToken(id: string) {
-    if (!confirm("Vuoi invalidare questo token? L'operazione è irreversibile.")) return;
+    const token = tokens.find(t => t.id === id);
+    const msg = token?.used_by 
+      ? "Questo token è già stato usato. Eliminarlo rimuoverà solo il record, non revocherà l'accesso dell'utente. Continuare?"
+      : "Vuoi invalidare questo token? L'operazione è irreversibile.";
+    if (!confirm(msg)) return;
     
     const { error } = await supabase
       .from("beta_tokens")
@@ -376,23 +380,21 @@ export default function AdminTokensPage() {
                       {new Date(t.expires_at).toLocaleDateString("it-IT")}
                     </td>
                     <td style={{ padding: 12, textAlign: "center" }}>
-                      {!isUsed && (
-                        <button
-                          onClick={() => invalidateToken(t.id)}
-                          style={{
-                            padding: "4px 10px",
-                            background: "#7F1D1D",
-                            border: "none",
-                            borderRadius: 4,
-                            color: "#FCA5A5",
-                            cursor: "pointer",
-                            fontSize: 11
-                          }}
-                          title="Invalida token"
-                        >
-                          🗑️ Invalida
-                        </button>
-                      )}
+                      <button
+                        onClick={() => invalidateToken(t.id)}
+                        style={{
+                          padding: "4px 10px",
+                          background: "#7F1D1D",
+                          border: "none",
+                          borderRadius: 4,
+                          color: "#FCA5A5",
+                          cursor: "pointer",
+                          fontSize: 11
+                        }}
+                        title={isUsed ? "Elimina token (non revoca accesso utente)" : "Invalida token"}
+                      >
+                        🗑️ {isUsed ? "Elimina" : "Invalida"}
+                      </button>
                     </td>
                   </tr>
                 );
