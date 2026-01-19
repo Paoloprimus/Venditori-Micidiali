@@ -83,6 +83,22 @@ export default function AdminTokensPage() {
     }
   }
 
+  // Invalida (elimina) un token non usato
+  async function invalidateToken(id: string) {
+    if (!confirm("Vuoi invalidare questo token? L'operazione è irreversibile.")) return;
+    
+    const { error } = await supabase
+      .from("beta_tokens")
+      .delete()
+      .eq("id", id);
+    
+    if (error) {
+      setError("Errore invalidazione: " + error.message);
+    } else {
+      await loadTokens();
+    }
+  }
+
   // Copia token negli appunti
   async function copyToken(token: string) {
     try {
@@ -268,18 +284,19 @@ export default function AdminTokensPage() {
                 <th style={{ padding: 12, textAlign: "left", color: "#9CA3AF", fontSize: 12 }}>Nota</th>
                 <th style={{ padding: 12, textAlign: "left", color: "#9CA3AF", fontSize: 12 }}>Creato</th>
                 <th style={{ padding: 12, textAlign: "left", color: "#9CA3AF", fontSize: 12 }}>Scade</th>
+                <th style={{ padding: 12, textAlign: "center", color: "#9CA3AF", fontSize: 12 }}>Azioni</th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: 24, textAlign: "center", color: "#6B7280" }}>
+                  <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#6B7280" }}>
                     Caricamento...
                   </td>
                 </tr>
               ) : tokens.length === 0 ? (
                 <tr>
-                  <td colSpan={5} style={{ padding: 24, textAlign: "center", color: "#6B7280" }}>
+                  <td colSpan={6} style={{ padding: 24, textAlign: "center", color: "#6B7280" }}>
                     Nessun token generato. Usa i pulsanti sopra per crearne.
                   </td>
                 </tr>
@@ -357,6 +374,25 @@ export default function AdminTokensPage() {
                     </td>
                     <td style={{ padding: 12, color: "#6B7280", fontSize: 12 }}>
                       {new Date(t.expires_at).toLocaleDateString("it-IT")}
+                    </td>
+                    <td style={{ padding: 12, textAlign: "center" }}>
+                      {!isUsed && (
+                        <button
+                          onClick={() => invalidateToken(t.id)}
+                          style={{
+                            padding: "4px 10px",
+                            background: "#7F1D1D",
+                            border: "none",
+                            borderRadius: 4,
+                            color: "#FCA5A5",
+                            cursor: "pointer",
+                            fontSize: 11
+                          }}
+                          title="Invalida token"
+                        >
+                          🗑️ Invalida
+                        </button>
+                      )}
                     </td>
                   </tr>
                 );
