@@ -10,7 +10,6 @@
 'use client';
 
 import { useState, useEffect, useCallback, useRef } from 'react';
-import Link from 'next/link';
 import { fetchPromemoria, deletePromemoria, type Promemoria } from '@/lib/promemoria';
 
 interface PromemoriaCardProps {
@@ -189,20 +188,19 @@ export default function PromemoriaCard({ className = '' }: PromemoriaCardProps) 
               ))}
               
               {/* Link alla lista completa */}
-              <Link
-                href="/promemoria"
+              <button
                 onClick={(e) => {
                   e.stopPropagation();
                   // Apri drawer docs con tab promemoria
                   window.dispatchEvent(new CustomEvent('open-promemoria'));
                 }}
-                className="block text-center text-blue-600 hover:text-blue-700 text-sm pt-2"
+                className="block w-full text-center text-blue-600 hover:text-blue-700 text-sm pt-2 bg-transparent border-none cursor-pointer"
               >
                 {hasOther 
                   ? `Vedi tutti i ${totalCount} promemoria →` 
                   : 'Gestisci promemoria →'
                 }
-              </Link>
+              </button>
             </div>
           ) : (
             // Nessun promemoria

@@ -30,6 +30,15 @@ export default function DrawerDocs({ onClose }: DrawerDocsProps) {
     loadPromemoria();
   }, []);
 
+  // Ascolta evento per aprire direttamente la sezione promemoria
+  useEffect(() => {
+    function handleOpenPromemoria() {
+      setOpenSection('promemoria');
+    }
+    window.addEventListener('open-promemoria', handleOpenPromemoria);
+    return () => window.removeEventListener('open-promemoria', handleOpenPromemoria);
+  }, []);
+
   async function loadDocuments() {
     setLoading(true);
     setError(null);
