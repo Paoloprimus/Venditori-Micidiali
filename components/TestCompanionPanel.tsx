@@ -63,38 +63,30 @@ const INITIAL_CHECKLIST: Omit<CheckItem, 'status' | 'note'>[] = [
   { id: 'visit-2', category: '📍 Visite', name: 'Storico visite', flow: '/visits → lista con filtri' },
   { id: 'visit-3', category: '📍 Visite', name: 'Analytics visite (chat)', flow: '"quante visite questo mese?" → query locale' },
   
-  // 7. COPILOT (Mappa)
-  { id: 'map-1', category: '🗺️ Copilot', name: 'Mappa POI', flow: '/copilot/mappa → Leaflet + OSM → cluster markers' },
-  { id: 'map-2', category: '🗺️ Copilot', name: 'Selezione luoghi', flow: 'Click POI → "Aggiungi" → POST /api/places/select' },
-  { id: 'map-3', category: '🗺️ Copilot', name: 'I miei luoghi', flow: '/copilot/luoghi → lista selezionati → rimuovi/mostra' },
-  { id: 'map-4', category: '🗺️ Copilot', name: 'Itinerari', flow: '/copilot/itinerari → crea/modifica → drag & drop' },
-  { id: 'map-5', category: '🗺️ Copilot', name: 'Note locali', flow: '/copilot/note → localStorage → zero cloud' },
-  { id: 'map-6', category: '🗺️ Copilot', name: 'Deep link navigazione', flow: '"Naviga" → Waze/Google Maps/Apple Maps' },
-  
-  // 8. NAPOLEON
+  // 7. NAPOLEON
   { id: 'nap-1', category: '🎯 Napoleon', name: 'Suggerimenti proattivi', flow: 'Dashboard → banner suggerimenti → dettaglio' },
   { id: 'nap-2', category: '🎯 Napoleon', name: 'Briefing giornaliero', flow: '"Buongiorno" → briefing con priorità' },
   { id: 'nap-3', category: '🎯 Napoleon', name: 'Azioni suggerimenti', flow: 'Completa / Posticipa / Ignora' },
   
-  // 9. VOCE
+  // 8. VOCE
   { id: 'voice-1', category: '🎙️ Voce', name: 'Push-to-talk', flow: '🎤 click → recording → release → transcription' },
   { id: 'voice-2', category: '🎙️ Voce', name: 'Modalità dialogo', flow: '🎙️ toggle → continuous listening → auto-send' },
   { id: 'voice-3', category: '🎙️ Voce', name: 'TTS risposta', flow: 'Risposta AI → speakAssistant() → audio' },
   { id: 'voice-4', category: '🎙️ Voce', name: 'Driving mode', flow: '/driving → UI semplificata → hands-free' },
   { id: 'voice-5', category: '🎙️ Voce', name: 'Comandi vocali', flow: '"stop", "ripeti", "aiuto" → azione' },
   
-  // 10. ADMIN
+  // 9. ADMIN
   { id: 'admin-1', category: '👑 Admin', name: 'Dashboard admin', flow: '/admin → KPI team, top agenti' },
   { id: 'admin-2', category: '👑 Admin', name: 'Gestione utenti', flow: '/admin/users → lista → cambia ruolo' },
   { id: 'admin-3', category: '👑 Admin', name: 'Statistiche uso', flow: '/admin/usage → query/giorno, trend' },
   { id: 'admin-4', category: '👑 Admin', name: 'Token Beta', flow: '/admin/tokens → genera/invalida token' },
   
-  // 11. IMPOSTAZIONI
+  // 10. IMPOSTAZIONI
   { id: 'sett-1', category: '⚙️ Impostazioni', name: 'I miei dati', flow: '/settings/my-data → visualizza → export → cancella' },
   { id: 'sett-2', category: '⚙️ Impostazioni', name: 'Preferenze', flow: '/settings/preferences → home mode, tema' },
   { id: 'sett-3', category: '⚙️ Impostazioni', name: 'Consensi GDPR', flow: 'Visualizza/revoca consensi' },
   
-  // 12. LEGAL
+  // 11. LEGAL
   { id: 'legal-1', category: '📜 Legal', name: 'Privacy Policy', flow: '/legal/privacy → pagina statica' },
   { id: 'legal-2', category: '📜 Legal', name: 'Terms of Service', flow: '/legal/terms → pagina statica' },
   { id: 'legal-3', category: '📜 Legal', name: 'Cookie Policy', flow: '/legal/cookies → pagina statica' },
