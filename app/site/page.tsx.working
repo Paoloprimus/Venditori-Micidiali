@@ -80,7 +80,6 @@ interface BetaFormData {
   dispositivi: string;
   dispositiviAltro: string;
   comeConosciuto: string;
-  interesseFunzionalita: string;
   privacy: boolean;
 }
 
@@ -99,7 +98,6 @@ const INITIAL_FORM: BetaFormData = {
   dispositivi: "",
   dispositiviAltro: "",
   comeConosciuto: "",
-  interesseFunzionalita: "",
   privacy: false,
 };
 
@@ -176,7 +174,6 @@ export default function LandingPage() {
           "Strumenti attuali": strumentiText,
           "Dispositivi": dispositiviText,
           "Come ci ha conosciuto": form.comeConosciuto,
-          "Cosa interessa che REPING faccia bene": form.interesseFunzionalita || "Non specificato",
           // Messaggio formattato
           message: `
 NUOVA CANDIDATURA BETA REPING
@@ -200,9 +197,6 @@ Dispositivi: ${dispositiviText}
 
 📣 ACQUISIZIONE
 Come ci ha conosciuto: ${form.comeConosciuto}
-
-💭 INTERESSE FUNZIONALITÀ
-${form.interesseFunzionalita || "Non specificato"}
 
 ✅ Privacy accettata: Sì
           `.trim(),
@@ -242,39 +236,39 @@ ${form.interesseFunzionalita || "Non specificato"}
       {/* ============ HERO ============ */}
       <section className="pt-40 pb-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid lg:grid-cols-3 gap-8 items-center">
+          <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-4 items-center">
             {/* Colonna sinistra: Titolo + Claim + CTA */}
-            <div className="lg:col-span-1">
+            <div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
-                <span className="text-white">REPING</span>
+                <span className="text-white">L'AI che</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Capisce</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">IMPARA</span>
                 <br />
-                <span className="text-white">Ottimizza</span>
+                <span className="text-white">da te</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">Personalizza</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">cresce</span>
                 <br />
-                <span className="text-white">Semplifica</span>
+                <span className="text-white">con te</span>
               </h1>
 
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
                 CoPilot AI per agenti di commercio.
                 <br />
-                <span className="text-cyan-300">Ogni giorno più intelligente.</span>
+                <span className="text-cyan-300">Più intelligente ogni giorno.</span>
               </p>
 
               {/* Features list MOBILE - sotto il claim */}
               <div className="lg:hidden mb-8 space-y-2 text-sm">
-                {/* Feature intelligenti */}
-                <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
-                <p className="text-cyan-400">• Suggerimenti proattivi</p>
-                <p className="text-cyan-400">• Personalizzazione vendite</p>
-                <p className="text-cyan-400">• Analisi, statistiche, report</p>
+                {/* Feature AI intelligenti */}
+                <p className="text-cyan-400">• AI che impara dalle tue abitudini</p>
+                <p className="text-cyan-400">• Comprende linguaggio naturale</p>
+                <p className="text-cyan-400">• Ricerca semantica intelligente</p>
+                <p className="text-cyan-400">• Suggerimenti personalizzati</p>
                 
                 {/* Feature sicure */}
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero accesso ai tuoi dati</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
               </div>
@@ -287,31 +281,26 @@ ${form.interesseFunzionalita || "Non specificato"}
                   Richiedi Accesso Beta
                 </a>
               </div>
-
-              {/* Mockup MOBILE - sotto il CTA, ridotto */}
-              <div className="lg:hidden flex justify-center mt-8 transform scale-90">
-                <AnimatedMockup />
-              </div>
             </div>
 
             {/* Colonna centrale: Features list DESKTOP */}
-            <div className="hidden lg:block lg:col-span-1 space-y-2 text-sm xl:text-base">
-              {/* Feature intelligenti */}
-              <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
-              <p className="text-cyan-400">• Suggerimenti proattivi</p>
-              <p className="text-cyan-400">• Personalizzazione vendite</p>
-              <p className="text-cyan-400">• Analisi, statistiche, report</p>
+            <div className="hidden lg:block space-y-2 text-base whitespace-nowrap px-3">
+              {/* Feature AI intelligenti */}
+              <p className="text-cyan-400">• AI che impara dalle tue abitudini</p>
+              <p className="text-cyan-400">• Comprende linguaggio naturale</p>
+              <p className="text-cyan-400">• Ricerca semantica intelligente</p>
+              <p className="text-cyan-400">• Suggerimenti personalizzati</p>
               
               {/* Feature sicure */}
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero accesso ai tuoi dati</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• From ❤️ Italy</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
             </div>
 
             {/* Colonna destra: Animated Mockup */}
-            <div className="hidden lg:flex lg:col-span-1 justify-center">
+            <div className="flex justify-center">
               <AnimatedMockup />
             </div>
           </div>
@@ -355,21 +344,22 @@ ${form.interesseFunzionalita || "Non specificato"}
           <div className="text-center mb-12">
             <BetaBanner />
             <h2 className="text-3xl font-bold text-slate-900 mt-4 mb-4">
-              REPING risolve tutto questo
+              Un'intelligenza che cresce con te
             </h2>
             <p className="text-slate-600 max-w-2xl mx-auto">
-              AI CoPilot che capisce il tuo lavoro e ti supporta in molti modi.
+              Più usi REPING, più impara le tue abitudini e diventa efficace.<br />
+              <strong>Personalizzazione progressiva basata su AI.</strong>
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: "", title: "Info sottomano", desc: "Tutti i dati sempre immediatamente accessibili, anche solo con una domanda.", bg: "from-blue-50 to-white border-blue-100" },
-              { icon: "", title: "Elaborazioni dati", desc: "Analisi automatiche: fatturato, visite, trend. Chiedi e REPING calcola.", bg: "from-green-50 to-white border-green-100" },
-              { icon: "", title: "Note personalizzate", desc: "Appunti e promemoria per vendite mirate. Mai più dimenticare un dettaglio.", bg: "from-purple-50 to-white border-purple-100" },
-              { icon: "", title: "Consigli strategici", desc: "Indicazioni operative basate sui tuoi dati. L'AI suggerisce, tu decidi.", bg: "from-yellow-50 to-white border-yellow-100" },
-              { icon: "", title: "Percorsi ottimizzati", desc: "Risparmia km e tempo. REPING pianifica i giri più efficienti.", bg: "from-red-50 to-white border-red-100" },
-              { icon: "", title: "Modalità Guida", desc: "Guida in sicurezza, REPING dialoga con te! Hands-free totale.", bg: "from-indigo-50 to-white border-indigo-100" },
+              { icon: "🧠", title: "Comprensione naturale", desc: "Parla come vuoi. L'AI capisce il contesto, ricorda le conversazioni precedenti.", bg: "from-blue-50 to-white border-blue-100" },
+              { icon: "🔍", title: "Ricerca semantica", desc: "Trova clienti e info per significato, non solo per parola esatta. L'AI comprende cosa intendi.", bg: "from-purple-50 to-white border-purple-100" },
+              { icon: "📊", title: "Analisi intelligenti", desc: "Chiedi trend, confronti, previsioni. L'AI elabora e risponde in linguaggio umano.", bg: "from-green-50 to-white border-green-100" },
+              { icon: "💡", title: "Suggerimenti proattivi", desc: "L'AI nota pattern nelle tue vendite e propone azioni concrete per migliorare.", bg: "from-yellow-50 to-white border-yellow-100" },
+              { icon: "🎯", title: "Personalizzazione progressiva", desc: "Ogni interazione migliora il modello. L'AI impara i tuoi clienti, le tue strategie.", bg: "from-orange-50 to-white border-orange-100" },
+              { icon: "🚗", title: "Modalità Guida", desc: "Dialoga vocalmente mentre guidi. L'AI ti assiste senza distrazioni visive.", bg: "from-indigo-50 to-white border-indigo-100" },
             ].map((feature, i) => (
               <div 
                 key={i} 
@@ -415,12 +405,10 @@ ${form.interesseFunzionalita || "Non specificato"}
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Crittografia end-to-end (AES-256)
                 </li>
-                
-                {/* <li className="flex items-center gap-3 text-slate-300">
+                <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Zero-knowledge: nemmeno noi leggiamo i tuoi dati
-                </li> */}
-                
+                </li>
                 <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Conforme GDPR
@@ -448,47 +436,51 @@ ${form.interesseFunzionalita || "Non specificato"}
                 
                 {/* Visual representation - dati realmente cifrati */}
                 <div className="space-y-2">
- 
+                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
+                    <span className="text-lg">🏢</span>
+                    <div className="flex-1">
+                      <p className="text-slate-500 text-[10px]">Nome cliente/azienda</p>
+                      <p className="text-green-400 font-mono text-xs">████████████</p>
+                    </div>
+                    <span className="text-green-400 text-sm">🔒</span>
+                  </div>
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">👤</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[14px]">Nome contatto</p>
-                      <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
+                      <p className="text-slate-500 text-[10px]">Nome contatto</p>
+                      <p className="text-green-400 font-mono text-xs">██████████</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
-                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📧</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[14px]">Email</p>
-                      <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXX</p>
+                      <p className="text-slate-500 text-[10px]">Email</p>
+                      <p className="text-green-400 font-mono text-xs">████████████████</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
-                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📞</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[14px]">Telefono</p>
-                      <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
+                      <p className="text-slate-500 text-[10px]">Telefono</p>
+                      <p className="text-green-400 font-mono text-xs">██████████</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
-                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📍</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[14px]">Via e Numero civico</p>
-                      <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXXXXXXXX</p>
+                      <p className="text-slate-500 text-[10px]">Indirizzo</p>
+                      <p className="text-green-400 font-mono text-xs">████████████████</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">🏛️</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[14px]">P.IVA</p>
-                      <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXXXXX</p>
+                      <p className="text-slate-500 text-[10px]">P.IVA</p>
+                      <p className="text-green-400 font-mono text-xs">██████████</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
@@ -557,12 +549,13 @@ ${form.interesseFunzionalita || "Non specificato"}
             </div>
             
             {/* Chat */}
-            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
-              <div className="text-4xl mb-4">💬</div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Chat AI</h3>
+            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl border-2 border-blue-200">
+              <div className="text-4xl mb-4">🧠</div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Chat AI Progressiva</h3>
               <p className="text-slate-600 text-sm">
-                GUI + interazione in <strong>linguaggio naturale</strong> per funzioni avanzate: 
-                elaborazioni statistiche, grafici personalizzati, analisi semantiche complesse.
+                Parla <strong>naturalmente</strong>. L'AI <strong>impara da ogni conversazione</strong>, 
+                ricorda il contesto, capisce follow-up impliciti. 
+                Più usi, più diventa <strong>personalizzata</strong> per te.
               </p>
             </div>
             
@@ -585,16 +578,16 @@ ${form.interesseFunzionalita || "Non specificato"}
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-400 text-lg font-bold mb-6">
-              🚀 BETA - SELEZIONE AGENTI
+              🚀 BETA PER PRO SELEZIONATI
             </div>
             
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Candidati al programma Beta
             </h2>
             <p className="text-slate-300 text-lg">
-              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la  BETA II testing di REPING.
+              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la fase Beta testing di REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">accesso completo gratuito per un anno</strong> + customizzazione diretta team.
+              Se selezionato: <strong className="text-amber-400">accesso completo gratuito</strong> + supporto diretto con il team.
             </p>
           </div>
 
@@ -812,20 +805,6 @@ ${form.interesseFunzionalita || "Non specificato"}
                   value={form.comeConosciuto}
                   onChange={e => updateForm("comeConosciuto", e.target.value)}
                   placeholder="es. LinkedIn, passaparola, ricerca Google, altro..."
-                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
-                />
-              </div>
-
-              {/* Sezione: Cosa ti interessa */}
-              <div className="mb-8">
-                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
-                  <span className="text-xl">💭</span> Cosa ti interessa faccia davvero bene REPING?
-                </h3>
-                <textarea
-                  value={form.interesseFunzionalita}
-                  onChange={e => updateForm("interesseFunzionalita", e.target.value)}
-                  placeholder="es. Risparmio tempo nella pianificazione, suggerimenti vendite personalizzate, sicurezza alla guida, analisi dati..."
-                  rows={3}
                   className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
