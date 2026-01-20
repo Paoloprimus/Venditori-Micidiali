@@ -164,7 +164,8 @@ export default function MigrateNamesPage() {
           name_iv: hexToBase64(account.name_iv),
         };
 
-        // Decripta
+        // Decripta (crypto è già verificato non-null all'inizio)
+        if (!crypto) continue; // Type guard per TypeScript
         const decrypted = await crypto.decryptFields(
           'table:accounts',
           'accounts',
