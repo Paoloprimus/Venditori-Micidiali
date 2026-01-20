@@ -240,21 +240,21 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             {/* Colonna sinistra: Titolo + Claim + CTA */}
             <div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
-                <span className="text-white">L'AI che</span>
+                <span className="text-white">REPING</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">IMPARA</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Capisce</span>
                 <br />
-                <span className="text-white">da te</span>
+                <span className="text-white">Ottimizza</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">cresce</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">Personalizza</span>
                 <br />
-                <span className="text-white">con te</span>
+                <span className="text-white">Semplifica</span>
               </h1>
 
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
                 CoPilot AI per agenti di commercio.
                 <br />
-                <span className="text-cyan-300">Più intelligente ogni giorno.</span>
+                <span className="text-cyan-300">Ogni giorno più intelligente.</span>
               </p>
 
               {/* Features list MOBILE - sotto il claim */}
@@ -268,7 +268,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 {/* Feature sicure */}
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero accesso ai tuoi dati</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
               </div>
