@@ -165,7 +165,10 @@ export default function MigrateNamesPage() {
         };
 
         // Decripta (crypto è già verificato non-null all'inizio)
-        if (!crypto) continue; // Type guard per TypeScript
+        if (!crypto || !crypto.decryptFields) {
+          newResults.push({ id: account.id, status: 'error', error: 'Crypto not available' });
+          continue;
+        }
         const decrypted = await crypto.decryptFields(
           'table:accounts',
           'accounts',
