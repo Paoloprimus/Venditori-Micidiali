@@ -438,22 +438,16 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 
                 {/* Visual representation - dati realmente cifrati */}
                 <div className="space-y-2">
-                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
-                    <span className="text-lg">🏢</span>
-                    <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Nome cliente/azienda</p>
-                      <p className="text-green-400 font-mono text-xs">████████████</p>
-                    </div>
-                    <span className="text-green-400 text-sm">🔒</span>
-                  </div>
+ 
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">👤</span>
                     <div className="flex-1">
                       <p className="text-slate-500 text-[10px]">Nome contatto</p>
-                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                      <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
+                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📧</span>
                     <div className="flex-1">
@@ -462,6 +456,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
+                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📞</span>
                     <div className="flex-1">
@@ -470,6 +465,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
+                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📍</span>
                     <div className="flex-1">
