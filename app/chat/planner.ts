@@ -272,7 +272,7 @@ export async function runChatTurn_v2(
   const scope = scopeFromIntent(parsed.intent);
   
   try {
-    const result = await handleIntent(parsed, crypto, state, nluContext);
+    const result = await handleIntent(parsed, crypto, state, nluContext, userId);
     
     // Aggiorna contesto NLU
     const newNluContext = updateContext(nluContext, parsed);
@@ -399,7 +399,8 @@ async function handleIntent(
   parsed: ParsedIntent,
   crypto: CryptoLike | null,
   state: ConversationContextState,
-  nluContext: ConversationContext
+  nluContext: ConversationContext,
+  userId?: string // 🧠 Per RAG fallback
 ): Promise<{ text: string; intent: string }> {
   const { intent, entities } = parsed;
 
