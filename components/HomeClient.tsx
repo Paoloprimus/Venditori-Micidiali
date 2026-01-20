@@ -65,7 +65,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   });
   
   // ---- Crypto ready status
-  const { ready: cryptoReady, crypto } = useCrypto();
+  const { ready: cryptoReady, crypto, userId } = useCrypto();
 
   // 🆕 Contesto NLU persistente per il planner locale
   const nluContextRef = useRef<ConversationContext>(createEmptyContext());
@@ -728,7 +728,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           const cryptoForPlanner = crypto && typeof crypto.decryptFields === 'function' 
             ? crypto as any 
             : null;
-          const result = await runChatTurn_v2(txt, plannerCtx, cryptoForPlanner);
+          const result = await runChatTurn_v2(txt, plannerCtx, cryptoForPlanner, userId ?? undefined);
           
           // Aggiorna contesto NLU
           nluContextRef.current = updateContext(nluContextRef.current, parsed);
@@ -845,7 +845,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           const cryptoForPlanner = crypto && typeof crypto.decryptFields === 'function' 
             ? crypto as any 
             : null;
-          const result = await runChatTurn_v2(txt, plannerCtx, cryptoForPlanner);
+          const result = await runChatTurn_v2(txt, plannerCtx, cryptoForPlanner, userId ?? undefined);
 
           if (result) {
             // Aggiorna contesto NLU

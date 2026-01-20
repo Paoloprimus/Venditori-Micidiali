@@ -25,8 +25,6 @@ COMMENT ON COLUMN messages.entities IS 'Entità estratte (clientName, period, et
 COMMENT ON COLUMN messages.account_ids IS 'UUID clienti menzionati nella conversazione';
 
 -- ═══════════════════════════════════════════════════════════════════════════
--- NOTA IMPORTANTE:
--- La tabella conversation_history (creata nella migration precedente) NON viene usata.
--- Tutti i metadati RAG sono salvati direttamente in messages per evitare duplicazione.
--- conversation_history può essere rimossa in futuro con: DROP TABLE conversation_history;
+-- PULIZIA: Rimuovi conversation_history (creata per errore, non usata)
 -- ═══════════════════════════════════════════════════════════════════════════
+DROP TABLE IF EXISTS conversation_history CASCADE;

@@ -23,6 +23,9 @@ import {
 
 // 📝 Nota: I metadati RAG sono ora inclusi in PlannerResult
 // e vengono salvati in messages tramite /api/messages/append
+
+// 🧠 RAG + LLM Fallback (Fase 3)
+import { generateWithRAG, shouldUseLLMFallback } from "@/lib/rag/llm-fallback";
 import {
   // Clienti
   countClients,
@@ -211,7 +214,8 @@ function formatProactiveSuggestions(_suggestions?: ProactiveSuggestion[]): strin
 export async function runChatTurn_v2(
   userText: string,
   conv: ConversationApi,
-  crypto: CryptoLike | null
+  crypto: CryptoLike | null,
+  userId?: string // 🧠 Per RAG fallback
 ): Promise<PlannerResult> {
   const { state, expired } = conv;
 
@@ -1613,7 +1617,25 @@ async function handleIntent(
 
     case 'unknown':
     default: {
-      // Usa la risposta intelligente dal parser
+      // 🧠 RAG + LLM Fallback per query non riconosciute
+      if (userId && shouldUseLLMFallback(intent, parsed.confidence)) {
+        try {
+          const llmResponse = await generateWithRAG(userText, userId);
+          return {
+            text: llmResponse.text,
+            intent: 'rag_response',
+            confidence: parsed.confidence,
+            source: llmResponse.ragResults.length > 0 ? 'rag' : 'llm',
+            entities: parsed.entities,
+            account_ids: llmResponse.ragResults.map(r => r.account_id),
+          };
+        } catch (llmError) {
+          console.error('[planner] LLM fallback error:', llmError);
+          // Continua con fallback locale
+        }
+      }
+      
+      // Fallback locale se LLM non disponibile
       if (parsed.suggestedResponse) {
         return { text: parsed.suggestedResponse, intent: 'unknown' };
       }
