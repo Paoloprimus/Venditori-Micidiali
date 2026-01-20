@@ -242,9 +242,9 @@ ${form.interesseFunzionalita || "Non specificato"}
       {/* ============ HERO ============ */}
       <section className="pt-40 pb-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid lg:grid-cols-3 gap-8 items-center">
+          <div className="flex flex-col lg:flex-row lg:items-center lg:gap-8">
             {/* Colonna sinistra: Titolo + Claim + CTA */}
-            <div className="lg:col-span-1">
+            <div className="flex-1">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
                 <span className="text-white">REPING</span>
                 <br />
@@ -290,7 +290,7 @@ ${form.interesseFunzionalita || "Non specificato"}
             </div>
 
             {/* Colonna centrale: Features list DESKTOP */}
-            <div className="hidden lg:block lg:col-span-1 space-y-2 text-sm xl:text-base">
+            <div className="hidden lg:block flex-shrink-0 space-y-2 text-sm xl:text-base">
               {/* Feature intelligenti */}
               <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
               <p className="text-cyan-400">• Suggerimenti proattivi</p>
@@ -306,7 +306,7 @@ ${form.interesseFunzionalita || "Non specificato"}
             </div>
 
             {/* Colonna destra: Animated Mockup */}
-            <div className="hidden lg:flex lg:col-span-1 justify-center">
+            <div className="hidden lg:flex flex-shrink-0 justify-center">
               <AnimatedMockup />
             </div>
           </div>
