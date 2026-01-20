@@ -222,7 +222,7 @@ ${form.interesseFunzionalita || "Non specificato"}
   }
 
   return (
-    <div className="font-sans min-h-screen overflow-x-hidden">
+    <div className="font-sans">
       {/* ============ NAVBAR ============ */}
       <nav className="fixed top-0 left-0 right-0 z-50 bg-slate-600 backdrop-blur-sm border-b border-slate-500">
         <div className="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
@@ -242,9 +242,9 @@ ${form.interesseFunzionalita || "Non specificato"}
       {/* ============ HERO ============ */}
       <section className="pt-40 pb-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between lg:gap-12">
-            {/* Colonna sinistra: Titolo + Claim + Features + CTA */}
-            <div className="flex-1 max-w-2xl">
+          <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+            {/* Colonna sinistra: Titolo + Claim + CTA */}
+            <div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
                 <span className="text-white">REPING</span>
                 <br />
@@ -263,15 +263,12 @@ ${form.interesseFunzionalita || "Non specificato"}
                 <span className="text-cyan-300">Ogni giorno più intelligente.</span>
               </p>
 
-              {/* Features list - sempre visibili */}
-              <div className="mb-8 space-y-2 text-sm lg:text-base">
-                {/* Feature intelligenti */}
+              {/* Features list MOBILE - sotto il claim */}
+              <div className="lg:hidden mb-8 space-y-2 text-sm">
                 <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
                 <p className="text-cyan-400">• Suggerimenti proattivi</p>
                 <p className="text-cyan-400">• Personalizzazione vendite</p>
                 <p className="text-cyan-400">• Analisi, statistiche, report</p>
-                
-                {/* Feature sicure */}
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
@@ -289,8 +286,21 @@ ${form.interesseFunzionalita || "Non specificato"}
               </div>
             </div>
 
-            {/* Colonna destra: Animated Mockup - solo desktop */}
-            <div className="hidden lg:flex flex-shrink-0 justify-center mt-8 lg:mt-0">
+            {/* Colonna centrale: Features list DESKTOP */}
+            <div className="hidden lg:block space-y-2 text-base whitespace-nowrap px-3">
+              <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
+              <p className="text-cyan-400">• Suggerimenti proattivi</p>
+              <p className="text-cyan-400">• Personalizzazione vendite</p>
+              <p className="text-cyan-400">• Analisi, statistiche, report</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made in Italy 🇮🇹</p>
+            </div>
+
+            {/* Colonna destra: Animated Mockup */}
+            <div className="hidden lg:flex justify-center">
               <AnimatedMockup />
             </div>
           </div>
