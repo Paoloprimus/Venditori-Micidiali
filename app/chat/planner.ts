@@ -272,7 +272,7 @@ export async function runChatTurn_v2(
   const scope = scopeFromIntent(parsed.intent);
   
   try {
-    const result = await handleIntent(parsed, crypto, state, nluContext, userId);
+    const result = await handleIntent(parsed, crypto, state, nluContext, userId, userText);
     
     // Aggiorna contesto NLU
     const newNluContext = updateContext(nluContext, parsed);
@@ -400,7 +400,8 @@ async function handleIntent(
   crypto: CryptoLike | null,
   state: ConversationContextState,
   nluContext: ConversationContext,
-  userId?: string // 🧠 Per RAG fallback
+  userId?: string, // 🧠 Per RAG fallback
+  userText?: string // 🧠 Testo originale per RAG
 ): Promise<{ text: string; intent: string }> {
   const { intent, entities } = parsed;
 
@@ -1619,7 +1620,7 @@ async function handleIntent(
     case 'unknown':
     default: {
       // 🧠 RAG + LLM Fallback per query non riconosciute
-      if (userId && shouldUseLLMFallback(intent, parsed.confidence)) {
+      if (userId && userText && shouldUseLLMFallback(intent, parsed.confidence)) {
         try {
           const llmResponse = await generateWithRAG(userText, userId);
           return {
