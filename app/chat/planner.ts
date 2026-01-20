@@ -1625,11 +1625,7 @@ async function handleIntent(
           const llmResponse = await generateWithRAG(userText, userId);
           return {
             text: llmResponse.text,
-            intent: 'rag_response',
-            confidence: parsed.confidence,
-            source: llmResponse.ragResults.length > 0 ? 'rag' : 'llm',
-            entities: parsed.entities,
-            account_ids: llmResponse.ragResults.map(r => r.account_id),
+            intent: llmResponse.ragResults.length > 0 ? 'rag_response' : 'llm_response',
           };
         } catch (llmError) {
           console.error('[planner] LLM fallback error:', llmError);
