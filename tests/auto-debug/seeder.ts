@@ -110,11 +110,13 @@ async function seedVisits(
 
   try {
     // Ottieni alcuni clienti dell'utente
-    const { data: clients } = await supabase
+    const { data: clientsData } = await supabase
       .from('accounts')
       .select('id')
       .eq('user_id', userId)
       .limit(5);
+
+    const clients = clientsData as { id: string }[] | null;
 
     if (!clients || clients.length === 0) {
       return {
