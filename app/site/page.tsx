@@ -296,7 +296,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• From ❤️ Italy</p>
             </div>
 
             {/* Colonna destra: Animated Mockup */}
@@ -451,7 +451,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📧</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Email</p>
+                      <p className="text-slate-500 text-[14px]">Email</p>
                       <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
@@ -460,7 +460,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📞</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Telefono</p>
+                      <p className="text-slate-500 text-[14px]">Telefono</p>
                       <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
@@ -469,7 +469,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📍</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Via e Numero civico</p>
+                      <p className="text-slate-500 text-[14px]">Via e Numero civico</p>
                       <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
@@ -477,7 +477,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">🏛️</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">P.IVA</p>
+                      <p className="text-slate-500 text-[14px]">P.IVA</p>
                       <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
@@ -576,16 +576,16 @@ Come ci ha conosciuto: ${form.comeConosciuto}
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-400 text-lg font-bold mb-6">
-              🚀 BETA PER PRO SELEZIONATI
+              🚀 BETA - SELEZIONE AGENTI
             </div>
             
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Candidati al programma Beta
             </h2>
             <p className="text-slate-300 text-lg">
-              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la fase Beta testing di REPING.
+              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la  BETA II testing di REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">accesso completo gratuito</strong> + supporto diretto con il team.
+              Se selezionato: <strong className="text-amber-400">accesso completo gratuito per un anno</strong> + customizzazione diretta team.
             </p>
           </div>
 
