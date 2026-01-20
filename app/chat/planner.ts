@@ -410,6 +410,27 @@ async function handleIntent(
     return handleChainedIntents(parsed, crypto, state, nluContext);
   }
 
+  // 🧠 LLM Fallback per query strategiche/analitiche complesse
+  // Questi intent richiedono ragionamento che va oltre il pattern matching
+  const llmDelegatedIntents = [
+    'strategy_visit_priority', 'strategy_churn_risk', 'strategy_revenue_focus',
+    'strategy_product_focus', 'strategy_ideal_customer', 'strategy_lost_opportunities',
+    'strategy_growth_potential', 'strategy_action_plan', 'strategy_best_time',
+  ];
+  
+  if (userId && userText && llmDelegatedIntents.includes(intent)) {
+    try {
+      const llmResponse = await generateWithRAG(userText, userId);
+      return {
+        text: llmResponse.text,
+        intent: 'llm_response',
+      };
+    } catch (e) {
+      console.error('[planner] LLM delegation error:', e);
+      // Continua con handler locale come fallback
+    }
+  }
+
   switch (intent) {
     // ═══════════════════════════════════════════════════════════════
     // CLIENTI
@@ -512,6 +533,20 @@ async function handleIntent(
       ]);
       
       if (!visitResult.found) {
+        // 🧠 RAG Fallback: se non trovo il cliente esatto, provo ricerca semantica
+        if (userId && userText) {
+          try {
+            const llmResponse = await generateWithRAG(userText, userId);
+            if (llmResponse.ragResults.length > 0) {
+              return {
+                text: llmResponse.text,
+                intent: 'rag_response',
+              };
+            }
+          } catch (e) {
+            console.error('[planner] RAG fallback error in client_detail:', e);
+          }
+        }
         return { text: visitResult.message, intent };
       }
 
@@ -973,6 +1008,44 @@ async function handleIntent(
       }
       
       return { text: "Di cosa vuoi più dettagli?", intent };
+    }
+
+    case 'followup_filter': {
+      // Applica filtro (città/tipo) all'ultimo intent
+      const lastIntent = state.ultimo_intent;
+      const city = entities.city;
+      const localeType = entities.localeType;
+      
+      // Se l'ultimo intent era sui clienti, filtra per città
+      if (lastIntent?.includes('client') && city) {
+        if (!crypto) return { ...needCrypto(), intent };
+        const result = await searchClients(crypto, city);
+        return { 
+          text: `Clienti a **${city.charAt(0).toUpperCase() + city.slice(1)}**:\n\n${result.message}`, 
+          intent: 'client_list' 
+        };
+      }
+      
+      // Se l'ultimo intent era sulle visite, filtra per città
+      if (lastIntent?.includes('visit') && city) {
+        return { 
+          text: `Per vedere le visite a ${city}, prova: "visite a ${city}" o "clienti visitati a ${city}"`, 
+          intent 
+        };
+      }
+      
+      // Filtro per tipo locale
+      if (localeType) {
+        return { 
+          text: `Per filtrare per ${localeType}, prova: "clienti di tipo ${localeType}" o "lista ${localeType}"`, 
+          intent 
+        };
+      }
+      
+      return { 
+        text: "Non ho capito quale filtro vuoi applicare. Puoi dire 'clienti a Milano' o 'lista bar'.", 
+        intent 
+      };
     }
 
     // ═══════════════════════════════════════════════════════════════

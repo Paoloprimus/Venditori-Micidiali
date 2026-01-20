@@ -104,7 +104,8 @@ const SEMANTIC_TEST_CASES: SemanticTestCase[] = [
     id: 'ent_3',
     query: 'ricordami di chiamare Mario domani alle 10',
     category: 'entity_extraction',
-    expectedBehavior: 'Dovrebbe estrarre reminder con time e contact',
+    expectedBehavior: 'Dovrebbe riconoscere intent reminder_create con entità',
+    minConfidence: 0.9,
   },
 ];
 

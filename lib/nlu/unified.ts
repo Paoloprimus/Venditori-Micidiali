@@ -64,6 +64,7 @@ export type IntentType =
   | 'followup_list'          // "Elencali" / "Chi sono?"
   | 'followup_count'         // "Quanti sono?"
   | 'followup_period'        // "E ieri?" / "E la settimana scorsa?"
+  | 'followup_filter'        // "E a Milano?" / "E i bar?" (aggiunge filtro)
   | 'followup_detail'        // "Dimmi di più" / "Dettagli"
   // ═══════════════════════════════════════════════════════════════
   // 🆕 ANALYTICS / BI - Domande analitiche complesse
@@ -1362,6 +1363,32 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /^(e|invece)\s+(prima|dopo|il periodo precedente)(\?)?$/i,
     ],
     confidence: 0.9,
+  },
+
+  {
+    intent: 'followup_filter',
+    patterns: [
+      // "e a Milano?", "e a Roma?", "e a Verona?"
+      /^e\s+(?:a|in|di)\s+([A-Z][a-zàèéìòù]+)(\?)?$/i,
+      // "e i bar?", "e i ristoranti?"
+      /^e\s+(?:i|le|gli)\s+(bar|ristoranti?|pizzeri[ae]|pub|hotel|caffetterie?|locali)(\?)?$/i,
+      // "invece a Milano", "ma a Roma"
+      /^(invece|ma)\s+(?:a|in|di)\s+([A-Z][a-zàèéìòù]+)(\?)?$/i,
+    ],
+    confidence: 0.92,
+    entityExtractor: (text) => {
+      // Estrai città
+      const cityMatch = text.match(/(?:a|in|di)\s+([A-Z][a-zàèéìòù]+)/i);
+      if (cityMatch) {
+        return { city: cityMatch[1] };
+      }
+      // Estrai tipo locale
+      const typeMatch = text.match(/(?:i|le|gli)\s+(bar|ristoranti?|pizzeri[ae]|pub|hotel|caffetterie?|locali)/i);
+      if (typeMatch) {
+        return { localeType: typeMatch[1].toLowerCase() };
+      }
+      return {};
+    },
   },
 
   {
