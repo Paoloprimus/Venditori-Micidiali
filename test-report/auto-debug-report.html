@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>REPING Auto-Debug Report</title>
+  <style>
+    body { font-family: -apple-system, sans-serif; max-width: 900px; margin: 40px auto; padding: 20px; }
+    h1 { color: #333; border-bottom: 3px solid #4CAF50; padding-bottom: 10px; }
+    h2 { color: #666; margin-top: 30px; }
+    .status-pass { color: #4CAF50; }
+    .status-fail { color: #f44336; }
+    .status-partial { color: #ff9800; }
+    .card { background: #f5f5f5; border-radius: 8px; padding: 15px; margin: 10px 0; }
+    .metric { display: inline-block; margin-right: 20px; }
+    .metric-value { font-size: 24px; font-weight: bold; }
+    .metric-label { color: #666; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #ddd; }
+    th { background: #333; color: white; }
+    .icon { margin-right: 5px; }
+  </style>
+</head>
+<body>
+  <h1>🧪 REPING Auto-Debug Report</h1>
+  <p>Generated: 2026-01-20T03:29:13.359Z</p>
+  
+  <div class="card">
+    <h2 class="status-fail">FAIL</h2>
+    <div class="metric">
+      <div class="metric-value">68.0%</div>
+      <div class="metric-label">Overall Score</div>
+    </div>
+    <p>2 suite testate, score medio 68.0%</p>
+  </div>
+
+  <h2>🔍 Pre-flight Checks</h2>
+  <table>
+    <tr><th>Check</th><th>Status</th><th>Message</th></tr>
+    
+      <tr>
+        <td>ENV: NEXT_PUBLIC_SUPABASE_URL</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>ENV: NEXT_PUBLIC_SUPABASE_ANON_KEY</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>ENV: OPENAI_API_KEY</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>ENV: ANTHROPIC_API_KEY</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>ENV: TEST_EMAIL</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>ENV: TEST_PASSWORD</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>ENV: TEST_PASSPHRASE</td>
+        <td>⚠️</td>
+        <td>Mancante (opzionale)</td>
+      </tr>
+    
+      <tr>
+        <td>FILE: package.json</td>
+        <td>✅</td>
+        <td>Presente</td>
+      </tr>
+    
+      <tr>
+        <td>FILE: next.config.mjs</td>
+        <td>✅</td>
+        <td>Presente</td>
+      </tr>
+    
+      <tr>
+        <td>FILE: lib/supabase/client.ts</td>
+        <td>✅</td>
+        <td>Presente</td>
+      </tr>
+    
+      <tr>
+        <td>FILE: lib/nlu/unified.ts</td>
+        <td>✅</td>
+        <td>Presente</td>
+      </tr>
+    
+      <tr>
+        <td>DEP: @supabase/supabase-js</td>
+        <td>✅</td>
+        <td>Installato</td>
+      </tr>
+    
+      <tr>
+        <td>DEP: openai</td>
+        <td>✅</td>
+        <td>Installato</td>
+      </tr>
+    
+      <tr>
+        <td>DEP: @anthropic-ai/sdk</td>
+        <td>✅</td>
+        <td>Installato</td>
+      </tr>
+    
+      <tr>
+        <td>DEP: next</td>
+        <td>✅</td>
+        <td>Installato</td>
+      </tr>
+    
+      <tr>
+        <td>AUTH: Stato salvato</td>
+        <td>⚠️</td>
+        <td>Auth state mancante - richiederà login</td>
+      </tr>
+    
+  </table>
+
+  <h2>🏥 Health Checks</h2>
+  <table>
+    <tr><th>Service</th><th>Status</th><th>Latency</th><th>Message</th></tr>
+    
+      <tr>
+        <td>App Locale</td>
+        <td>❌</td>
+        <td>22ms</td>
+        <td>App non in esecuzione su http://localhost:3000</td>
+      </tr>
+    
+      <tr>
+        <td>Supabase</td>
+        <td>❌</td>
+        <td>0ms</td>
+        <td>NEXT_PUBLIC_SUPABASE_URL non configurato</td>
+      </tr>
+    
+      <tr>
+        <td>OpenAI</td>
+        <td>⚠️</td>
+        <td>0ms</td>
+        <td>OPENAI_API_KEY non configurato (RAG non funzionerà)</td>
+      </tr>
+    
+      <tr>
+        <td>Anthropic</td>
+        <td>⚠️</td>
+        <td>0ms</td>
+        <td>ANTHROPIC_API_KEY non configurato (LLM fallback non funzionerà)</td>
+      </tr>
+    
+  </table>
+
+  
+  <h2>🧪 NLU Tests</h2>
+  <div class="card">
+    <div class="metric">
+      <div class="metric-value">48/50</div>
+      <div class="metric-label">Tests Passed</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">96.0%</div>
+      <div class="metric-label">Pass Rate</div>
+    </div>
+  </div>
+  
+
+  <h2>🧠 Semantic Tests</h2>
+  <div class="card">
+    <div class="metric">
+      <div class="metric-value">4/10</div>
+      <div class="metric-label">Tests Passed</div>
+    </div>
+    <div class="metric">
+      <div class="metric-value">40.0%</div>
+      <div class="metric-label">Pass Rate</div>
+    </div>
+  </div>
+  <table>
+    <tr><th>Category</th><th>Passed</th><th>Total</th><th>Rate</th></tr>
+    
+      <tr>
+        <td>rag_search</td>
+        <td>1</td>
+        <td>3</td>
+        <td>33%</td>
+      </tr>
+    
+      <tr>
+        <td>llm_fallback</td>
+        <td>0</td>
+        <td>2</td>
+        <td>0%</td>
+      </tr>
+    
+      <tr>
+        <td>context_handling</td>
+        <td>1</td>
+        <td>2</td>
+        <td>50%</td>
+      </tr>
+    
+      <tr>
+        <td>entity_extraction</td>
+        <td>2</td>
+        <td>3</td>
+        <td>67%</td>
+      </tr>
+    
+  </table>
+
+  <h2>🎭 E2E Tests</h2><p>Skipped (auth state missing)</p>
+
+</body>
+</html>

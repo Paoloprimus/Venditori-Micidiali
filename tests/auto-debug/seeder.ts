@@ -70,7 +70,7 @@ async function seedClients(
 
     const { data, error } = await supabase
       .from('accounts')
-      .insert(clientsToCreate)
+      .insert(clientsToCreate as any)
       .select('id');
 
     if (error) throw error;
@@ -138,7 +138,7 @@ async function seedVisits(
 
     const { data, error } = await supabase
       .from('visits')
-      .insert(visits.slice(0, 10 - existingCount))
+      .insert(visits.slice(0, 10 - existingCount) as any)
       .select('id');
 
     if (error) throw error;
@@ -185,7 +185,7 @@ async function seedReminders(
 
     const { data, error } = await supabase
       .from('reminders')
-      .insert(reminders.slice(0, 5 - existingCount))
+      .insert(reminders.slice(0, 5 - existingCount) as any)
       .select('id');
 
     if (error) throw error;

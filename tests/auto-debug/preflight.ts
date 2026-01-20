@@ -3,6 +3,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+// Carica env vars da .env.local
+dotenv.config({ path: path.resolve(process.cwd(), '.env.local') });
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
 export interface PreflightResult {
   name: string;
@@ -17,12 +22,13 @@ export interface PreflightReport {
   canProceed: boolean;
 }
 
-const REQUIRED_ENV_VARS = [
-  'NEXT_PUBLIC_SUPABASE_URL',
-  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
-];
+// Env vars richieste per test completi (E2E, seeding)
+// Ma non bloccano i test NLU/semantic che sono offline
+const REQUIRED_ENV_VARS: string[] = [];
 
 const OPTIONAL_ENV_VARS = [
+  'NEXT_PUBLIC_SUPABASE_URL',
+  'NEXT_PUBLIC_SUPABASE_ANON_KEY',
   'OPENAI_API_KEY',
   'ANTHROPIC_API_KEY',
   'TEST_EMAIL',
@@ -32,7 +38,7 @@ const OPTIONAL_ENV_VARS = [
 
 const REQUIRED_FILES = [
   'package.json',
-  'next.config.js',
+  'next.config.mjs',
   'lib/supabase/client.ts',
   'lib/nlu/unified.ts',
 ];
