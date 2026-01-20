@@ -294,7 +294,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               {/* Feature sicure */}
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero accesso ai tuoi dati</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
             </div>
@@ -405,10 +405,12 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Crittografia end-to-end (AES-256)
                 </li>
-                <li className="flex items-center gap-3 text-slate-300">
+                
+                {/* <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Zero-knowledge: nemmeno noi leggiamo i tuoi dati
-                </li>
+                </li> */}
+                
                 <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Conforme GDPR
