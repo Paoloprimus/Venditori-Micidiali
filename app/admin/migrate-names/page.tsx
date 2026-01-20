@@ -44,7 +44,7 @@ function hexToBase64(hexStr: unknown): string {
 }
 
 export default function MigrateNamesPage() {
-  const crypto = useCrypto();
+  const { crypto, ready: cryptoReady } = useCrypto();
   const [loading, setLoading] = useState(false);
   const [checking, setChecking] = useState(true);
   const [accounts, setAccounts] = useState<AccountToMigrate[]>([]);
@@ -116,7 +116,7 @@ export default function MigrateNamesPage() {
 
   // Esegui migrazione
   async function runMigration() {
-    if (!crypto || !crypto.isUnlocked()) {
+    if (!crypto || !cryptoReady) {
       alert('Crypto non sbloccato. Inserisci la passphrase prima.');
       return;
     }
