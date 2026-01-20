@@ -736,10 +736,16 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           // Mostra risposta
           appendAssistantLocal(result.text);
           
-          // Salva in DB per persistenza
+          // Salva in DB per persistenza (con metadati RAG)
           const convId = conv.currentConv?.id;
           if (convId) {
-            await saveAndReloadMessages(convId, txt, result.text);
+            await saveAndReloadMessages(convId, txt, result.text, {
+              intent: result.intent,
+              confidence: result.confidence,
+              source: result.source,
+              entities: result.entities,
+              account_ids: result.account_ids,
+            });
           }
           
           speakIfEnabled(stripMarkdownForTTS(result.text));
@@ -767,7 +773,12 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           
           const convId = conv.currentConv?.id;
           if (convId) {
-            await saveAndReloadMessages(convId, txt, response);
+            await saveAndReloadMessages(convId, txt, response, {
+              intent: parsed.intent,
+              confidence: parsed.confidence,
+              source: 'local',
+              entities: parsed.entities,
+            });
           }
           
           speakIfEnabled(stripMarkdownForTTS(response));
@@ -898,11 +909,33 @@ export default function HomeClient({ email, userName }: { email: string; userNam
   }
 
   // Helper: salva messaggio e ricarica
-  async function saveAndReloadMessages(convId: string, userText: string, assistantText: string) {
+  // 📝 Esteso per supportare metadati RAG (Fase 2)
+  async function saveAndReloadMessages(
+    convId: string, 
+    userText: string, 
+    assistantText: string,
+    ragMetadata?: {
+      intent?: string | null;
+      confidence?: number;
+      source?: 'local' | 'rag' | 'llm' | 'unknown';
+      entities?: Record<string, any>;
+      account_ids?: string[];
+    }
+  ) {
     await fetch("/api/messages/append", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ conversationId: convId, userText, assistantText }),
+      body: JSON.stringify({ 
+        conversationId: convId, 
+        userText, 
+        assistantText,
+        // 📝 Metadati RAG
+        intent: ragMetadata?.intent,
+        confidence: ragMetadata?.confidence,
+        source: ragMetadata?.source,
+        entities: ragMetadata?.entities,
+        account_ids: ragMetadata?.account_ids,
+      }),
     });
     await reloadMessages(convId);
   }

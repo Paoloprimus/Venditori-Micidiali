@@ -21,8 +21,8 @@ import {
   type ProactiveSuggestion 
 } from "@/lib/nlu/unified";
 
-// 📝 Logging conversazioni (Fase 2)
-import { logConversation, extractAccountIds, determineSource } from "@/lib/conversation/logger";
+// 📝 Nota: I metadati RAG sono ora inclusi in PlannerResult
+// e vengono salvati in messages tramite /api/messages/append
 import {
   // Clienti
   countClients,
@@ -151,6 +151,11 @@ export type PlannerResult = {
     question: string;
     options: { label: string; intent: string; entities: any }[];
   };
+  // 📝 Metadati RAG (Fase 2)
+  confidence?: number;
+  source?: 'local' | 'rag' | 'llm' | 'unknown';
+  entities?: Record<string, any>;
+  account_ids?: string[];
 };
 
 // ==================== HELPERS ====================
@@ -230,48 +235,32 @@ export async function runChatTurn_v2(
 
   // 2. Se c'è disambiguazione, restituiscila
   if (parsed.disambiguation && parsed.confidence < 0.8) {
-    const disambigResponse = parsed.disambiguation.question;
-    
-    // 📝 Log disambiguazione
-    logConversation({
-      query: userText,
-      response: disambigResponse,
-      intent: parsed.intent,
-      confidence: parsed.confidence,
-      source: 'local',
-      entities: parsed.entities,
-    });
-    
     return {
-      text: disambigResponse,
+      text: parsed.disambiguation.question,
       appliedScope: state.scope,
       intent: parsed.intent,
       usedContext: state,
       disambiguation: parsed.disambiguation,
+      // 📝 Metadati RAG
+      confidence: parsed.confidence,
+      source: 'local',
+      entities: parsed.entities,
     };
   }
 
   // 3. Se ha una risposta suggerita (greet, help, thanks, cancel)
   if (parsed.suggestedResponse && ['greet', 'help', 'thanks', 'cancel'].includes(parsed.intent)) {
     const proactiveText = formatProactiveSuggestions(parsed.proactiveSuggestions);
-    const greetResponse = parsed.suggestedResponse + proactiveText;
-    
-    // 📝 Log risposta semplice
-    logConversation({
-      query: userText,
-      response: greetResponse,
-      intent: parsed.intent,
-      confidence: parsed.confidence,
-      source: 'local',
-      entities: parsed.entities,
-    });
-    
     return {
-      text: greetResponse,
+      text: parsed.suggestedResponse + proactiveText,
       appliedScope: state.scope,
       intent: parsed.intent,
       usedContext: state,
       proactiveSuggestions: parsed.proactiveSuggestions,
+      // 📝 Metadati RAG
+      confidence: parsed.confidence,
+      source: 'local',
+      entities: parsed.entities,
     };
   }
 
@@ -294,16 +283,10 @@ export async function runChatTurn_v2(
     const proactiveText = formatProactiveSuggestions(parsed.proactiveSuggestions);
     const finalResponse = result.text + proactiveText;
 
-    // 📝 Log conversazione principale
-    logConversation({
-      query: userText,
-      response: finalResponse,
-      intent: result.intent,
-      confidence: parsed.confidence,
-      source: determineSource(result.intent, parsed.confidence),
-      account_ids: extractAccountIds(parsed.entities),
-      entities: parsed.entities,
-    });
+    // Estrai account_ids dalle entità
+    const accountIds: string[] = [];
+    if (parsed.entities.clientId) accountIds.push(parsed.entities.clientId);
+    if (nluContext.focusClient?.id) accountIds.push(nluContext.focusClient.id);
 
     return {
       text: finalResponse,
@@ -311,27 +294,24 @@ export async function runChatTurn_v2(
       intent: result.intent,
       usedContext: conv.state,
       proactiveSuggestions: parsed.proactiveSuggestions,
+      // 📝 Metadati RAG - passati a HomeClient per il salvataggio in messages
+      confidence: parsed.confidence,
+      source: 'local' as const, // Per ora tutto locale, in futuro RAG/LLM
+      entities: parsed.entities,
+      account_ids: accountIds.length > 0 ? accountIds : undefined,
     };
   } catch (error) {
     console.error("[planner:error]", error);
     
-    const errorResponse = "❌ Si è verificato un errore. Riprova tra poco.";
-    
-    // 📝 Log anche gli errori
-    logConversation({
-      query: userText,
-      response: errorResponse,
-      intent: 'error',
-      confidence: parsed.confidence,
-      source: 'local',
-      entities: { error: String(error) },
-    });
-    
     return {
-      text: errorResponse,
+      text: "❌ Si è verificato un errore. Riprova tra poco.",
       appliedScope: state.scope,
       intent: "error",
       usedContext: state,
+      // 📝 Metadati RAG anche per errori
+      confidence: parsed.confidence,
+      source: 'local' as const,
+      entities: { error: String(error) },
     };
   }
 }

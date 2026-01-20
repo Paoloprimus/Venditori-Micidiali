@@ -9,11 +9,27 @@ type Body = {
   conversationId: string;
   userText: string;
   assistantText: string;
+  // 📝 Metadati RAG (Fase 2)
+  intent?: string;
+  confidence?: number;
+  source?: 'local' | 'rag' | 'llm' | 'unknown';
+  entities?: Record<string, any>;
+  account_ids?: string[];
 };
 
 export async function POST(req: NextRequest) {
   try {
-    const { conversationId, userText, assistantText } = (await req.json()) as Body;
+    const { 
+      conversationId, 
+      userText, 
+      assistantText,
+      // 📝 Metadati RAG
+      intent,
+      confidence,
+      source,
+      entities,
+      account_ids,
+    } = (await req.json()) as Body;
 
     if (!conversationId || !userText || !assistantText) {
       return NextResponse.json({ error: "MISSING_FIELDS" }, { status: 400 });
@@ -61,6 +77,12 @@ export async function POST(req: NextRequest) {
         body_tag: assistantEnc.tag,
         content: null, // ← campo vecchio vuoto
         created_at: later.toISOString(),
+        // 📝 Metadati RAG (Fase 2)
+        intent: intent ?? null,
+        confidence: confidence ?? null,
+        source: source ?? null,
+        entities: entities ?? null,
+        account_ids: account_ids?.length ? account_ids : null,
       },
     ]);
 
