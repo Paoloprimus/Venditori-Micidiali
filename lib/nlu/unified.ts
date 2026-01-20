@@ -127,6 +127,15 @@ export type IntentType =
   // 🆕 NAPOLEONE - Briefing proattivo
   // ═══════════════════════════════════════════════════════════════
   | 'napoleon_briefing'           // "Fammi il punto della situazione"
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 PROMEMORIA / REMINDER
+  // ═══════════════════════════════════════════════════════════════
+  | 'reminder_create'             // "Ricordami di chiamare Mario domani"
+  | 'reminder_list'               // "Mostra promemoria" / "Lista promemoria"
+  | 'reminder_complete'           // "Segna come fatto il promemoria X"
+  | 'reminder_delete'             // "Elimina promemoria X"
+  | 'reminder_today'              // "Promemoria di oggi" / "Cosa devo fare oggi?"
+  | 'reminder_pending'            // "Promemoria in sospeso" / "Cosa ho in scadenza?"
   // GENERICI
   | 'greet'                  // "Ciao" / "Buongiorno"
   | 'help'                   // "Aiuto" / "Cosa posso fare?"
@@ -166,6 +175,10 @@ export type EntityType = {
   productBought?: string;    // Prodotto acquistato ("che hanno comprato vino")
   minAmount?: number;        // Importo minimo ("> 500€")
   maxAmount?: number;        // Importo massimo ("< 1000€")
+  // 🆕 PROMEMORIA
+  reminderTitle?: string;    // Titolo/contenuto del promemoria
+  reminderTime?: string;     // Ora specifica ("alle 10", "ore 15:30")
+  reminderContact?: string;  // Persona da contattare ("chiamare Mario")
   hasOrdered?: boolean;      // Ha effettuato ordini (true/false)
   notVisitedDays?: number;   // Non visitato da X giorni
   filters?: string[];        // Lista filtri applicati per debug/display
@@ -1921,6 +1934,105 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(aggiornami|aggiorna)\b.*\b(situazione|tutto)\b/i,
       /\b(cosa)\b.*\b(c'è|abbiamo)\b.*\b(in programma|da fare)\b/i,
       /\b(ok|bene)\b.*\b(napoleone|che)\b.*\b(mi dici|novità)\b/i,
+    ],
+    confidence: 0.90,
+  },
+
+  // ═══════════════════════════════════════════════════════════════
+  // 🆕 PROMEMORIA / REMINDER
+  // ═══════════════════════════════════════════════════════════════
+
+  {
+    intent: 'reminder_create',
+    patterns: [
+      /\b(ricordami|ricorda)\b.*\b(di|che)\b/i,
+      /\b(crea|aggiungi|inserisci|metti)\b.*\b(promemoria|reminder|nota)\b/i,
+      /\b(devo|dovr[oò])\b.*\b(ricordarmi|ricordare)\b/i,
+      /\b(non)\b.*\b(dimenticare|scordarmi)\b.*\b(di)\b/i,
+      /\b(segna|annota)\b.*\b(che devo|di)\b/i,
+    ],
+    confidence: 0.95,
+    entityExtractor: (text) => {
+      const entities: Partial<EntityType> = {};
+      
+      // Estrai cosa fare: "ricordami di CHIAMARE MARIO"
+      const actionMatch = text.match(/(?:ricordami|ricorda|devo)\s+(?:di\s+)?(.+?)(?:\s+(?:domani|oggi|alle|tra|per|entro)|$)/i);
+      if (actionMatch) {
+        entities.reminderTitle = actionMatch[1].trim();
+      }
+      
+      // Estrai contatto: "chiamare MARIO"
+      const contactMatch = text.match(/(?:chiamare|telefonare|contattare|sentire|vedere)\s+(?:a\s+)?([A-Z][a-zàèéìòù]+(?:\s+[A-Z][a-zàèéìòù]+)?)/i);
+      if (contactMatch) {
+        entities.reminderContact = contactMatch[1];
+      }
+      
+      // Estrai ora: "alle 10", "ore 15:30"
+      const timeMatch = text.match(/(?:alle|ore)\s*(\d{1,2}(?:[:\.]\d{2})?)/i);
+      if (timeMatch) {
+        entities.reminderTime = timeMatch[1];
+      }
+      
+      // Estrai data relativa
+      if (/\bdomani\b/i.test(text)) {
+        entities.dateRelative = 'today'; // domani sarà gestito nel planner
+        entities.period = 'today';
+      }
+      if (/\boggi\b/i.test(text)) {
+        entities.dateRelative = 'today';
+        entities.period = 'today';
+      }
+      
+      return entities;
+    },
+  },
+
+  {
+    intent: 'reminder_list',
+    patterns: [
+      /\b(lista|elenco|mostra|vedi)\b.*\b(promemoria|reminder|cose da fare)\b/i,
+      /\b(promemoria|reminder)\b.*\b(lista|elenco|tutti)\b/i,
+      /\b(quali|quanti)\b.*\b(promemoria|reminder)\b/i,
+      /\b(i miei|miei)\b.*\b(promemoria|reminder)\b/i,
+    ],
+    confidence: 0.92,
+  },
+
+  {
+    intent: 'reminder_today',
+    patterns: [
+      /\b(promemoria|reminder)\b.*\b(di oggi|oggi|odierni)\b/i,
+      /\b(oggi)\b.*\b(promemoria|reminder|devo fare)\b/i,
+      /\b(cosa)\b.*\b(devo)\b.*\b(fare)\b.*\b(oggi)\b/i,
+    ],
+    confidence: 0.93,
+  },
+
+  {
+    intent: 'reminder_pending',
+    patterns: [
+      /\b(promemoria|reminder)\b.*\b(in sospeso|scaduti|urgenti|arretrati)\b/i,
+      /\b(cosa)\b.*\b(in scadenza|scaduto|urgente)\b/i,
+      /\b(scadenze|urgenze)\b/i,
+    ],
+    confidence: 0.91,
+  },
+
+  {
+    intent: 'reminder_complete',
+    patterns: [
+      /\b(segna|marca|completa)\b.*\b(fatto|completato|finito)\b.*\b(promemoria|reminder)\b/i,
+      /\b(promemoria|reminder)\b.*\b(fatto|completato|finito)\b/i,
+      /\b(ho fatto|finito)\b.*\b(promemoria|il)\b/i,
+    ],
+    confidence: 0.90,
+  },
+
+  {
+    intent: 'reminder_delete',
+    patterns: [
+      /\b(elimina|cancella|rimuovi|togli)\b.*\b(promemoria|reminder)\b/i,
+      /\b(promemoria|reminder)\b.*\b(elimina|cancella|rimuovi)\b/i,
     ],
     confidence: 0.90,
   },
