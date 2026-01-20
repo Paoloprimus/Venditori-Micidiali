@@ -20,6 +20,9 @@ import {
   type ConversationContext,
   type ProactiveSuggestion 
 } from "@/lib/nlu/unified";
+
+// 📝 Logging conversazioni (Fase 2)
+import { logConversation, extractAccountIds, determineSource } from "@/lib/conversation/logger";
 import {
   // Clienti
   countClients,
@@ -227,8 +230,20 @@ export async function runChatTurn_v2(
 
   // 2. Se c'è disambiguazione, restituiscila
   if (parsed.disambiguation && parsed.confidence < 0.8) {
+    const disambigResponse = parsed.disambiguation.question;
+    
+    // 📝 Log disambiguazione
+    logConversation({
+      query: userText,
+      response: disambigResponse,
+      intent: parsed.intent,
+      confidence: parsed.confidence,
+      source: 'local',
+      entities: parsed.entities,
+    });
+    
     return {
-      text: parsed.disambiguation.question,
+      text: disambigResponse,
       appliedScope: state.scope,
       intent: parsed.intent,
       usedContext: state,
@@ -239,8 +254,20 @@ export async function runChatTurn_v2(
   // 3. Se ha una risposta suggerita (greet, help, thanks, cancel)
   if (parsed.suggestedResponse && ['greet', 'help', 'thanks', 'cancel'].includes(parsed.intent)) {
     const proactiveText = formatProactiveSuggestions(parsed.proactiveSuggestions);
+    const greetResponse = parsed.suggestedResponse + proactiveText;
+    
+    // 📝 Log risposta semplice
+    logConversation({
+      query: userText,
+      response: greetResponse,
+      intent: parsed.intent,
+      confidence: parsed.confidence,
+      source: 'local',
+      entities: parsed.entities,
+    });
+    
     return {
-      text: parsed.suggestedResponse + proactiveText,
+      text: greetResponse,
       appliedScope: state.scope,
       intent: parsed.intent,
       usedContext: state,
@@ -265,9 +292,21 @@ export async function runChatTurn_v2(
 
     // Aggiungi suggerimenti proattivi
     const proactiveText = formatProactiveSuggestions(parsed.proactiveSuggestions);
+    const finalResponse = result.text + proactiveText;
+
+    // 📝 Log conversazione principale
+    logConversation({
+      query: userText,
+      response: finalResponse,
+      intent: result.intent,
+      confidence: parsed.confidence,
+      source: determineSource(result.intent, parsed.confidence),
+      account_ids: extractAccountIds(parsed.entities),
+      entities: parsed.entities,
+    });
 
     return {
-      text: result.text + proactiveText,
+      text: finalResponse,
       appliedScope: scope,
       intent: result.intent,
       usedContext: conv.state,
@@ -275,8 +314,21 @@ export async function runChatTurn_v2(
     };
   } catch (error) {
     console.error("[planner:error]", error);
+    
+    const errorResponse = "❌ Si è verificato un errore. Riprova tra poco.";
+    
+    // 📝 Log anche gli errori
+    logConversation({
+      query: userText,
+      response: errorResponse,
+      intent: 'error',
+      confidence: parsed.confidence,
+      source: 'local',
+      entities: { error: String(error) },
+    });
+    
     return {
-      text: "❌ Si è verificato un errore. Riprova tra poco.",
+      text: errorResponse,
       appliedScope: state.scope,
       intent: "error",
       usedContext: state,
