@@ -240,36 +240,36 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             {/* Colonna sinistra: Titolo + Claim + CTA */}
             <div>
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
-                <span className="text-white">L'AI che</span>
+                REPING
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">IMPARA</span>
+                <span className="text-white">IL CoPilota</span>
                 <br />
-                <span className="text-white">da te</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Intelligente</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">cresce</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">e Sicuro</span>
                 <br />
-                <span className="text-white">con te</span>
+                <span className="text-white">x Agenti di</span>
+                <br />
+                <span className="text-white">Commercio</span>
               </h1>
 
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
-                CoPilot AI per agenti di commercio.
-                <br />
-                <span className="text-cyan-300">Più intelligente ogni giorno.</span>
+                Vendi di più, meglio e in meno tempo.
               </p>
 
               {/* Features list MOBILE - sotto il claim */}
               <div className="lg:hidden mb-8 space-y-2 text-sm">
-                {/* Feature AI intelligenti */}
-                <p className="text-cyan-400">• AI che impara dalle tue abitudini</p>
-                <p className="text-cyan-400">• Comprende linguaggio naturale</p>
-                <p className="text-cyan-400">• Ricerca semantica intelligente</p>
-                <p className="text-cyan-400">• Suggerimenti personalizzati</p>
+                {/* Feature intelligenti */}
+                <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
+                <p className="text-cyan-400">• Suggerimenti proattivi</p>
+                <p className="text-cyan-400">• Personalizzazione vendite</p>
+                <p className="text-cyan-400">• Analisi, statistiche, report</p>
                 
                 {/* Feature sicure */}
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero accesso ai tuoi dati</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
               </div>
 
@@ -285,17 +285,17 @@ Come ci ha conosciuto: ${form.comeConosciuto}
 
             {/* Colonna centrale: Features list DESKTOP */}
             <div className="hidden lg:block space-y-2 text-base whitespace-nowrap px-3">
-              {/* Feature AI intelligenti */}
-              <p className="text-cyan-400">• AI che impara dalle tue abitudini</p>
-              <p className="text-cyan-400">• Comprende linguaggio naturale</p>
-              <p className="text-cyan-400">• Ricerca semantica intelligente</p>
-              <p className="text-cyan-400">• Suggerimenti personalizzati</p>
+              {/* Feature intelligenti */}
+              <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
+              <p className="text-cyan-400">• Suggerimenti proattivi</p>
+              <p className="text-cyan-400">• Personalizzazione vendite</p>
+              <p className="text-cyan-400">• Analisi, statistiche, report</p>
               
               {/* Feature sicure */}
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero accesso ai tuoi dati</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
             </div>
 
@@ -344,22 +344,21 @@ Come ci ha conosciuto: ${form.comeConosciuto}
           <div className="text-center mb-12">
             <BetaBanner />
             <h2 className="text-3xl font-bold text-slate-900 mt-4 mb-4">
-              Un'intelligenza che cresce con te
+              REPING risolve tutto questo
             </h2>
             <p className="text-slate-600 max-w-2xl mx-auto">
-              Più usi REPING, più impara le tue abitudini e diventa efficace.<br />
-              <strong>Personalizzazione progressiva basata su AI.</strong>
+              AI CoPilot che capisce il tuo lavoro e ti supporta in molti modi.
             </p>
           </div>
 
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {[
-              { icon: "🧠", title: "Comprensione naturale", desc: "Parla come vuoi. L'AI capisce il contesto, ricorda le conversazioni precedenti.", bg: "from-blue-50 to-white border-blue-100" },
-              { icon: "🔍", title: "Ricerca semantica", desc: "Trova clienti e info per significato, non solo per parola esatta. L'AI comprende cosa intendi.", bg: "from-purple-50 to-white border-purple-100" },
-              { icon: "📊", title: "Analisi intelligenti", desc: "Chiedi trend, confronti, previsioni. L'AI elabora e risponde in linguaggio umano.", bg: "from-green-50 to-white border-green-100" },
-              { icon: "💡", title: "Suggerimenti proattivi", desc: "L'AI nota pattern nelle tue vendite e propone azioni concrete per migliorare.", bg: "from-yellow-50 to-white border-yellow-100" },
-              { icon: "🎯", title: "Personalizzazione progressiva", desc: "Ogni interazione migliora il modello. L'AI impara i tuoi clienti, le tue strategie.", bg: "from-orange-50 to-white border-orange-100" },
-              { icon: "🚗", title: "Modalità Guida", desc: "Dialoga vocalmente mentre guidi. L'AI ti assiste senza distrazioni visive.", bg: "from-indigo-50 to-white border-indigo-100" },
+              { icon: "", title: "Info sottomano", desc: "Tutti i dati sempre immediatamente accessibili, anche solo con una domanda.", bg: "from-blue-50 to-white border-blue-100" },
+              { icon: "", title: "Elaborazioni dati", desc: "Analisi automatiche: fatturato, visite, trend. Chiedi e REPING calcola.", bg: "from-green-50 to-white border-green-100" },
+              { icon: "", title: "Note personalizzate", desc: "Appunti e promemoria per vendite mirate. Mai più dimenticare un dettaglio.", bg: "from-purple-50 to-white border-purple-100" },
+              { icon: "", title: "Consigli strategici", desc: "Indicazioni operative basate sui tuoi dati. L'AI suggerisce, tu decidi.", bg: "from-yellow-50 to-white border-yellow-100" },
+              { icon: "", title: "Percorsi ottimizzati", desc: "Risparmia km e tempo. REPING pianifica i giri più efficienti.", bg: "from-red-50 to-white border-red-100" },
+              { icon: "", title: "Modalità Guida", desc: "Guida in sicurezza, REPING dialoga con te! Hands-free totale.", bg: "from-indigo-50 to-white border-indigo-100" },
             ].map((feature, i) => (
               <div 
                 key={i} 
@@ -549,13 +548,12 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             </div>
             
             {/* Chat */}
-            <div className="bg-gradient-to-br from-blue-50 to-purple-50 p-6 rounded-2xl border-2 border-blue-200">
-              <div className="text-4xl mb-4">🧠</div>
-              <h3 className="text-xl font-bold text-slate-900 mb-2">Chat AI Progressiva</h3>
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200">
+              <div className="text-4xl mb-4">💬</div>
+              <h3 className="text-xl font-bold text-slate-900 mb-2">Chat AI</h3>
               <p className="text-slate-600 text-sm">
-                Parla <strong>naturalmente</strong>. L'AI <strong>impara da ogni conversazione</strong>, 
-                ricorda il contesto, capisce follow-up impliciti. 
-                Più usi, più diventa <strong>personalizzata</strong> per te.
+                GUI + interazione in <strong>linguaggio naturale</strong> per funzioni avanzate: 
+                elaborazioni statistiche, grafici personalizzati, analisi semantiche complesse.
               </p>
             </div>
             
