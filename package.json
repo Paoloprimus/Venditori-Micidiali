@@ -14,7 +14,10 @@
     "test:nlu": "npx tsx test/run-nlu-tests.ts",
     "test:nlu:json": "npx tsx test/run-nlu-tests.ts --json",
     "test:nlu:failed": "npx tsx test/run-nlu-tests.ts --failed",
-    "test:nlu:extended": "npx tsx test/run-nlu-tests.ts --extended"
+    "test:nlu:extended": "npx tsx test/run-nlu-tests.ts --extended",
+    "test:full": "npx tsx tests/auto-debug/runner.ts --report",
+    "test:full:json": "npx tsx tests/auto-debug/runner.ts --json",
+    "test:full:quick": "npx tsx tests/auto-debug/runner.ts --skip-e2e --report"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
