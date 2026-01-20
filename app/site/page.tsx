@@ -442,7 +442,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">👤</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Nome contatto</p>
+                      <p className="text-slate-500 text-[14px]">Nome contatto</p>
                       <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
