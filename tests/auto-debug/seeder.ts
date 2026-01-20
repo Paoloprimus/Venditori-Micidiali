@@ -1,7 +1,10 @@
 // tests/auto-debug/seeder.ts
 // Data seeder: crea dati di test se mancano
 
-import { createClient } from '@supabase/supabase-js';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+
+// Tipo generico per evitare conflitti di tipo
+type AnySupabaseClient = SupabaseClient<any, any, any>;
 
 export interface SeederResult {
   entity: string;
@@ -29,7 +32,7 @@ const TEST_CLIENTS = [
  * Verifica se esistono già dati di test per l'utente
  */
 async function checkExistingData(
-  supabase: ReturnType<typeof createClient>,
+  supabase: AnySupabaseClient,
   userId: string
 ): Promise<{ clients: number; visits: number; reminders: number }> {
   const [clientsRes, visitsRes, remindersRes] = await Promise.all([
@@ -49,7 +52,7 @@ async function checkExistingData(
  * Crea clienti di test
  */
 async function seedClients(
-  supabase: ReturnType<typeof createClient>,
+  supabase: AnySupabaseClient,
   userId: string,
   existingCount: number
 ): Promise<SeederResult> {
@@ -95,7 +98,7 @@ async function seedClients(
  * Crea visite di test
  */
 async function seedVisits(
-  supabase: ReturnType<typeof createClient>,
+  supabase: AnySupabaseClient,
   userId: string,
   existingCount: number
 ): Promise<SeederResult> {
@@ -165,7 +168,7 @@ async function seedVisits(
  * Crea promemoria di test
  */
 async function seedReminders(
-  supabase: ReturnType<typeof createClient>,
+  supabase: AnySupabaseClient,
   userId: string,
   existingCount: number
 ): Promise<SeederResult> {
