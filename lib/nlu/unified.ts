@@ -1026,6 +1026,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(cliente|visita)\s+(numero|n\.?|#)\s*(\d+)\b/i,
       // "prima/seconda/ultima visita di oggi"
       /\b(prim[ao]|second[ao]|terz[ao]|quart[ao]|quint[ao]|ultim[ao])\b.*\b(visita|cliente)\b.*\b(di oggi|di ieri|odiern[ao])\b/i,
+      // "chi è il primo/prossimo cliente?"
+      /\bchi\s+(e|sara)\s+(il\s+)?(prim[ao]|prossim[ao]|secondo|terzo|ultimo)\s+(cliente|visita)\b/i,
     ],
     confidence: 0.9,
     entityExtractor: (text) => {
@@ -1196,6 +1198,10 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(di cosa)\b.*\b(parlato|discusso)\b/i,
       // "cosa ho discusso con Rossi"
       /\b(cosa)\b.*\b(ho discusso|ho parlato|ho proposto)\b.*\b(con|a)\s+([\wÀ-ÿ]+)/i,
+      // "cosa gli ho venduto?" / "cosa gli ho venduto di solito?"
+      /\b(cosa)\s+(gli|le)\s+(ho|hai)\s+(venduto|proposto|ordinato)/i,
+      // "cosa compra di solito?" / "cosa ordina abitualmente?"
+      /\b(cosa)\s+(compra|ordina|prende)\b.*\b(solito|spesso|sempre|abitualmente)\b/i,
     ],
     confidence: 0.85,
     entityExtractor: (text) => {
@@ -2021,6 +2027,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(promemoria|reminder)\b.*\b(lista|elenco|tutti)\b/i,
       /\b(quali|quanti)\b.*\b(promemoria|reminder)\b/i,
       /\b(i miei|miei)\b.*\b(promemoria|reminder)\b/i,
+      // "e i promemoria?" / "e i reminder?"
+      /^e\s+(i\s+)?(promemoria|reminder)(\?)?$/i,
     ],
     confidence: 0.92,
   },

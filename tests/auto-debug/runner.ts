@@ -17,6 +17,7 @@ import { spawn } from 'child_process';
 import { runPreflight, printPreflightReport, type PreflightReport } from './preflight';
 import { runHealthChecks, printHealthReport, type HealthReport } from './health';
 import { runSemanticTests, printSemanticReport, type SemanticReport } from './semantic';
+import { runAllUserFlows, printUserFlowsReport, type FlowResult } from './user-flows';
 
 // ═══════════════════════════════════════════════════════════════
 // TIPI
@@ -37,12 +38,21 @@ interface E2EReport {
   skipped: boolean;
 }
 
+interface UserFlowsReport {
+  timestamp: string;
+  flows: FlowResult[];
+  total: number;
+  passed: number;
+  passRate: number;
+}
+
 interface FullReport {
   timestamp: string;
   preflight: PreflightReport;
   health: HealthReport;
   nlu: NLUReport | null;
   semantic: SemanticReport;
+  userFlows: UserFlowsReport | null;
   e2e: E2EReport | null;
   overall: {
     status: 'PASS' | 'FAIL' | 'PARTIAL';
@@ -335,6 +345,24 @@ async function main() {
     };
   }
 
+  // 4b. User Flow Tests (simulazione flussi reali)
+  let userFlows: UserFlowsReport | null = null;
+  if (!skipSemantic) {
+    const flowResults = runAllUserFlows();
+    if (!jsonOutput) printUserFlowsReport(flowResults);
+    
+    const totalSteps = flowResults.reduce((acc, f) => acc + f.steps.length, 0);
+    const passedSteps = flowResults.reduce((acc, f) => acc + f.steps.filter(s => s.passed).length, 0);
+    
+    userFlows = {
+      timestamp: new Date().toISOString(),
+      flows: flowResults,
+      total: totalSteps,
+      passed: passedSteps,
+      passRate: (passedSteps / totalSteps) * 100,
+    };
+  }
+
   // 5. E2E Tests
   let e2e: E2EReport | null = null;
   if (!skipE2E) {
@@ -345,6 +373,7 @@ async function main() {
   const scores: number[] = [];
   if (nlu) scores.push(nlu.passRate);
   if (semantic.summary.total > 0) scores.push(semantic.summary.passRate);
+  if (userFlows && userFlows.total > 0) scores.push(userFlows.passRate);
   if (e2e && !e2e.skipped && e2e.total > 0) scores.push(e2e.passRate);
 
   const overallScore = scores.length > 0 
@@ -360,6 +389,7 @@ async function main() {
     health,
     nlu,
     semantic,
+    userFlows,
     e2e,
     overall: {
       status: overallStatus,
