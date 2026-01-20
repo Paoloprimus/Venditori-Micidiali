@@ -80,6 +80,7 @@ interface BetaFormData {
   dispositivi: string;
   dispositiviAltro: string;
   comeConosciuto: string;
+  interesseFunzionalita: string;
   privacy: boolean;
 }
 
@@ -98,6 +99,7 @@ const INITIAL_FORM: BetaFormData = {
   dispositivi: "",
   dispositiviAltro: "",
   comeConosciuto: "",
+  interesseFunzionalita: "",
   privacy: false,
 };
 
@@ -174,6 +176,7 @@ export default function LandingPage() {
           "Strumenti attuali": strumentiText,
           "Dispositivi": dispositiviText,
           "Come ci ha conosciuto": form.comeConosciuto,
+          "Cosa interessa che REPING faccia bene": form.interesseFunzionalita || "Non specificato",
           // Messaggio formattato
           message: `
 NUOVA CANDIDATURA BETA REPING
@@ -197,6 +200,9 @@ Dispositivi: ${dispositiviText}
 
 📣 ACQUISIZIONE
 Come ci ha conosciuto: ${form.comeConosciuto}
+
+💭 INTERESSE FUNZIONALITÀ
+${form.interesseFunzionalita || "Non specificato"}
 
 ✅ Privacy accettata: Sì
           `.trim(),
@@ -236,25 +242,25 @@ Come ci ha conosciuto: ${form.comeConosciuto}
       {/* ============ HERO ============ */}
       <section className="pt-40 pb-20 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
         <div className="max-w-7xl mx-auto px-4">
-          <div className="grid lg:grid-cols-[1fr_auto_1fr] gap-4 items-center">
+          <div className="grid lg:grid-cols-3 gap-8 items-center">
             {/* Colonna sinistra: Titolo + Claim + CTA */}
-            <div>
+            <div className="lg:col-span-1">
               <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold text-white leading-tight mb-8">
-                REPING
+                <span className="text-white">REPING</span>
                 <br />
-                <span className="text-white">IL CoPilota</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Capisce</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">Intelligente</span>
+                <span className="text-white">Ottimizza</span>
                 <br />
-                <span className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">e Sicuro</span>
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-400">Personalizza</span>
                 <br />
-                <span className="text-white">x Agenti di</span>
-                <br />
-                <span className="text-white">Commercio</span>
+                <span className="text-white">Semplifica</span>
               </h1>
 
               <p className="text-xl text-slate-300 mb-8 leading-relaxed">
-                Vendi di più, meglio e in meno tempo.
+                CoPilot AI per agenti di commercio.
+                <br />
+                <span className="text-cyan-300">Ogni giorno più intelligente.</span>
               </p>
 
               {/* Features list MOBILE - sotto il claim */}
@@ -267,9 +273,9 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 
                 {/* Feature sicure */}
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
-                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
+                <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
                 <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
               </div>
 
@@ -284,7 +290,7 @@ Come ci ha conosciuto: ${form.comeConosciuto}
             </div>
 
             {/* Colonna centrale: Features list DESKTOP */}
-            <div className="hidden lg:block space-y-2 text-base whitespace-nowrap px-3">
+            <div className="hidden lg:block lg:col-span-1 space-y-2 text-sm xl:text-base">
               {/* Feature intelligenti */}
               <p className="text-cyan-400">• Ottimizzazione pianificazione</p>
               <p className="text-cyan-400">• Suggerimenti proattivi</p>
@@ -293,14 +299,14 @@ Come ci ha conosciuto: ${form.comeConosciuto}
               
               {/* Feature sicure */}
               <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Modalità Voce e Guida Sicura</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Zero Data Retention sul Server</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Crittografia End-to-End</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant by design</p>
-              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Made ❤️ in Italy</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Dati cifrati end-to-end</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• Stats e Reportistica</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• GDPR-compliant</p>
+              <p className="text-transparent bg-clip-text bg-gradient-to-r from-emerald-400 to-teal-400">• From ❤️ Italy</p>
             </div>
 
             {/* Colonna destra: Animated Mockup */}
-            <div className="flex justify-center">
+            <div className="hidden lg:flex lg:col-span-1 justify-center">
               <AnimatedMockup />
             </div>
           </div>
@@ -404,10 +410,12 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Crittografia end-to-end (AES-256)
                 </li>
-                <li className="flex items-center gap-3 text-slate-300">
+                
+                {/* <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Zero-knowledge: nemmeno noi leggiamo i tuoi dati
-                </li>
+                </li> */}
+                
                 <li className="flex items-center gap-3 text-slate-300">
                   <span className="w-6 h-6 bg-green-500/20 rounded-full flex items-center justify-center text-green-400 text-sm">✓</span>
                   Conforme GDPR
@@ -435,51 +443,47 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                 
                 {/* Visual representation - dati realmente cifrati */}
                 <div className="space-y-2">
-                  <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
-                    <span className="text-lg">🏢</span>
-                    <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Nome cliente/azienda</p>
-                      <p className="text-green-400 font-mono text-xs">████████████</p>
-                    </div>
-                    <span className="text-green-400 text-sm">🔒</span>
-                  </div>
+ 
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">👤</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Nome contatto</p>
-                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                      <p className="text-slate-500 text-[14px]">Nome contatto</p>
+                      <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
+                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📧</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Email</p>
-                      <p className="text-green-400 font-mono text-xs">████████████████</p>
+                      <p className="text-slate-500 text-[14px]">Email</p>
+                      <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
+                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📞</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Telefono</p>
-                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                      <p className="text-slate-500 text-[14px]">Telefono</p>
+                      <p className="text-green-400 font-mono text-xs">XXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
+                  
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">📍</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">Indirizzo</p>
-                      <p className="text-green-400 font-mono text-xs">████████████████</p>
+                      <p className="text-slate-500 text-[14px]">Via e Numero civico</p>
+                      <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
                   <div className="bg-slate-900 rounded-lg p-2.5 flex items-center gap-3">
                     <span className="text-lg">🏛️</span>
                     <div className="flex-1">
-                      <p className="text-slate-500 text-[10px]">P.IVA</p>
-                      <p className="text-green-400 font-mono text-xs">██████████</p>
+                      <p className="text-slate-500 text-[14px]">P.IVA</p>
+                      <p className="text-green-400 font-mono text-xs">XXXXXXXXXXXXXXXXXXX</p>
                     </div>
                     <span className="text-green-400 text-sm">🔒</span>
                   </div>
@@ -576,16 +580,16 @@ Come ci ha conosciuto: ${form.comeConosciuto}
         <div className="max-w-3xl mx-auto px-4">
           <div className="text-center mb-8">
             <div className="inline-flex items-center gap-2 px-5 py-2 bg-amber-500/20 border border-amber-500/50 rounded-full text-amber-400 text-lg font-bold mb-6">
-              🚀 BETA PER PRO SELEZIONATI
+              🚀 BETA - SELEZIONE AGENTI
             </div>
             
             <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
               Candidati al programma Beta
             </h2>
             <p className="text-slate-300 text-lg">
-              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la fase Beta testing di REPING.
+              Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la  BETA II testing di REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">accesso completo gratuito</strong> + supporto diretto con il team.
+              Se selezionato: <strong className="text-amber-400">accesso completo gratuito per un anno</strong> + customizzazione diretta team.
             </p>
           </div>
 
@@ -803,6 +807,20 @@ Come ci ha conosciuto: ${form.comeConosciuto}
                   value={form.comeConosciuto}
                   onChange={e => updateForm("comeConosciuto", e.target.value)}
                   placeholder="es. LinkedIn, passaparola, ricerca Google, altro..."
+                  className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
+              {/* Sezione: Cosa ti interessa */}
+              <div className="mb-8">
+                <h3 className="text-white font-semibold mb-4 flex items-center gap-2">
+                  <span className="text-xl">💭</span> Cosa ti interessa faccia davvero bene REPING?
+                </h3>
+                <textarea
+                  value={form.interesseFunzionalita}
+                  onChange={e => updateForm("interesseFunzionalita", e.target.value)}
+                  placeholder="es. Risparmio tempo nella pianificazione, suggerimenti vendite personalizzate, sicurezza alla guida, analisi dati..."
+                  rows={3}
                   className="w-full px-4 py-2.5 bg-slate-900 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500"
                 />
               </div>
