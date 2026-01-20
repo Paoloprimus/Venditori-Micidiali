@@ -3,7 +3,7 @@
 -- ═══════════════════════════════════════════════════════════════════════════
 -- Data: 2026-01-20
 -- Descrizione: 
---   - Assicura che la colonna `name` sia disponibile per RAG
+--   - AGGIUNGE la colonna `name` per memorizzare il nome in chiaro
 --   - Aggiunge tabella conversation_history per logging (prep Fase 2)
 --   - Aggiunge indici per search su name e notes
 -- 
@@ -11,9 +11,11 @@
 --       La migrazione dati avviene client-side tramite /admin/migrate-names
 -- ═══════════════════════════════════════════════════════════════════════════
 
--- 1. Assicura che name possa essere NULL temporaneamente durante migrazione
--- (già NOT NULL nello schema, ma alcuni record potrebbero avere solo name_enc)
-ALTER TABLE accounts ALTER COLUMN name DROP NOT NULL;
+-- 1. AGGIUNGI colonna name (in chiaro) - può essere NULL durante migrazione
+ALTER TABLE accounts 
+  ADD COLUMN IF NOT EXISTS name TEXT;
+
+COMMENT ON COLUMN accounts.name IS 'Nome attività in chiaro (per RAG e ricerca)';
 
 -- 2. Aggiungi colonna per tracciare stato migrazione
 ALTER TABLE accounts 
@@ -57,11 +59,11 @@ CREATE POLICY "Users view own history" ON conversation_history
 CREATE POLICY "Users insert own history" ON conversation_history
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 
--- 4. Indici per search full-text su notes (in accounts)
-CREATE INDEX IF NOT EXISTS idx_accounts_note_trgm 
-  ON accounts USING gin (note gin_trgm_ops);
+-- 4. Indici per search full-text su notes (colonna già esistente in accounts)
+CREATE INDEX IF NOT EXISTS idx_accounts_notes_trgm 
+  ON accounts USING gin (notes gin_trgm_ops);
 
--- 5. Indice per search su name (per RAG)
+-- 5. Indice per search su name (per RAG) - dopo che la colonna esiste
 CREATE INDEX IF NOT EXISTS idx_accounts_name_trgm 
   ON accounts USING gin (name gin_trgm_ops);
 
@@ -99,7 +101,7 @@ CREATE OR REPLACE FUNCTION match_accounts(
   account_id uuid,
   name text,
   city text,
-  note text,
+  notes text,
   similarity double precision
 ) 
 LANGUAGE sql STABLE PARALLEL SAFE
@@ -108,7 +110,7 @@ AS $$
     a.id as account_id,
     a.name,
     a.city,
-    a.note,
+    a.notes,
     1 - (ae.embedding <=> query_embedding) as similarity
   FROM account_embeddings ae
   JOIN accounts a ON a.id = ae.account_id
