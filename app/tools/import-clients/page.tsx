@@ -51,6 +51,7 @@ type CsvRow = {
   contact_name?: string;
   city?: string;
   address?: string;
+  postal_code?: string;
   tipo_locale?: string;
   phone?: string;
   email?: string;
@@ -77,17 +78,18 @@ type ImportStep = "upload" | "mapping" | "preview" | "importing" | "complete";
 // Mapping: colonna CSV -> campo app
 type ColumnMapping = Record<string, string | undefined>;
 
-// Auto-detection intelligente delle colonne
+// Auto-detection intelligente delle colonne (estesa per AI-assisted import)
 const COLUMN_ALIASES: Record<string, string[]> = {
-  name: ["name", "nome", "ragione sociale", "azienda", "cliente", "company", "business name"],
-  contact_name: ["contact_name", "contatto", "nome contatto", "referente", "contact", "person"],
-  city: ["city", "città", "citta", "comune", "location"],
-  address: ["address", "indirizzo", "via", "street", "location"],
-  tipo_locale: ["tipo_locale", "tipo", "type", "categoria", "category"],
-  phone: ["phone", "telefono", "tel", "mobile", "cellulare"],
-  email: ["email", "mail", "e-mail", "posta"],
-  vat_number: ["vat_number", "p.iva", "piva", "partita iva", "vat", "tax id"],
-  notes: ["notes", "note", "commenti", "comments", "memo"],
+  name: ["name", "nome", "ragione sociale", "azienda", "cliente", "company", "business name", "rag.soc", "rag soc", "denominazione", "ditta", "società", "societa", "locale"],
+  contact_name: ["contact_name", "contatto", "nome contatto", "referente", "contact", "person", "rif", "rif.to", "riferimento", "responsabile"],
+  city: ["city", "città", "citta", "comune", "location", "località", "localita", "paese"],
+  address: ["address", "indirizzo", "via", "street", "sede", "ubicazione"],
+  postal_code: ["postal_code", "cap", "zip", "codice postale"],
+  tipo_locale: ["tipo_locale", "tipo", "type", "categoria", "category", "settore", "attività", "attivita"],
+  phone: ["phone", "telefono", "tel", "mobile", "cellulare", "cell", "numero", "recapito"],
+  email: ["email", "mail", "e-mail", "posta", "pec"],
+  vat_number: ["vat_number", "p.iva", "piva", "partita iva", "vat", "tax id", "cf", "codice fiscale"],
+  notes: ["notes", "note", "commenti", "comments", "memo", "osservazioni", "annotazioni"],
   latitude: ["latitude", "lat", "latitudine"],
   longitude: ["longitude", "lon", "lng", "longitudine"],
 };
@@ -299,14 +301,87 @@ export default function ImportClientsPage() {
     }
   };
 
-  // Preview con validazione
+  // ==================== NORMALIZZAZIONE INTELLIGENTE ====================
+  
+  // Normalizza numero di telefono
+  const normalizePhone = (phone: string): string => {
+    if (!phone) return "";
+    // Rimuovi tutto tranne numeri e +
+    let cleaned = phone.replace(/[^\d+]/g, "");
+    // Se inizia con 00, sostituisci con +
+    if (cleaned.startsWith("00")) {
+      cleaned = "+" + cleaned.slice(2);
+    }
+    // Se non ha prefisso e ha 10 cifre, aggiungi +39
+    if (!cleaned.startsWith("+") && cleaned.length >= 9 && cleaned.length <= 11) {
+      cleaned = "+39" + cleaned;
+    }
+    // Formatta: +39 XXX XXX XXXX
+    if (cleaned.startsWith("+39") && cleaned.length >= 12) {
+      const num = cleaned.slice(3);
+      return `+39 ${num.slice(0, 3)} ${num.slice(3, 6)} ${num.slice(6)}`.trim();
+    }
+    return cleaned || phone; // Ritorna originale se non normalizzabile
+  };
+
+  // Normalizza email
+  const normalizeEmail = (email: string): string => {
+    if (!email) return "";
+    return email.toLowerCase().trim();
+  };
+
+  // Parse indirizzo composto (es: "Via Roma 123, 37100 Verona")
+  const parseAddress = (fullAddress: string, existingCity?: string): { 
+    address: string; 
+    city: string; 
+    postal_code: string; 
+  } => {
+    if (!fullAddress) return { address: "", city: existingCity || "", postal_code: "" };
+    
+    let address = fullAddress.trim();
+    let city = existingCity || "";
+    let postal_code = "";
+    
+    // Pattern: cerca CAP (5 cifre)
+    const capMatch = address.match(/\b(\d{5})\b/);
+    if (capMatch) {
+      postal_code = capMatch[1];
+      address = address.replace(capMatch[0], "").trim();
+    }
+    
+    // Pattern: cerca città dopo virgola o CAP
+    // Es: "Via Roma 123, Verona" o "Via Roma 123 - Verona"
+    const cityPatterns = [
+      /,\s*([A-Za-zÀ-ú\s]+)$/,  // dopo virgola
+      /-\s*([A-Za-zÀ-ú\s]+)$/,   // dopo trattino
+      /\b(Milano|Roma|Napoli|Torino|Verona|Padova|Bologna|Firenze|Brescia|Venezia|Bergamo|Modena|Parma|Reggio Emilia|Trento|Bolzano|Trieste|Genova|Palermo|Catania|Bari)\b/i, // città comuni
+    ];
+    
+    if (!city) {
+      for (const pattern of cityPatterns) {
+        const match = address.match(pattern);
+        if (match) {
+          city = match[1].trim();
+          address = address.replace(match[0], "").trim();
+          break;
+        }
+      }
+    }
+    
+    // Rimuovi virgole/trattini finali
+    address = address.replace(/[,\-\s]+$/, "").trim();
+    
+    return { address, city, postal_code };
+  };
+
+  // Preview con validazione RILASSATA + normalizzazione
   const handlePreview = () => {
     const processed: ProcessedClient[] = [];
 
     for (let i = 0; i < rawData.length; i++) {
       const rawRow = rawData[i];
       const mappedRow: CsvRow = {};
-      const errors: string[] = [];
+      const warnings: string[] = [];
 
       // Applica mapping
       for (const [csvCol, appField] of Object.entries(mapping)) {
@@ -315,25 +390,58 @@ export default function ImportClientsPage() {
         }
       }
 
-      // Validazione campi obbligatori
+      // ========== NORMALIZZAZIONE INTELLIGENTE ==========
+      
+      // Normalizza telefono
+      if (mappedRow.phone) {
+        mappedRow.phone = normalizePhone(mappedRow.phone);
+      }
+      
+      // Normalizza email
+      if (mappedRow.email) {
+        mappedRow.email = normalizeEmail(mappedRow.email);
+      }
+      
+      // Parse indirizzo composto → estrai city e postal_code se mancanti
+      if (mappedRow.address && (!mappedRow.city || !mappedRow.postal_code)) {
+        const parsed = parseAddress(mappedRow.address, mappedRow.city);
+        if (!mappedRow.city && parsed.city) {
+          mappedRow.city = parsed.city;
+        }
+        if (!mappedRow.postal_code && parsed.postal_code) {
+          mappedRow.postal_code = parsed.postal_code;
+        }
+        // Aggiorna indirizzo pulito
+        if (parsed.address) {
+          mappedRow.address = parsed.address;
+        }
+      }
+
+      // ========== VALIDAZIONE RILASSATA ==========
+      // Solo il nome è VERAMENTE obbligatorio
+      
+      const errors: string[] = [];
+      
       if (!mappedRow.name || mappedRow.name.trim() === "") {
         errors.push("Nome Cliente mancante");
       }
-      if (!mappedRow.contact_name || mappedRow.contact_name.trim() === "") {
-        errors.push("Nome Contatto mancante");
+      
+      // Gli altri sono solo warning (non bloccanti)
+      if (!mappedRow.contact_name) {
+        warnings.push("Contatto mancante");
       }
-      if (!mappedRow.phone || mappedRow.phone.trim() === "") {
-        errors.push("Telefono mancante");
+      if (!mappedRow.phone && !mappedRow.email) {
+        warnings.push("Nessun recapito (tel/email)");
       }
-      if (!mappedRow.address || mappedRow.address.trim() === "") {
-        errors.push("Indirizzo mancante");
+      if (!mappedRow.address && !mappedRow.city) {
+        warnings.push("Indirizzo/città mancante");
       }
 
       processed.push({
         ...mappedRow,
         rowIndex: i + 1,
-        isValid: errors.length === 0,
-        errors,
+        isValid: errors.length === 0, // Valido se ha almeno il nome
+        errors: [...errors, ...warnings.map(w => `⚠️ ${w}`)],
       });
     }
 
@@ -822,12 +930,13 @@ export default function ImportClientsPage() {
                         >
                           <option value="">Scegli dato</option>
                           <option value="name">Nome Cliente *</option>
-                          <option value="contact_name">Nome Contatto *</option>
-                          <option value="phone">Telefono *</option>
-                          <option value="address">Indirizzo *</option>
+                          <option value="contact_name">Nome Contatto</option>
+                          <option value="phone">Telefono</option>
+                          <option value="address">Indirizzo</option>
+                          <option value="city">Città</option>
+                          <option value="postal_code">CAP</option>
                           <option value="email">Email</option>
                           <option value="vat_number">P.IVA</option>
-                          <option value="city">Città</option>
                           <option value="tipo_locale">Tipo Locale</option>
                           <option value="notes">Note</option>
                         </select>
@@ -865,7 +974,7 @@ export default function ImportClientsPage() {
 
             <div style={{ marginTop: 24, padding: 16, background: "#eff6ff", borderRadius: 8, border: "1px solid #bfdbfe" }}>
               <p style={{ fontSize: 13, color: "#1e40af" }}>
-                <strong>💡 Suggerimento:</strong> Guarda i valori nella prima riga per capire a quale campo corrisponde ogni colonna. I campi con * sono obbligatori.
+                <strong>💡 Suggerimento:</strong> Guarda i valori nella prima riga per capire a quale campo corrisponde ogni colonna. Solo il <strong>Nome Cliente</strong> è obbligatorio - gli altri campi possono essere aggiunti in seguito.
               </p>
             </div>
 
