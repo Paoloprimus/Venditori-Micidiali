@@ -746,7 +746,7 @@ ${form.interesseFunzionalita || "Non specificato"}
                 </h3>
                 
                 <div className="mb-4">
-                  <label className="block text-slate-400 text-sm mb-2">Strumenti attuali per gestire i clienti * (seleziona tutti)</label>
+                  <label className="block text-slate-400 text-sm mb-2">Strumenti attuali per gestire i clienti *</label>
                   <div className="flex flex-wrap gap-2">
                     {["CRM", "Excel", "App", "Carta", "Misto"].map(strumento => (
                       <button
@@ -844,7 +844,7 @@ ${form.interesseFunzionalita || "Non specificato"}
                     <a href="https://reping.app/legal/privacy" target="_blank" className="text-blue-400 hover:underline">
                       Privacy Policy
                     </a>
-                    . Comprendo che in caso di non selezione i miei dati saranno cancellati. *
+                    . *
                   </span>
                 </label>
 
