@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
       .from("accounts")
       .select("id")
       .eq("user_id", user.id)
-      .eq("custom->>is_demo", "true");
+      .contains("custom", { is_demo: true });
 
     if (findError) {
       throw new Error(`Errore ricerca account demo: ${findError.message}`);
@@ -68,7 +68,7 @@ export async function POST(req: NextRequest) {
       .from("accounts")
       .delete({ count: "exact" })
       .eq("user_id", user.id)
-      .eq("custom->>is_demo", "true");
+      .contains("custom", { is_demo: true });
 
     if (deleteError) {
       throw new Error(`Errore cancellazione account: ${deleteError.message}`);
@@ -108,7 +108,7 @@ export async function GET(req: NextRequest) {
       .from("accounts")
       .select("id", { count: "exact", head: true })
       .eq("user_id", user.id)
-      .eq("custom->>is_demo", "true");
+      .contains("custom", { is_demo: true });
 
     return NextResponse.json({
       hasDemoData: (count || 0) > 0,

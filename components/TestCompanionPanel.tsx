@@ -115,10 +115,13 @@ export default function TestCompanionPanel() {
   const dragRef = useRef<{ startX: number; startY: number; startPosX: number; startPosY: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
 
-  // 🔒 Verifica ruolo utente (solo admin/tester vedono il pannello)
+  // 🔒 Verifica ruolo utente (SOLO admin vede il pannello)
   useEffect(() => {
     async function checkUserRole() {
       try {
+        // Verifica anche se c'è il flag manuale in localStorage (per sviluppo)
+        const devOverride = localStorage.getItem('reping:testPanelEnabled') === 'true';
+        
         const { data: { user } } = await supabase.auth.getUser();
         if (!user) {
           setCanShow(false);
@@ -131,13 +134,15 @@ export default function TestCompanionPanel() {
           .eq('id', user.id)
           .single();
         
-        // Solo admin e tester vedono il pannello
-        const allowedRoles = ['admin', 'tester'];
-        if (profile?.role && allowedRoles.includes(profile.role)) {
+        // 🔒 SOLO admin vede il pannello (rimosso 'tester')
+        const isAdmin = profile?.role === 'admin';
+        
+        if (isAdmin || devOverride) {
           setCanShow(true);
-          console.log('[TestPanel] 🧪 Pannello abilitato per ruolo:', profile.role);
         } else {
           setCanShow(false);
+          // Pulisci localStorage se non è admin
+          localStorage.removeItem('reping:testPanelEnabled');
         }
       } catch (e) {
         console.log('[TestPanel] Errore verifica ruolo:', e);
