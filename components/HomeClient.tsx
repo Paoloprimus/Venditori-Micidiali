@@ -13,6 +13,7 @@ import DialogOverlay from "./home/DialogOverlay";
 import PassphraseDebugPanel from "./PassphraseDebugPanel";
 import WelcomeModal from "./WelcomeModal";
 import OnboardingImport from "./OnboardingImport";
+import DemoBanner from "./DemoBanner";
 import GuidedClientCreationDialog from "./GuidedClientCreationDialog";
 
 import { useConversation } from "../app/context/ConversationContext";
@@ -1054,6 +1055,9 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
       {/* 📋 Onboarding Import Clienti (dopo welcome) */}
       <OnboardingImport userName={userName} />
+
+      {/* 🧪 Banner Demo (visibile quando ci sono dati fake) */}
+      <DemoBanner />
 
       {/* 🎙️ Dialogo Guidato Creazione Cliente */}
       <GuidedClientCreationDialog

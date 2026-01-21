@@ -41,6 +41,7 @@ import TopBar from "@/components/home/TopBar";
 import { supabase } from "@/lib/supabase/client";
 import { useToast } from "@/components/ui/Toast";
 import { geocodeAddressWithFallback } from "@/lib/geocoding";
+import { notifyDemoCleared } from "@/components/DemoBanner";
 
 // Aggiungo l'import per crypto se non esiste. Se l'ambiente non ha crypto.randomUUID() disponibile globalmente,
 // questo potrebbe essere necessario. Tuttavia, in ambienti moderni come Next.js client side, è spesso globale.
@@ -192,6 +193,10 @@ export default function ImportClientsPage() {
       toast(`✅ ${result.message}`, "success");
       setHasDemoData(false);
       setDemoDataCount(0);
+      
+      // Notifica il DemoBanner che i dati demo sono stati cancellati
+      notifyDemoCleared();
+      
       return true;
     } catch (e: any) {
       toast(`❌ ${e.message}`, "error");
