@@ -72,8 +72,11 @@ export async function POST(req: NextRequest) {
   // Auth check
   const { data: { user }, error: authErr } = await supabase.auth.getUser();
   if (authErr || !user) {
+    console.error("[Demo Seed] Auth error:", authErr);
     return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
   }
+
+  console.log("[Demo Seed] Starting seed for user:", user.id);
 
   try {
     const results = {
@@ -88,6 +91,8 @@ export async function POST(req: NextRequest) {
     
     for (const client of DEMO_CLIENTS) {
       try {
+        console.log("[Demo Seed] Inserting client:", client.name);
+        
         const { data: inserted, error } = await supabase
           .from("accounts")
           .insert({
@@ -103,14 +108,16 @@ export async function POST(req: NextRequest) {
           .single();
 
         if (error) {
-          console.error("[Demo Seed] Errore insert client:", error);
+          console.error("[Demo Seed] Errore insert client:", client.name, error);
           results.errors.push(`Cliente ${client.name}: ${error.message}`);
           continue;
         }
 
+        console.log("[Demo Seed] Inserted client:", client.name, "with id:", inserted.id);
         insertedClients.push({ id: inserted.id, data: client });
         results.clients++;
       } catch (e: any) {
+        console.error("[Demo Seed] Exception for client:", client.name, e);
         results.errors.push(`Cliente ${client.name}: ${e.message}`);
       }
     }
@@ -172,6 +179,18 @@ export async function POST(req: NextRequest) {
           // Ignora errori singole note
         }
       }
+    }
+
+    console.log("[Demo Seed] Completed:", results);
+
+    // Se non è stato inserito nessun cliente, considera un errore
+    if (results.clients === 0) {
+      return NextResponse.json({
+        success: false,
+        error: "Nessun cliente inserito",
+        details: results.errors,
+        ...results,
+      }, { status: 500 });
     }
 
     return NextResponse.json({

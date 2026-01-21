@@ -79,9 +79,14 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
     setLoadingFakeData(true);
     try {
       const response = await fetch("/api/demo/seed", { method: "POST" });
-      if (!response.ok) {
-        const err = await response.json();
-        throw new Error(err.error || "Errore caricamento dati demo");
+      const result = await response.json();
+      
+      console.log("[OnboardingImport] Demo seed result:", result);
+      
+      if (!response.ok || !result.success) {
+        const errorMsg = result.error || "Errore caricamento dati demo";
+        const details = result.details ? `\n\nDettagli:\n${result.details.join("\n")}` : "";
+        throw new Error(errorMsg + details);
       }
       
       localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ 
@@ -96,6 +101,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
       window.location.reload();
       
     } catch (err: any) {
+      console.error("[OnboardingImport] Error loading fake data:", err);
       alert("Errore: " + err.message);
     } finally {
       setLoadingFakeData(false);
