@@ -24,6 +24,8 @@ export default function WelcomeModal({ userName }: WelcomeModalProps) {
   const handleClose = () => {
     localStorage.setItem(WELCOME_SHOWN_KEY, new Date().toISOString());
     setShow(false);
+    // Emetti evento custom per triggerare OnboardingImport
+    window.dispatchEvent(new CustomEvent("reping:welcomeClosed"));
   };
 
   if (!show) return null;

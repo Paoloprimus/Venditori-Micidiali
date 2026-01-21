@@ -32,7 +32,7 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { parse } from "csv-parse/browser/esm/sync";
 import readXlsxFile from "read-excel-file";
@@ -121,12 +121,40 @@ export default function ImportClientsPage() {
   const [importProgress, setImportProgress] = useState(0);
   const [parsingProgress, setParsingProgress] = useState<string | null>(null);
   const [fileType, setFileType] = useState<string>("");
+  const [prefilledFileName, setPrefilledFileName] = useState<string | null>(null);
   const [importResults, setImportResults] = useState<{
     success: number;
     failed: number;
     duplicates: number;
     errors: string[];
   }>({ success: 0, failed: 0, duplicates: 0, errors: [] });
+
+  // 🆕 Carica dati pre-analizzati da onboarding (se presenti)
+  useEffect(() => {
+    try {
+      const prefilled = sessionStorage.getItem("reping:import_prefilled");
+      if (prefilled) {
+        const data = JSON.parse(prefilled);
+        if (data.headers && data.data && data.mapping) {
+          // Carica i dati
+          setCsvHeaders(data.headers);
+          setRawData(data.data);
+          setMapping(data.mapping);
+          setPrefilledFileName(data.fileName || "file pre-caricato");
+          
+          // Vai direttamente allo step mapping
+          setStep("mapping");
+          
+          // Pulisci sessionStorage
+          sessionStorage.removeItem("reping:import_prefilled");
+          
+          toast("✅ Dati pre-analizzati caricati! Verifica il mapping e prosegui.", "success");
+        }
+      }
+    } catch (e) {
+      console.warn("[ImportClients] Errore caricamento dati prefilled:", e);
+    }
+  }, []);
 
   // Verifica che il crypto sia pronto (esposto dal CryptoProvider su window.cryptoSvc)
   const getCryptoService = () => {

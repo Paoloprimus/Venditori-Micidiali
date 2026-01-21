@@ -49,13 +49,18 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
     // Check iniziale
     checkShow();
     
-    // Ascolta quando il welcome viene chiuso
+    // Ascolta quando il welcome viene chiuso (custom event)
     const handleWelcomeClosed = () => {
       setTimeout(checkShow, 100);
     };
     
-    window.addEventListener("storage", checkShow);
-    return () => window.removeEventListener("storage", checkShow);
+    window.addEventListener("reping:welcomeClosed", handleWelcomeClosed);
+    window.addEventListener("storage", checkShow); // Per altre tab
+    
+    return () => {
+      window.removeEventListener("reping:welcomeClosed", handleWelcomeClosed);
+      window.removeEventListener("storage", checkShow);
+    };
   }, []);
 
   const firstName = userName.split(" ")[0] || "Agente";
@@ -84,6 +89,9 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
       if (data.length === 0) {
         throw new Error("Il file sembra vuoto. Controlla che contenga dati.");
       }
+      
+      // Salva i dati raw per passarli alla pagina import
+      setRawFileData({ headers, data });
       
       setStep("analyzing");
       setProgress(40);
@@ -216,12 +224,19 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
     };
   };
 
+  // Stato per salvare i dati raw del file
+  const [rawFileData, setRawFileData] = useState<{ headers: string[]; data: any[] } | null>(null);
+
   const handleProceed = () => {
-    // Salva dati per la pagina import e naviga
-    sessionStorage.setItem("reping:import_analysis", JSON.stringify({
-      file: file?.name,
-      analysis,
-    }));
+    // Salva TUTTI i dati per la pagina import
+    if (rawFileData && analysis) {
+      sessionStorage.setItem("reping:import_prefilled", JSON.stringify({
+        headers: rawFileData.headers,
+        data: rawFileData.data,
+        mapping: analysis.mapping,
+        fileName: file?.name,
+      }));
+    }
     
     localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ 
       completed: true,
