@@ -34,6 +34,10 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
   const [progress, setProgress] = useState(0);
   const [error, setError] = useState<string | null>(null);
   
+  // Stato per il popup dei dati fake
+  const [showFakeDataPopup, setShowFakeDataPopup] = useState(false);
+  const [loadingFakeData, setLoadingFakeData] = useState(false);
+  
   // Mostra solo se welcome è già stato mostrato e onboarding non completato
   useEffect(() => {
     const checkShow = () => {
@@ -65,11 +69,46 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
 
   const firstName = userName.split(" ")[0] || "Agente";
 
-  const handleSkip = () => {
+  // Quando l'utente clicca "Lista non ancora pronta"
+  const handleSkipToFakePopup = () => {
+    setShowFakeDataPopup(true);
+  };
+
+  // Carica dati fake
+  const handleLoadFakeData = async () => {
+    setLoadingFakeData(true);
+    try {
+      const response = await fetch("/api/demo/seed", { method: "POST" });
+      if (!response.ok) {
+        const err = await response.json();
+        throw new Error(err.error || "Errore caricamento dati demo");
+      }
+      
+      localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ 
+        usedDemo: true, 
+        at: new Date().toISOString() 
+      }));
+      
+      setShowFakeDataPopup(false);
+      setShow(false);
+      
+      // Refresh per caricare i dati
+      window.location.reload();
+      
+    } catch (err: any) {
+      alert("Errore: " + err.message);
+    } finally {
+      setLoadingFakeData(false);
+    }
+  };
+
+  // Skip definitivo senza dati fake
+  const handleSkipCompletely = () => {
     localStorage.setItem(ONBOARDING_KEY, JSON.stringify({ 
       skipped: true, 
       at: new Date().toISOString() 
     }));
+    setShowFakeDataPopup(false);
     setShow(false);
   };
 
@@ -261,7 +300,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
         <div 
           className="px-6 py-6 text-white"
           style={{ 
-            background: "linear-gradient(135deg, #059669 0%, #0d9488 100%)" 
+            background: "linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)" 
           }}
         >
           <div className="flex items-center gap-3">
@@ -270,7 +309,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
               <h1 className="text-xl font-bold">
                 Ciao {firstName}, iniziamo!
               </h1>
-              <p className="text-emerald-100 text-sm">
+              <p className="text-blue-100 text-sm">
                 Importazione automatica clienti
               </p>
             </div>
@@ -290,7 +329,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
               <p className="text-slate-600 text-sm leading-relaxed">
                 Se puoi, carica la lista clienti in formato <strong>Excel</strong> o <strong>CSV</strong>.
                 <br />
-                Altrimenti carica quello che hai: <span className="text-emerald-600 font-medium">vediamo cosa si può fare!</span>
+                Altrimenti carica quello che hai: <span className="text-blue-600 font-medium">vediamo cosa si può fare!</span>
               </p>
               
               {error && (
@@ -302,7 +341,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
               {/* Upload area */}
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-emerald-300 bg-emerald-50 rounded-xl p-8 text-center cursor-pointer hover:bg-emerald-100 hover:border-emerald-400 transition-colors"
+                className="border-2 border-dashed border-blue-300 bg-blue-50 rounded-xl p-8 text-center cursor-pointer hover:bg-blue-100 hover:border-blue-400 transition-colors"
               >
                 <div className="text-5xl mb-3">📂</div>
                 <p className="font-semibold text-slate-800">
@@ -338,7 +377,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
               
               <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                 <div 
-                  className="h-full bg-emerald-500 transition-all duration-500"
+                  className="h-full bg-blue-500 transition-all duration-500"
                   style={{ width: `${progress}%` }}
                 />
               </div>
@@ -348,7 +387,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
           {/* STEP: PREVIEW */}
           {step === "preview" && analysis && (
             <div className="space-y-4">
-              <div className="flex items-center gap-2 text-emerald-600">
+              <div className="flex items-center gap-2 text-blue-600">
                 <span className="text-2xl">✅</span>
                 <span className="font-semibold">Analisi completata!</span>
               </div>
@@ -358,9 +397,9 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
                   <div className="text-2xl font-bold text-slate-800">{analysis.totalRows}</div>
                   <div className="text-xs text-slate-500">Righe totali</div>
                 </div>
-                <div className="bg-emerald-50 rounded-lg p-3 text-center">
-                  <div className="text-2xl font-bold text-emerald-600">{analysis.validRows}</div>
-                  <div className="text-xs text-emerald-600">Clienti riconosciuti</div>
+                <div className="bg-blue-50 rounded-lg p-3 text-center">
+                  <div className="text-2xl font-bold text-blue-600">{analysis.validRows}</div>
+                  <div className="text-xs text-blue-600">Clienti riconosciuti</div>
                 </div>
               </div>
               
@@ -377,7 +416,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
                     >
                       <span className="text-slate-500">{col}</span>
                       <span className="mx-1">→</span>
-                      <span className="font-medium text-emerald-600">{field}</span>
+                      <span className="font-medium text-blue-600">{field}</span>
                     </span>
                   ))}
                 </div>
@@ -405,7 +444,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
           {step === "intro" && (
             <>
               <button
-                onClick={handleSkip}
+                onClick={handleSkipToFakePopup}
                 className="flex-1 py-3 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
               >
                 Lista non ancora pronta
@@ -425,7 +464,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
                 onClick={handleProceed}
                 className="flex-1 py-3 rounded-xl text-white font-bold transition-transform hover:scale-[1.02] active:scale-[0.98]"
                 style={{ 
-                  background: "linear-gradient(135deg, #059669 0%, #0d9488 100%)" 
+                  background: "linear-gradient(135deg, #3b82f6 0%, #6366f1 100%)" 
                 }}
               >
                 Prosegui all'importazione →
@@ -447,6 +486,76 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
           }
         }
       `}</style>
+
+      {/* ========== POPUP DATI FAKE ========== */}
+      {showFakeDataPopup && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background: "rgba(0, 0, 0, 0.85)" }}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl"
+            style={{ animation: "fadeInScale 0.3s ease-out" }}
+          >
+            {/* Header */}
+            <div 
+              className="px-6 py-5 text-white"
+              style={{ 
+                background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" 
+              }}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-3xl">🧪</span>
+                <div>
+                  <h2 className="text-lg font-bold">Vuoi provare con dati demo?</h2>
+                </div>
+              </div>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-5">
+              <p className="text-slate-700 text-sm leading-relaxed mb-4">
+                Ricorda che sino a quando il database clienti non è popolato 
+                non potrai testare molte delle funzionalità di REPING.
+              </p>
+              
+              <p className="text-slate-600 text-sm leading-relaxed">
+                Vuoi caricare un <strong>set temporaneo di dati fake</strong> (clienti, visite, note, storico) 
+                per fare un po' di pratica con l'app?
+              </p>
+              
+              <div className="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                <p className="text-amber-800 text-xs">
+                  ⚠️ Quando poi deciderai di importare i tuoi clienti, questi dati demo 
+                  verranno <strong>automaticamente cancellati</strong>.
+                </p>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-5 space-y-2">
+              <button
+                onClick={handleLoadFakeData}
+                disabled={loadingFakeData}
+                className="w-full py-3 rounded-xl text-white font-semibold transition-transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50"
+                style={{ 
+                  background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)" 
+                }}
+              >
+                {loadingFakeData ? "⏳ Caricamento..." : "✅ Sì, fammi provare con i dati demo"}
+              </button>
+              
+              <button
+                onClick={handleSkipCompletely}
+                disabled={loadingFakeData}
+                className="w-full py-3 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
+              >
+                No grazie, faccio un giro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -129,6 +129,29 @@ export default function ImportClientsPage() {
     errors: string[];
   }>({ success: 0, failed: 0, duplicates: 0, errors: [] });
 
+  // 🆕 Stato per dati demo
+  const [hasDemoData, setHasDemoData] = useState(false);
+  const [demoDataCount, setDemoDataCount] = useState(0);
+  const [showDemoConfirm, setShowDemoConfirm] = useState(false);
+  const [clearingDemo, setClearingDemo] = useState(false);
+
+  // 🆕 Verifica presenza dati demo all'avvio
+  useEffect(() => {
+    async function checkDemoData() {
+      try {
+        const res = await fetch("/api/demo/clear");
+        if (res.ok) {
+          const data = await res.json();
+          setHasDemoData(data.hasDemoData);
+          setDemoDataCount(data.demoCount || 0);
+        }
+      } catch (e) {
+        console.warn("[ImportClients] Errore check demo data:", e);
+      }
+    }
+    checkDemoData();
+  }, []);
+
   // 🆕 Carica dati pre-analizzati da onboarding (se presenti)
   useEffect(() => {
     try {
@@ -155,6 +178,46 @@ export default function ImportClientsPage() {
       console.warn("[ImportClients] Errore caricamento dati prefilled:", e);
     }
   }, []);
+
+  // 🆕 Cancella dati demo
+  const clearDemoData = async (): Promise<boolean> => {
+    setClearingDemo(true);
+    try {
+      const res = await fetch("/api/demo/clear", { method: "POST" });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Errore cancellazione dati demo");
+      }
+      const result = await res.json();
+      toast(`✅ ${result.message}`, "success");
+      setHasDemoData(false);
+      setDemoDataCount(0);
+      return true;
+    } catch (e: any) {
+      toast(`❌ ${e.message}`, "error");
+      return false;
+    } finally {
+      setClearingDemo(false);
+    }
+  };
+
+  // 🆕 Gestione click su Importa (verifica demo data prima)
+  const handleImportClick = () => {
+    if (hasDemoData) {
+      setShowDemoConfirm(true);
+    } else {
+      handleImport();
+    }
+  };
+
+  // 🆕 Conferma cancellazione demo e procedi
+  const handleConfirmClearAndImport = async () => {
+    setShowDemoConfirm(false);
+    const cleared = await clearDemoData();
+    if (cleared) {
+      handleImport();
+    }
+  };
 
   // Verifica che il crypto sia pronto (esposto dal CryptoProvider su window.cryptoSvc)
   const getCryptoService = () => {
@@ -1110,7 +1173,7 @@ export default function ImportClientsPage() {
                 ← Indietro
               </button>
               <button
-                onClick={handleImport}
+                onClick={handleImportClick}
                 disabled={processedClients.filter(c => c.isValid).length === 0}
                 style={{
                   padding: "10px 20px",
@@ -1171,9 +1234,6 @@ export default function ImportClientsPage() {
                   <strong style={{ color: "#1D4ED8" }}>Geocodificazione in corso...</strong>
                 </div>
                 <div style={{ color: "#1D4ED8", fontSize: 14 }}>{geocodeProgress}</div>
-                <div style={{ marginTop: 8, fontSize: 12, color: "#6B7280" }}>
-                  ⏱️ ~1 secondo per cliente (rate limit OpenStreetMap)
-                </div>
                 <button
                   onClick={() => { geocodingAbortRef.current = true; }}
                   style={{
@@ -1289,6 +1349,111 @@ export default function ImportClientsPage() {
       <LeftDrawer open={leftOpen} onClose={closeLeft} onSelect={() => {}} />
       <RightDrawer open={rightOpen} content={rightContent} onClose={closeRight} />
     </div>
+
+    {/* 🆕 Popup conferma cancellazione dati demo */}
+    {showDemoConfirm && (
+      <div 
+        style={{
+          position: "fixed",
+          inset: 0,
+          zIndex: 9999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 16,
+          background: "rgba(0, 0, 0, 0.7)",
+        }}
+      >
+        <div 
+          style={{
+            background: "white",
+            borderRadius: 16,
+            maxWidth: 420,
+            width: "100%",
+            overflow: "hidden",
+            boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+          }}
+        >
+          {/* Header */}
+          <div style={{ 
+            padding: "20px 24px", 
+            background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+            color: "white",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <span style={{ fontSize: 28 }}>⚠️</span>
+              <div>
+                <h2 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+                  Dati demo presenti
+                </h2>
+                <p style={{ fontSize: 13, margin: 0, opacity: 0.9 }}>
+                  {demoDataCount} clienti demo nel database
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Body */}
+          <div style={{ padding: 24 }}>
+            <p style={{ color: "#374151", fontSize: 14, lineHeight: 1.6, margin: 0 }}>
+              Stai per importare i tuoi clienti veri. I <strong>{demoDataCount} clienti demo</strong> (con relative visite e note) verranno <strong>cancellati definitivamente</strong> prima dell'importazione.
+            </p>
+            
+            <div style={{ 
+              marginTop: 16, 
+              padding: 12, 
+              background: "#FEF3C7", 
+              border: "1px solid #FCD34D", 
+              borderRadius: 8,
+            }}>
+              <p style={{ color: "#92400E", fontSize: 13, margin: 0 }}>
+                ⚠️ Questa operazione non può essere annullata.
+              </p>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div style={{ padding: "16px 24px", display: "flex", gap: 12 }}>
+            <button
+              onClick={() => setShowDemoConfirm(false)}
+              disabled={clearingDemo}
+              style={{
+                flex: 1,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "1px solid #d1d5db",
+                background: "white",
+                color: "#374151",
+                fontSize: 14,
+                fontWeight: 500,
+                cursor: clearingDemo ? "not-allowed" : "pointer",
+                opacity: clearingDemo ? 0.5 : 1,
+              }}
+            >
+              Annulla
+            </button>
+            <button
+              onClick={handleConfirmClearAndImport}
+              disabled={clearingDemo}
+              style={{
+                flex: 1,
+                padding: "12px 16px",
+                borderRadius: 8,
+                border: "none",
+                background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
+                color: "white",
+                fontSize: 14,
+                fontWeight: 600,
+                cursor: clearingDemo ? "not-allowed" : "pointer",
+                opacity: clearingDemo ? 0.5 : 1,
+              }}
+            >
+              {clearingDemo ? "⏳ Cancellazione..." : "✅ Conferma e importa"}
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
   </>
   );
 }
