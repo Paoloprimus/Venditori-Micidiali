@@ -353,7 +353,7 @@ export default function AnimatedMockup() {
               {/* ========== SCENA 0: IMPORT DATA ========== */}
               {currentVisualId === "import-data" && (
                 <div className="px-4 animate-fadeIn flex flex-col items-center justify-center h-[400px]">
-                  <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl flex items-center justify-center mb-4">
+                  <div className="w-20 h-20 bg-gradient-to-br from-blue-600 to-blue-400 rounded-2xl flex items-center justify-center mb-4">
                     <span className="text-white text-3xl">📄</span>
                   </div>
                   <p className="text-white font-bold text-lg mb-2">Inizia in 2 minuti</p>
@@ -403,7 +403,7 @@ export default function AnimatedMockup() {
                   {subStep > 2 && (
                     <div className="bg-slate-800 rounded-2xl p-3 mb-3 border border-slate-700 animate-slideInLeft">
                       <div className="flex items-start gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-blue-400 rounded-xl flex items-center justify-center flex-shrink-0">
                           <span className="text-white font-bold text-sm">R</span>
                         </div>
                         <div className="flex-1">
@@ -756,7 +756,7 @@ export default function AnimatedMockup() {
 
               {/* ========== SCENA 12: CLAIM ========== */}
               {currentVisualId === "claim" && (
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 flex flex-col items-center justify-center animate-fadeIn rounded-b-[2.5rem]">
+                <div className="absolute inset-0 bg-gradient-to-br from-blue-700 to-blue-500 flex flex-col items-center justify-center animate-fadeIn rounded-b-[2.5rem]">
                   <div className="text-center px-6">
                     <div className={`w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mx-auto mb-4 ${subStep > 2 ? "animate-pulse" : ""}`}>
                       <span className="text-white text-2xl font-bold">R</span>
@@ -802,7 +802,7 @@ export default function AnimatedMockup() {
                 className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-[2.5rem] z-40 cursor-pointer"
                 onClick={startPresentation}
               >
-                <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg">
+                <div className="w-20 h-20 bg-gradient-to-r from-blue-600 to-blue-400 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg">
                   <span className="text-white text-3xl ml-1">▶</span>
                 </div>
               </div>
@@ -826,7 +826,7 @@ export default function AnimatedMockup() {
             onClick={handleProgressClick}
           >
             <div
-              className="h-full bg-gradient-to-r from-blue-500 to-purple-500 transition-all duration-100"
+              className="h-full bg-gradient-to-r from-blue-600 to-blue-400 transition-all duration-100"
               style={{ width: `${Math.min(progressPercent, 100)}%` }}
             />
           </div>

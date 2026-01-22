@@ -594,7 +594,7 @@ ${form.interesseFunzionalita || "Non specificato"}
             <p className="text-slate-300 text-lg">
               Cerchiamo <strong className="text-white">agenti di commercio qualificati</strong> per completare la  BETA II testing di REPING.
               <br />
-              Se selezionato: <strong className="text-amber-400">accesso completo gratuito per un anno</strong> + customizzazione diretta team.
+              Se selezionato: <strong className="text-amber-400">accesso completo gratuito per 3 mesi</strong> + customizzazione diretta team.
             </p>
           </div>
 
