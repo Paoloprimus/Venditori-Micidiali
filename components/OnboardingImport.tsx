@@ -37,6 +37,7 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
   // Stato per il popup dei dati fake
   const [showFakeDataPopup, setShowFakeDataPopup] = useState(false);
   const [loadingFakeData, setLoadingFakeData] = useState(false);
+  const [showTourPrompt, setShowTourPrompt] = useState(false);
   
   // Mostra solo se welcome è già stato mostrato e onboarding non completato
   useEffect(() => {
@@ -101,8 +102,8 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
       setShowFakeDataPopup(false);
       setShow(false);
       
-      // Refresh per caricare i dati
-      window.location.reload();
+      // Mostra popup per tour guidato invece di reload diretto
+      setShowTourPrompt(true);
       
     } catch (err: any) {
       console.error("[OnboardingImport] Error loading fake data:", err);
@@ -561,6 +562,65 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
                 className="w-full py-3 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-colors disabled:opacity-50"
               >
                 No grazie, faccio un giro
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== POPUP TOUR PROMPT ========== */}
+      {showTourPrompt && (
+        <div 
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          style={{ background: "rgba(0, 0, 0, 0.85)" }}
+        >
+          <div 
+            className="bg-white rounded-2xl max-w-md w-full overflow-hidden shadow-2xl"
+            style={{ animation: "fadeInScale 0.3s ease-out" }}
+          >
+            {/* Header */}
+            <div 
+              className="px-6 py-8 text-center text-white"
+              style={{ background: "linear-gradient(135deg, #10b981 0%, #059669 100%)" }}
+            >
+              <div className="text-5xl mb-4">🎉</div>
+              <h2 className="text-2xl font-bold mb-2">Perfetto!</h2>
+              <p className="text-emerald-100">
+                Ho caricato 10 clienti di prova con visite e note
+              </p>
+            </div>
+
+            {/* Body */}
+            <div className="px-6 py-6 text-center">
+              <p className="text-slate-700 text-lg mb-2">
+                Vuoi fare un <strong>giro veloce</strong>?
+              </p>
+              <p className="text-slate-500 text-sm">
+                Ti mostro le 3 cose più importanti in 1 minuto
+              </p>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 pb-6 space-y-2">
+              <button
+                onClick={() => {
+                  setShowTourPrompt(false);
+                  // Trigger il tour guidato
+                  window.dispatchEvent(new CustomEvent("reping:startTour"));
+                }}
+                className="w-full py-4 rounded-xl text-white font-bold text-lg transition-transform hover:scale-[1.02] active:scale-[0.98]"
+                style={{ background: "linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%)" }}
+              >
+                🚀 Sì, mostrami!
+              </button>
+              <button
+                onClick={() => {
+                  setShowTourPrompt(false);
+                  window.location.reload();
+                }}
+                className="w-full py-3 rounded-xl border border-slate-300 text-slate-600 font-medium hover:bg-slate-50 transition-colors"
+              >
+                Faccio da solo
               </button>
             </div>
           </div>

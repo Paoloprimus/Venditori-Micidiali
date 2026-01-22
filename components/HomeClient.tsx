@@ -14,6 +14,7 @@ import PassphraseDebugPanel from "./PassphraseDebugPanel";
 import WelcomeModal from "./WelcomeModal";
 import OnboardingImport from "./OnboardingImport";
 import DemoBanner from "./DemoBanner";
+import GuidedTour from "./GuidedTour";
 import GuidedClientCreationDialog from "./GuidedClientCreationDialog";
 
 import { useConversation } from "../app/context/ConversationContext";
@@ -1055,6 +1056,9 @@ export default function HomeClient({ email, userName }: { email: string; userNam
 
       {/* 📋 Onboarding Import Clienti (dopo welcome) */}
       <OnboardingImport userName={userName} />
+
+      {/* 🎯 Tour Guidato (dopo caricamento dati demo) */}
+      <GuidedTour />
 
       {/* 🧪 Banner Demo (visibile quando ci sono dati fake) */}
       <DemoBanner />

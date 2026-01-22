@@ -89,6 +89,10 @@ export default function WelcomeModal({ userName }: WelcomeModalProps) {
                   🔐 NON PERDERLA! Se la perdi, tutti i dati criptati dei tuoi clienti 
                   saranno IRRECUPERABILI!
                 </p>
+                <p className="text-amber-800 text-xs mt-3 italic">
+                  💡 Se ogni tanto l'app "respira", sta cifrando i tuoi dati. 
+                  È il prezzo della vera privacy.
+                </p>
               </div>
             </div>
           </div>
