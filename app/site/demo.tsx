@@ -609,18 +609,18 @@ export default function AnimatedMockup() {
                   </p>
                   
                   {subStep > 2 && (
-                    <div className="space-y-2 w-full max-w-[200px]">
+                    <div className="space-y-2 w-full max-w-[220px]">
                       <div className="bg-slate-800 rounded-lg p-2 flex items-center gap-2 animate-slideInLeft">
                         <span className="text-green-400">✓</span>
-                        <span className="text-slate-300 text-xs">Clienti cifrati</span>
+                        <span className="text-slate-300 text-xs">Nomi e contatti cifrati</span>
                       </div>
                       <div className="bg-slate-800 rounded-lg p-2 flex items-center gap-2 animate-slideInLeft" style={{ animationDelay: "0.1s" }}>
                         <span className="text-green-400">✓</span>
-                        <span className="text-slate-300 text-xs">Visite cifrate</span>
+                        <span className="text-slate-300 text-xs">Email e telefoni cifrati</span>
                       </div>
                       <div className="bg-slate-800 rounded-lg p-2 flex items-center gap-2 animate-slideInLeft" style={{ animationDelay: "0.2s" }}>
                         <span className="text-green-400">✓</span>
-                        <span className="text-slate-300 text-xs">Note cifrate</span>
+                        <span className="text-slate-300 text-xs">Indirizzi e P.IVA cifrati</span>
                       </div>
                     </div>
                   )}
