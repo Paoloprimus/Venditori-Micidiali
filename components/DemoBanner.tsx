@@ -94,23 +94,24 @@ export default function DemoBanner() {
     );
   }
 
-  // Versione espansa (banner compatto - una riga)
+  // Versione espansa (banner compatto - centrato, non copre bottone chat)
   return (
     <div
       style={{
         position: "fixed",
-        bottom: 0,
-        left: 0,
-        right: 0,
+        bottom: 8,
+        left: "50%",
+        transform: "translateX(-50%)",
         zIndex: 9000,
         background: "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)",
-        boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.1)",
-        padding: "6px 12px",
+        boxShadow: "0 2px 12px rgba(0, 0, 0, 0.15)",
+        padding: "6px 16px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         gap: 12,
-        height: 36,
+        height: 32,
+        borderRadius: 20,
       }}
     >
       {/* Icona e testo compatto */}
