@@ -266,6 +266,10 @@ export function useVoice({
   // Auto-send dopo pausa: timer per rilevare silenzio
   const autoSendTimerRef = useRef<NodeJS.Timeout | null>(null);
   const AUTO_SEND_DELAY_MS = 1200; // 1.2 secondi di silenzio → invio automatico
+  
+  // 🔧 FIX: Safety timeout per resettare dialogSendingRef se rimane bloccato
+  const sendingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const SENDING_TIMEOUT_MS = 15000; // 15 secondi max per una risposta
 
   // ======= SR nativa: avvio/loop robusto =======
   function startNativeSR() {
@@ -416,7 +420,18 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
             finalAccumRef.current = "";
             micActiveRef.current = false;
             try { sr.stop?.(); } catch {}
+            srRef.current = null; // 🔧 FIX: Forza cleanup SR
             console.log('[useVoice] Sending to AI:', payload);
+            
+            // 🔧 FIX: Safety timeout - resetta dopo 15s se bloccato
+            if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
+            sendingTimeoutRef.current = setTimeout(() => {
+              if (dialogSendingRef.current && dialogModeRef.current) {
+                console.warn('[useVoice] ⚠️ Safety timeout: resetting dialogSendingRef');
+                dialogSendingRef.current = false;
+              }
+            }, SENDING_TIMEOUT_MS);
+            
             onSendDirectly(payload).catch((e) => console.error('[useVoice] Send error:', e));
             return;
           }
@@ -444,6 +459,16 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
               // Pausa mic
               micActiveRef.current = false;
               try { sr.stop?.(); } catch {}
+              srRef.current = null; // 🔧 FIX: Forza cleanup SR
+              
+              // 🔧 FIX: Safety timeout
+              if (sendingTimeoutRef.current) clearTimeout(sendingTimeoutRef.current);
+              sendingTimeoutRef.current = setTimeout(() => {
+                if (dialogSendingRef.current && dialogModeRef.current) {
+                  console.warn('[useVoice] ⚠️ Safety timeout (auto-send): resetting dialogSendingRef');
+                  dialogSendingRef.current = false;
+                }
+              }, SENDING_TIMEOUT_MS);
               
               console.log('[useVoice] Auto-send dopo pausa:', payload);
               onSendDirectly(payload).catch((e) => console.error('[useVoice] Send error:', e));
@@ -700,6 +725,12 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
       pauseTimerRef.current = null;
     }
     
+    // 🔧 FIX: Cancella safety timeout
+    if (sendingTimeoutRef.current) {
+      clearTimeout(sendingTimeoutRef.current);
+      sendingTimeoutRef.current = null;
+    }
+    
     stopAll();
     setSpeakerEnabled(false);
   }
@@ -719,6 +750,11 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
         clearTimeout(pauseTimerRef.current);
         pauseTimerRef.current = null;
       }
+      // 🔧 FIX: Cancella safety timeout
+      if (sendingTimeoutRef.current) {
+        clearTimeout(sendingTimeoutRef.current);
+        sendingTimeoutRef.current = null;
+      }
     };
   }, []);
 
@@ -737,16 +773,30 @@ Oppure fai qualsiasi domanda sui tuoi clienti e visite.`;
       
       if (ttsPlaying) {
         // TTS sta parlando → pausa mic
-        console.log("[useVoice] TTS playing, pausing mic");
-        if (srRef.current) { try { srRef.current.stop?.(); } catch {} srRef.current = null; }
+        if (srRef.current) {
+          console.log("[useVoice] TTS playing, pausing mic");
+          try { srRef.current.stop?.(); } catch {} 
+          srRef.current = null;
+        }
         micActiveRef.current = false;
         setIsRecording(false);
         wasPlayingTTSRef.current = true;
         micReadyFeedbackGivenRef.current = false;
+        
+        // 🔧 FIX: Cancella safety timeout quando TTS parte (risposta arrivata)
+        if (sendingTimeoutRef.current) {
+          clearTimeout(sendingTimeoutRef.current);
+          sendingTimeoutRef.current = null;
+        }
       } else if (!isRecording && dialogModeRef.current && !srRef.current && !mrRef.current) {
         // TTS ha finito → riavvia mic
+        // 🔧 FIX: Reset dialogSendingRef QUI, quando siamo pronti a ripartire
+        if (dialogSendingRef.current) {
+          console.log("[useVoice] 🔄 Resetting dialogSendingRef after TTS finished");
+          dialogSendingRef.current = false;
+        }
+        
         console.log("[useVoice] TTS finished, restarting mic");
-        dialogSendingRef.current = false;
         finalAccumRef.current = "";
         dialogBufRef.current = "";
         micActiveRef.current = true;
