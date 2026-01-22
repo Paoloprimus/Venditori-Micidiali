@@ -850,6 +850,11 @@ async function handleIntent(
       return { text: result.message, intent };
     }
 
+    case 'planning_tomorrow': {
+      // Per ora fallback a OpenAI - TODO: implementare getTomorrowPlanning
+      return null; // null = fallback to OpenAI
+    }
+
     case 'planning_callbacks': {
       if (!crypto) return { ...needCrypto(), intent };
       const result = await getCallbacks(crypto);

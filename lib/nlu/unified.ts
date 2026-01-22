@@ -54,6 +54,7 @@ export type IntentType =
   | 'product_not_proposed'   // "Cosa non ho mai proposto a Rossi?"
   // PLANNING
   | 'planning_today'         // "Cosa devo fare oggi?"
+  | 'planning_tomorrow'      // "Cosa devo fare domani?"
   | 'planning_callbacks'     // "Chi devo richiamare?"
   | 'planning_week'          // "Planning settimanale"
   // REPORT
@@ -1277,6 +1278,20 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   },
 
   {
+    intent: 'planning_tomorrow',
+    patterns: [
+      /\b(cosa|che)\b.*\b(devo|dovrei|ho da)\b.*\b(fare|domani)\b/i,
+      /\b(programma|agenda|planning|piano)\b.*\b(domani)\b/i,
+      /\b(domani)\b.*\b(programma|agenda|fare|visite)\b/i,
+      /^cosa (devo fare|faccio) domani$/i,
+      // "visite domani", "appuntamenti domani"
+      /\b(visite|appuntament[oi]|impegn[oi])\b.*\b(domani|di domani)\b/i,
+      /\b(domani)\b.*\b(visite|appuntament[oi])\b/i,
+    ],
+    confidence: 0.9,
+  },
+
+  {
     intent: 'planning_callbacks',
     patterns: [
       /\b(chi|quali)\b.*\b(devo|dovrei)\b.*\b(richiamare|ricontattare|risentire)\b/i,
@@ -2008,8 +2023,8 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       
       // Estrai data relativa
       if (/\bdomani\b/i.test(text)) {
-        entities.dateRelative = 'today'; // domani sarà gestito nel planner
-        entities.period = 'today';
+        entities.dateRelative = 'tomorrow';
+        entities.period = 'tomorrow';
       }
       if (/\boggi\b/i.test(text)) {
         entities.dateRelative = 'today';
