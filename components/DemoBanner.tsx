@@ -94,7 +94,7 @@ export default function DemoBanner() {
     );
   }
 
-  // Versione espansa (banner completo)
+  // Versione espansa (banner compatto - una riga)
   return (
     <div
       style={{
@@ -103,48 +103,36 @@ export default function DemoBanner() {
         left: 0,
         right: 0,
         zIndex: 9000,
-        background: "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
-        boxShadow: "0 -4px 20px rgba(0, 0, 0, 0.15)",
-        padding: "12px 16px",
+        background: "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)",
+        boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.1)",
+        padding: "6px 12px",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        gap: 16,
-        flexWrap: "wrap",
+        gap: 12,
+        height: 36,
       }}
     >
-      {/* Icona e testo */}
-      <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-        <span style={{ fontSize: 22 }}>🧪</span>
-        <div>
-          <p style={{ 
-            margin: 0, 
-            color: "white", 
-            fontWeight: 600, 
-            fontSize: 14,
-          }}>
-            Modalità Demo attiva
-          </p>
-          <p style={{ 
-            margin: 0, 
-            color: "rgba(255,255,255,0.85)", 
-            fontSize: 12,
-          }}>
-            Stai usando {demoCount} clienti di prova
-          </p>
-        </div>
-      </div>
+      {/* Icona e testo compatto */}
+      <span style={{ fontSize: 14 }}>🧪</span>
+      <span style={{ 
+        color: "white", 
+        fontSize: 12,
+        fontWeight: 500,
+      }}>
+        Demo attiva ({demoCount} clienti di prova)
+      </span>
 
-      {/* Bottone import */}
+      {/* Bottone import compatto */}
       <button
         onClick={handleGoToImport}
         style={{
-          padding: "10px 20px",
-          borderRadius: 8,
-          border: "2px solid white",
+          padding: "4px 12px",
+          borderRadius: 4,
+          border: "1px solid rgba(255,255,255,0.6)",
           background: "rgba(255,255,255,0.15)",
           color: "white",
-          fontSize: 14,
+          fontSize: 11,
           fontWeight: 600,
           cursor: "pointer",
           transition: "all 0.2s",
@@ -159,32 +147,29 @@ export default function DemoBanner() {
           e.currentTarget.style.color = "white";
         }}
       >
-        📥 Importa i tuoi clienti
+        Importa clienti
       </button>
 
       {/* Bottone minimizza */}
       <button
         onClick={() => setMinimized(true)}
         style={{
-          position: "absolute",
-          right: 12,
-          top: "50%",
-          transform: "translateY(-50%)",
-          width: 28,
-          height: 28,
+          marginLeft: 4,
+          width: 20,
+          height: 20,
           borderRadius: "50%",
           border: "none",
           background: "rgba(255,255,255,0.2)",
           color: "white",
-          fontSize: 14,
+          fontSize: 10,
           cursor: "pointer",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
         }}
-        title="Riduci a icona"
+        title="Riduci"
       >
-        ▼
+        ✕
       </button>
     </div>
   );
