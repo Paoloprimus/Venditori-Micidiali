@@ -150,10 +150,10 @@ export type EntityType = {
   clientName?: string;       // Nome cliente estratto
   clientId?: string;         // ID cliente (se risolto)
   date?: string;             // Data specifica
-  dateRelative?: 'today' | 'yesterday' | 'day_before' | 'last_week' | 'last_month';
+  dateRelative?: 'today' | 'tomorrow' | 'yesterday' | 'day_before' | 'last_week' | 'last_month';
   amount?: number;           // Importo
   productName?: string;      // Nome prodotto
-  period?: 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'quarter' | 'year';
+  period?: 'today' | 'tomorrow' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'quarter' | 'year';
   periodCompare?: 'previous' | 'same_last_year'; // Per confronti
   outcome?: string;          // Esito visita
   targetPage?: 'clients' | 'visits' | 'products' | 'documents' | 'settings';
