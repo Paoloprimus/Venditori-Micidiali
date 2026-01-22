@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
             city: client.city,
             street: client.address,
             type: client.type,
-            note: client.notes,
+            notes: client.notes,  // FIXED: era 'note', ora 'notes'
             custom: { is_demo: true },
           })
           .select("id")
