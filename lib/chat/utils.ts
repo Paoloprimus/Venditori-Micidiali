@@ -149,12 +149,14 @@ function numberToItalianWords(num: number): string {
   return num.toString();
 }
 
-/** Strip markdown e placeholder per TTS */
+/** Strip markdown, emoji e placeholder per TTS */
 export function stripMarkdownForTTS(text: string): string {
   return text
     .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1') // Links
     .replace(/\*\*/g, '') // Bold
     .replace(/\[CLIENT:[a-f0-9-]+(?:\|[^|\]]*)*\]/gi, 'un cliente') // Placeholder non decriptati
+    // 🔧 Rimuovi TUTTE le emoji (Unicode ranges)
+    .replace(/[\u{1F300}-\u{1F9FF}]|[\u{2600}-\u{26FF}]|[\u{2700}-\u{27BF}]|[\u{1F600}-\u{1F64F}]|[\u{1F680}-\u{1F6FF}]|[\u{1F1E0}-\u{1F1FF}]/gu, '')
     // Converti numeri in parole italiane (es. "94" → "novantaquattro")
     .replace(/€\s*(\d+(?:[.,]\d+)?)/g, (_, n) => {
       const num = parseFloat(n.replace(',', '.'));

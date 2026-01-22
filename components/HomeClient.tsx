@@ -625,19 +625,20 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     processPlaceholders();
   }, [patchedBubbles]);
 
-  // --- Stato per bolle locali ---
-  const [localUser, setLocalUser] = useState<string[]>([]);
-  const [localAssistant, setLocalAssistant] = useState<string[]>([]);
+  // --- Stato per bolle locali (ordine cronologico) ---
+  const [localBubbles, setLocalBubbles] = useState<Bubble[]>([]);
 
-  function appendUserLocal(text: string) { setLocalUser(prev => [...prev, text]); }
-  function appendAssistantLocal(text: string) { setLocalAssistant(prev => [...prev, patchPriceReply(text)]); }
+  function appendUserLocal(text: string) { 
+    setLocalBubbles(prev => [...prev, { role: "user" as const, content: text }]); 
+  }
+  function appendAssistantLocal(text: string) { 
+    setLocalBubbles(prev => [...prev, { role: "assistant" as const, content: patchPriceReply(text) }]); 
+  }
 
-  // ✅ Unione bolle
+  // ✅ Unione bolle - ordine cronologico corretto
   const mergedBubbles = useMemo((): Bubble[] => {
-    const localsUser = localUser.map((t): Bubble => ({ role: "user", content: t }));
-    const localsAssistant = localAssistant.map((t): Bubble => ({ role: "assistant", content: t }));
-    return [...decryptedBubbles, ...localsUser, ...localsAssistant];
-  }, [decryptedBubbles, localUser, localAssistant]);
+    return [...decryptedBubbles, ...localBubbles];
+  }, [decryptedBubbles, localBubbles]);
 
   // ===================== SUBMIT FROM COMPOSER =====================
   async function submitFromComposer() {
@@ -755,8 +756,8 @@ export default function HomeClient({ email, userName }: { email: string; userNam
           
         } catch (plannerError) {
           console.error('[HomeClient] Planner error, fallback to OpenAI:', plannerError);
-          // Fallback a OpenAI in caso di errore
-          setLocalUser(prev => prev.filter(t => t !== txt)); // Rimuovi bolla utente
+          // Fallback a OpenAI in caso di errore - rimuovi ultima bolla utente
+          setLocalBubbles(prev => prev.slice(0, -1));
           await conv.send(txt);
         } finally {
           setIsLocalProcessing(false);
@@ -948,8 +949,7 @@ export default function HomeClient({ email, userName }: { email: string; userNam
     const r = await fetch(`/api/messages/by-conversation?conversationId=${convId}&limit=200`, { cache: "no-store" });
     const j = await r.json();
     conv.setBubbles?.((j.items ?? []).map((m: any) => ({ id: m.id, role: m.role, content: m.content })));
-    setLocalUser([]);
-    setLocalAssistant([]);
+    setLocalBubbles([]); // Reset bolle locali
   }
 
   // ===================== RENDER =====================
