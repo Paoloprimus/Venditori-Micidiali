@@ -1,0 +1,44 @@
+# REPING - Regole per AI Assistant
+
+## 🎯 Efficienza e Costi
+- Sii conciso e diretto. Evita wall-of-text quando non necessario.
+- Usa grep/search invece di leggere file interi quando cerchi qualcosa di specifico.
+- Non rileggere file già presenti nel contesto della conversazione.
+- Raggruppa le modifiche: preferisci 1 edit con più cambi a 5 edit separati.
+- Se un task è semplice (fix typo, rinomina, piccolo refactor), avvisa l'utente che potrebbe usare un modello più leggero.
+
+## 🏗️ Progetto REPING
+- Stack: Next.js 14+ (App Router), TypeScript, Supabase, Tailwind CSS
+- Crittografia: E2E client-side con lib/crypto/CryptoService
+- I dati sensibili (name, email, phone, etc.) sono cifrati con campi _enc/_iv
+- Campi in chiaro: city, tipo_locale, notes, custom (JSONB)
+- L'AI assistant usa OpenAI function calling (tools in lib/ai/tools.ts)
+- Napoleon è il sistema di suggerimenti proattivi (lib/napoleon/)
+
+## 📝 Convenzioni Codice
+- Commenti in italiano per documentazione business
+- Nomi variabili/funzioni in inglese (camelCase)
+- Componenti React in PascalCase
+- API routes in kebab-case
+- Preferisci async/await a .then()
+- Usa TypeScript strict, evita `any` quando possibile
+
+## 🚫 Evita
+- Non creare file README o documentazione se non richiesto
+- Non aggiungere emoji al codice se non richiesto
+- Non fare refactoring non richiesti
+- Non aggiungere feature "bonus" non richieste
+- Non over-engineerizzare soluzioni semplici
+
+## ✅ Preferenze
+- Soluzioni semplici e dirette
+- Codice leggibile > codice clever
+- Testare le modifiche quando possibile (browser tools)
+- Committare con messaggi chiari e concisi
+- Pushare dopo ogni fix funzionante
+
+## 🔐 Sicurezza
+- Mai loggare dati sensibili decifrati
+- Mai esporre chiavi API nel frontend
+- Usare sempre RLS policies su Supabase
+- Validare input lato server
