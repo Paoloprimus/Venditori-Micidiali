@@ -1000,7 +1000,7 @@ export async function getTomorrowPlanning(crypto: CryptoLike): Promise<{
     message += `📞 **Clienti da richiamare:** ${callbackResult.items.length}\n`;
     callbackResult.items.slice(0, 5).forEach(i => {
       message += `   • ${i.clientName}`;
-      if (i.esito) message += ` - ${i.esito}`;
+      if (i.reason) message += ` - ${i.reason}`;
       message += '\n';
     });
     message += '\n💡 Suggerimento: inizia la giornata con i richiami!';
