@@ -44,17 +44,21 @@ export default function OnboardingImport({ userName }: OnboardingImportProps) {
       const welcomeShown = localStorage.getItem(WELCOME_SHOWN_KEY);
       const onboardingDone = localStorage.getItem(ONBOARDING_KEY);
       
+      console.log('[OnboardingImport] checkShow:', { welcomeShown: !!welcomeShown, onboardingDone: !!onboardingDone });
+      
       if (welcomeShown && !onboardingDone) {
+        console.log('[OnboardingImport] ✅ Mostro OnboardingImport');
         // Piccolo delay per transizione fluida
         setTimeout(() => setShow(true), 300);
       }
     };
     
-    // Check iniziale
-    checkShow();
+    // Check iniziale (con piccolo delay per aspettare il render)
+    setTimeout(checkShow, 100);
     
     // Ascolta quando il welcome viene chiuso (custom event)
     const handleWelcomeClosed = () => {
+      console.log('[OnboardingImport] 📣 Ricevuto evento welcomeClosed');
       setTimeout(checkShow, 100);
     };
     
