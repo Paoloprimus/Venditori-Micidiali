@@ -18,48 +18,71 @@ export default function AnimatedMockup() {
   const sceneTimerRef = useRef<NodeJS.Timeout | null>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
 
-  // Mappa scena → audio (metti i file in public/demo/)
-  const sceneAudio: Record<number, string | null> = {
-    0: "/demo/narratore01.mp3",   // Import
-    1: "/demo/narratore02.mp3",   // Proattivo
-    2: "/demo/narratore03.mp3",   // Chaos (inizio)
-    3: "/demo/utente01.mp3",      // Domanda utente
-    4: "/demo/reping01.mp3",      // Piano REPING
-    5: null,                       // Dettaglio (no audio)
-    6: "/demo/narratore05.mp3",   // Guida
-    7: "/demo/reping02.mp3",      // Hands-free REPING
-    8: "/demo/utente02.mp3",      // Registra utente
-    9: "/demo/reping03.mp3",      // Salvato REPING
-    10: "/demo/narratore07.mp3",  // Report
-    11: "/demo/narratore08.mp3",  // Sicurezza
-    12: "/demo/narratore09.mp3",  // Claim finale
+  // Mappa scena → audio (file in public/demo/)
+  // narratore04 = "E se bastasse chiedere?" (fine chaos)
+  // narratore06 = "A fine visita, detti e REPING organizza"
+  const sceneAudio: Record<number, string[]> = {
+    0: ["/demo/narratore01.mp3"],                    // Import
+    1: ["/demo/narratore02.mp3"],                    // Proattivo
+    2: ["/demo/narratore03.mp3", "/demo/narratore04.mp3"], // Chaos + "E se bastasse chiedere?"
+    3: ["/demo/utente01.mp3"],                       // Domanda utente
+    4: ["/demo/reping01.mp3"],                       // Piano REPING
+    5: [],                                            // Dettaglio (no audio)
+    6: ["/demo/narratore05.mp3"],                    // Guida
+    7: ["/demo/reping02.mp3"],                       // Hands-free REPING
+    8: ["/demo/narratore06.mp3", "/demo/utente02.mp3"], // "A fine visita..." + dettatura
+    9: ["/demo/reping03.mp3"],                       // Salvato REPING
+    10: ["/demo/narratore07.mp3"],                   // Report
+    11: ["/demo/narratore08.mp3"],                   // Sicurezza
+    12: ["/demo/narratore09.mp3"],                   // Claim finale
   };
 
-  // Play audio for current scene
+  const audioQueueRef = useRef<string[]>([]);
+  const [audioReady, setAudioReady] = useState(false);
+
+  // Play audio queue for current scene
   const playSceneAudio = (sceneId: number) => {
-    // Stop previous audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-    }
+    stopAudio();
     
-    const audioSrc = sceneAudio[sceneId];
-    if (audioSrc) {
-      audioRef.current = new Audio(audioSrc);
-      audioRef.current.volume = 0.8;
-      audioRef.current.play().catch(() => {
-        // Autoplay blocked - user needs to interact first
-        console.log("Audio autoplay blocked");
-      });
-    }
+    const audioFiles = sceneAudio[sceneId] || [];
+    if (audioFiles.length === 0) return;
+    
+    audioQueueRef.current = [...audioFiles];
+    playNextInQueue();
+  };
+
+  // Play next audio in queue
+  const playNextInQueue = () => {
+    if (audioQueueRef.current.length === 0) return;
+    
+    const nextSrc = audioQueueRef.current.shift()!;
+    audioRef.current = new Audio(nextSrc);
+    audioRef.current.volume = 0.8;
+    
+    // When this audio ends, play next in queue
+    audioRef.current.onended = () => {
+      playNextInQueue();
+    };
+    
+    audioRef.current.play().catch(() => {
+      console.log("Audio autoplay blocked - click to enable");
+      setAudioReady(false);
+    });
   };
 
   // Stop audio
   const stopAudio = () => {
+    audioQueueRef.current = [];
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current.onended = null;
     }
+  };
+
+  // Enable audio on first user interaction
+  const enableAudio = () => {
+    setAudioReady(true);
   };
 
   // SCENEGGIATURA v3 - 13 scene, ~70 secondi
@@ -129,6 +152,7 @@ export default function AnimatedMockup() {
   // Start from beginning
   const startPresentation = () => {
     resetPresentation();
+    enableAudio(); // Enable audio on user click
     setIsPlaying(true);
   };
 
@@ -278,7 +302,7 @@ export default function AnimatedMockup() {
                   {isPlaying && (
                     <span className="text-[10px] text-green-400">● DEMO</span>
                   )}
-                  {isPlaying && sceneAudio[scene] && (
+                  {isPlaying && sceneAudio[scene]?.length > 0 && (
                     <span className="text-[10px]">🔊</span>
                   )}
                   <span>📶</span>
