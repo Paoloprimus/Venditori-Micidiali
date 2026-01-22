@@ -851,8 +851,11 @@ async function handleIntent(
     }
 
     case 'planning_tomorrow': {
-      // Per ora fallback a OpenAI - TODO: implementare getTomorrowPlanning
-      return null; // null = fallback to OpenAI
+      // TODO: implementare getTomorrowPlanning con prossima_data
+      return {
+        text: "📅 Per il planning di domani, sto ancora imparando!\n\nPer ora puoi:\n• Controllare i promemoria impostati\n• Vedere i clienti da richiamare\n\nProva: \"Chi devo richiamare?\"",
+        intent
+      };
     }
 
     case 'planning_callbacks': {
