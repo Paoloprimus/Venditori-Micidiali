@@ -1546,8 +1546,11 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(client[ei])\b.*\b(pers[oi]|non compra più|sparit[oi])\b/i,
       /\b(chi)\b.*\b(non (compra|ordina) più|smesso)\b/i,
       /\b(client[ei])\b.*\b(inattiv[ei]|dormient[ei])\b.*\b(da tempo|da molto)\b/i,
+      // "chi non ordina da più tempo", "chi non compra da più tempo"
+      /\b(chi)\b.*\b(non (ordina|compra))\b.*\b(da (più|piu) tempo)\b/i,
+      /\b(chi)\b.*\b((più|piu) tempo)\b.*\b(senza (ordinare|comprare|acquistare))\b/i,
     ],
-    confidence: 0.9,
+    confidence: 0.95, // Alta priorità
     entityExtractor: () => ({ inactivityDays: 90, sortBy: 'recency' as const })
   },
 
