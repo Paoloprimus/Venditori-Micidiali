@@ -536,6 +536,106 @@ export async function executeFunction(
         bestZone: sorted[0]?.city || "N/A"
       };
     }
+
+    // 🆕 WRITE TOOLS
+    case "create_client": {
+      const { name, city, tipo_locale, notes } = args;
+      if (!name) return { error: "Nome cliente obbligatorio" };
+      
+      const { data, error } = await supabase
+        .from("accounts")
+        .insert({
+          user_id: userId,
+          name: name,
+          city: city || null,
+          tipo_locale: tipo_locale || null,
+          notes: notes || null,
+        })
+        .select("id, name")
+        .single();
+      
+      if (error) return { error: `Errore creazione: ${error.message}` };
+      return { success: true, client: data, message: `Cliente "${name}" creato` };
+    }
+
+    case "register_visit": {
+      const { client_name, tipo, esito, importo, note, prodotti } = args;
+      if (!client_name) return { error: "Nome cliente obbligatorio" };
+      
+      // Trova il cliente per nome (case insensitive)
+      const { data: clients } = await supabase
+        .from("accounts")
+        .select("id, name")
+        .eq("user_id", userId)
+        .ilike("name", `%${client_name}%`)
+        .limit(1);
+      
+      if (!clients || clients.length === 0) {
+        return { error: `Cliente "${client_name}" non trovato` };
+      }
+      
+      const client = clients[0];
+      const today = new Date().toISOString().split("T")[0];
+      
+      const { data, error } = await supabase
+        .from("visits")
+        .insert({
+          user_id: userId,
+          account_id: client.id,
+          data_visita: today,
+          tipo: tipo || "visita",
+          esito: esito || null,
+          importo_vendita: importo || 0,
+          note: note || null,
+          prodotti_discussi: prodotti || null,
+        })
+        .select("id")
+        .single();
+      
+      if (error) return { error: `Errore registrazione: ${error.message}` };
+      return { 
+        success: true, 
+        visit_id: data.id,
+        client_name: client.name,
+        message: `Visita a "${client.name}" registrata` 
+      };
+    }
+
+    case "add_note_to_client": {
+      const { client_name, note } = args;
+      if (!client_name || !note) return { error: "Nome cliente e nota obbligatori" };
+      
+      // Trova il cliente
+      const { data: clients } = await supabase
+        .from("accounts")
+        .select("id, name, notes")
+        .eq("user_id", userId)
+        .ilike("name", `%${client_name}%`)
+        .limit(1);
+      
+      if (!clients || clients.length === 0) {
+        return { error: `Cliente "${client_name}" non trovato` };
+      }
+      
+      const client = clients[0];
+      const existingNotes = client.notes || "";
+      const timestamp = new Date().toLocaleDateString("it-IT");
+      const newNotes = existingNotes 
+        ? `${existingNotes}\n[${timestamp}] ${note}`
+        : `[${timestamp}] ${note}`;
+      
+      const { error } = await supabase
+        .from("accounts")
+        .update({ notes: newNotes })
+        .eq("id", client.id);
+      
+      if (error) return { error: `Errore aggiunta nota: ${error.message}` };
+      return { 
+        success: true, 
+        client_name: client.name,
+        message: `Nota aggiunta a "${client.name}"` 
+      };
+    }
     
     default:
       return { error: "Funzione non trovata" };
@@ -681,6 +781,22 @@ export function formatToolResult(name: string, result: any): string {
         text += `${medal} **${z.city}**: €${z.total.toLocaleString('it-IT')} (${z.count} ordini)\n`;
       });
       return text;
+    }
+
+    // 🆕 WRITE TOOLS formatters
+    case "create_client": {
+      if (result.error) return `❌ ${result.error}`;
+      return `✅ **${result.message}**\n\nIl cliente è stato aggiunto al tuo database.`;
+    }
+
+    case "register_visit": {
+      if (result.error) return `❌ ${result.error}`;
+      return `✅ **${result.message}**\n\nLa visita è stata registrata.`;
+    }
+
+    case "add_note_to_client": {
+      if (result.error) return `❌ ${result.error}`;
+      return `✅ **${result.message}**`;
     }
     
     default:

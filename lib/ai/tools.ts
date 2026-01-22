@@ -181,6 +181,58 @@ export const chatTools: OpenAI.Chat.Completions.ChatCompletionTool[] = [
         }
       }
     }
+  },
+  // 🆕 WRITE TOOLS - Azioni di scrittura hands-free
+  {
+    type: "function",
+    function: {
+      name: "create_client",
+      description: "Crea un nuovo cliente. Usa quando l'utente dice 'aggiungi cliente', 'nuovo cliente', 'inserisci Bar Roma'.",
+      parameters: {
+        type: "object",
+        properties: {
+          name: { type: "string", description: "Nome del cliente/attività (es. Bar Roma, Pizzeria da Gino)" },
+          city: { type: "string", description: "Città (es. Verona, Milano)" },
+          tipo_locale: { type: "string", description: "Tipo: bar, ristorante, pizzeria, hotel, pub, enoteca, etc." },
+          notes: { type: "string", description: "Note aggiuntive (opzionale)" }
+        },
+        required: ["name"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "register_visit",
+      description: "Registra una visita/chiamata a un cliente. Usa per 'registra visita', 'ho visitato', 'ho chiamato', 'segna che sono stato da'.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Nome del cliente visitato" },
+          tipo: { type: "string", enum: ["visita", "telefonata"], description: "Tipo di contatto (default: visita)" },
+          esito: { type: "string", description: "Esito: Interessato, Ordine effettuato, Non interessato, Da ricontattare" },
+          importo: { type: "number", description: "Importo vendita in euro (0 se nessuna vendita)" },
+          note: { type: "string", description: "Note sulla visita" },
+          prodotti: { type: "string", description: "Prodotti discussi/venduti" }
+        },
+        required: ["client_name"]
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "add_note_to_client",
+      description: "Aggiunge una nota a un cliente. Usa per 'aggiungi nota', 'segna che', 'ricordami che il cliente X'.",
+      parameters: {
+        type: "object",
+        properties: {
+          client_name: { type: "string", description: "Nome del cliente" },
+          note: { type: "string", description: "Testo della nota da aggiungere" }
+        },
+        required: ["client_name", "note"]
+      }
+    }
   }
 ];
 
