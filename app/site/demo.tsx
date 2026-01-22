@@ -667,25 +667,39 @@ export default function AnimatedMockup() {
               <div className="absolute bottom-2 left-1/2 -translate-x-1/2 w-32 h-1 bg-white/30 rounded-full"></div>
             </div>
 
-            {/* Play overlay */}
+            {/* Clickable overlay for play/pause on entire screen */}
+            <div 
+              className="absolute inset-0 cursor-pointer z-30"
+              onClick={togglePlayPause}
+            />
+
+            {/* Play overlay - only when stopped at beginning */}
             {!isPlaying && scene === 0 && elapsedTime === 0 && (
-              <div className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-[2.5rem]">
-                <button
-                  onClick={startPresentation}
-                  className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg"
-                >
+              <div 
+                className="absolute inset-0 bg-black/70 flex items-center justify-center rounded-[2.5rem] z-40 cursor-pointer"
+                onClick={startPresentation}
+              >
+                <div className="w-20 h-20 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full flex items-center justify-center hover:scale-110 transition shadow-lg">
                   <span className="text-white text-3xl ml-1">▶</span>
-                </button>
+                </div>
+              </div>
+            )}
+
+            {/* Pause indicator - brief flash when paused */}
+            {!isPlaying && elapsedTime > 0 && (
+              <div className="absolute inset-0 flex items-center justify-center z-40 pointer-events-none">
+                <div className="w-16 h-16 bg-black/50 rounded-full flex items-center justify-center animate-fadeIn">
+                  <span className="text-white text-2xl">⏸</span>
+                </div>
               </div>
             )}
           </div>
         </div>
 
-        {/* Controls bar */}
-        <div className="mt-4 bg-slate-800 rounded-xl p-3">
-          {/* Progress bar */}
+        {/* Progress bar only */}
+        <div className="mt-3">
           <div
-            className="h-2 bg-slate-700 rounded-full overflow-hidden mb-2 cursor-pointer"
+            className="h-1.5 bg-slate-700 rounded-full overflow-hidden cursor-pointer hover:h-2 transition-all"
             onClick={handleProgressClick}
           >
             <div
@@ -693,54 +707,21 @@ export default function AnimatedMockup() {
               style={{ width: `${Math.min(progressPercent, 100)}%` }}
             />
           </div>
-
-          {/* Time & controls */}
-          <div className="flex items-center justify-between">
-            <span className="text-slate-400 text-xs font-mono">
-              {formatTime(elapsedTime)} / {formatTime(totalDuration)}
+          <div className="flex justify-between mt-1">
+            <span className="text-slate-500 text-[10px] font-mono">
+              {formatTime(elapsedTime)}
             </span>
-
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => seekToScene(Math.max(0, scene - 1))}
-                className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition"
-              >
-                <span className="text-white text-xs">⏮</span>
-              </button>
-
-              <button
-                onClick={togglePlayPause}
-                className="w-10 h-10 bg-blue-500 hover:bg-blue-600 rounded-full flex items-center justify-center transition"
-              >
-                <span className="text-white text-lg">{isPlaying ? "⏸" : "▶"}</span>
-              </button>
-
-              <button
-                onClick={() => seekToScene(Math.min(scenes.length - 1, scene + 1))}
-                className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition"
-              >
-                <span className="text-white text-xs">⏭</span>
-              </button>
-
-              <button
-                onClick={resetPresentation}
-                className="w-8 h-8 bg-slate-700 hover:bg-slate-600 rounded-full flex items-center justify-center transition"
-              >
-                <span className="text-white text-xs">↺</span>
-              </button>
-            </div>
-
-            <span className="text-slate-500 text-[10px] w-16 text-right">
-              {scenes[scene]?.label || "..."}
+            <span className="text-slate-500 text-[10px] font-mono">
+              {formatTime(totalDuration)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Hint */}
-      {!isPlaying && scene === 0 && elapsedTime === 0 && (
-        <div className="text-center mt-4 text-slate-500 text-xs">
-          Clicca ▶ per vedere la demo (~1 min)
+      {/* Hint - tap anywhere */}
+      {!isPlaying && elapsedTime > 0 && (
+        <div className="text-center mt-2 text-slate-500 text-[10px]">
+          Tocca per riprendere
         </div>
       )}
 
