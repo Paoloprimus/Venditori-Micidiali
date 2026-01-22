@@ -259,8 +259,82 @@ export type ConversationContext = {
 
 // ==================== NORMALIZZAZIONE ====================
 
+/**
+ * Mappa sinonimi per aumentare la copertura NLU.
+ * Chiave: variante usata dall'utente
+ * Valore: termine canonico usato nei pattern
+ */
+const SYNONYMS: Record<string, string> = {
+  // Vendite/Fatturato
+  'fatturato': 'vendite',
+  'incassato': 'vendite',
+  'incasso': 'vendite',
+  'guadagnato': 'vendite',
+  'fatto': 'vendite', // "quanto ho fatto oggi" → "vendite oggi"
+  'ricavi': 'vendite',
+  'entrate': 'vendite',
+  
+  // Visite/Passaggi
+  'giro': 'visite',
+  'giri': 'visite',
+  'passaggi': 'visite',
+  'passaggio': 'visita',
+  'appuntamenti': 'visite',
+  'appuntamento': 'visita',
+  'incontri': 'visite',
+  'incontro': 'visita',
+  
+  // Clienti/Locali
+  'locale': 'cliente',
+  'locali': 'clienti',
+  'esercizio': 'cliente',
+  'esercizi': 'clienti',
+  'attivita': 'cliente', // già senza accento per normalize
+  'negozio': 'cliente',
+  'negozi': 'clienti',
+  'punto vendita': 'cliente',
+  'punti vendita': 'clienti',
+  
+  // Azioni
+  'contattato': 'visitato',
+  'sentito': 'visitato',
+  'chiamato': 'visitato',
+  'visto': 'visitato',
+  
+  // Tempo
+  'questa settimana': 'settimana',
+  'questo mese': 'mese',
+  'quest anno': 'anno', // senza apostrofo per normalize
+  
+  // Prodotti
+  'articoli': 'prodotti',
+  'articolo': 'prodotto',
+  'merce': 'prodotti',
+  
+  // Verbi comuni
+  'acquista': 'compra',
+  'acquistato': 'comprato',
+  'ordinato': 'comprato',
+  'preso': 'comprato',
+  'prende': 'compra',
+};
+
+/**
+ * Applica sinonimi al testo normalizzato.
+ * Usa word boundaries per evitare sostituzioni parziali.
+ */
+function applySynonyms(text: string): string {
+  let result = text;
+  for (const [synonym, canonical] of Object.entries(SYNONYMS)) {
+    // Usa regex con word boundary per match esatti
+    const regex = new RegExp(`\\b${synonym}\\b`, 'gi');
+    result = result.replace(regex, canonical);
+  }
+  return result;
+}
+
 function normalize(text: string): string {
-  return text
+  const cleaned = text
     .trim()
     .toLowerCase()
     .normalize('NFD')
@@ -268,6 +342,9 @@ function normalize(text: string): string {
     .replace(/[''`]/g, "'")
     .replace(/\s+/g, ' ')
     .replace(/[?!.,;:]+$/g, ''); // rimuovi punteggiatura finale
+  
+  // Applica sinonimi per aumentare copertura
+  return applySynonyms(cleaned);
 }
 
 // ==================== ENTITY EXTRACTION ====================
