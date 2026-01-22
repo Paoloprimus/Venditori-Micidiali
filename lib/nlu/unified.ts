@@ -263,18 +263,34 @@ export type ConversationContext = {
  * Mappa sinonimi per aumentare la copertura NLU.
  * Chiave: variante usata dall'utente
  * Valore: termine canonico usato nei pattern
+ * 
+ * NOTA: le chiavi sono già normalizzate (lowercase, senza accenti)
  */
 const SYNONYMS: Record<string, string> = {
-  // Vendite/Fatturato
+  // ═══════════════════════════════════════════════════════════════
+  // VENDITE / FATTURATO / INCASSI
+  // ═══════════════════════════════════════════════════════════════
   'fatturato': 'vendite',
   'incassato': 'vendite',
   'incasso': 'vendite',
+  'incassi': 'vendite',
   'guadagnato': 'vendite',
-  'fatto': 'vendite', // "quanto ho fatto oggi" → "vendite oggi"
+  'guadagni': 'vendite',
   'ricavi': 'vendite',
+  'ricavo': 'vendite',
   'entrate': 'vendite',
+  'portato a casa': 'vendite',      // "quanto ho portato a casa"
+  'chiuso': 'vendite',              // "quanto ho chiuso oggi"
+  'fattura': 'vendite',
+  'fatture': 'vendite',
+  'scontrini': 'vendite',
+  'scontrino': 'vendita',
+  'ordini': 'vendite',
+  'ordine': 'vendita',
   
-  // Visite/Passaggi
+  // ═══════════════════════════════════════════════════════════════
+  // VISITE / PASSAGGI / GIRI
+  // ═══════════════════════════════════════════════════════════════
   'giro': 'visite',
   'giri': 'visite',
   'passaggi': 'visite',
@@ -283,40 +299,141 @@ const SYNONYMS: Record<string, string> = {
   'appuntamento': 'visita',
   'incontri': 'visite',
   'incontro': 'visita',
+  'tappe': 'visite',                // "quante tappe oggi"
+  'tappa': 'visita',
+  'fermate': 'visite',              // "fermate del giro"
+  'fermata': 'visita',
+  'sopralluogo': 'visita',
+  'sopralluoghi': 'visite',
+  'battuto': 'visitato',            // gergo: "ho battuto 10 clienti"
+  'battere': 'visitare',
   
-  // Clienti/Locali
+  // ═══════════════════════════════════════════════════════════════
+  // CLIENTI / LOCALI / ATTIVITÀ
+  // ═══════════════════════════════════════════════════════════════
   'locale': 'cliente',
   'locali': 'clienti',
   'esercizio': 'cliente',
   'esercizi': 'clienti',
-  'attivita': 'cliente', // già senza accento per normalize
+  'attivita': 'cliente',            // senza accento (già normalizzato)
   'negozio': 'cliente',
   'negozi': 'clienti',
   'punto vendita': 'cliente',
   'punti vendita': 'clienti',
+  'account': 'cliente',
+  'accounts': 'clienti',
+  'contatto': 'cliente',
+  'contatti': 'clienti',
+  'azienda': 'cliente',
+  'aziende': 'clienti',
+  'ditta': 'cliente',
+  'ditte': 'clienti',
+  // Tipi specifici HoReCa → cliente generico per matching
+  'barista': 'cliente',
+  'baristi': 'clienti',
+  'ristoratore': 'cliente',
+  'ristoratori': 'clienti',
+  'albergatore': 'cliente',
+  'albergatori': 'clienti',
   
-  // Azioni
+  // ═══════════════════════════════════════════════════════════════
+  // AZIONI / VERBI
+  // ═══════════════════════════════════════════════════════════════
   'contattato': 'visitato',
   'sentito': 'visitato',
   'chiamato': 'visitato',
   'visto': 'visitato',
-  
-  // Tempo
-  'questa settimana': 'settimana',
-  'questo mese': 'mese',
-  'quest anno': 'anno', // senza apostrofo per normalize
-  
-  // Prodotti
-  'articoli': 'prodotti',
-  'articolo': 'prodotto',
-  'merce': 'prodotti',
-  
-  // Verbi comuni
+  'passato da': 'visitato',         // "sono passato da Rossi"
+  'fatto visita': 'visitato',
   'acquista': 'compra',
   'acquistato': 'comprato',
   'ordinato': 'comprato',
   'preso': 'comprato',
   'prende': 'compra',
+  'piazzato': 'venduto',            // "quanto ho piazzato"
+  'piazzo': 'vendo',
+  'proposto': 'venduto',
+  'lasciato': 'venduto',            // "gli ho lasciato 2 cartoni"
+  
+  // ═══════════════════════════════════════════════════════════════
+  // TEMPO / PERIODI
+  // ═══════════════════════════════════════════════════════════════
+  'questa settimana': 'settimana',
+  'sta settimana': 'settimana',     // colloquiale
+  'questo mese': 'mese',
+  'sto mese': 'mese',               // colloquiale
+  'quest anno': 'anno',             // senza apostrofo
+  'st anno': 'anno',                // colloquiale
+  'stamattina': 'oggi',
+  'stasera': 'oggi',
+  'stanotte': 'oggi',
+  'l altro ieri': 'ieri',           // senza apostrofo
+  'ieri l altro': 'due giorni fa',
+  
+  // ═══════════════════════════════════════════════════════════════
+  // PRODOTTI / MERCE / ARTICOLI
+  // ═══════════════════════════════════════════════════════════════
+  'articoli': 'prodotti',
+  'articolo': 'prodotto',
+  'merce': 'prodotti',
+  'merci': 'prodotti',
+  'referenze': 'prodotti',
+  'referenza': 'prodotto',
+  'listino': 'prodotti',
+  'catalogo': 'prodotti',
+  'gamma': 'prodotti',
+  
+  // ═══════════════════════════════════════════════════════════════
+  // STATI / CONDIZIONI CLIENTI
+  // ═══════════════════════════════════════════════════════════════
+  'fermo': 'inattivo',              // "cliente fermo"
+  'fermi': 'inattivi',
+  'dormiente': 'inattivo',
+  'dormienti': 'inattivi',
+  'perso': 'inattivo',
+  'persi': 'inattivi',
+  'sparito': 'inattivo',
+  'spariti': 'inattivi',
+  'non si fa vivo': 'non ordina',
+  'non si fanno vivi': 'non ordinano',
+  'silenzio': 'inattivo',           // "è in silenzio da mesi"
+  
+  // ═══════════════════════════════════════════════════════════════
+  // ZONE / TERRITORI / AREE
+  // ═══════════════════════════════════════════════════════════════
+  'zona': 'citta',
+  'zone': 'citta',
+  'territorio': 'citta',
+  'territori': 'citta',
+  'area': 'citta',
+  'aree': 'citta',
+  'piazza': 'citta',                // "la piazza di Verona"
+  'piazze': 'citta',
+  
+  // ═══════════════════════════════════════════════════════════════
+  // REPORT / STATISTICHE / NUMERI
+  // ═══════════════════════════════════════════════════════════════
+  'statistiche': 'report',
+  'statistica': 'report',
+  'riepilogo': 'report',
+  'riassunto': 'report',
+  'situazione': 'report',           // "fammi la situazione"
+  'punto': 'report',                // "fammi il punto"
+  'numeri': 'report',
+  'andamento': 'report',
+  'performance': 'report',
+  
+  // ═══════════════════════════════════════════════════════════════
+  // DOMANDE / RICHIESTE
+  // ═══════════════════════════════════════════════════════════════
+  'dimmi': 'mostra',
+  'fammi vedere': 'mostra',
+  'fammi': 'mostra',
+  'elenca': 'mostra',
+  'elencami': 'mostra',
+  'listami': 'mostra',
+  'tirami fuori': 'mostra',         // "tirami fuori i clienti di Verona"
+  'dammi': 'mostra',
 };
 
 /**
