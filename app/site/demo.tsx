@@ -1,6 +1,6 @@
 // app/site/demo.tsx
-// Animated Demo Presentation - NUOVA SCENEGGIATURA v2
-// ~60 secondi, 11 scene, focus su: Import → Problema → Soluzione → Guida → Report
+// Animated Demo Presentation - SCENEGGIATURA v3
+// ~70 secondi, 13 scene, focus su: Import → Proattività → Problema → Soluzione → Guida → Report → Sicurezza
 
 "use client";
 
@@ -17,32 +17,38 @@ export default function AnimatedMockup() {
   const elapsedRef = useRef<NodeJS.Timeout | null>(null);
   const sceneTimerRef = useRef<NodeJS.Timeout | null>(null);
 
-  // NUOVA SCENEGGIATURA - 11 scene, ~60 secondi
+  // SCENEGGIATURA v3 - 13 scene, ~70 secondi
   const scenes = [
     // BLOCCO 0: IMPORT (5s)
     { id: 0, duration: 5000, label: "Import", visualId: "import-data" },
     
-    // BLOCCO 1: IL PROBLEMA (8s)
-    { id: 1, duration: 4000, label: "Chaos", visualId: "morning-chaos" },
-    { id: 2, duration: 4000, label: "Domanda", visualId: "chat-question" },
+    // BLOCCO 1: PROATTIVITÀ (5s) - NUOVO!
+    { id: 1, duration: 5000, label: "Proattivo", visualId: "proactive-alert" },
     
-    // BLOCCO 2: PIANIFICAZIONE (12s)
-    { id: 3, duration: 6000, label: "Piano", visualId: "chat-plan" },
-    { id: 4, duration: 6000, label: "Dettaglio", visualId: "client-detail" },
+    // BLOCCO 2: IL PROBLEMA (8s)
+    { id: 2, duration: 4000, label: "Chaos", visualId: "morning-chaos" },
+    { id: 3, duration: 4000, label: "Domanda", visualId: "chat-question" },
     
-    // BLOCCO 3: GUIDA (10s)
-    { id: 5, duration: 5000, label: "Guida", visualId: "driving-start" },
-    { id: 6, duration: 5000, label: "Hands-free", visualId: "driving-active" },
+    // BLOCCO 3: PIANIFICAZIONE (12s)
+    { id: 4, duration: 6000, label: "Piano", visualId: "chat-plan" },
+    { id: 5, duration: 6000, label: "Dettaglio", visualId: "client-detail" },
     
-    // BLOCCO 4: POST-VISITA (10s)
-    { id: 7, duration: 5000, label: "Registra", visualId: "visit-record" },
-    { id: 8, duration: 5000, label: "Salvato", visualId: "visit-saved" },
+    // BLOCCO 4: GUIDA (10s)
+    { id: 6, duration: 5000, label: "Guida", visualId: "driving-start" },
+    { id: 7, duration: 5000, label: "Hands-free", visualId: "driving-active" },
     
-    // BLOCCO 5: FINE GIORNATA (6s)
-    { id: 9, duration: 6000, label: "Report", visualId: "daily-report" },
+    // BLOCCO 5: POST-VISITA (10s)
+    { id: 8, duration: 5000, label: "Registra", visualId: "visit-record" },
+    { id: 9, duration: 5000, label: "Salvato", visualId: "visit-saved" },
+    
+    // BLOCCO 6: FINE GIORNATA (6s)
+    { id: 10, duration: 6000, label: "Report", visualId: "daily-report" },
+    
+    // BLOCCO 7: SICUREZZA (4s) - NUOVO!
+    { id: 11, duration: 4000, label: "Sicurezza", visualId: "security" },
     
     // CLOSING (5s)
-    { id: 10, duration: 5000, label: "Claim", visualId: "claim" },
+    { id: 12, duration: 5000, label: "Claim", visualId: "claim" },
   ];
 
   const totalDuration = scenes.reduce((acc, s) => acc + s.duration, 0);
@@ -249,7 +255,54 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 1: MORNING CHAOS ========== */}
+              {/* ========== SCENA 1: PROACTIVE ALERT (NUOVO!) ========== */}
+              {currentVisualId === "proactive-alert" && (
+                <div className="px-4 animate-fadeIn">
+                  <p className="text-slate-400 text-xs mb-3">Il giorno dopo...</p>
+                  
+                  {/* Notifica push */}
+                  <div className="bg-slate-800 rounded-2xl p-3 mb-3 border border-slate-700 animate-slideInLeft">
+                    <div className="flex items-start gap-3">
+                      <div className="w-10 h-10 bg-gradient-to-br from-amber-500 to-orange-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                        <span className="text-white font-bold text-sm">R</span>
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-white text-xs font-medium">REPING</span>
+                          <span className="text-slate-500 text-[10px]">ora</span>
+                        </div>
+                        <p className="text-white text-sm font-medium">⚠️ Bar Roma non ordina da 45 giorni</p>
+                        <p className="text-slate-400 text-xs mt-1">Priorità alta • Media ordini: €200</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {subStep > 2 && (
+                    <div className="bg-slate-800 rounded-2xl p-3 mb-3 border border-slate-700 animate-slideInLeft">
+                      <div className="flex items-start gap-3">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <span className="text-white font-bold text-sm">R</span>
+                        </div>
+                        <div className="flex-1">
+                          <p className="text-white text-sm">💡 Hotel Centrale ha ordinato meno del solito</p>
+                          <p className="text-slate-400 text-xs mt-1">-40% vs media trimestrale</p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {subStep > 5 && (
+                    <div className="text-center mt-4">
+                      <p className="text-cyan-400 text-sm font-medium animate-pulse">
+                        🧠 REPING ti avvisa PRIMA
+                      </p>
+                      <p className="text-slate-500 text-xs mt-1">Non aspetta che tu lo chieda</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ========== SCENA 2: MORNING CHAOS ========== */}
               {currentVisualId === "morning-chaos" && (
                 <div className="px-4 animate-fadeIn">
                   <p className="text-slate-400 text-xs mb-3">Sono le 8 di mattina...</p>
@@ -287,7 +340,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 2: CHAT QUESTION ========== */}
+              {/* ========== SCENA 3: CHAT QUESTION ========== */}
               {currentVisualId === "chat-question" && (
                 <div className="px-4 animate-fadeIn">
                   <div className="flex items-center gap-2 mb-4">
@@ -313,7 +366,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 3: CHAT PLAN ========== */}
+              {/* ========== SCENA 4: CHAT PLAN ========== */}
               {currentVisualId === "chat-plan" && (
                 <div className="px-4 animate-fadeIn">
                   <div className="flex items-center gap-2 mb-3">
@@ -345,12 +398,13 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 4: CLIENT DETAIL ========== */}
+              {/* ========== SCENA 5: CLIENT DETAIL ========== */}
               {currentVisualId === "client-detail" && (
                 <div className="px-4 animate-fadeIn">
                   <div className="flex items-center gap-2 mb-3">
                     <span className="text-slate-400 text-xs">←</span>
                     <span className="text-white font-medium">Bar Roma</span>
+                    <span className="text-emerald-400 text-[10px]">🔐</span>
                     <span className="ml-auto bg-amber-500/20 text-amber-400 text-[10px] px-2 py-0.5 rounded-full">⚠️ 45gg</span>
                   </div>
 
@@ -390,7 +444,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 5: DRIVING START ========== */}
+              {/* ========== SCENA 6: DRIVING START ========== */}
               {currentVisualId === "driving-start" && (
                 <div className="px-4 animate-fadeIn flex flex-col items-center justify-center h-[400px]">
                   <div className={`w-20 h-20 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-full flex items-center justify-center mb-4 ${subStep > 2 ? "animate-pulse" : ""}`}>
@@ -410,7 +464,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 6: DRIVING ACTIVE ========== */}
+              {/* ========== SCENA 7: DRIVING ACTIVE ========== */}
               {currentVisualId === "driving-active" && (
                 <div className="absolute inset-0 bg-gradient-to-b from-slate-900 to-emerald-900 animate-fadeIn">
                   <div className="pt-12 px-4">
@@ -444,7 +498,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 7: VISIT RECORD ========== */}
+              {/* ========== SCENA 8: VISIT RECORD ========== */}
               {currentVisualId === "visit-record" && (
                 <div className="px-4 animate-fadeIn">
                   <div className="flex items-center gap-2 mb-3">
@@ -484,7 +538,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 8: VISIT SAVED ========== */}
+              {/* ========== SCENA 9: VISIT SAVED ========== */}
               {currentVisualId === "visit-saved" && (
                 <div className="px-4 animate-fadeIn flex flex-col items-center justify-center h-[400px]">
                   <div className="w-16 h-16 bg-green-500/20 border-2 border-green-500 rounded-full flex items-center justify-center mb-4">
@@ -509,7 +563,7 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 9: DAILY REPORT ========== */}
+              {/* ========== SCENA 10: DAILY REPORT ========== */}
               {currentVisualId === "daily-report" && (
                 <div className="px-4 animate-fadeIn">
                   <p className="text-white text-lg font-semibold mb-1">📊 Fine giornata</p>
@@ -541,7 +595,43 @@ export default function AnimatedMockup() {
                 </div>
               )}
 
-              {/* ========== SCENA 10: CLAIM ========== */}
+              {/* ========== SCENA 11: SECURITY (NUOVO!) ========== */}
+              {currentVisualId === "security" && (
+                <div className="px-4 animate-fadeIn flex flex-col items-center justify-center h-[400px]">
+                  <div className="w-20 h-20 bg-gradient-to-br from-emerald-500 to-green-600 rounded-full flex items-center justify-center mb-4">
+                    <span className="text-3xl">🔐</span>
+                  </div>
+                  <p className="text-white font-bold text-lg mb-2">I tuoi dati, solo tuoi</p>
+                  <p className="text-slate-400 text-xs text-center mb-4 px-4">
+                    Crittografia end-to-end.
+                    <br />
+                    <span className="text-emerald-400">Nemmeno noi possiamo leggerli.</span>
+                  </p>
+                  
+                  {subStep > 2 && (
+                    <div className="space-y-2 w-full max-w-[200px]">
+                      <div className="bg-slate-800 rounded-lg p-2 flex items-center gap-2 animate-slideInLeft">
+                        <span className="text-green-400">✓</span>
+                        <span className="text-slate-300 text-xs">Clienti cifrati</span>
+                      </div>
+                      <div className="bg-slate-800 rounded-lg p-2 flex items-center gap-2 animate-slideInLeft" style={{ animationDelay: "0.1s" }}>
+                        <span className="text-green-400">✓</span>
+                        <span className="text-slate-300 text-xs">Visite cifrate</span>
+                      </div>
+                      <div className="bg-slate-800 rounded-lg p-2 flex items-center gap-2 animate-slideInLeft" style={{ animationDelay: "0.2s" }}>
+                        <span className="text-green-400">✓</span>
+                        <span className="text-slate-300 text-xs">Note cifrate</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {subStep > 5 && (
+                    <p className="text-emerald-400 text-xs mt-4 animate-pulse">GDPR compliant</p>
+                  )}
+                </div>
+              )}
+
+              {/* ========== SCENA 12: CLAIM ========== */}
               {currentVisualId === "claim" && (
                 <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-purple-600 flex flex-col items-center justify-center animate-fadeIn rounded-b-[2.5rem]">
                   <div className="text-center px-6">
@@ -557,9 +647,15 @@ export default function AnimatedMockup() {
                         <span className="text-cyan-300">Ogni giorno più intelligente.</span>
                       </p>
                     )}
+
+                    {subStep > 3 && (
+                      <p className="text-white/60 text-xs mt-2 animate-fadeIn">
+                        🔐 Solo tu puoi vedere i tuoi dati
+                      </p>
+                    )}
                     
-                    {subStep > 4 && (
-                      <div className="mt-6 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full animate-pulse">
+                    {subStep > 5 && (
+                      <div className="mt-5 inline-flex items-center gap-2 bg-white/20 px-4 py-2 rounded-full animate-pulse">
                         <span className="text-white text-sm font-medium">Richiedi accesso Beta →</span>
                       </div>
                     )}
