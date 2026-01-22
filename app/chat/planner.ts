@@ -48,6 +48,7 @@ import {
   // Planning
   getCallbacks,
   getTodayPlanning,
+  getTomorrowPlanning,
   getInactiveClients,
   // Note
   searchInNotes,
@@ -851,11 +852,9 @@ async function handleIntent(
     }
 
     case 'planning_tomorrow': {
-      // TODO: implementare getTomorrowPlanning con prossima_data
-      return {
-        text: "📅 Per il planning di domani, sto ancora imparando!\n\nPer ora puoi:\n• Controllare i promemoria impostati\n• Vedere i clienti da richiamare\n\nProva: \"Chi devo richiamare?\"",
-        intent
-      };
+      if (!crypto) return { ...needCrypto(), intent };
+      const result = await getTomorrowPlanning(crypto);
+      return { text: result.message, intent };
     }
 
     case 'planning_callbacks': {

@@ -976,6 +976,44 @@ export async function getTodayPlanning(crypto: CryptoLike): Promise<{
   return { callbacks: callbackResult.items, visitsToday, message };
 }
 
+/**
+ * Planning per domani (visite pianificate, callbacks)
+ */
+export async function getTomorrowPlanning(crypto: CryptoLike): Promise<{
+  callbacks: PlanningItem[];
+  message: string;
+}> {
+  assertCrypto(crypto);
+
+  // Per ora mostra i callbacks (clienti da richiamare)
+  // TODO: aggiungere supporto per visite pianificate quando avremo un campo data_pianificata
+  const callbackResult = await getCallbacks(crypto);
+
+  // Calcola data di domani
+  const tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = tomorrow.toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
+
+  let message = `📅 **Planning per domani (${tomorrowStr}):**\n\n`;
+
+  if (callbackResult.items.length > 0) {
+    message += `📞 **Clienti da richiamare:** ${callbackResult.items.length}\n`;
+    callbackResult.items.slice(0, 5).forEach(i => {
+      message += `   • ${i.clientName}`;
+      if (i.esito) message += ` - ${i.esito}`;
+      message += '\n';
+    });
+    message += '\n💡 Suggerimento: inizia la giornata con i richiami!';
+  } else {
+    message += "✨ Nessun appuntamento o richiamo pianificato per domani.\n\n";
+    message += "💡 Vuoi pianificare delle visite? Prova:\n";
+    message += '   • "Chi non visito da più di 30 giorni?"\n';
+    message += '   • "Clienti senza ordini questo mese"';
+  }
+
+  return { callbacks: callbackResult.items, message };
+}
+
 // ───────────────────────────────────────────────────────────────
 // RICERCA CLIENTI
 // ───────────────────────────────────────────────────────────────

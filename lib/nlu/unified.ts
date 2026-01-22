@@ -952,8 +952,9 @@ const INTENT_MATCHERS: IntentMatcher[] = [
   {
     intent: 'visit_count',
     patterns: [
-      /\b(quante|numero|conta|totale)\b.*\b(visite|chiamate|attivita)\b/i,
-      /\b(visite|chiamate)\b.*\b(quante|totale|numero)\b/i,
+      // ❌ Escludi "domani" - va a planning_tomorrow
+      /\b(quante|numero|conta|totale)\b.*\b(visite|chiamate|attivita)\b(?!.*\bdomani\b)/i,
+      /\b(visite|chiamate)\b.*\b(quante|totale|numero)\b(?!.*\bdomani\b)/i,
       // "visite questa settimana/mese" senza "quante"
       /\b(visite|chiamate)\b.*\b(questa settimana|questo mese|settimana scorsa|mese scorso)\b/i,
     ],
@@ -1284,11 +1285,13 @@ const INTENT_MATCHERS: IntentMatcher[] = [
       /\b(programma|agenda|planning|piano)\b.*\b(domani)\b/i,
       /\b(domani)\b.*\b(programma|agenda|fare|visite)\b/i,
       /^cosa (devo fare|faccio) domani$/i,
-      // "visite domani", "appuntamenti domani"
+      // "visite domani", "appuntamenti domani", "quante visite domani"
       /\b(visite|appuntament[oi]|impegn[oi])\b.*\b(domani|di domani)\b/i,
       /\b(domani)\b.*\b(visite|appuntament[oi])\b/i,
+      /\b(quante|che)\b.*\b(visite|appuntament[oi])\b.*\b(domani)\b/i,
+      /\b(domani)\b.*\b(quante|che)\b.*\b(visite)\b/i,
     ],
-    confidence: 0.9,
+    confidence: 0.95, // Più alta per priorità su visit_count
   },
 
   {
