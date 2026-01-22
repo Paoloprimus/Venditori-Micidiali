@@ -39,6 +39,7 @@ export default function AnimatedMockup() {
 
   const audioQueueRef = useRef<string[]>([]);
   const [audioReady, setAudioReady] = useState(false);
+  const [audioDurations, setAudioDurations] = useState<Record<number, number>>({});
 
   // Play audio queue for current scene
   const playSceneAudio = (sceneId: number) => {
@@ -207,6 +208,11 @@ export default function AnimatedMockup() {
     // Play audio for this scene
     playSceneAudio(scene);
     
+    // Use audio duration if available, otherwise use default scene duration
+    // Add 500ms buffer for smooth transition
+    const audioDur = audioDurations[scene] || 0;
+    const sceneDur = Math.max(currentScene.duration, audioDur + 500);
+    
     sceneTimerRef.current = setTimeout(() => {
       if (scene < scenes.length - 1) {
         setScene(s => s + 1);
@@ -215,12 +221,12 @@ export default function AnimatedMockup() {
       } else {
         resetPresentation();
       }
-    }, currentScene.duration);
+    }, sceneDur);
     
     return () => {
       if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
     };
-  }, [isPlaying, scene]);
+  }, [isPlaying, scene, audioDurations]);
 
   // Scene-specific animations
   useEffect(() => {
@@ -270,6 +276,40 @@ export default function AnimatedMockup() {
     return () => {
       stopAudio();
     };
+  }, []);
+
+  // Pre-load audio and get durations
+  useEffect(() => {
+    const loadDurations = async () => {
+      const durations: Record<number, number> = {};
+      
+      for (const [sceneIdStr, files] of Object.entries(sceneAudio)) {
+        const sceneId = parseInt(sceneIdStr);
+        let totalDuration = 0;
+        
+        for (const src of files) {
+          try {
+            const audio = new Audio(src);
+            await new Promise<void>((resolve) => {
+              audio.onloadedmetadata = () => {
+                totalDuration += audio.duration * 1000; // ms
+                resolve();
+              };
+              audio.onerror = () => resolve(); // Skip if error
+            });
+          } catch {
+            // Skip if error
+          }
+        }
+        
+        durations[sceneId] = totalDuration;
+      }
+      
+      setAudioDurations(durations);
+      console.log("Audio durations loaded:", durations);
+    };
+    
+    loadDurations();
   }, []);
 
   const currentVisualId = scenes[scene]?.visualId || "import-data";
