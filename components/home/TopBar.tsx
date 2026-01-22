@@ -1,7 +1,7 @@
 // components/home/TopBar.tsx
 "use client";
 import React from "react";
-import { APP_NAME } from "@/lib/config";
+import { APP_NAME_FULL } from "@/lib/config";
 
 type Props = {
   title: string;
@@ -21,7 +21,7 @@ export default function TopBar({
   onOpenImpostazioni,
   onLogout 
 }: Props) {
-  const brand = APP_NAME; // "Repping"
+  const brand = APP_NAME_FULL; // "Repping"
 
   return (
     <div className="topbar" style={{ justifyContent: "space-between" }}>

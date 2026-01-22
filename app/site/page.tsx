@@ -31,7 +31,7 @@ function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg";
           R
         </text>
       </svg>
-      <span className={`font-bold ${textSize} ${textColor}`}>REPING</span>
+      <span className={`font-bold ${textSize} ${textColor}`}>REPING</span><span className={`ml-2 text-xs ${textColor} opacity-70`}>V2 Beta</span>
     </div>
   );
 }
