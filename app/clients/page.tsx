@@ -44,8 +44,12 @@ type RawAccount = {
   vat_number_enc?: any; vat_number_iv?: any;
   address_enc?: any; address_iv?: any;
   
-  // plain text
+  // plain text (fallback per dati demo/non cifrati)
+  name?: string;
   notes?: string;
+  type?: string;
+  street?: string;
+  note?: string;
   
   // custom (plain text per LLM)
   custom?: any;
@@ -268,15 +272,15 @@ const { data, error } = await supabase
   .from("accounts")
   .select(
     "id,created_at," +
-    "name_enc,name_iv," +
+    "name,name_enc,name_iv," +  // name in chiaro + cifrato
     "contact_name_enc,contact_name_iv," +
     "city," + 
-    "tipo_locale," +
+    "tipo_locale,type," +  // tipo_locale + type (alias)
     "email_enc,email_iv," +
     "phone_enc,phone_iv," +
     "vat_number_enc,vat_number_iv," +
     "address_enc,address_iv," +
-    "notes," +
+    "street,notes,note," +  // street, notes e note (alias)
     "custom"
   )
   .order("created_at", { ascending: false });
@@ -380,17 +384,22 @@ const decAny = await (crypto as any).decryptFields(
           });
         }
 
-        // ✅ Estrai note dal campo separato (in chiaro!)
-        const notes = r.notes || "";
+        // ✅ Estrai campi in chiaro (fallback per dati demo/non cifrati)
+        const notes = r.notes || r.note || "";
         const city = r.city || "";
-        const tipoLocale = r.tipo_locale || "";
+        const tipoLocale = r.tipo_locale || r.type || "";
+        const plainName = r.name || "";  // nome in chiaro (per dati demo)
+        const plainStreet = r.street || "";
+
+        // 🔧 Usa nome in chiaro come fallback se decifratura non produce risultato
+        const finalName = String(dec.name || plainName || "");
 
 plain.push({
   id: r.id,
   created_at: r.created_at,
-  name: String(dec.name ?? ""),
+  name: finalName,  // usa fallback se decifratura fallisce
   contact_name: String(dec.contact_name ?? ""),
-  city: String(city),  // <-- CAMBIA DA: String(dec.city ?? "")
+  city: String(city),
   tipo_locale: String(tipoLocale),
   email: String(dec.email ?? ""),
   phone: String(dec.phone ?? ""),
@@ -400,17 +409,18 @@ plain.push({
         
       } catch (e) {
         console.warn("[/clients] decrypt error for", r.id, e);
+        // 🔧 Usa campi in chiaro come fallback in caso di errore
 plain.push({
   id: r.id,
   created_at: r.created_at,
-  name: "", 
+  name: r.name || "",  // fallback al nome in chiaro (per dati demo)
   contact_name: "", 
-  city: "",
-  tipo_locale: "",
+  city: r.city || "",
+  tipo_locale: r.tipo_locale || r.type || "",
   email: "", 
   phone: "", 
   vat_number: "", 
-  notes: "",
+  notes: r.notes || r.note || "",
 });
       }
     }
