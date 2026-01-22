@@ -191,7 +191,7 @@ export type CompositeFilters = {
   maxAmount?: number;
   notVisitedDays?: number;
   hasOrdered?: boolean;
-  period?: 'today' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'quarter' | 'year';
+  period?: 'today' | 'tomorrow' | 'yesterday' | 'week' | 'last_week' | 'month' | 'last_month' | 'quarter' | 'year';
 };
 
 export type CompositeQueryResult = {
