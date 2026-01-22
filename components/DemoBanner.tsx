@@ -18,23 +18,30 @@ export default function DemoBanner() {
   useEffect(() => {
     async function checkDemoData() {
       try {
+        console.log("[DemoBanner] Checking for demo data...");
         const res = await fetch("/api/demo/clear");
+        const data = await res.json();
+        console.log("[DemoBanner] Response:", data);
+        
         if (res.ok) {
-          const data = await res.json();
           if (data.hasDemoData) {
+            console.log("[DemoBanner] ✅ Demo data found, showing banner");
             setVisible(true);
             setDemoCount(data.demoCount || 0);
           } else {
+            console.log("[DemoBanner] No demo data");
             setVisible(false);
           }
+        } else {
+          console.error("[DemoBanner] API error:", data);
         }
       } catch (e) {
-        // Ignora errori
+        console.error("[DemoBanner] Fetch error:", e);
       }
     }
 
-    // Check iniziale
-    checkDemoData();
+    // Check iniziale (con piccolo delay per aspettare auth)
+    setTimeout(checkDemoData, 1000);
 
     // Ricontrolla periodicamente (ogni 30 secondi) o dopo navigazione
     const interval = setInterval(checkDemoData, 30000);

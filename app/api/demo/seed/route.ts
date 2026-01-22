@@ -93,16 +93,27 @@ export async function POST(req: NextRequest) {
       try {
         console.log("[Demo Seed] Inserting client:", client.name);
         
+        // Usa SOLO le colonne che esistono nel DB:
+        // - name (in chiaro, per dati demo)
+        // - city (in chiaro)
+        // - tipo_locale (in chiaro, NON 'type')
+        // - notes (in chiaro)
+        // - custom (JSONB con is_demo flag)
         const { data: inserted, error } = await supabase
           .from("accounts")
           .insert({
             user_id: user.id,
             name: client.name,
             city: client.city,
-            street: client.address,
-            type: client.type,
-            notes: client.notes,  // FIXED: era 'note', ora 'notes'
-            custom: { is_demo: true },
+            tipo_locale: client.type,  // FIXED: 'tipo_locale' non 'type'
+            notes: client.notes,
+            custom: { 
+              is_demo: true,
+              address: client.address,  // Salva indirizzo in custom
+              contact_name: client.contact_name,
+              phone: client.phone,
+              email: client.email,
+            },
           })
           .select("id")
           .single();
