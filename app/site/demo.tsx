@@ -16,6 +16,51 @@ export default function AnimatedMockup() {
   const subStepRef = useRef<NodeJS.Timeout | null>(null);
   const elapsedRef = useRef<NodeJS.Timeout | null>(null);
   const sceneTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Mappa scena → audio (metti i file in public/demo/)
+  const sceneAudio: Record<number, string | null> = {
+    0: "/demo/narratore01.mp3",   // Import
+    1: "/demo/narratore02.mp3",   // Proattivo
+    2: "/demo/narratore03.mp3",   // Chaos (inizio)
+    3: "/demo/utente01.mp3",      // Domanda utente
+    4: "/demo/reping01.mp3",      // Piano REPING
+    5: null,                       // Dettaglio (no audio)
+    6: "/demo/narratore05.mp3",   // Guida
+    7: "/demo/reping02.mp3",      // Hands-free REPING
+    8: "/demo/utente02.mp3",      // Registra utente
+    9: "/demo/reping03.mp3",      // Salvato REPING
+    10: "/demo/narratore07.mp3",  // Report
+    11: "/demo/narratore08.mp3",  // Sicurezza
+    12: "/demo/narratore09.mp3",  // Claim finale
+  };
+
+  // Play audio for current scene
+  const playSceneAudio = (sceneId: number) => {
+    // Stop previous audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+    
+    const audioSrc = sceneAudio[sceneId];
+    if (audioSrc) {
+      audioRef.current = new Audio(audioSrc);
+      audioRef.current.volume = 0.8;
+      audioRef.current.play().catch(() => {
+        // Autoplay blocked - user needs to interact first
+        console.log("Audio autoplay blocked");
+      });
+    }
+  };
+
+  // Stop audio
+  const stopAudio = () => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
+  };
 
   // SCENEGGIATURA v3 - 13 scene, ~70 secondi
   const scenes = [
@@ -63,12 +108,13 @@ export default function AnimatedMockup() {
     });
   };
 
-  // Stop all timers
+  // Stop all timers and audio
   const stopPresentation = () => {
     setIsPlaying(false);
     if (subStepRef.current) clearInterval(subStepRef.current);
     if (elapsedRef.current) clearInterval(elapsedRef.current);
     if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
+    stopAudio();
   };
 
   // Reset to beginning
@@ -127,12 +173,15 @@ export default function AnimatedMockup() {
     }
   };
 
-  // Scene progression timer
+  // Scene progression timer + audio
   useEffect(() => {
     if (!isPlaying) return;
     
     const currentScene = scenes[scene];
     if (!currentScene) return;
+
+    // Play audio for this scene
+    playSceneAudio(scene);
     
     sceneTimerRef.current = setTimeout(() => {
       if (scene < scenes.length - 1) {
@@ -192,6 +241,13 @@ export default function AnimatedMockup() {
     };
   }, [isPlaying]);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      stopAudio();
+    };
+  }, []);
+
   const currentVisualId = scenes[scene]?.visualId || "import-data";
   const progressPercent = totalDuration > 0 ? (elapsedTime / totalDuration) * 100 : 0;
 
@@ -221,6 +277,9 @@ export default function AnimatedMockup() {
                 <div className="flex gap-1 items-center">
                   {isPlaying && (
                     <span className="text-[10px] text-green-400">● DEMO</span>
+                  )}
+                  {isPlaying && sceneAudio[scene] && (
+                    <span className="text-[10px]">🔊</span>
                   )}
                   <span>📶</span>
                   <span>🔋</span>
