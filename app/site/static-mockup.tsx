@@ -15,50 +15,43 @@ export default function StaticMockupWithCTA() {
     setLoading(true);
 
     try {
-      // Genera credenziali temporanee
-      const timestamp = Date.now();
-      const randomId = Math.random().toString(36).substring(2, 8);
-      const email = `demo-${timestamp}-${randomId}@reping.app`;
-      const password = `demo-${randomId}-${timestamp}`;
+      // 1. Crea utente via API server-side (già confermato)
+      const createRes = await fetch("/api/demo/create-user", { method: "POST" });
+      const createData = await createRes.json();
 
-      // Crea account
-      const { data, error: signUpError } = await supabase.auth.signUp({
+      if (!createRes.ok) {
+        console.error("[Demo] Create user error:", createData);
+        alert("Errore creazione utente: " + createData.error);
+        setLoading(false);
+        return;
+      }
+
+      const { email, password } = createData;
+
+      // 2. Login per ottenere sessione
+      const { data, error: signInError } = await supabase.auth.signInWithPassword({
         email,
         password,
-        options: {
-          data: {
-            full_name: "Demo User",
-            is_demo: true,
-          },
-        },
       });
 
-      if (signUpError) {
-        console.error("[Demo] Signup error:", signUpError);
-        alert("Errore creazione demo: " + signUpError.message);
+      if (signInError || !data.session) {
+        console.error("[Demo] SignIn error:", signInError);
+        alert("Errore login: " + (signInError?.message || "sessione non creata"));
         setLoading(false);
         return;
       }
 
-      // Verifica che abbiamo una sessione
-      if (!data.session) {
-        console.error("[Demo] No session after signup");
-        alert("Errore: sessione non creata. Verifica impostazioni Supabase.");
-        setLoading(false);
-        return;
-      }
-
-      // Seed dati demo
+      // 3. Seed dati demo
       const seedRes = await fetch("/api/demo/seed", { method: "POST" });
       if (!seedRes.ok) {
         console.warn("[Demo] Seed warning:", await seedRes.text());
       }
 
-      // Codifica token di sessione in base64
+      // 4. Codifica token di sessione in base64
       const encodedAccessToken = btoa(data.session.access_token);
       const encodedRefreshToken = btoa(data.session.refresh_token);
 
-      // Redirect a reping.app con token di sessione
+      // 5. Redirect a reping.app con token di sessione
       window.location.href = `https://reping.app/auto-login?at=${encodedAccessToken}&rt=${encodedRefreshToken}`;
 
     } catch (err: any) {
