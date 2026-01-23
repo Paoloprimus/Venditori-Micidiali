@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 /**
- * Auto-login page per demo anonima
- * Riceve credenziali via query params e fa login automatico
+ * Contenuto della pagina auto-login
  */
-export default function AutoLoginPage() {
+function AutoLoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState("");
@@ -58,13 +57,7 @@ export default function AutoLoginPage() {
   }, [searchParams, router]);
 
   return (
-    <div style={{
-      minHeight: "100vh",
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "center",
-      background: "#0f172a",
-    }}>
+    <>
       {error ? (
         <div style={{ color: "white", textAlign: "center" }}>
           <p style={{ color: "#ef4444", marginBottom: 16 }}>{error}</p>
@@ -87,6 +80,40 @@ export default function AutoLoginPage() {
           <p>Accesso in corso...</p>
         </div>
       )}
+    </>
+  );
+}
+
+/**
+ * Auto-login page per demo anonima
+ * Riceve credenziali via query params e fa login automatico
+ */
+export default function AutoLoginPage() {
+  return (
+    <div style={{
+      minHeight: "100vh",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      background: "#0f172a",
+    }}>
+      <Suspense fallback={
+        <div style={{ color: "white", textAlign: "center" }}>
+          <div style={{
+            width: 48,
+            height: 48,
+            margin: "0 auto 16px",
+            border: "4px solid #334155",
+            borderTopColor: "#3b82f6",
+            borderRadius: "50%",
+            animation: "spin 1s linear infinite",
+          }} />
+          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+          <p>Caricamento...</p>
+        </div>
+      }>
+        <AutoLoginContent />
+      </Suspense>
     </div>
   );
 }
