@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { supabase } from "@/lib/supabase/client";
 
 /**
  * Mockup statico della dashboard REPING - tutto cliccabile per demo
@@ -13,56 +12,9 @@ export default function StaticMockupWithCTA() {
   async function startDemo() {
     if (loading) return;
     setLoading(true);
-
-    try {
-      // 1. Crea utente via API server-side (già confermato)
-      const createRes = await fetch("/api/demo/create-user", { method: "POST" });
-      const createData = await createRes.json();
-
-      if (!createRes.ok) {
-        console.error("[Demo] Create user error:", createData);
-        alert("Errore creazione utente: " + createData.error);
-        setLoading(false);
-        return;
-      }
-
-      const { email, password } = createData;
-
-      // 2. Login per ottenere sessione
-      const { data, error: signInError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (signInError || !data.session) {
-        console.error("[Demo] SignIn error:", signInError);
-        alert("Errore login: " + (signInError?.message || "sessione non creata"));
-        setLoading(false);
-        return;
-      }
-
-      // 3. Seed dati demo (passa userId)
-      const seedRes = await fetch("/api/demo/seed", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ userId: createData.userId }),
-      });
-      if (!seedRes.ok) {
-        console.warn("[Demo] Seed warning:", await seedRes.text());
-      }
-
-      // 4. Codifica credenziali in base64 (più semplice dei token)
-      const encodedEmail = btoa(email);
-      const encodedPassword = btoa(password);
-
-      // 5. Redirect alla pagina di loading demo
-      window.location.href = `https://reping.app/demo-loading?e=${encodedEmail}&p=${encodedPassword}`;
-
-    } catch (err: any) {
-      console.error("[Demo] Error:", err);
-      alert("Errore: " + err.message);
-      setLoading(false);
-    }
+    
+    // Redirect IMMEDIATO alla pagina di loading - tutto il resto avviene lì
+    window.location.href = "https://reping.app/demo-loading";
   }
 
   return (

@@ -1,197 +1,115 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 const STEPS = [
-  { id: 1, text: "Creazione ambiente demo...", duration: 800 },
-  { id: 2, text: "Accesso sicuro in corso...", duration: 1200 },
-  { id: 3, text: "Inizializzazione cifratura E2E...", duration: 1500 },
-  { id: 4, text: "Caricamento dati di esempio...", duration: 1000 },
-  { id: 5, text: "Preparazione dashboard...", duration: 800 },
+  { id: 1, text: "Creazione ambiente demo...", key: "create" },
+  { id: 2, text: "Accesso sicuro in corso...", key: "login" },
+  { id: 3, text: "Caricamento dati di esempio...", key: "seed" },
+  { id: 4, text: "Inizializzazione cifratura E2E...", key: "crypto" },
+  { id: 5, text: "Preparazione dashboard...", key: "ready" },
 ];
 
-function DemoLoadingContent() {
-  const searchParams = useSearchParams();
-  const [currentStep, setCurrentStep] = useState(0);
+export default function DemoLoadingPage() {
+  const [currentStep, setCurrentStep] = useState(1);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    const emailParam = searchParams.get("e");
-    const passwordParam = searchParams.get("p");
+    async function setupDemo() {
+      try {
+        // STEP 1: Crea utente
+        setCurrentStep(1);
+        const createRes = await fetch("/api/demo/create-user", { method: "POST" });
+        const createData = await createRes.json();
 
-    if (!emailParam || !passwordParam) {
-      setError("Parametri mancanti. Torna alla home.");
-      return;
+        if (!createRes.ok) {
+          throw new Error(createData.error || "Errore creazione utente");
+        }
+
+        const { email, password, userId } = createData;
+
+        // STEP 2: Login
+        setCurrentStep(2);
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
+
+        if (signInError || !data.session) {
+          throw new Error(signInError?.message || "Errore login");
+        }
+
+        // STEP 3: Seed dati
+        setCurrentStep(3);
+        const seedRes = await fetch("/api/demo/seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ userId }),
+        });
+
+        if (!seedRes.ok) {
+          console.warn("[Demo] Seed warning:", await seedRes.text());
+        }
+
+        // STEP 4: Crypto init (simulato - il vero init avviene nella home)
+        setCurrentStep(4);
+        await new Promise(r => setTimeout(r, 800));
+
+        // Setta flag demo
+        sessionStorage.setItem("reping:isAnonDemo", "true");
+        localStorage.setItem("reping:welcome_shown", "true");
+        localStorage.setItem("reping:onboarding_import_done", "true");
+
+        // STEP 5: Ready
+        setCurrentStep(5);
+        await new Promise(r => setTimeout(r, 500));
+
+        // Vai alla home
+        window.location.href = "/";
+
+      } catch (err: any) {
+        console.error("[DemoLoading] Error:", err);
+        setError(err.message || "Errore durante il setup");
+      }
     }
 
-    // Avvia gli step di loading
-    let stepIndex = 0;
-    const runSteps = async () => {
-      for (const step of STEPS) {
-        setCurrentStep(step.id);
-        await new Promise(r => setTimeout(r, step.duration));
-        stepIndex++;
-        
-        // A metà degli step, fai il login effettivo
-        if (stepIndex === 2) {
-          try {
-            // Redirect all'API di login (avviene in background mentre mostriamo gli step)
-            const loginUrl = `/api/demo/auto-login?e=${emailParam}&p=${passwordParam}`;
-            
-            // Fetch per fare login senza redirect immediato
-            const res = await fetch(loginUrl, { 
-              method: 'GET',
-              redirect: 'manual',
-              credentials: 'include',
-            });
-            
-            // Se il login ha settato i cookies, prosegui con gli step
-            if (res.type === 'opaqueredirect' || res.ok || res.status === 302) {
-              console.log("[DemoLoading] Login fetch completed");
-            }
-          } catch (e) {
-            console.log("[DemoLoading] Fetch error (expected for redirect):", e);
-          }
-        }
-      }
-      
-      // Tutti gli step completati, vai alla home
-      window.location.href = "/";
-    };
-
-    runSteps();
-  }, [searchParams]);
+    setupDemo();
+  }, []);
 
   if (error) {
     return (
-      <div style={{ textAlign: "center" }}>
-        <p style={{ color: "#ef4444", marginBottom: 24 }}>{error}</p>
-        <a 
-          href="https://reping.it" 
-          style={{ 
-            color: "#3b82f6", 
-            textDecoration: "underline",
-            fontSize: 16,
-          }}
-        >
-          Torna alla home
-        </a>
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
+        padding: 20,
+      }}>
+        <div style={{ textAlign: "center", maxWidth: 400 }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>😕</div>
+          <h2 style={{ color: "white", marginBottom: 16 }}>Ops! Qualcosa è andato storto</h2>
+          <p style={{ color: "#ef4444", marginBottom: 24 }}>{error}</p>
+          <a 
+            href="https://reping.it" 
+            style={{ 
+              display: "inline-block",
+              padding: "12px 24px",
+              background: "#3b82f6",
+              color: "white",
+              borderRadius: 8,
+              textDecoration: "none",
+              fontWeight: 600,
+            }}
+          >
+            Torna alla home
+          </a>
+        </div>
       </div>
     );
   }
 
-  return (
-    <div style={{ textAlign: "center", maxWidth: 400 }}>
-      {/* Logo */}
-      <div style={{ marginBottom: 32 }}>
-        <svg width="80" height="80" viewBox="0 0 512 512" style={{ margin: "0 auto" }}>
-          <rect width="512" height="512" fill="#1e1e1e" rx="96"/>
-          <text x="256" y="380" fontFamily="system-ui" fontSize="360" fontWeight="900" fill="#BEFF00" textAnchor="middle">R</text>
-        </svg>
-        <h1 style={{ 
-          fontSize: 28, 
-          fontWeight: 700, 
-          color: "white", 
-          marginTop: 16,
-          marginBottom: 8,
-        }}>
-          REPING Demo
-        </h1>
-        <p style={{ color: "#94a3b8", fontSize: 14 }}>
-          Preparazione dell'ambiente di prova
-        </p>
-      </div>
-
-      {/* Progress steps */}
-      <div style={{ marginBottom: 32 }}>
-        {STEPS.map((step) => (
-          <div 
-            key={step.id}
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 12,
-              padding: "10px 16px",
-              marginBottom: 8,
-              borderRadius: 8,
-              background: currentStep >= step.id ? "rgba(59, 130, 246, 0.1)" : "transparent",
-              transition: "all 0.3s",
-            }}
-          >
-            {/* Icona stato */}
-            <div style={{
-              width: 24,
-              height: 24,
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              background: currentStep > step.id 
-                ? "#10b981" 
-                : currentStep === step.id 
-                  ? "#3b82f6" 
-                  : "#334155",
-              transition: "all 0.3s",
-            }}>
-              {currentStep > step.id ? (
-                <span style={{ color: "white", fontSize: 14 }}>✓</span>
-              ) : currentStep === step.id ? (
-                <div style={{
-                  width: 10,
-                  height: 10,
-                  borderRadius: "50%",
-                  border: "2px solid white",
-                  borderTopColor: "transparent",
-                  animation: "spin 0.8s linear infinite",
-                }} />
-              ) : (
-                <span style={{ color: "#64748b", fontSize: 12 }}>{step.id}</span>
-              )}
-            </div>
-            
-            {/* Testo */}
-            <span style={{
-              color: currentStep >= step.id ? "white" : "#64748b",
-              fontSize: 14,
-              fontWeight: currentStep === step.id ? 600 : 400,
-              transition: "all 0.3s",
-            }}>
-              {step.text}
-            </span>
-          </div>
-        ))}
-      </div>
-
-      {/* Info box */}
-      <div style={{
-        background: "rgba(251, 191, 36, 0.1)",
-        border: "1px solid rgba(251, 191, 36, 0.3)",
-        borderRadius: 8,
-        padding: 16,
-        marginBottom: 24,
-      }}>
-        <p style={{ color: "#fbbf24", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
-          🔐 REPING utilizza crittografia end-to-end.<br/>
-          I tuoi dati sono protetti e visibili solo a te.
-        </p>
-      </div>
-
-      {/* Footer */}
-      <p style={{ color: "#64748b", fontSize: 12 }}>
-        Questa è una demo con dati fittizi
-      </p>
-
-      <style>{`
-        @keyframes spin {
-          to { transform: rotate(360deg); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-export default function DemoLoadingPage() {
   return (
     <div style={{
       minHeight: "100vh",
@@ -201,23 +119,113 @@ export default function DemoLoadingPage() {
       background: "linear-gradient(135deg, #0f172a 0%, #1e293b 100%)",
       padding: 20,
     }}>
-      <Suspense fallback={
-        <div style={{ color: "white", textAlign: "center" }}>
-          <div style={{
-            width: 48,
-            height: 48,
-            margin: "0 auto 16px",
-            border: "4px solid #334155",
-            borderTopColor: "#3b82f6",
-            borderRadius: "50%",
-            animation: "spin 1s linear infinite",
-          }} />
-          <p>Caricamento...</p>
-          <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+      <div style={{ textAlign: "center", maxWidth: 400 }}>
+        {/* Logo */}
+        <div style={{ marginBottom: 32 }}>
+          <svg width="80" height="80" viewBox="0 0 512 512" style={{ margin: "0 auto", display: "block" }}>
+            <rect width="512" height="512" fill="#1e1e1e" rx="96"/>
+            <text x="256" y="380" fontFamily="system-ui" fontSize="360" fontWeight="900" fill="#BEFF00" textAnchor="middle">R</text>
+          </svg>
+          <h1 style={{ 
+            fontSize: 28, 
+            fontWeight: 700, 
+            color: "white", 
+            marginTop: 16,
+            marginBottom: 8,
+          }}>
+            REPING Demo
+          </h1>
+          <p style={{ color: "#94a3b8", fontSize: 14 }}>
+            Preparazione dell'ambiente di prova
+          </p>
         </div>
-      }>
-        <DemoLoadingContent />
-      </Suspense>
+
+        {/* Progress steps */}
+        <div style={{ marginBottom: 32, textAlign: "left" }}>
+          {STEPS.map((step) => (
+            <div 
+              key={step.id}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 16px",
+                marginBottom: 8,
+                borderRadius: 8,
+                background: currentStep >= step.id ? "rgba(59, 130, 246, 0.1)" : "transparent",
+                transition: "all 0.3s",
+              }}
+            >
+              {/* Icona stato */}
+              <div style={{
+                width: 28,
+                height: 28,
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                background: currentStep > step.id 
+                  ? "#10b981" 
+                  : currentStep === step.id 
+                    ? "#3b82f6" 
+                    : "#334155",
+                transition: "all 0.3s",
+                flexShrink: 0,
+              }}>
+                {currentStep > step.id ? (
+                  <span style={{ color: "white", fontSize: 14 }}>✓</span>
+                ) : currentStep === step.id ? (
+                  <div style={{
+                    width: 12,
+                    height: 12,
+                    borderRadius: "50%",
+                    border: "2px solid white",
+                    borderTopColor: "transparent",
+                    animation: "spin 0.8s linear infinite",
+                  }} />
+                ) : (
+                  <span style={{ color: "#64748b", fontSize: 12 }}>{step.id}</span>
+                )}
+              </div>
+              
+              {/* Testo */}
+              <span style={{
+                color: currentStep >= step.id ? "white" : "#64748b",
+                fontSize: 14,
+                fontWeight: currentStep === step.id ? 600 : 400,
+                transition: "all 0.3s",
+              }}>
+                {step.text}
+              </span>
+            </div>
+          ))}
+        </div>
+
+        {/* Info box */}
+        <div style={{
+          background: "rgba(251, 191, 36, 0.1)",
+          border: "1px solid rgba(251, 191, 36, 0.3)",
+          borderRadius: 8,
+          padding: 16,
+          marginBottom: 24,
+        }}>
+          <p style={{ color: "#fbbf24", fontSize: 13, margin: 0, lineHeight: 1.5 }}>
+            🔐 REPING utilizza crittografia end-to-end.<br/>
+            I tuoi dati sono protetti e visibili solo a te.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <p style={{ color: "#64748b", fontSize: 12 }}>
+          Questa è una demo con dati fittizi
+        </p>
+
+        <style>{`
+          @keyframes spin {
+            to { transform: rotate(360deg); }
+          }
+        `}</style>
+      </div>
     </div>
   );
 }
