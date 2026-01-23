@@ -27,15 +27,29 @@ function AutoLoginContent() {
         const decodedAccessToken = atob(accessToken);
         const decodedRefreshToken = atob(refreshToken);
 
+        console.log("[AutoLogin] Setting session with tokens...");
+        
         // Imposta sessione con i token
-        const { error: sessionError } = await supabase.auth.setSession({
+        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
           access_token: decodedAccessToken,
           refresh_token: decodedRefreshToken,
         });
 
         if (sessionError) {
-          console.error("[AutoLogin] Error:", sessionError);
+          console.error("[AutoLogin] setSession error:", sessionError);
           setError("Errore sessione: " + sessionError.message);
+          return;
+        }
+
+        console.log("[AutoLogin] Session set, data:", sessionData);
+
+        // Verifica che la sessione sia attiva
+        const { data: { session }, error: getError } = await supabase.auth.getSession();
+        console.log("[AutoLogin] getSession result:", { session: !!session, error: getError });
+
+        if (!session) {
+          console.error("[AutoLogin] Session not persisted!");
+          setError("Sessione non persistita. Riprova.");
           return;
         }
 
@@ -44,6 +58,8 @@ function AutoLoginContent() {
         localStorage.setItem("reping:welcome_shown", "true");
         localStorage.setItem("reping:onboarding_import_done", "true");
 
+        console.log("[AutoLogin] Flags set, redirecting to /");
+        
         // Aspetta che la sessione sia salvata, poi redirect
         await new Promise(resolve => setTimeout(resolve, 500));
         window.location.href = "/";
