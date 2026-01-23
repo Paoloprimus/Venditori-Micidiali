@@ -18,7 +18,7 @@ export default function StaticMockupWithCTA() {
       // Genera credenziali temporanee
       const timestamp = Date.now();
       const randomId = Math.random().toString(36).substring(2, 8);
-      const email = `demo-${timestamp}-${randomId}@demo.reping.it`;
+      const email = `demo-${timestamp}-${randomId}@reping.app`;
       const password = `demo-${randomId}-${timestamp}`;
 
       // Crea account
