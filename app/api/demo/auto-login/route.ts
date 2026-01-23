@@ -1,6 +1,5 @@
-import { createClient } from "@supabase/supabase-js";
+import { createSupabaseServer } from "@/lib/supabase/server";
 import { NextRequest, NextResponse } from "next/server";
-import { cookies } from "next/headers";
 
 /**
  * API: Auto-login per demo
@@ -21,15 +20,10 @@ export async function GET(req: NextRequest) {
     const email = atob(emailParam);
     const password = atob(passwordParam);
 
-    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
-    const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+    // Usa il client SSR che gestisce i cookies
+    const supabase = createSupabaseServer();
 
-    // Crea client per login
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
-      auth: { persistSession: false },
-    });
-
-    // Login
+    // Login - questo setta automaticamente i cookies
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -42,34 +36,8 @@ export async function GET(req: NextRequest) {
 
     console.log("[AutoLogin API] Success for user:", data.user.id);
 
-    // Setta i cookies di sessione Supabase
-    const cookieStore = cookies();
-    
-    // I cookie names usati da Supabase
-    const projectRef = supabaseUrl.match(/https:\/\/([^.]+)/)?.[1] || "supabase";
-    
-    cookieStore.set(`sb-${projectRef}-auth-token`, JSON.stringify({
-      access_token: data.session.access_token,
-      refresh_token: data.session.refresh_token,
-      expires_at: data.session.expires_at,
-      expires_in: data.session.expires_in,
-      token_type: data.session.token_type,
-      user: data.user,
-    }), {
-      path: "/",
-      httpOnly: false,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 7, // 1 week
-    });
-
-    // Redirect alla home con flag demo
-    const response = NextResponse.redirect(new URL("/?demo=true", req.url));
-    
-    // Aggiungi header per indicare che è una demo
-    response.headers.set("X-Demo-User", "true");
-    
-    return response;
+    // Redirect alla home
+    return NextResponse.redirect(new URL("/", req.url));
 
   } catch (err: any) {
     console.error("[AutoLogin API] Exception:", err);
