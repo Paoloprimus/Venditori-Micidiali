@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'apikey': serviceRoleKey,
+        'apikey': serviceRoleKey!,
         'Authorization': `Bearer ${serviceRoleKey}`,
         'Prefer': 'return=representation',
       },
