@@ -27,6 +27,13 @@ function AutoLoginContent() {
         const decodedAccessToken = atob(accessToken);
         const decodedRefreshToken = atob(refreshToken);
 
+        console.log("[AutoLogin] Logging out any existing session...");
+        
+        // Prima logout da eventuali sessioni esistenti e pulisci storage
+        await supabase.auth.signOut();
+        sessionStorage.clear();
+        localStorage.removeItem("repping:pph");
+        
         console.log("[AutoLogin] Setting session with tokens...");
         
         // Imposta sessione con i token
