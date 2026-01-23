@@ -66,7 +66,7 @@ export default function DemoPage() {
         
         // Piccolo delay per mostrare completamento
         setTimeout(() => {
-          router.push("/");
+          window.location.href = "https://reping.app";
         }, 500);
 
       } catch (err: any) {
