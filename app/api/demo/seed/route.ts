@@ -88,11 +88,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing Supabase config" }, { status: 500 });
   }
 
-  const supabase = createClient(supabaseUrl, serviceRoleKey, {
-    auth: { autoRefreshToken: false, persistSession: false },
-  });
-
   console.log("[Demo Seed] Starting seed for user:", userId);
+  
+  // Helper per insert via REST API (bypassa trigger)
+  async function insertViaRest(table: string, data: Record<string, any>) {
+    const res = await fetch(`${supabaseUrl}/rest/v1/${table}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': serviceRoleKey,
+        'Authorization': `Bearer ${serviceRoleKey}`,
+        'Prefer': 'return=representation',
+      },
+      body: JSON.stringify(data),
+    });
+    if (!res.ok) {
+      const err = await res.json();
+      throw new Error(err.message || res.statusText);
+    }
+    return res.json();
+  }
   
   // Usa userId dal body invece di user.id
   const user = { id: userId };
@@ -118,27 +133,28 @@ export async function POST(req: NextRequest) {
         // - tipo_locale (in chiaro, NON 'type')
         // - notes (in chiaro)
         // - custom (JSONB con is_demo flag)
-        const { data: inserted, error } = await supabase
-          .from("accounts")
-          .insert({
-            user_id: user.id,
-            name: client.name,
-            city: client.city,
-            tipo_locale: client.type,  // FIXED: 'tipo_locale' non 'type'
-            notes: client.notes,
-            custom: { 
-              is_demo: true,
-              address: client.address,  // Salva indirizzo in custom
-              contact_name: client.contact_name,
-              phone: client.phone,
-              email: client.email,
-            },
-          })
-          .select("id")
-          .single();
+        // Usa REST API diretto per bypassare trigger/RLS
+        const insertData = {
+          user_id: user.id,
+          name: client.name,
+          city: client.city,
+          tipo_locale: client.type,
+          notes: client.notes,
+          custom: { 
+            is_demo: true,
+            address: client.address,
+            contact_name: client.contact_name,
+            phone: client.phone,
+            email: client.email,
+          },
+        };
 
-        if (error) {
-          console.error("[Demo Seed] Errore insert client:", client.name, error);
+        let inserted: { id: string };
+        try {
+          const result = await insertViaRest("accounts", insertData);
+          inserted = Array.isArray(result) ? result[0] : result;
+        } catch (error: any) {
+          console.error("[Demo Seed] Errore insert client:", client.name, error.message);
           results.errors.push(`Cliente ${client.name}: ${error.message}`);
           continue;
         }
