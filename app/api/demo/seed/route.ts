@@ -178,24 +178,19 @@ export async function POST(req: NextRequest) {
         const prodotti = PRODOTTI.slice(0, 1 + Math.floor(Math.random() * 3)).join(", ");
         
         try {
-          const { error } = await supabase
-            .from("visits")
-            .insert({
-              user_id: user.id,
-              account_id: accountId,
-              data_visita: randomDate(60), // Ultimi 60 giorni
-              tipo: Math.random() > 0.7 ? "telefonata" : "visita",
-              importo_vendita: importo,
-              prodotti_discussi: prodotti,
-              note: generateVisitNote(client, esito),
-              esito,
-              prossima_azione: PROSSIME_AZIONI[Math.floor(Math.random() * PROSSIME_AZIONI.length)],
-              prossima_data: Math.random() > 0.5 ? randomDate(-14) : null, // Prossimi 14 giorni o null
-            });
-
-          if (!error) {
-            results.visits++;
-          }
+          await insertViaRest("visits", {
+            user_id: user.id,
+            account_id: accountId,
+            data_visita: randomDate(60),
+            tipo: Math.random() > 0.7 ? "telefonata" : "visita",
+            importo_vendita: importo,
+            prodotti_discussi: prodotti,
+            note: generateVisitNote(client, esito),
+            esito,
+            prossima_azione: PROSSIME_AZIONI[Math.floor(Math.random() * PROSSIME_AZIONI.length)],
+            prossima_data: Math.random() > 0.5 ? randomDate(-14) : null,
+          });
+          results.visits++;
         } catch (e: any) {
           // Ignora errori singole visite
         }
@@ -210,17 +205,12 @@ export async function POST(req: NextRequest) {
         const noteBody = CLIENT_NOTES[Math.floor(Math.random() * CLIENT_NOTES.length)];
         
         try {
-          const { error } = await supabase
-            .from("notes")
-            .insert({
-              account_id: accountId,
-              body: noteBody,
-              custom: { is_demo: true },
-            });
-
-          if (!error) {
-            results.notes++;
-          }
+          await insertViaRest("notes", {
+            account_id: accountId,
+            body: noteBody,
+            custom: { is_demo: true },
+          });
+          results.notes++;
         } catch (e: any) {
           // Ignora errori singole note
         }
