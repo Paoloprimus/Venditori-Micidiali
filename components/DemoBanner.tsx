@@ -5,17 +5,29 @@ import { useRouter } from "next/navigation";
 
 /**
  * Banner persistente che appare quando ci sono dati demo.
- * Rimane visibile finché l'utente non importa i propri clienti.
- * Non blocca l'uso dell'app (posizionato in basso).
+ * 
+ * Due modalità:
+ * 1. Utente registrato con dati fake → "Importa i tuoi clienti"
+ * 2. Demo anonima (da /demo) → "Torna a reping.it"
  */
 export default function DemoBanner() {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
   const [demoCount, setDemoCount] = useState(0);
   const [minimized, setMinimized] = useState(false);
+  const [isAnonDemo, setIsAnonDemo] = useState(false);
 
   // Verifica presenza dati demo
   useEffect(() => {
+    // Check se è demo anonima
+    const anonFlag = sessionStorage.getItem("reping:isAnonDemo");
+    if (anonFlag === "true") {
+      setIsAnonDemo(true);
+      setVisible(true);
+      setDemoCount(10); // Sempre 10 clienti nella demo anonima
+      return;
+    }
+
     async function checkDemoData() {
       try {
         console.log("[DemoBanner] Checking for demo data...");
@@ -58,8 +70,16 @@ export default function DemoBanner() {
     };
   }, []);
 
-  const handleGoToImport = () => {
-    router.push("/tools/import-clients");
+  const handleAction = () => {
+    if (isAnonDemo) {
+      // Demo anonima → torna alla landing
+      sessionStorage.removeItem("reping:isAnonDemo");
+      sessionStorage.removeItem("reping:demoExpiresAt");
+      window.location.href = "https://reping.it";
+    } else {
+      // Utente registrato → vai a import
+      router.push("/tools/import-clients");
+    }
   };
 
   if (!visible) return null;
@@ -115,18 +135,21 @@ export default function DemoBanner() {
       }}
     >
       {/* Icona e testo compatto */}
-      <span style={{ fontSize: 14 }}>🧪</span>
+      <span style={{ fontSize: 14 }}>{isAnonDemo ? "🎮" : "🧪"}</span>
       <span style={{ 
         color: "white", 
         fontSize: 12,
         fontWeight: 500,
       }}>
-        Demo attiva ({demoCount} clienti di prova)
+        {isAnonDemo 
+          ? "Demo interattiva - esplora liberamente!" 
+          : `Demo attiva (${demoCount} clienti di prova)`
+        }
       </span>
 
-      {/* Bottone import compatto */}
+      {/* Bottone azione */}
       <button
-        onClick={handleGoToImport}
+        onClick={handleAction}
         style={{
           padding: "4px 12px",
           borderRadius: 4,
@@ -148,7 +171,7 @@ export default function DemoBanner() {
           e.currentTarget.style.color = "white";
         }}
       >
-        Importa clienti
+        {isAnonDemo ? "← Torna a reping.it" : "Importa clienti"}
       </button>
 
       {/* Bottone minimizza */}

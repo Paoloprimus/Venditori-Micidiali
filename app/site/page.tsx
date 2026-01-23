@@ -5,7 +5,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import AnimatedMockup from "./demo";
+import StaticMockupWithCTA from "./static-mockup";
 
 // Logo Component - R lime su sfondo nero
 function RepingLogo({ size = "md", light = false }: { size?: "sm" | "md" | "lg"; light?: boolean }) {
@@ -290,7 +290,7 @@ ${form.interesseFunzionalita || "Non specificato"}
 
               {/* Mockup MOBILE - sotto il CTA, ridotto */}
               <div className="lg:hidden flex justify-center mt-8 transform scale-90">
-                <AnimatedMockup />
+                <StaticMockupWithCTA />
               </div>
             </div>
 
@@ -312,7 +312,7 @@ ${form.interesseFunzionalita || "Non specificato"}
 
             {/* Colonna destra: Animated Mockup */}
             <div className="hidden lg:flex lg:col-span-1 justify-center">
-              <AnimatedMockup />
+              <StaticMockupWithCTA />
             </div>
           </div>
         </div>
