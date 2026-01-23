@@ -51,12 +51,12 @@ export default function StaticMockupWithCTA() {
         console.warn("[Demo] Seed warning:", await seedRes.text());
       }
 
-      // 4. Codifica token di sessione in base64
-      const encodedAccessToken = btoa(data.session.access_token);
-      const encodedRefreshToken = btoa(data.session.refresh_token);
+      // 4. Codifica credenziali in base64 (più semplice dei token)
+      const encodedEmail = btoa(email);
+      const encodedPassword = btoa(password);
 
-      // 5. Redirect a reping.app con token di sessione
-      window.location.href = `https://reping.app/auto-login?at=${encodedAccessToken}&rt=${encodedRefreshToken}`;
+      // 5. Redirect a reping.app con credenziali
+      window.location.href = `https://reping.app/auto-login?e=${encodedEmail}&p=${encodedPassword}`;
 
     } catch (err: any) {
       console.error("[Demo] Error:", err);

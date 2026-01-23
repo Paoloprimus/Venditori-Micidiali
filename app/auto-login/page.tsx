@@ -14,18 +14,18 @@ function AutoLoginContent() {
 
   useEffect(() => {
     async function doLogin() {
-      const accessToken = searchParams.get("at");
-      const refreshToken = searchParams.get("rt");
+      const emailParam = searchParams.get("e");
+      const passwordParam = searchParams.get("p");
 
-      if (!accessToken || !refreshToken) {
-        setError("Token mancanti");
+      if (!emailParam || !passwordParam) {
+        setError("Credenziali mancanti");
         return;
       }
 
       try {
-        // Decodifica token
-        const decodedAccessToken = atob(accessToken);
-        const decodedRefreshToken = atob(refreshToken);
+        // Decodifica credenziali
+        const email = atob(emailParam);
+        const password = atob(passwordParam);
 
         console.log("[AutoLogin] Logging out any existing session...");
         
@@ -34,29 +34,25 @@ function AutoLoginContent() {
         sessionStorage.clear();
         localStorage.removeItem("repping:pph");
         
-        console.log("[AutoLogin] Setting session with tokens...");
+        console.log("[AutoLogin] Signing in with email/password...");
         
-        // Imposta sessione con i token
-        const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-          access_token: decodedAccessToken,
-          refresh_token: decodedRefreshToken,
+        // Login con credenziali
+        const { data, error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
         });
 
-        if (sessionError) {
-          console.error("[AutoLogin] setSession error:", sessionError);
-          setError("Errore sessione: " + sessionError.message);
+        if (signInError) {
+          console.error("[AutoLogin] signIn error:", signInError);
+          setError("Errore login: " + signInError.message);
           return;
         }
 
-        console.log("[AutoLogin] Session set, data:", sessionData);
+        console.log("[AutoLogin] SignIn success, user:", data.user?.id);
 
-        // Verifica che la sessione sia attiva
-        const { data: { session }, error: getError } = await supabase.auth.getSession();
-        console.log("[AutoLogin] getSession result:", { session: !!session, error: getError });
-
-        if (!session) {
-          console.error("[AutoLogin] Session not persisted!");
-          setError("Sessione non persistita. Riprova.");
+        if (!data.session) {
+          console.error("[AutoLogin] No session after signIn!");
+          setError("Sessione non creata. Riprova.");
           return;
         }
 
