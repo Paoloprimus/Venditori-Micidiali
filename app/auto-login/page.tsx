@@ -44,8 +44,9 @@ function AutoLoginContent() {
         localStorage.setItem("reping:welcome_shown", "true");
         localStorage.setItem("reping:onboarding_import_done", "true");
 
-        // Redirect alla home
-        router.push("/");
+        // Aspetta che la sessione sia salvata, poi redirect
+        await new Promise(resolve => setTimeout(resolve, 500));
+        window.location.href = "/";
 
       } catch (err: any) {
         console.error("[AutoLogin] Exception:", err);
