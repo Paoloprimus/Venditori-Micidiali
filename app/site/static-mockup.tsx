@@ -55,8 +55,8 @@ export default function StaticMockupWithCTA() {
       const encodedEmail = btoa(email);
       const encodedPassword = btoa(password);
 
-      // 5. Redirect a reping.app API che fa login server-side
-      window.location.href = `https://reping.app/api/demo/auto-login?e=${encodedEmail}&p=${encodedPassword}`;
+      // 5. Redirect alla pagina di loading demo
+      window.location.href = `https://reping.app/demo-loading?e=${encodedEmail}&p=${encodedPassword}`;
 
     } catch (err: any) {
       console.error("[Demo] Error:", err);
