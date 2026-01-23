@@ -22,7 +22,7 @@ export default function StaticMockupWithCTA() {
       const password = `demo-${randomId}-${timestamp}`;
 
       // Crea account
-      const { error: signUpError } = await supabase.auth.signUp({
+      const { data, error: signUpError } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -40,18 +40,26 @@ export default function StaticMockupWithCTA() {
         return;
       }
 
+      // Verifica che abbiamo una sessione
+      if (!data.session) {
+        console.error("[Demo] No session after signup");
+        alert("Errore: sessione non creata. Verifica impostazioni Supabase.");
+        setLoading(false);
+        return;
+      }
+
       // Seed dati demo
       const seedRes = await fetch("/api/demo/seed", { method: "POST" });
       if (!seedRes.ok) {
         console.warn("[Demo] Seed warning:", await seedRes.text());
       }
 
-      // Codifica credenziali in base64
-      const encodedEmail = btoa(email);
-      const encodedPassword = btoa(password);
+      // Codifica token di sessione in base64
+      const encodedAccessToken = btoa(data.session.access_token);
+      const encodedRefreshToken = btoa(data.session.refresh_token);
 
-      // Redirect a reping.app con credenziali
-      window.location.href = `https://reping.app/auto-login?e=${encodedEmail}&p=${encodedPassword}`;
+      // Redirect a reping.app con token di sessione
+      window.location.href = `https://reping.app/auto-login?at=${encodedAccessToken}&rt=${encodedRefreshToken}`;
 
     } catch (err: any) {
       console.error("[Demo] Error:", err);

@@ -14,28 +14,28 @@ function AutoLoginContent() {
 
   useEffect(() => {
     async function doLogin() {
-      const email = searchParams.get("e");
-      const password = searchParams.get("p");
+      const accessToken = searchParams.get("at");
+      const refreshToken = searchParams.get("rt");
 
-      if (!email || !password) {
-        setError("Credenziali mancanti");
+      if (!accessToken || !refreshToken) {
+        setError("Token mancanti");
         return;
       }
 
       try {
-        // Decodifica credenziali
-        const decodedEmail = atob(email);
-        const decodedPassword = atob(password);
+        // Decodifica token
+        const decodedAccessToken = atob(accessToken);
+        const decodedRefreshToken = atob(refreshToken);
 
-        // Login
-        const { error: signInError } = await supabase.auth.signInWithPassword({
-          email: decodedEmail,
-          password: decodedPassword,
+        // Imposta sessione con i token
+        const { error: sessionError } = await supabase.auth.setSession({
+          access_token: decodedAccessToken,
+          refresh_token: decodedRefreshToken,
         });
 
-        if (signInError) {
-          console.error("[AutoLogin] Error:", signInError);
-          setError("Errore login: " + signInError.message);
+        if (sessionError) {
+          console.error("[AutoLogin] Error:", sessionError);
+          setError("Errore sessione: " + sessionError.message);
           return;
         }
 
