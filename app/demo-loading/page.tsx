@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/client";
 
 const STEPS = [
   { id: 1, text: "Creazione ambiente demo...", key: "create" },
-  { id: 2, text: "Accesso sicuro in corso...", key: "login" },
-  { id: 3, text: "Caricamento dati di esempio...", key: "seed" },
-  { id: 4, text: "Inizializzazione cifratura E2E...", key: "crypto" },
+  { id: 2, text: "Caricamento dati di esempio...", key: "seed" },
+  { id: 3, text: "Inizializzazione cifratura E2E...", key: "crypto" },
+  { id: 4, text: "Accesso sicuro in corso...", key: "login" },
   { id: 5, text: "Preparazione dashboard...", key: "ready" },
 ];
 
@@ -29,19 +28,8 @@ export default function DemoLoadingPage() {
 
         const { email, password, userId } = createData;
 
-        // STEP 2: Login
+        // STEP 2: Seed dati (prima del login, usa admin API)
         setCurrentStep(2);
-        const { data, error: signInError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-
-        if (signInError || !data.session) {
-          throw new Error(signInError?.message || "Errore login");
-        }
-
-        // STEP 3: Seed dati
-        setCurrentStep(3);
         const seedRes = await fetch("/api/demo/seed", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -52,21 +40,26 @@ export default function DemoLoadingPage() {
           console.warn("[Demo] Seed warning:", await seedRes.text());
         }
 
-        // STEP 4: Crypto init (simulato - il vero init avviene nella home)
-        setCurrentStep(4);
-        await new Promise(r => setTimeout(r, 800));
+        // STEP 3: Crypto init (simulato)
+        setCurrentStep(3);
+        await new Promise(r => setTimeout(r, 600));
 
-        // Setta flag demo
+        // Setta flag demo PRIMA del login
         sessionStorage.setItem("reping:isAnonDemo", "true");
         localStorage.setItem("reping:welcome_shown", "true");
         localStorage.setItem("reping:onboarding_import_done", "true");
 
-        // STEP 5: Ready
-        setCurrentStep(5);
-        await new Promise(r => setTimeout(r, 500));
+        // STEP 4: Login via API route (setta cookies server-side)
+        setCurrentStep(4);
+        const encodedEmail = btoa(email);
+        const encodedPassword = btoa(password);
 
-        // Vai alla home
-        window.location.href = "/";
+        // STEP 5: Ready + redirect
+        setCurrentStep(5);
+        await new Promise(r => setTimeout(r, 400));
+
+        // Redirect all'API di login che setta i cookies e poi va alla home
+        window.location.href = `/api/demo/auto-login?e=${encodedEmail}&p=${encodedPassword}`;
 
       } catch (err: any) {
         console.error("[DemoLoading] Error:", err);
