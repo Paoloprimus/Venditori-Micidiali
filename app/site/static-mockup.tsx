@@ -41,8 +41,12 @@ export default function StaticMockupWithCTA() {
         return;
       }
 
-      // 3. Seed dati demo
-      const seedRes = await fetch("/api/demo/seed", { method: "POST" });
+      // 3. Seed dati demo (passa userId)
+      const seedRes = await fetch("/api/demo/seed", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: createData.userId }),
+      });
       if (!seedRes.ok) {
         console.warn("[Demo] Seed warning:", await seedRes.text());
       }

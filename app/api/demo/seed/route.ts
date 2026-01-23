@@ -7,7 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { createClient } from "@supabase/supabase-js";
 
 // 10 clienti fake (basati su clienti-test-sporchi.csv)
 const DEMO_CLIENTS = [
@@ -67,16 +67,35 @@ const CLIENT_NOTES = [
 ];
 
 export async function POST(req: NextRequest) {
-  const supabase = createSupabaseServer();
-  
-  // Auth check
-  const { data: { user }, error: authErr } = await supabase.auth.getUser();
-  if (authErr || !user) {
-    console.error("[Demo Seed] Auth error:", authErr);
-    return NextResponse.json({ error: "UNAUTH" }, { status: 401 });
+  // Prendi userId dal body (passato dal client dopo creazione utente)
+  let userId: string;
+  try {
+    const body = await req.json();
+    userId = body.userId;
+  } catch {
+    return NextResponse.json({ error: "Missing userId in body" }, { status: 400 });
   }
 
-  console.log("[Demo Seed] Starting seed for user:", user.id);
+  if (!userId) {
+    return NextResponse.json({ error: "Missing userId" }, { status: 400 });
+  }
+
+  // Usa admin client per bypassare RLS
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  
+  if (!supabaseUrl || !serviceRoleKey) {
+    return NextResponse.json({ error: "Missing Supabase config" }, { status: 500 });
+  }
+
+  const supabase = createClient(supabaseUrl, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  console.log("[Demo Seed] Starting seed for user:", userId);
+  
+  // Usa userId dal body invece di user.id
+  const user = { id: userId };
 
   try {
     const results = {
