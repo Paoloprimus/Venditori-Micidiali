@@ -1,5 +1,6 @@
-import { createSupabaseServer } from "@/lib/supabase/server";
+import { createServerClient } from "@supabase/ssr";
 import { NextRequest, NextResponse } from "next/server";
+import { cookies } from "next/headers";
 
 /**
  * API: Auto-login per demo
@@ -20,10 +21,44 @@ export async function GET(req: NextRequest) {
     const email = atob(emailParam);
     const password = atob(passwordParam);
 
-    // Usa il client SSR che gestisce i cookies
-    const supabase = createSupabaseServer();
+    // Prepara la response per il redirect
+    const response = NextResponse.redirect(new URL("/", req.url));
 
-    // Login - questo setta automaticamente i cookies
+    // Crea client SSR che scrive i cookies nella response
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          get(name: string) {
+            return req.cookies.get(name)?.value;
+          },
+          set(name: string, value: string, options: any) {
+            // Scrive il cookie nella response
+            response.cookies.set({
+              name,
+              value,
+              ...options,
+              path: "/",
+              httpOnly: false,
+              secure: process.env.NODE_ENV === "production",
+              sameSite: "lax",
+            });
+          },
+          remove(name: string, options: any) {
+            response.cookies.set({
+              name,
+              value: "",
+              ...options,
+              path: "/",
+              maxAge: 0,
+            });
+          },
+        },
+      }
+    );
+
+    // Login - questo chiamerà set() per i cookies
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -35,9 +70,10 @@ export async function GET(req: NextRequest) {
     }
 
     console.log("[AutoLogin API] Success for user:", data.user.id);
+    console.log("[AutoLogin API] Cookies set in response");
 
-    // Redirect alla home
-    return NextResponse.redirect(new URL("/", req.url));
+    // Ritorna la response con i cookies già settati
+    return response;
 
   } catch (err: any) {
     console.error("[AutoLogin API] Exception:", err);
