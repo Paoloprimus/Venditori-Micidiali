@@ -1,15 +1,68 @@
 "use client";
 
-import Link from "next/link";
+import { useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 /**
  * Mockup statico della dashboard REPING - tutto cliccabile per demo
  * Con CTA prominente sopra
  */
 export default function StaticMockupWithCTA() {
+  const [loading, setLoading] = useState(false);
+
+  async function startDemo() {
+    if (loading) return;
+    setLoading(true);
+
+    try {
+      // Genera credenziali temporanee
+      const timestamp = Date.now();
+      const randomId = Math.random().toString(36).substring(2, 8);
+      const email = `demo-${timestamp}-${randomId}@demo.reping.it`;
+      const password = `demo-${randomId}-${timestamp}`;
+
+      // Crea account
+      const { error: signUpError } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: {
+            full_name: "Demo User",
+            is_demo: true,
+          },
+        },
+      });
+
+      if (signUpError) {
+        console.error("[Demo] Signup error:", signUpError);
+        alert("Errore creazione demo: " + signUpError.message);
+        setLoading(false);
+        return;
+      }
+
+      // Seed dati demo
+      const seedRes = await fetch("/api/demo/seed", { method: "POST" });
+      if (!seedRes.ok) {
+        console.warn("[Demo] Seed warning:", await seedRes.text());
+      }
+
+      // Codifica credenziali in base64
+      const encodedEmail = btoa(email);
+      const encodedPassword = btoa(password);
+
+      // Redirect a reping.app con credenziali
+      window.location.href = `https://reping.app/auto-login?e=${encodedEmail}&p=${encodedPassword}`;
+
+    } catch (err: any) {
+      console.error("[Demo] Error:", err);
+      alert("Errore: " + err.message);
+      setLoading(false);
+    }
+  }
+
   return (
-    <Link
-      href="/demo"
+    <div
+      onClick={startDemo}
       className="flex flex-col items-center gap-3 cursor-pointer group"
     >
       {/* CTA prominente SOPRA il mockup */}
@@ -172,7 +225,7 @@ export default function StaticMockupWithCTA() {
             </div>
           </div>
 
-          {/* Play overlay */}
+          {/* Play overlay - shows loading state */}
           <div 
             className="group-hover:opacity-100 opacity-80 transition-opacity"
             style={{
@@ -180,20 +233,34 @@ export default function StaticMockupWithCTA() {
               bottom: 10,
               left: "50%",
               transform: "translateX(-50%)",
-              background: "linear-gradient(135deg, #10b981 0%, #059669 100%)",
+              background: loading 
+                ? "linear-gradient(135deg, #6b7280 0%, #4b5563 100%)"
+                : "linear-gradient(135deg, #10b981 0%, #059669 100%)",
               borderRadius: 10,
               padding: "4px 12px",
               display: "flex",
               alignItems: "center",
               gap: 4,
-              boxShadow: "0 4px 12px rgba(16, 185, 129, 0.4)",
+              boxShadow: loading 
+                ? "0 4px 12px rgba(107, 114, 128, 0.4)"
+                : "0 4px 12px rgba(16, 185, 129, 0.4)",
             }}
           >
-            <span style={{ fontSize: 10 }}>▶</span>
-            <span style={{ fontSize: 9, color: "white", fontWeight: 600 }}>Clicca per provare</span>
+            {loading ? (
+              <>
+                <span style={{ fontSize: 10, animation: "spin 1s linear infinite" }}>⏳</span>
+                <span style={{ fontSize: 9, color: "white", fontWeight: 600 }}>Caricamento...</span>
+              </>
+            ) : (
+              <>
+                <span style={{ fontSize: 10 }}>▶</span>
+                <span style={{ fontSize: 9, color: "white", fontWeight: 600 }}>Clicca per provare</span>
+              </>
+            )}
           </div>
         </div>
       </div>
-    </Link>
+      <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+    </div>
   );
 }
