@@ -52,7 +52,10 @@ function AddVisitContent() {
 
   useEffect(() => {
     (async () => {
-      if (!crypto?.crypto) return;
+      // 🎮 Demo mode: carica dati in chiaro
+      const isDemoMode = sessionStorage.getItem('reping:isAnonDemo') === 'true';
+      
+      if (!isDemoMode && !crypto?.crypto) return;
       setLoadingClients(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
@@ -60,7 +63,7 @@ function AddVisitContent() {
 
         const { data, error } = await supabase
           .from('accounts')
-          .select('id, name_enc, name_iv')
+          .select('id, name, name_enc, name_iv')  // Aggiungo name in chiaro
           .eq('user_id', user.id)
           .order('created_at', { ascending: false });
 
@@ -86,8 +89,16 @@ function AddVisitContent() {
             : ((x ?? {}) as Record<string, unknown>);
 
         const clientList: ClientOption[] = [];
-        for (const acc of (data || [])) {
-          if (acc.name_enc && acc.name_iv) {
+        const isDemoMode = sessionStorage.getItem('reping:isAnonDemo') === 'true';
+        
+        for (const acc of (data || []) as any[]) {
+          // 🎮 Demo mode o nome in chiaro disponibile
+          if (isDemoMode || acc.name) {
+            clientList.push({
+              id: acc.id,
+              name: String(acc.name || 'Cliente'),
+            });
+          } else if (acc.name_enc && acc.name_iv) {
             try {
               const accountForDecrypt = {
                 name_enc: hexToBase64(acc.name_enc),

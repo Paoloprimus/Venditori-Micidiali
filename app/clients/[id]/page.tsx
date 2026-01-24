@@ -101,6 +101,15 @@ export default function ClientDetailPage() {
 
   // Carica dati cliente
   useEffect(() => {
+    // 🎮 Demo mode: carica senza crypto
+    const isDemoMode = typeof window !== 'undefined' && 
+      sessionStorage.getItem('reping:isAnonDemo') === 'true';
+    
+    if (isDemoMode && userId && clientId) {
+      loadClientData();
+      return;
+    }
+    
     if (!actuallyReady || !crypto || !userId || !clientId) return;
     loadClientData();
   }, [actuallyReady, crypto, userId, clientId]);
@@ -350,7 +359,11 @@ export default function ClientDetailPage() {
     );
   }
 
-  if (!actuallyReady || !crypto) {
+  // 🎮 Demo mode: bypassa check crypto
+  const isDemoMode = typeof window !== 'undefined' && 
+    sessionStorage.getItem('reping:isAnonDemo') === 'true';
+
+  if (!isDemoMode && (!actuallyReady || !crypto)) {
     const hasPass = typeof window !== 'undefined' && 
       (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
     
