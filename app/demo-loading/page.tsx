@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabase/client";
 
 const STEPS = [
   { id: 1, text: "Creazione ambiente demo...", key: "create" },
   { id: 2, text: "Caricamento dati di esempio...", key: "seed" },
-  { id: 3, text: "Inizializzazione cifratura E2E...", key: "crypto" },
-  { id: 4, text: "Accesso sicuro in corso...", key: "login" },
+  { id: 3, text: "Accesso sicuro in corso...", key: "login" },
+  { id: 4, text: "Inizializzazione cifratura...", key: "crypto" },
   { id: 5, text: "Preparazione dashboard...", key: "ready" },
 ];
 
@@ -28,7 +29,7 @@ export default function DemoLoadingPage() {
 
         const { email, password, userId } = createData;
 
-        // STEP 2: Seed dati (prima del login, usa admin API)
+        // STEP 2: Seed dati (usa admin API)
         setCurrentStep(2);
         const seedRes = await fetch("/api/demo/seed", {
           method: "POST",
@@ -40,26 +41,36 @@ export default function DemoLoadingPage() {
           console.warn("[Demo] Seed warning:", await seedRes.text());
         }
 
-        // STEP 3: Crypto init (simulato)
+        // STEP 3: Login CLIENT-SIDE (salva sessione in localStorage)
         setCurrentStep(3);
-        await new Promise(r => setTimeout(r, 600));
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email,
+          password,
+        });
 
-        // Setta flag demo PRIMA del login
+        if (signInError) {
+          throw new Error(signInError.message || "Errore login");
+        }
+
+        // STEP 4: Setup flag e crypto placeholder
+        setCurrentStep(4);
+        
+        // Setta flag demo
         sessionStorage.setItem("reping:isAnonDemo", "true");
         localStorage.setItem("reping:welcome_shown", "true");
         localStorage.setItem("reping:onboarding_import_done", "true");
+        
+        // Per utenti demo, NON settiamo passphrase - i dati sono in chiaro
+        // Il flag isAnonDemo indica alle pagine di bypassare la cifratura
+        
+        await new Promise(r => setTimeout(r, 500));
 
-        // STEP 4: Login via API route (setta cookies server-side)
-        setCurrentStep(4);
-        const encodedEmail = btoa(email);
-        const encodedPassword = btoa(password);
-
-        // STEP 5: Ready + redirect
+        // STEP 5: Ready
         setCurrentStep(5);
         await new Promise(r => setTimeout(r, 400));
 
-        // Redirect all'API di login che setta i cookies e poi va alla home
-        window.location.href = `/api/demo/auto-login?e=${encodedEmail}&p=${encodedPassword}`;
+        // Vai alla home
+        window.location.href = "/";
 
       } catch (err: any) {
         console.error("[DemoLoading] Error:", err);

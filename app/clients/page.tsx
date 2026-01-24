@@ -185,7 +185,17 @@ async function logout() {
 
 // 🔐 Auto-unlock FORZATO: sblocca e carica dati
 useEffect(() => {
-  if (!authChecked || !crypto) return;
+  if (!authChecked) return;
+  
+  // 🎮 Demo mode: carica dati in chiaro senza cifratura
+  const isDemoMode = sessionStorage.getItem('reping:isAnonDemo') === 'true';
+  if (isDemoMode) {
+    console.log('[/clients] 🎮 Demo mode - carico dati in chiaro');
+    loadClients();
+    return;
+  }
+  
+  if (!crypto) return;
   
   console.log('[/clients] 🔍 Check unlock status:', {
     isUnlocked: crypto.isUnlocked?.(),
@@ -696,8 +706,13 @@ async function saveEditing() {
     );
   }
 
+  // 🎮 Check se è modalità demo (dati in chiaro, no cifratura)
+  const isDemoMode = typeof window !== 'undefined' && 
+    sessionStorage.getItem('reping:isAnonDemo') === 'true';
+
   // 🔧 FIX: Mostra loader durante auto-unlock, form SOLO se non c'è passphrase
-  if (!actuallyReady || !crypto) {
+  // In demo mode, bypassa completamente il check crypto
+  if (!isDemoMode && (!actuallyReady || !crypto)) {
     const hasPassInStorage = typeof window !== 'undefined' && 
       (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
     

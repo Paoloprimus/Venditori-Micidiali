@@ -114,6 +114,16 @@ export default function VisitsPage(): JSX.Element {
 
   // 🔧 FIX: Carica visite automaticamente se crypto è già sbloccato
   useEffect(() => {
+    // 🎮 Demo mode: carica dati senza crypto
+    const isDemoMode = typeof window !== 'undefined' && 
+      sessionStorage.getItem('reping:isAnonDemo') === 'true';
+    
+    if (isDemoMode && userId) {
+      console.log('[/visits] 🎮 Demo mode - carico dati');
+      if (rows.length === 0 && !loading) loadVisits();
+      return;
+    }
+    
     if (!actuallyReady || !crypto || !userId) return;
     if (rows.length > 0) return; // Già caricato
     if (loading) return; // Già in caricamento
@@ -122,7 +132,10 @@ export default function VisitsPage(): JSX.Element {
   }, [actuallyReady, crypto, userId]);
 
   async function loadVisits(): Promise<void> {
-    if (!crypto || !userId) return;
+    const isDemoMode = typeof window !== 'undefined' && 
+      sessionStorage.getItem('reping:isAnonDemo') === 'true';
+    if (!isDemoMode && !crypto) return;
+    if (!userId) return;
     setLoading(true);
 
     try {
@@ -345,8 +358,13 @@ export default function VisitsPage(): JSX.Element {
     return (<div style={{ padding: 20, textAlign: 'center' }}>Non autenticato. <a href="/login">Login</a></div>);
   }
 
+  // 🎮 Check se è modalità demo (dati in chiaro, no cifratura)
+  const isDemoMode = typeof window !== 'undefined' && 
+    sessionStorage.getItem('reping:isAnonDemo') === 'true';
+
   // 🔧 FIX: Mostra loader durante auto-unlock, form SOLO se non c'è passphrase
-  if (!actuallyReady || !crypto) {
+  // In demo mode, bypassa completamente il check crypto
+  if (!isDemoMode && (!actuallyReady || !crypto)) {
     const hasPassInStorage = typeof window !== 'undefined' && 
       (sessionStorage.getItem('repping:pph') || localStorage.getItem('repping:pph'));
     
